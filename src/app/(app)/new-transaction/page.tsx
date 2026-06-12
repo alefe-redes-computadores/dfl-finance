@@ -5,16 +5,16 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Paperclip } from 'lucide-react'
-import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 type TxType = 'income' | 'expense' | 'sangria' | 'transfer'
+type Context = 'dfl' | 'personal'
 
-function NewTransactionContent() {
+export default function NewTransactionPage() {
   const { user } = useAuth()
-  const { context } = useContext_()
   const router = useRouter()
 
   const [type, setType] = useState<TxType>('income')
+  const [context, setContext] = useState<Context>('dfl')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -34,6 +34,7 @@ function NewTransactionContent() {
 
   async function loadOptions() {
     const catType = type === 'income' ? 'income' : 'expense'
+
     const { data: cats } = await supabase
       .from('categories')
       .select('*')
@@ -49,13 +50,19 @@ function NewTransactionContent() {
 
     setCategories(cats ?? [])
     setAccounts(accs ?? [])
+    setCategoryId('')
   }
 
   async function handleSave() {
-    if (!amount || isNaN(Number(amount))) {
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       setError('Informe um valor válido.')
       return
     }
+    if (!user) {
+      setError('Usuário não autenticado.')
+      return
+    }
+
     setSaving(true)
     setError('')
 
@@ -63,7 +70,7 @@ function NewTransactionContent() {
 
     if (receipt) {
       const ext = receipt.name.split('.').pop()
-      const path = `${user!.uid}/${Date.now()}.${ext}`
+      const path = `${user.uid}/${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
         .from('receipts')
         .upload(path, receipt)
@@ -74,10 +81,10 @@ function NewTransactionContent() {
     }
 
     const { error: txErr } = await supabase.from('transactions').insert({
-      user_id: user!.uid,
+      user_id: user.uid,
       type,
       amount: Number(amount),
-      description,
+      description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
       date,
@@ -87,9 +94,10 @@ function NewTransactionContent() {
     })
 
     if (txErr) {
-      setError('Erro ao salvar. Tente novamente.')
+      console.error(txErr)
+      setError(`Erro: ${txErr.message}`)
     } else {
-      router.back()
+      router.replace('/home')
     }
     setSaving(false)
   }
@@ -110,6 +118,23 @@ function NewTransactionContent() {
           <ChevronLeft size={24} className="text-gray-700 dark:text-gray-300" />
         </button>
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Nova transação</h1>
+      </div>
+
+      {/* Contexto */}
+      <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 gap-1 mb-4 w-fit">
+        {(['dfl', 'personal'] as Context[]).map(c => (
+          <button
+            key={c}
+            onClick={() => setContext(c)}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              context === c
+                ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {c === 'dfl' ? 'DFL' : 'Pessoal'}
+          </button>
+        ))}
       </div>
 
       {/* Tipo */}
@@ -246,7 +271,6 @@ function NewTransactionContent() {
 
         {error && <p className="text-red-500 text-xs text-center">{error}</p>}
 
-        {/* Salvar */}
         <button
           onClick={handleSave}
           disabled={saving}
@@ -257,13 +281,5 @@ function NewTransactionContent() {
 
       </div>
     </div>
-  )
-}
-
-export default function NewTransactionPage() {
-  return (
-    <ContextProvider>
-      <NewTransactionContent />
-    </ContextProvider>
   )
 }
