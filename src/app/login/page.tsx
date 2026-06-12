@@ -2,12 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  createUserWithEmailAndPassword,
-} from 'firebase/auth'
-import { auth, googleProvider } from '@/lib/firebase'
+import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -19,39 +14,34 @@ export default function LoginPage() {
   async function handleEmail() {
     setLoading(true)
     setError('')
-    try {
-      await signInWithEmailAndPassword(auth, email, password)
-      router.replace('/home')
-    } catch {
-      try {
-        await createUserWithEmailAndPassword(auth, email, password)
-        router.replace('/home')
-      } catch {
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+    if (signInErr) {
+      const { error: signUpErr } = await supabase.auth.signUp({ email, password })
+      if (signUpErr) {
         setError('E-mail ou senha inválidos.')
+      } else {
+        router.replace('/home')
       }
-    } finally {
-      setLoading(false)
+    } else {
+      router.replace('/home')
     }
+    setLoading(false)
   }
 
   async function handleGoogle() {
     setLoading(true)
     setError('')
-    try {
-      await signInWithPopup(auth, googleProvider)
-      router.replace('/home')
-    } catch {
-      setError('Erro ao entrar com Google.')
-    } finally {
-      setLoading(false)
-    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/home` }
+    })
+    if (error) setError('Erro ao entrar com Google.')
+    setLoading(false)
   }
 
   return (
     <div className="min-h-screen bg-surface-light dark:bg-surface-dark flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-black rounded-2xl mb-4">
             <span className="text-white font-black text-xl tracking-wider">DFL</span>
@@ -60,7 +50,6 @@ export default function LoginPage() {
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Controle financeiro</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-sm">
           <div className="space-y-4">
             <div>
@@ -116,7 +105,6 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
-
         <p className="text-center text-xs text-gray-400 mt-6">DFL Finance • uso interno</p>
       </div>
     </div>
