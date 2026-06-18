@@ -2,8 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { auth } from '@/lib/firebase'
-import { signOut } from 'firebase/auth'
+import { supabase } from '@/lib/supabase'
 import {
   Wallet, Tag, LogOut, Moon, Sun, ChevronRight
 } from 'lucide-react'
@@ -34,7 +33,7 @@ export default function MorePage() {
   }
 
   async function handleLogout() {
-    await signOut(auth)
+    await supabase.auth.signOut()
     router.replace('/login')
   }
 
