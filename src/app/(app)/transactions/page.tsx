@@ -32,7 +32,7 @@ function TransactionsContent() {
     let query = supabase
       .from('transactions')
       .select('*, categories(name, icon, color)')
-      .eq('user_id', user!.uid)
+      .eq('user_id', user!.id)
       .eq('context', context)
       .gte('date', `${monthLabel2}-01`)
       .lte('date', `${monthLabel2}-31`)
