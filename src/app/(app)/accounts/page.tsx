@@ -45,7 +45,7 @@ export default function AccountsPage() {
     const { data } = await supabase
       .from('accounts')
       .select('*')
-      .eq('user_id', user!.uid)
+      .eq('user_id', user!.id)
       .order('created_at', { ascending: true })
     setAccounts(data ?? [])
   }
@@ -54,7 +54,7 @@ export default function AccountsPage() {
     if (!name) return
     setSaving(true)
     await supabase.from('accounts').insert({
-      user_id: user!.uid,
+      user_id: user!.id,
       name,
       bank_slug: bankSlug,
       balance: Number(balance) || 0,
