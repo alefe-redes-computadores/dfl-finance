@@ -30,7 +30,7 @@ function HomeContent() {
     const { data: transactions } = await supabase
       .from('transactions')
       .select('*')
-      .eq('user_id', user!.uid)
+      .eq('user_id', user!.id)
       .eq('context', context)
       .gte('date', `${monthLabel2}-01`)
       .lte('date', `${monthLabel2}-31`)
@@ -42,7 +42,7 @@ function HomeContent() {
     const { data: accs } = await supabase
       .from('accounts')
       .select('*')
-      .eq('user_id', user!.uid)
+      .eq('user_id', user!.id)
       .eq('context', context)
 
     setAccounts(accs ?? [])
