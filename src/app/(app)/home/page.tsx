@@ -10,7 +10,19 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 
 
 
-   function BankLogo({ slug, name, emoji, color }: { slug: string, name: string, emoji: string, color: string }) {
+  const ALL_BANKS = [
+  { slug: 'inter', name: 'Inter', color: '#ff7a00', emoji: '🏦' },
+  { slug: 'nubank', name: 'Nubank', color: '#820ad1', emoji: '💳' },
+  { slug: 'bradesco', name: 'Bradesco', color: '#ff0000', emoji: '🏛️' },
+  { slug: 'itau', name: 'Itaú', color: '#ec7000', emoji: '🏦' },
+  { slug: 'stone', name: 'Stone', color: '#00cc66', emoji: '💳' },
+  { slug: 'infinitpay', name: 'InfinitPay', color: '#000000', emoji: '💳' },
+  { slug: 'bb', name: 'Banco do Brasil', color: '#ffd700', emoji: '🏛️' },
+  { slug: 'caixa', name: 'Caixa', color: '#0055a4', emoji: '🏛️' },
+  { slug: 'carteira', name: 'Carteira', color: '#94a3b8', emoji: '💰' },
+];
+
+function BankLogo({ slug, name, emoji, color }: { slug: string, name: string, emoji: string, color: string }) {
   const logos: Record<string, string> = {
     inter: 'https://cdn.iconscout.com/icon/free/png-256/free-banco-inter-3628826-3030163.png',
     nubank: 'https://nubank.com.br/favicon.ico',
@@ -36,6 +48,13 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
       />
     )
   }
+
+  return (
+    <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ backgroundColor: `${color}20` }}>
+      {emoji}
+    </div>
+  )
+}
 
   return (
     <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ backgroundColor: `${color}20` }}>
