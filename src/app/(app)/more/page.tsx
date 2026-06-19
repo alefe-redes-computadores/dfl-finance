@@ -11,12 +11,24 @@ import {
   FileDown, Settings, ChevronRight, Moon, Sun, Camera, Edit2, Check, X, LogOut, Lock 
 } from 'lucide-react'
 
+type MenuItem = {
+  icon: any
+  label: string
+  active: boolean
+  href?: string
+  isPro?: boolean
+}
+
+type MenuSection = {
+  title: string
+  items: MenuItem[]
+}
+
 export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
   const [dark, setDark] = useState(false)
-
-  // Estados do Perfil
+  const [modalOpen, setModalOpen] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [displayName, setDisplayName] = useState('Usuário')
@@ -53,11 +65,6 @@ export default function MorePage() {
     setDark(!dark)
   }
 
-  // Feedback divertido para funcionalidades indisponíveis
-  const handleComingSoon = () => {
-    alert('🍔 Estamos preparando essa funcionalidade no capricho! Já já ela sai do forno, fique ligado!')
-  }
-
   async function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       setUploadingAvatar(true)
@@ -83,26 +90,65 @@ export default function MorePage() {
     router.replace('/login')
   }
 
-  // Definição dos itens do menu
-  const menuItems = [
-    { icon: Wallet, label: 'Contas', href: '/accounts', active: true },
-    { icon: Tags, label: 'Categorias', href: '/categories', active: true },
-    { icon: CreditCard, label: 'Cartões', active: false },
-    { icon: Hash, label: 'Tags', active: false },
-    { icon: PieChart, label: 'Orçamento', active: false },
-    { icon: Target, label: 'Metas', active: false },
-    { icon: TrendingUp, label: 'Projeções', active: false },
-    { icon: Users, label: 'Quem me deve', active: false, isPro: true },
-    { icon: BarChart2, label: 'Relatórios Pro', active: false, isPro: true },
-    { icon: Bot, label: 'Assistente IA', active: false },
-    { icon: ScanLine, label: 'Importar comprovante', active: false },
+  const menuData: MenuSection[] = [
+    {
+      title: 'Organizar',
+      items: [
+        { icon: Wallet, label: 'Contas', href: '/accounts', active: true },
+        { icon: CreditCard, label: 'Cartões de Crédito', active: false },
+        { icon: Tags, label: 'Categorias', href: '/categories', active: true },
+        { icon: Hash, label: 'Tags', active: false },
+      ]
+    },
+    {
+      title: 'Planejar',
+      items: [
+        { icon: PieChart, label: 'Orçamento', active: false },
+        { icon: Target, label: 'Metas', active: false },
+        { icon: TrendingUp, label: 'Projeções', active: false },
+      ]
+    },
+    {
+      title: 'Acompanhar',
+      items: [
+        { icon: RefreshCw, label: 'Assinaturas', active: false },
+        { icon: Landmark, label: 'Financiamentos', active: false },
+        { icon: Users, label: 'Quem me deve', active: false, isPro: true },
+      ]
+    },
+    {
+      title: 'Analisar',
+      items: [
+        { icon: FileText, label: 'Relatório personalizado', active: false },
+        { icon: BarChart2, label: 'Relatórios avançados', active: false, isPro: true },
+      ]
+    },
+    {
+      title: 'Ferramentas',
+      items: [
+        { icon: Bot, label: 'Assistente IA', active: false },
+        { icon: ScanLine, label: 'Importar comprovante', active: false },
+        { icon: FileDown, label: 'Importar extrato (CSV)', active: false },
+      ]
+    }
   ]
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 pb-24">
-      <div className="max-w-lg mx-auto px-5 pt-8">
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl">
+            <div className="w-16 h-16 bg-brand-teal/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Bot size={32} className="text-brand-teal" />
+            </div>
+            <h3 className="font-bold text-lg mb-2 text-gray-900 dark:text-white">Saindo do forno!</h3>
+            <p className="text-gray-500 mb-6 text-sm">Estamos preparando essa função com todo o capricho para você.</p>
+            <button onClick={() => setModalOpen(false)} className="w-full bg-brand-teal text-white py-3 rounded-xl font-bold">Entendido</button>
+          </div>
+        </div>
+      )}
 
-        {/* Header */}
+      <div className="max-w-lg mx-auto px-5 pt-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Mais</h1>
           <button onClick={toggleTheme} className="p-2 text-gray-500 hover:text-yellow-500 transition-colors">
@@ -110,60 +156,55 @@ export default function MorePage() {
           </button>
         </div>
 
-        {/* Perfil */}
         <div className="flex items-center gap-4 mb-8 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
-           <label className="relative w-14 h-14 rounded-2xl bg-brand-teal flex items-center justify-center overflow-hidden cursor-pointer shadow-sm group shrink-0">
-             {avatarUrl ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : <span className="text-white font-bold text-xl">{displayName.charAt(0).toUpperCase()}</span>}
+          <label className="relative w-14 h-14 rounded-2xl bg-brand-teal flex items-center justify-center overflow-hidden cursor-pointer shadow-sm group shrink-0">
+             {uploadingAvatar ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : 
+              avatarUrl ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : <span className="text-white font-bold text-xl">{displayName.charAt(0).toUpperCase()}</span>}
              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={18} className="text-white" /></div>
              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-           </label>
-           <div className="flex-1 overflow-hidden">
+          </label>
+          <div className="flex-1 overflow-hidden">
              {isEditingName ? (
-               <div className="flex items-center gap-2"><input value={nameInput} onChange={(e) => setNameInput(e.target.value)} className="w-full bg-gray-100 dark:bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none" /><button onClick={saveName} className="text-green-500"><Check size={16} /></button></div>
+               <div className="flex items-center gap-2"><input value={nameInput} onChange={(e) => setNameInput(e.target.value)} className="w-full bg-gray-100 dark:bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none" /><button onClick={saveName} className="text-green-500"><Check size={16} /></button><button onClick={() => setIsEditingName(false)} className="text-red-500"><X size={16} /></button></div>
              ) : (
                <div className="flex items-center gap-2">
-                 <h2 className="text-lg font-semibold truncate">{displayName}</h2>
+                 <h2 className="text-lg font-semibold truncate text-gray-900 dark:text-white">{displayName}</h2>
                  {!isGoogleLogin && <button onClick={() => setIsEditingName(true)} className="text-gray-400"><Edit2 size={12} /></button>}
                </div>
              )}
-             <p className="text-sm text-gray-500">{user?.email}</p>
-           </div>
+             <p className="text-sm text-gray-500 truncate">{user?.email}</p>
+          </div>
         </div>
 
-        {/* Menu Principal (Ativo) */}
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">Menu Principal</h4>
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm mb-6 border border-gray-100 dark:border-zinc-800">
-          {menuItems.filter(i => i.active).map((item, idx) => (
-            <Link href={item.href!} key={idx} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-brand-teal/10 flex items-center justify-center"><item.icon size={18} className="text-brand-teal" /></div>
-                <span className="font-medium text-gray-800 dark:text-gray-200">{item.label}</span>
-              </div>
-              <ChevronRight size={18} className="text-gray-300" />
-            </Link>
-          ))}
-        </div>
+        {menuData.map((section, index) => (
+          <div key={index} className="mb-6">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">{section.title}</h4>
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
+              {section.items.map((item, i) => (
+                item.active && item.href ? (
+                  <Link href={item.href} key={i} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><item.icon size={16} className="text-brand-teal" /></div>
+                      <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{item.label}</span>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </Link>
+                ) : (
+                  <button key={i} onClick={() => setModalOpen(true)} className="flex items-center justify-between w-full p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors opacity-60">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center"><item.icon size={16} className="text-gray-500" /></div>
+                      <span className="font-medium text-sm text-gray-600 dark:text-gray-400">{item.label}</span>
+                    </div>
+                    {item.isPro ? <span className="text-[10px] font-bold text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">PRO</span> : <Lock size={14} className="text-gray-300" />}
+                  </button>
+                )
+              ))}
+            </div>
+          </div>
+        ))}
 
-        {/* Em Breve / Pro */}
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">No forno / Premium</h4>
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 opacity-70">
-          {menuItems.filter(i => !i.active).map((item, idx) => (
-            <button key={idx} onClick={handleComingSoon} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-zinc-800 flex items-center justify-center"><item.icon size={18} className="text-gray-500" /></div>
-                <span className="font-medium text-gray-600 dark:text-gray-400">{item.label}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {item.isPro && <span className="text-[10px] font-bold text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">PRO</span>}
-                <Lock size={16} className="text-gray-300" />
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Logout */}
-        <button onClick={handleLogout} className="mt-8 w-full flex items-center gap-3 p-4 text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors">
-          <LogOut size={20} /> Sair da conta
+        <button onClick={handleLogout} className="mt-4 w-full flex items-center gap-3 p-4 text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors">
+          <LogOut size={18} /> Sair da conta
         </button>
       </div>
     </div>
