@@ -8,7 +8,8 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-  const ALL_BANKS = [
+  // 1. Definição da lista no topo
+const ALL_BANKS = [
   { slug: 'inter', name: 'Inter', color: '#ff7a00', emoji: '🏦' },
   { slug: 'nubank', name: 'Nubank', color: '#820ad1', emoji: '💳' },
   { slug: 'bradesco', name: 'Bradesco', color: '#ff0000', emoji: '🏛️' },
@@ -20,8 +21,8 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
   { slug: 'carteira', name: 'Carteira', color: '#94a3b8', emoji: '💰' },
 ];
 
-
-  function BankLogo({ slug, name, emoji, color }: { slug: string, name: string, emoji: string, color: string }) {
+// 2. Definição do componente no topo
+function BankLogo({ slug, name, emoji, color }: { slug: string, name: string, emoji: string, color: string }) {
   const logos: Record<string, string> = {
     inter: 'https://cdn.iconscout.com/icon/free/png-256/free-banco-inter-3628826-3030163.png',
     nubank: 'https://nubank.com.br/favicon.ico',
@@ -33,36 +34,20 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
     caixa: 'https://www.caixa.gov.br/favicon.ico',
   }
 
-  // Fallback visual (o emoji que aparece se não houver logo ou a logo falhar)
-  const Fallback = () => (
-    <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ backgroundColor: `${color}20` }}>
-      {emoji}
-    </div>
-  )
-
   if (logos[slug]) {
     return (
-      <>
-        <img
-          src={logos[slug]}
-          alt={name}
-          className="w-10 h-10 object-contain rounded-full"
-          onError={e => {
-            const t = e.target as HTMLImageElement
-            t.style.display = 'none'
-            t.nextElementSibling?.classList.remove('hidden')
-          }}
-        />
-        <div className="hidden">
-           <Fallback />
-        </div>
-      </>
+      <img
+        src={logos[slug]}
+        alt={name}
+        className="w-10 h-10 object-contain rounded-full"
+        onError={e => {
+          const t = e.target as HTMLImageElement
+          t.style.display = 'none'
+          t.nextElementSibling?.classList.remove('hidden')
+        }}
+      />
     )
   }
-
-  return <Fallback />
-}
-
 
   return (
     <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ backgroundColor: `${color}20` }}>
@@ -70,6 +55,8 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
     </div>
   )
 }
+
+  
 
   return (
     <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ backgroundColor: `${color}20` }}>
