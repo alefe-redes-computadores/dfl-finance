@@ -25,6 +25,9 @@ const DFL_BANKS = [
   { slug: 'outra', name: 'Outra', color: '#94a3b8', emoji: '🏛️' },
 ]
 
+// A LINHA QUE FALTAVA PARA O VERCEL NÃO RECLAMAR:
+const ALL_BANKS = [...PERSONAL_BANKS, ...DFL_BANKS]
+
 export default function AccountsPage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -59,7 +62,6 @@ export default function AccountsPage() {
     loadAccounts()
   }, [loadAccounts])
 
-  // Atualiza o banco padrão ao trocar de contexto
   useEffect(() => {
     const defaultBank = AVAILABLE_BANKS[0]
     setBankSlug(defaultBank.slug)
@@ -107,7 +109,6 @@ export default function AccountsPage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 px-4 pt-6 pb-24 font-sans">
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()}>
@@ -120,7 +121,6 @@ export default function AccountsPage() {
         </button>
       </div>
 
-      {/* Contexto DFL / Pessoal */}
       <div className="flex bg-gray-200 rounded-full p-1 mb-6">
         <button 
           onClick={() => setContext('dfl')}
@@ -136,13 +136,11 @@ export default function AccountsPage() {
         </button>
       </div>
 
-      {/* Saldo Total */}
       <div className="bg-emerald-900 rounded-3xl p-6 text-white mb-6 shadow-lg">
         <p className="text-emerald-100/80 text-sm font-medium mb-1">Saldo Total ({context === 'dfl' ? 'DFL' : 'Pessoal'})</p>
         <h2 className="text-3xl font-bold">R$ {totalBalance.toFixed(2).replace('.', ',')}</h2>
       </div>
 
-      {/* Formulário Nova Conta */}
       {showForm && (
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6 space-y-4">
           <h2 className="font-bold text-gray-800">Nova Conta</h2>
@@ -190,7 +188,6 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* Lista de Contas */}
       {loading ? (
         <div className="flex justify-center py-10">
           <div className="w-8 h-8 border-2 border-emerald-900 border-t-transparent rounded-full animate-spin" />
