@@ -9,33 +9,40 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 
-// Adiciona esse objeto junto com ALL_BANKS no topo do arquivo
-const BANK_LOGOS: Record<string, string> = {
-  inter: 'https://logo.clearbit.com/inter.co',
-  nubank: 'https://logo.clearbit.com/nubank.com.br',
-  bradesco: 'https://logo.clearbit.com/bradesco.com.br',
-  itau: 'https://logo.clearbit.com/itau.com.br',
-  stone: 'https://logo.clearbit.com/stone.com.br',
-  infinitpay: 'https://logo.clearbit.com/infinitpay.io',
-  bb: 'https://logo.clearbit.com/bb.com.br',
-  caixa: 'https://logo.clearbit.com/caixa.gov.br',
-  c6: 'https://logo.clearbit.com/c6bank.com.br',
-  mercantil: 'https://logo.clearbit.com/mercantil.com.br',
-}
 
-// Substitui o div do emoji dentro do map de accounts por:
-<div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden bg-gray-50 border border-gray-100">
-  {BANK_LOGOS[acc.bank_slug] ? (
-    <img
-      src={BANK_LOGOS[acc.bank_slug]}
-      alt={acc.name}
-      className="w-8 h-8 object-contain"
-      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-    />
-  ) : (
-    <span className="text-xl">{bankDef?.emoji || '🏛️'}</span>
-  )}
-</div>
+   function BankLogo({ slug, name, emoji, color }: { slug: string, name: string, emoji: string, color: string }) {
+  const logos: Record<string, string> = {
+    inter: 'https://cdn.iconscout.com/icon/free/png-256/free-banco-inter-3628826-3030163.png',
+    nubank: 'https://nubank.com.br/favicon.ico',
+    stone: 'https://www.stone.com.br/favicon.ico',
+    infinitpay: 'https://infinitpay.io/favicon.ico',
+    bradesco: 'https://banco.bradesco/favicon.ico',
+    itau: 'https://www.itau.com.br/favicon.ico',
+    bb: 'https://www.bb.com.br/favicon.ico',
+    caixa: 'https://www.caixa.gov.br/favicon.ico',
+  }
+
+  if (logos[slug]) {
+    return (
+      <img
+        src={logos[slug]}
+        alt={name}
+        className="w-8 h-8 object-contain rounded-full"
+        onError={e => {
+          const t = e.target as HTMLImageElement
+          t.style.display = 'none'
+          t.nextElementSibling?.classList.remove('hidden')
+        }}
+      />
+    )
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl" style={{ backgroundColor: `${color}20` }}>
+      {emoji}
+    </div>
+  )
+}
 
 function HomeContent() {
   const { user } = useAuth()
