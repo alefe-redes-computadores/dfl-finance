@@ -29,7 +29,7 @@ export default function AccountsPage() {
     const { error } = await supabase.from('accounts').insert({
       user_id: user.id, name, bank_slug: selectedBank.slug, balance: parseInt(rawBalance || '0', 10) / 100, context, color: selectedBank.color
     })
-    if (error) { alert("Erro: " + error.message); return }
+    if (error) { alert("Erro ao salvar: " + error.message); return }
     setName(''); setRawBalance(''); setShowForm(false); setSelectedBank(null); loadAccounts()
   }
 
@@ -53,7 +53,7 @@ export default function AccountsPage() {
   const banks = context === 'personal' ? personalBanks : dflBanks
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 font-sans">
+    <div className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-white p-4 flex items-center justify-between border-b"><button onClick={() => router.back()}><ChevronLeft /></button><h1 className="font-bold text-lg">Contas</h1><button onClick={() => setShowForm(true)}><Plus /></button></div>
       <div className="p-4">
         <div className="bg-white rounded-2xl p-6 border mb-6 shadow-sm text-center">
@@ -75,8 +75,8 @@ export default function AccountsPage() {
           <div className="bg-white w-full rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold mb-4">Nova Conta</h3>
             <div className="flex bg-gray-100 p-1 rounded-full mb-4">
-              <button onClick={() => {setContext('dfl'); setSelectedBank(null)}} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'dfl' ? 'bg-white shadow' : ''}`}>Jurídica</button>
-              <button onClick={() => {setContext('personal'); setSelectedBank(null)}} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'personal' ? 'bg-white shadow' : ''}`}>Pessoal</button>
+              <button onClick={() => {setContext('dfl'); setSelectedBank(null); setName('')}} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'dfl' ? 'bg-white shadow' : ''}`}>Jurídica</button>
+              <button onClick={() => {setContext('personal'); setSelectedBank(null); setName('')}} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'personal' ? 'bg-white shadow' : ''}`}>Pessoal</button>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-4">{banks.map(b => (<button key={b.slug} onClick={() => { setSelectedBank(b); setName(b.name) }} className={`p-3 rounded-xl border text-xs font-bold ${selectedBank?.slug === b.slug ? 'border-teal-800 bg-teal-50' : ''}`}>{b.name}</button>))}</div>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome" className="w-full bg-gray-50 p-4 rounded-xl mb-3" />
