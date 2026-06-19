@@ -27,6 +27,8 @@ function HomeContent() {
 
   async function loadData() {
     setLoading(true)
+    
+    // Busca transações
     const { data: transactions } = await supabase
       .from('transactions')
       .select('*')
@@ -37,8 +39,10 @@ function HomeContent() {
 
     const income = transactions?.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0) ?? 0
     const expense = transactions?.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + Number(t.amount), 0) ?? 0
+    
     setSummary({ income, expense, balance: income - expense })
 
+    // Busca contas
     const { data: accs } = await supabase
       .from('accounts')
       .select('*')
@@ -60,11 +64,14 @@ function HomeContent() {
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-          <span className="text-white font-black text-xs tracking-wider">DFL</span>
+        <div className="w-10 h-10 flex items-center justify-center">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-sm">
+            <rect width="40" height="40" rx="10" className="fill-brand-teal dark:fill-brand-teal" />
+            <path d="M12 28V12H20C23.3137 12 26 14.6863 26 18C26 21.3137 23.3137 24 20 24H16V28H12Z" fill="white"/>
+            <path d="M28 28V12H24V28H28Z" fill="white" fillOpacity="0.7"/>
+          </svg>
         </div>
         <ContextToggle />
         <button className="w-10 h-10" />
@@ -86,10 +93,7 @@ function HomeContent() {
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-gray-500 dark:text-gray-400">Saldo total</span>
           <button onClick={() => setHideBalance(!hideBalance)}>
-            {hideBalance
-              ? <EyeOff size={16} className="text-gray-400" />
-              : <Eye size={16} className="text-gray-400" />
-            }
+            {hideBalance ? <EyeOff size={16} className="text-gray-400" /> : <Eye size={16} className="text-gray-400" />}
           </button>
         </div>
         <p className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -157,7 +161,6 @@ function HomeContent() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
