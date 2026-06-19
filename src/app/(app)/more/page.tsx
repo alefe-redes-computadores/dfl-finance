@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Wallet, CreditCard, Tags, Hash, PieChart, Target, TrendingUp, Users, BarChart2, Bot, ChevronRight, Moon, Sun, Camera, Edit2, Check, X, LogOut, Lock } from 'lucide-react'
+import { Wallet, CreditCard, Tags, Hash, PieChart, Target, TrendingUp, Users, BarChart2, Bot, ChevronRight, Camera, Edit2, Check, X, Lock } from 'lucide-react'
 
 export default function MorePage() {
   const router = useRouter()
@@ -34,8 +34,8 @@ export default function MorePage() {
     try {
       setUploadingAvatar(true)
       const file = event.target.files?.[0]
-      if (!file) return
-      const filePath = `${user!.id}-${Math.random()}`
+      if (!file || !user) return
+      const filePath = `${user.id}-${Math.random()}`
       const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
       if (uploadError) throw uploadError
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath)
@@ -72,7 +72,7 @@ export default function MorePage() {
           <button className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold">Ver</button>
         </div>
 
-        {/* Perfil Restaurado */}
+        {/* Perfil */}
         <div className="flex items-center gap-4 mb-8 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
            <label className="relative w-14 h-14 rounded-2xl bg-brand-teal flex items-center justify-center overflow-hidden cursor-pointer shadow-sm group shrink-0">
              {uploadingAvatar ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : 
@@ -93,18 +93,27 @@ export default function MorePage() {
            </div>
         </div>
 
-        {/* Menu */}
+        {/* Menu Principal */}
         <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 px-1">Menu Principal</h4>
         <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border mb-6">
-          <Link href="/accounts" className="flex items-center justify-between p-4 border-b hover:bg-gray-50"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><Wallet size={16} className="text-brand-teal" /></div><span className="font-medium text-sm">Contas</span></div><ChevronRight size={16} /></Link>
-          <Link href="/categories" className="flex items-center justify-between p-4 hover:bg-gray-50"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><Tags size={16} className="text-brand-teal" /></div><span className="font-medium text-sm">Categorias</span></div><ChevronRight size={16} /></Link>
+          <Link href="/accounts" className="flex items-center justify-between p-4 border-b hover:bg-gray-50 dark:hover:bg-zinc-800"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><Wallet size={16} className="text-brand-teal" /></div><span className="font-medium text-sm">Contas</span></div><ChevronRight size={16} /></Link>
+          <Link href="/categories" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-zinc-800"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><Tags size={16} className="text-brand-teal" /></div><span className="font-medium text-sm">Categorias</span></div><ChevronRight size={16} /></Link>
         </div>
 
+        {/* No Forno */}
         <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 px-1">No forno</h4>
         <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border opacity-70">
-          {[CreditCard, Hash, PieChart, Target, TrendingUp, Users, BarChart2].map((Icon, i) => (
-            <button key={i} onClick={() => setModalOpen(true)} className="w-full flex items-center justify-between p-4 border-b last:border-0 hover:bg-gray-50">
-              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"><Icon size={16} className="text-gray-500" /></div><span className="font-medium text-sm text-gray-600">Função {i+1}</span></div>
+          {[
+            { icon: CreditCard, title: 'Função 1' },
+            { icon: Hash, title: 'Função 2' },
+            { icon: PieChart, title: 'Função 3' },
+            { icon: Target, title: 'Função 4' },
+            { icon: TrendingUp, title: 'Função 5' },
+            { icon: Users, title: 'Função 6' },
+            { icon: BarChart2, title: 'Função 7' }
+          ].map((item, i) => (
+            <button key={i} onClick={() => setModalOpen(true)} className="w-full flex items-center justify-between p-4 border-b last:border-0 hover:bg-gray-50 dark:hover:bg-zinc-800">
+              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center"><item.icon size={16} className="text-gray-500" /></div><span className="font-medium text-sm text-gray-600 dark:text-gray-300">{item.title}</span></div>
               <Lock size={14} className="text-gray-300" />
             </button>
           ))}
