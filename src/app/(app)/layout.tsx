@@ -22,9 +22,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-surface-light dark:bg-surface-dark pb-20">
-      {children}
-      <BottomNav />
-    </div>
+    <body className="overscroll-none">
+      <div className="min-h-screen bg-surface-light dark:bg-surface-dark pb-20">
+        {children}
+        <BottomNav />
+      </div>
+    </body>
   )
 }
