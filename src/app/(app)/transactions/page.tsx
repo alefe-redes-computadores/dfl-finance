@@ -76,7 +76,8 @@ export default function TransactionsPage() {
   ]
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 pb-28 font-sans">
+    // Exemplo no home:
+    <div className="page-transition max-w-md mx-auto ...">
       <div className="px-4 pt-6 pb-4 bg-white shadow-sm mb-2">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">Transações</h1>
