@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, Settings2, Plus } from 'lucide-react'
+import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-// Componente de Iniciais (Visual Profissional)
+// Componente Visual Profissional (Iniciais e Cores Customizadas)
 function BankInitials({ color, name }: { color: string, name: string }) {
   const initials = name ? name.substring(0, 2).toUpperCase() : '??';
   return (
@@ -28,12 +28,25 @@ function HomeContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
-  const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
-  const [recentExpenses, setRecentExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+
+  // Máscara de Moeda Profissional
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(val);
+  };
+
+  // Lógica de Cores do Saldo (Verde/Vermelho/Cinza)
+  const getBalanceStyle = (val: number) => {
+    if (val > 0) return 'text-emerald-600 font-bold';
+    if (val < 0) return 'text-red-500 font-bold';
+    return 'text-gray-500 font-bold'; // Zerado
+  }
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -49,18 +62,12 @@ function HomeContent() {
       .eq('context', context)
       .gte('date', start)
       .lte('date', end)
-      .order('date', { ascending: false })
 
     const txs = transactions || []
     const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount), 0)
     const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount), 0)
-    
-    const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0)
-    const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0)
 
     setSummary({ income, expense, balance: income - expense })
-    setPendings({ toPay, toReceive })
-    setRecentExpenses(txs.filter(t => t.type === 'expense').slice(0, 4))
 
     const { data: accs } = await supabase
       .from('accounts')
@@ -75,27 +82,21 @@ function HomeContent() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
-
-  // Cor do saldo (Positivo: verde, Negativo: vermelho, Zerado: cinza)
-  const getBalanceStyle = (val: number) => {
-    if (val > 0) return 'text-emerald-600'
-    if (val < 0) return 'text-red-500'
-    return 'text-gray-600'
-  }
 
   return (
     <div className="page-transition min-h-screen bg-slate-50 pb-28 font-sans">
+      
+      {/* HEADER */}
       <div className="pt-6 px-4 bg-white rounded-b-[32px] pb-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mb-6">
         <div className="flex justify-between items-center mb-6">
           <ContextToggle />
         </div>
 
         <div className="flex justify-between items-center mb-6 px-4">
-          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600 transition-colors"><ChevronLeft size={20} /></button>
+          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></button>
           <span className="text-[15px] font-semibold text-gray-800 capitalize tracking-wide">{monthLabel}</span>
-          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600 transition-colors"><ChevronRight size={20} /></button>
+          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600"><ChevronRight size={20} /></button>
         </div>
 
         <div className="text-center mb-6 relative">
@@ -113,9 +114,7 @@ function HomeContent() {
 
       {/* LISTAGEM DE CONTAS */}
       <div className="px-4 mb-8">
-        <div className="flex justify-between items-center mb-4 px-1">
-          <h3 className="text-[15px] font-bold text-gray-800">Contas</h3>
-        </div>
+        <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Contas</h3>
         
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {accounts.map((acc, index) => {
@@ -126,7 +125,9 @@ function HomeContent() {
                   <BankInitials color={acc.color} name={acc.name} />
                   <p className="text-[14px] font-medium text-gray-800">{acc.name}</p>
                 </div>
-                <p className={`text-[14px] font-bold ${getBalanceStyle(val)}`}>
+                
+                {/* Saldo formatado, colorido e em negrito */}
+                <p className={`text-[14px] ${getBalanceStyle(val)}`}>
                    {hideBalance ? '••••' : formatCurrency(val)}
                 </p>
               </div>
