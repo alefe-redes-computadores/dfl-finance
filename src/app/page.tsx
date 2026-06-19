@@ -1,26 +1,32 @@
-'use client'
+import type { Metadata, Viewport } from 'next'
+import './globals.css'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#14b8a6',
+}
 
-export default function Root() {
-  const { user, loading } = useAuth()
-  const router = useRouter()
+export const metadata: Metadata = {
+  title: 'DFL Finance',
+  description: 'Gestão inteligente do seu dinheiro',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'DFL',
+  },
+  icons: {
+    icon: '/icon-192x192.png',
+    apple: '/icon-192x192.png',
+  },
+}
 
-  useEffect(() => {
-    if (!loading) {
-      if (user) {
-        router.replace('/home')
-      } else {
-        router.replace('/login')
-      }
-    }
-  }, [user, loading, router])
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-surface-light dark:bg-surface-dark">
-      <div className="w-8 h-8 border-2 border-brand-teal border-t-transparent rounded-full animate-spin" />
-    </div>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="overscroll-none">{children}</body>
+    </html>
   )
 }
