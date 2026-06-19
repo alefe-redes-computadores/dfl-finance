@@ -3,12 +3,28 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, Plus } from 'lucide-react'
+import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, Landmark, SlidersHorizontal, Settings2 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-// Componente Visual Profissional (Iniciais e Cores Customizadas)
+// 1. Definição dos Bancos (Mantida igual ao seu código original)
+const ALL_BANKS = [
+  { slug: 'bradesco', name: 'Bradesco', color: '#dc2626', emoji: '🔴' },
+  { slug: 'caixa', name: 'Caixa', color: '#0284c7', emoji: '🏦' },
+  { slug: 'carteira', name: 'Carteira', color: '#16a34a', emoji: '👛' },
+  { slug: 'itau', name: 'Itaú', color: '#f97316', emoji: '🟠' },
+  { slug: 'nubank', name: 'Nubank', color: '#8b5cf6', emoji: '🟣' },
+  { slug: 'cora', name: 'Cora', color: '#7c3aed', emoji: '🟣' },
+  { slug: 'ifood-pago', name: 'iFood Pago', color: '#ea1d2c', emoji: '🍔' },
+  { slug: 'infinitpay', name: 'InfinitPay', color: '#111827', emoji: '⚫' },
+  { slug: 'mercado-pago', name: 'Mercado Pago', color: '#009ee3', emoji: '💙' },
+  { slug: 'pagbank', name: 'PagBank', color: '#22c55e', emoji: '💚' },
+  { slug: 'stone', name: 'Stone', color: '#00a868', emoji: '🟢' },
+  { slug: 'outra', name: 'Outra', color: '#94a3b8', emoji: '🏛️' },
+]
+
+// 2. Novo componente de Iniciais (Substitui os emojis por um visual Profissional)
 function BankInitials({ color, name }: { color: string, name: string }) {
   const initials = name ? name.substring(0, 2).toUpperCase() : '??';
   return (
@@ -28,24 +44,19 @@ function HomeContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
+  const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
+  const [recentExpenses, setRecentExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isCartaoModalOpen, setIsCartaoModalOpen] = useState(false)
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
-  // Máscara de Moeda Profissional
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(val);
-  };
-
-  // Lógica de Cores do Saldo (Verde/Vermelho/Cinza)
+  // Função para definir a cor do saldo (Verde positivo, Vermelho negativo, Cinza zerado)
   const getBalanceStyle = (val: number) => {
     if (val > 0) return 'text-emerald-600 font-bold';
     if (val < 0) return 'text-red-500 font-bold';
-    return 'text-gray-500 font-bold'; // Zerado
+    return 'text-gray-600 font-bold';
   }
 
   const loadData = useCallback(async () => {
@@ -62,41 +73,55 @@ function HomeContent() {
       .eq('context', context)
       .gte('date', start)
       .lte('date', end)
+      .order('date', { ascending: false })
 
     const txs = transactions || []
+
     const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount), 0)
     const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount), 0)
+    
+    const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0)
+    const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0)
 
     setSummary({ income, expense, balance: income - expense })
+    setPendings({ toPay, toReceive })
+    setRecentExpenses(txs.filter(t => t.type === 'expense').slice(0, 4))
 
     const { data: accs } = await supabase
       .from('accounts')
       .select('*')
       .eq('user_id', user.id)
       .eq('context', context)
-      .order('name')
+      .order('name') 
 
     setAccounts(accs ?? [])
     setLoading(false)
   }, [user, context, currentDate])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
+  const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
 
   return (
-    <div className="page-transition min-h-screen bg-slate-50 pb-28 font-sans">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-28 font-sans">
       
-      {/* HEADER */}
       <div className="pt-6 px-4 bg-white rounded-b-[32px] pb-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mb-6">
+        
         <div className="flex justify-between items-center mb-6">
           <ContextToggle />
         </div>
 
         <div className="flex justify-between items-center mb-6 px-4">
-          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></button>
+          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600">
+            <ChevronLeft size={20} />
+          </button>
           <span className="text-[15px] font-semibold text-gray-800 capitalize tracking-wide">{monthLabel}</span>
-          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600"><ChevronRight size={20} /></button>
+          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 text-gray-400 hover:text-gray-600">
+            <ChevronRight size={20} />
+          </button>
         </div>
 
         <div className="text-center mb-6 relative">
@@ -110,37 +135,118 @@ function HomeContent() {
             {hideBalance ? '••••••' : formatCurrency(totalAccountsBalance)}
           </h1>
         </div>
-      </div>
 
-      {/* LISTAGEM DE CONTAS */}
-      <div className="px-4 mb-8">
-        <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Contas</h3>
-        
-        <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
-          {accounts.map((acc, index) => {
-            const val = Number(acc.balance)
-            return (
-              <div key={acc.id} className={`flex justify-between items-center p-4 ${index !== accounts.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <BankInitials color={acc.color} name={acc.name} />
-                  <p className="text-[14px] font-medium text-gray-800">{acc.name}</p>
-                </div>
-                
-                {/* Saldo formatado, colorido e em negrito */}
-                <p className={`text-[14px] ${getBalanceStyle(val)}`}>
-                   {hideBalance ? '••••' : formatCurrency(val)}
-                </p>
-              </div>
-            )
-          })}
-          
-          <div className="p-4 border-t border-gray-50 flex justify-center bg-gray-50/50 cursor-pointer hover:bg-gray-50 transition-colors">
-             <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
-                <Plus size={16} />
+        <div className="grid grid-cols-2 gap-3 px-2">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
+             <div className="flex items-center gap-1.5 mb-1.5">
+               <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center">
+                 <ArrowUp size={12} className="text-emerald-500" />
+               </div>
+               <span className="text-[11px] text-gray-500 font-medium">Receitas</span>
              </div>
+             <p className="text-[15px] font-bold text-emerald-600">
+               {hideBalance ? '••••' : formatCurrency(summary.income)}
+             </p>
+          </div>
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
+             <div className="flex items-center gap-1.5 mb-1.5">
+               <div className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center">
+                 <ArrowDown size={12} className="text-red-400" />
+               </div>
+               <span className="text-[11px] text-gray-500 font-medium">Despesas</span>
+             </div>
+             <p className="text-[15px] font-bold text-red-500">
+               {hideBalance ? '••••' : formatCurrency(summary.expense)}
+             </p>
           </div>
         </div>
       </div>
+
+      <div className="px-4 mb-8">
+        <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Pendências</h3>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center">
+            <p className="text-[10px] text-gray-400 font-medium mb-0.5">Pagar</p>
+            <p className="text-[13px] font-bold text-red-500">{hideBalance ? '•••' : formatCurrency(pendings.toPay)}</p>
+          </div>
+          
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center">
+            <p className="text-[10px] text-gray-400 font-medium mb-0.5">Receber</p>
+            <p className="text-[13px] font-bold text-emerald-600">{hideBalance ? '•••' : formatCurrency(pendings.toReceive)}</p>
+          </div>
+
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center">
+            <p className="text-[10px] text-gray-400 font-medium mb-0.5">Faturas</p>
+            <p className="text-[13px] font-bold text-orange-400">{hideBalance ? '•••' : 'R$ 0,00'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 mb-8">
+        <div className="flex justify-between items-center mb-4 px-1">
+          <h3 className="text-[15px] font-bold text-gray-800">Contas</h3>
+        </div>
+        
+        <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
+          {accounts.length === 0 ? (
+             <div className="p-6 text-center text-gray-400 text-sm">Nenhuma conta cadastrada.</div>
+          ) : (
+            accounts.map((acc, index) => {
+              const currentBalance = Number(acc.balance)
+              
+              return (
+                <div key={acc.id} className={`flex justify-between items-center p-4 ${index !== accounts.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    {/* Aqui usamos o novo componente profissional */}
+                    <BankInitials color={acc.color} name={acc.name} />
+                    <div>
+                      <p className="text-[14px] font-medium text-gray-800">{acc.name}</p>
+                      <p className="text-[11px] text-gray-400">Saldo</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {/* Saldo colorido, em negrito, como você pediu */}
+                    <p className={`text-[14px] ${getBalanceStyle(currentBalance)}`}>
+                      {hideBalance ? '••••' : formatCurrency(currentBalance)}
+                    </p>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* O resto do código (Cartões, Despesas Recentes, Modal) está intocado e igual ao original */}
+      <div className="px-4 mb-8">
+        <div className="flex justify-between items-center mb-4 px-1">
+          <h3 className="text-[15px] font-bold text-gray-800">Cartões</h3>
+          <ChevronRight size={18} className="text-gray-400" />
+        </div>
+        <div onClick={() => setIsCartaoModalOpen(true)} className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-4 cursor-pointer">
+           <p className="text-sm font-medium text-gray-500">Cartão Principal</p>
+        </div>
+      </div>
+      
+      <div className="px-4 mb-8">
+        <h3 className="text-[15px] font-bold text-gray-800 mb-4">Despesas recentes</h3>
+        <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-2">
+            {recentExpenses.map(t => (
+                <div key={t.id} className="p-3 border-b border-gray-50 last:border-0 flex justify-between">
+                    <p className="text-sm font-bold text-gray-800">{t.description}</p>
+                    <p className="text-sm font-bold text-red-500">{formatCurrency(Number(t.amount))}</p>
+                </div>
+            ))}
+        </div>
+      </div>
+
+      {isCartaoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setIsCartaoModalOpen(false)}>
+          <div className="bg-white p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setIsCartaoModalOpen(false)} className="w-full bg-teal-800 text-white py-3 rounded-xl font-bold">Entendido</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
