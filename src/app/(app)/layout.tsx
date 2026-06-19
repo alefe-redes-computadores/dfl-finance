@@ -14,19 +14,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [user, loading, router])
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen bg-surface-light dark:bg-surface-dark">
-      <div className="w-8 h-8 border-2 border-brand-teal border-t-transparent rounded-full animate-spin" />
+    <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="w-8 h-8 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
   if (!user) return null
 
   return (
-    <body className="overscroll-none">
-      <div className="min-h-screen bg-surface-light dark:bg-surface-dark pb-20">
-        {children}
-        <BottomNav />
-      </div>
-    </body>
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
+      {children}
+      <BottomNav />
+    </div>
   )
 }
