@@ -1,5 +1,5 @@
-import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import type { Metadata, Viewport } from 'next'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -23,14 +23,10 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <body>{children}</body>
+    <html lang="pt-BR">
+      <body className="overscroll-none">{children}</body>
     </html>
   )
 }
