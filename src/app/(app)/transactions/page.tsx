@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Search, SlidersHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
-import { format, addMonths, subMonths } from 'date-fns'
+import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText } from 'lucide-react'
+import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
+type Context = 'dfl' | 'personal'
 
-function TransactionsContent() {
+export default function TransactionsPage() {
   const { user } = useAuth()
-  const { context } = useContext_()
+  
+  const [context, setContext] = useState<Context>('dfl')
   const [transactions, setTransactions] = useState<any[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
@@ -20,32 +21,38 @@ function TransactionsContent() {
   const [loading, setLoading] = useState(true)
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
-  const monthLabel2 = format(currentDate, 'yyyy-MM')
 
-  useEffect(() => {
-    if (!user) return
-    loadTransactions()
-  }, [user, context, currentDate, filter])
-
-  async function loadTransactions() {
+  const loadTransactions = useCallback(async () => {
+    if (!user?.id) return
     setLoading(true)
+    
+    // Calcula o primeiro e último dia do mês exato para evitar bugs em fevereiro/meses com 30 dias
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
     let query = supabase
       .from('transactions')
       .select('*, categories(name, icon, color)')
-      .eq('user_id', user!.id)
+      .eq('user_id', user.id)
       .eq('context', context)
-      .gte('date', `${monthLabel2}-01`)
-      .lte('date', `${monthLabel2}-31`)
+      .gte('date', start)
+      .lte('date', end)
       .order('date', { ascending: false })
 
     if (filter !== 'all') {
       query = query.eq('type', filter)
     }
 
-    const { data } = await query
+    const { data, error } = await query
+    if (error) console.error(error)
+    
     setTransactions(data ?? [])
     setLoading(false)
-  }
+  }, [user, context, currentDate, filter])
+
+  useEffect(() => {
+    loadTransactions()
+  }, [loadTransactions])
 
   const filtered = transactions.filter(t =>
     t.description?.toLowerCase().includes(search.toLowerCase()) ||
@@ -60,48 +67,66 @@ function TransactionsContent() {
   ]
 
   return (
-    <div className="max-w-lg mx-auto px-4 pt-6">
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 px-4 pt-6 pb-28 font-sans">
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Transações</h1>
-        <div className="flex items-center gap-2">
+      {/* Header com Navegação de Meses */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-bold text-gray-900">Transações</h1>
+        <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-100">
           <button onClick={() => setCurrentDate(subMonths(currentDate, 1))}>
-            <ChevronLeft size={20} className="text-gray-500" />
+            <ChevronLeft size={18} className="text-gray-500 hover:text-emerald-700" />
           </button>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{monthLabel}</span>
+          <span className="text-xs font-bold text-gray-700 capitalize w-24 text-center">
+            {monthLabel}
+          </span>
           <button onClick={() => setCurrentDate(addMonths(currentDate, 1))}>
-            <ChevronRight size={20} className="text-gray-500" />
+            <ChevronRight size={18} className="text-gray-500 hover:text-emerald-700" />
           </button>
         </div>
       </div>
 
-      {/* Busca */}
+      {/* Contexto DFL / Pessoal */}
+      <div className="flex bg-gray-200 rounded-full p-1 mb-4">
+        <button 
+          onClick={() => setContext('dfl')}
+          className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${context === 'dfl' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+        >
+          DFL
+        </button>
+        <button 
+          onClick={() => setContext('personal')}
+          className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${context === 'personal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+        >
+          Pessoal
+        </button>
+      </div>
+
+      {/* Busca e Filtros */}
       <div className="flex gap-2 mb-4">
-        <div className="flex-1 flex items-center gap-2 bg-white dark:bg-zinc-900 rounded-xl px-3 py-2.5 shadow-sm">
-          <Search size={16} className="text-gray-400" />
+        <div className="flex-1 flex items-center gap-2 bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
+          <Search size={18} className="text-gray-400" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar transação..."
-            className="flex-1 bg-transparent text-sm outline-none text-gray-800 dark:text-white placeholder-gray-400"
+            className="flex-1 bg-transparent text-sm outline-none text-gray-800 placeholder-gray-400"
           />
         </div>
-        <button className="w-10 h-10 bg-white dark:bg-zinc-900 rounded-xl flex items-center justify-center shadow-sm">
-          <SlidersHorizontal size={16} className="text-gray-500" />
+        <button className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
+          <SlidersHorizontal size={18} className="text-gray-500" />
         </button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+      {/* Chips de Filtro */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
         {filters.map(f => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-all ${
+            className={`px-5 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
               filter === f.key
-                ? 'bg-brand-teal text-white border-brand-teal'
-                : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-zinc-700'
+                ? 'bg-emerald-900 text-white shadow-md'
+                : 'bg-white text-gray-500 border border-gray-200'
             }`}
           >
             {f.label}
@@ -109,50 +134,53 @@ function TransactionsContent() {
         ))}
       </div>
 
-      {/* Lista */}
+      {/* Lista de Transações */}
       {loading ? (
         <div className="flex justify-center py-10">
-          <div className="w-6 h-6 border-2 border-brand-teal border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-emerald-900 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-gray-400">
-          <span className="text-4xl mb-3">📋</span>
-          <p className="text-sm font-medium">Nenhuma transação encontrada</p>
+        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <ReceiptText size={48} className="mb-4 opacity-20" />
+          <p className="text-sm font-medium">Nenhuma transação neste período</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filtered.map(t => (
-            <div key={t.id} className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
+            <div key={t.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+                className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm"
                 style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6' }}
               >
-                {t.categories?.icon ?? (t.type === 'income' ? '💰' : t.type === 'sangria' ? '🔻' : '💸')}
+                {t.categories?.icon ?? (t.type === 'income' ? '💰' : t.type === 'transfer' ? '🔄' : '💸')}
               </div>
+              
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 dark:text-white truncate">
-                  {t.description ?? t.categories?.name ?? '—'}
+                <p className="text-sm font-bold text-gray-800 truncate">
+                  {t.description ?? t.categories?.name ?? 'Sem descrição'}
                 </p>
-                <p className="text-xs text-gray-400">
-                  {t.categories?.name ?? '—'} • {format(new Date(t.date + 'T12:00:00'), "d 'de' MMM", { locale: ptBR })}
+                <p className="text-xs text-gray-500 font-medium">
+                  {t.categories?.name ?? 'Outros'} • {format(new Date(t.date + 'T12:00:00'), "d 'de' MMM", { locale: ptBR })}
                 </p>
               </div>
-              <p className={`text-sm font-semibold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                {t.type === 'income' ? '+' : '-'} R$ {Number(t.amount).toFixed(2).replace('.', ',')}
-              </p>
+              
+              <div className="text-right">
+                <p className={`text-sm font-bold ${
+                  t.type === 'income' ? 'text-emerald-600' : 
+                  t.type === 'expense' ? 'text-red-600' : 
+                  'text-gray-700'
+                }`}>
+                  {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''} R$ {Number(t.amount).toFixed(2).replace('.', ',')}
+                </p>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase mt-0.5">
+                  {t.status === 'done' ? '✅ Pago' : '⏳ Pend.'}
+                </p>
+              </div>
             </div>
           ))}
         </div>
       )}
 
     </div>
-  )
-}
-
-export default function TransactionsPage() {
-  return (
-    <ContextProvider>
-      <TransactionsContent />
-    </ContextProvider>
   )
 }
