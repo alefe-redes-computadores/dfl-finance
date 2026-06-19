@@ -1,12 +1,25 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#14b8a6',
+}
 
 export const metadata: Metadata = {
   title: 'DFL Finance',
-  description: 'Controle financeiro DFL',
+  description: 'Gestão inteligente do seu dinheiro',
   manifest: '/manifest.json',
-  themeColor: '#1a6b5c',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'DFL',
+  },
+  icons: {
+    apple: '/icon-192x192.png',
+  },
 }
 
 export default function RootLayout({
