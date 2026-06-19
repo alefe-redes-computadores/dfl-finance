@@ -43,38 +43,16 @@ export default function AccountsPage() {
   }, [user, context])
 
   async function loadAccounts() {
-    const { data } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('user_id', user!.id)
-      .eq('context', context)
-      .order('created_at', { ascending: true })
+    const { data } = await supabase.from('accounts').select('*').eq('user_id', user!.id).eq('context', context).order('created_at', { ascending: true })
     setAccounts(data ?? [])
   }
 
   async function handleSave() {
     if (!name) return
     setSaving(true)
-    
     const numericBalance = parseFloat(balance.replace(',', '.')) || 0
-    
-    const { error } = await supabase.from('accounts').insert({
-      user_id: user!.id,
-      name,
-      bank_slug: bankSlug,
-      balance: numericBalance,
-      context,
-    })
-
-    if (!error) {
-      setName('')
-      setBankSlug('carteira')
-      setBalance('')
-      setShowForm(false)
-      loadAccounts()
-    } else {
-      alert('Erro ao salvar conta')
-    }
+    const { error } = await supabase.from('accounts').insert({ user_id: user!.id, name, bank_slug: bankSlug, balance: numericBalance, context })
+    if (!error) { setName(''); setBankSlug('carteira'); setBalance(''); setShowForm(false); loadAccounts() }
     setSaving(false)
   }
 
@@ -87,64 +65,31 @@ export default function AccountsPage() {
     <div className="max-w-lg mx-auto px-4 pt-6 pb-20">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()}>
-            <ChevronLeft size={24} className="text-gray-700 dark:text-gray-300" />
-          </button>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
-            Contas {context === 'dfl' ? '(Jurídica)' : '(Pessoal)'}
-          </h1>
+          <button onClick={() => router.back()}><ChevronLeft size={24} /></button>
+          <h1 className="text-xl font-bold capitalize">Contas ({context === 'dfl' ? 'Jurídica' : 'Pessoal'})</h1>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${showForm ? 'bg-red-500 rotate-45' : 'bg-brand-teal'}`}
-        >
+        <button onClick={() => setShowForm(!showForm)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${showForm ? 'bg-red-500 rotate-45' : 'bg-brand-teal'}`}>
           <Plus size={20} className="text-white" />
         </button>
       </div>
 
       {showForm && (
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-xl border border-gray-100 dark:border-zinc-800 mb-6">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Adicionar Conta</h2>
+          <h2 className="text-lg font-bold mb-4">Adicionar Conta</h2>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Selecione o banco</label>
+              <label className="text-xs font-bold text-gray-400 uppercase">Banco</label>
               <div className="grid grid-cols-4 gap-2 mt-2">
                 {BANKS.map(b => (
-                  <button
-                    key={b.slug}
-                    onClick={() => { setBankSlug(b.slug); if (!name) setName(b.name) }}
-                    className={`p-2 rounded-2xl border ${bankSlug === b.slug ? 'border-brand-teal bg-brand-teal/10' : 'border-gray-100 dark:border-zinc-800'}`}
-                  >
-                    {BANK_LOGOS[b.slug] ? (
-                      <img src={BANK_LOGOS[b.slug]} className="w-8 h-8 rounded-full mx-auto" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full mx-auto flex items-center justify-center text-white text-[10px]" style={{backgroundColor: b.color}}>{b.name[0]}</div>
-                    )}
+                  <button key={b.slug} onClick={() => { setBankSlug(b.slug); if (!name) setName(b.name) }} className={`p-2 rounded-2xl border ${bankSlug === b.slug ? 'border-brand-teal bg-brand-teal/10' : 'border-gray-100 dark:border-zinc-800'}`}>
+                    {BANK_LOGOS[b.slug] ? <img src={BANK_LOGOS[b.slug]} className="w-8 h-8 rounded-full mx-auto" /> : <div className="w-8 h-8 rounded-full mx-auto flex items-center justify-center text-white text-[10px]" style={{backgroundColor: b.color}}>{b.name[0]}</div>}
                   </button>
                 ))}
               </div>
             </div>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Nome da conta (ex: Caixa Principal)"
-              className="w-full bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl outline-none"
-            />
-            <input
-              type="text"
-              inputMode="decimal"
-              value={balance}
-              onChange={e => setBalance(e.target.value.replace(/[^0-9,]/g, ''))}
-              placeholder="Saldo inicial (0,00)"
-              className="w-full bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl outline-none"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full bg-brand-teal text-white py-4 rounded-2xl font-bold hover:opacity-90"
-            >
-              {saving ? 'Salvando...' : 'Confirmar conta'}
-            </button>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da conta" className="w-full bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl outline-none" />
+            <input type="text" inputMode="decimal" value={balance} onChange={e => setBalance(e.target.value.replace(/[^0-9,]/g, ''))} placeholder="Saldo inicial (0,00)" className="w-full bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl outline-none" />
+            <button onClick={handleSave} disabled={saving} className="w-full bg-brand-teal text-white py-4 rounded-2xl font-bold">{saving ? 'Salvando...' : 'Confirmar conta'}</button>
           </div>
         </div>
       )}
@@ -152,18 +97,10 @@ export default function AccountsPage() {
       <div className="space-y-3">
         {accounts.map(acc => (
           <div key={acc.id} className="bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm flex items-center gap-4 border border-gray-100 dark:border-zinc-800">
-            {BANK_LOGOS[acc.bank_slug] ? (
-              <img src={BANK_LOGOS[acc.bank_slug]} className="w-10 h-10 rounded-full" />
-            ) : (
-              <div className="w-10 h-10 bg-gray-100 dark:bg-zinc-800 rounded-full flex items-center justify-center"><Wallet size={20} className="text-gray-400" /></div>
-            )}
-            <div className="flex-1">
-              <p className="font-semibold text-gray-800 dark:text-white">{acc.name}</p>
-            </div>
-            <p className="font-bold text-gray-800 dark:text-white">R$ {Number(acc.balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <button onClick={() => handleDelete(acc.id)} className="text-red-400">
-              <Trash2 size={16} />
-            </button>
+            {BANK_LOGOS[acc.bank_slug] ? <img src={BANK_LOGOS[acc.bank_slug]} className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 bg-gray-100 dark:bg-zinc-800 rounded-full flex items-center justify-center"><Wallet size={20} className="text-gray-400" /></div>}
+            <div className="flex-1"><p className="font-semibold">{acc.name}</p></div>
+            <p className="font-bold">R$ {Number(acc.balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <button onClick={() => handleDelete(acc.id)} className="text-red-400"><Trash2 size={16} /></button>
           </div>
         ))}
       </div>
