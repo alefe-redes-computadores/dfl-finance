@@ -3,9 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import {
-  Wallet, Tag, LogOut, Moon, Sun, ChevronRight
-} from 'lucide-react'
+import { Wallet, Tag, LogOut, Moon, Sun, ChevronRight, Camera, Edit2, Check, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 export default function MorePage() {
@@ -13,6 +11,17 @@ export default function MorePage() {
   const { user } = useAuth()
   const [dark, setDark] = useState(false)
 
+  // Estados do Avatar e Nome
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [displayName, setDisplayName] = useState('Usuário')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+
+  // Verifica se o login foi feito pelo Google
+  const isGoogleLogin = user?.app_metadata?.provider === 'google'
+
+  // Efeito do Tema (Dark Mode)
   useEffect(() => {
     const saved = localStorage.getItem('theme')
     if (saved === 'dark') {
@@ -20,6 +29,16 @@ export default function MorePage() {
       setDark(true)
     }
   }, [])
+
+  // Efeito do Perfil
+  useEffect(() => {
+    if (user) {
+      setAvatarUrl(user.user_metadata?.avatar_url || user.user_metadata?.picture || '')
+      const name = user.user_metadata?.full_name || user.user_metadata?.name || 'Usuário'
+      setDisplayName(name)
+      setNameInput(name)
+    }
+  }, [user])
 
   function toggleTheme() {
     if (dark) {
@@ -30,6 +49,52 @@ export default function MorePage() {
       localStorage.setItem('theme', 'dark')
     }
     setDark(!dark)
+  }
+
+  // UPLOAD DE AVATAR
+  async function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    try {
+      setUploadingAvatar(true)
+      const file = event.target.files?.[0]
+      if (!file) return
+
+      const fileExt = file.name.split('.').pop()
+      const filePath = `${user!.id}-${Math.random()}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
+      await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl }
+      })
+
+      setAvatarUrl(publicUrl)
+    } catch (error) {
+      alert('Erro ao enviar a foto de perfil.')
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  // SALVAR NOME
+  async function saveName() {
+    if (!nameInput.trim()) return
+    try {
+      await supabase.auth.updateUser({
+        data: { full_name: nameInput }
+      })
+      setDisplayName(nameInput)
+      setIsEditingName(false)
+    } catch (error) {
+      alert('Erro ao atualizar o nome.')
+    }
   }
 
   async function handleLogout() {
@@ -64,18 +129,60 @@ export default function MorePage() {
         </button>
       </div>
 
-      {/* User */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center gap-3">
-        <div className="w-10 h-10 bg-brand-teal rounded-full flex items-center justify-center">
-          <span className="text-white font-bold text-sm">
-            {user?.email?.[0]?.toUpperCase() ?? 'U'}
-          </span>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-800 dark:text-white">
-            {user?.displayName ?? 'Usuário'}
-          </p>
-          <p className="text-xs text-gray-400">{user?.email}</p>
+      {/* User Card (Otimizado) */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center gap-4">
+        {/* Avatar */}
+        <label className="relative w-12 h-12 rounded-full bg-brand-teal flex items-center justify-center overflow-hidden cursor-pointer shadow-sm group shrink-0">
+          {uploadingAvatar ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : avatarUrl ? (
+            <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-white font-bold text-lg">{displayName.charAt(0).toUpperCase()}</span>
+          )}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera size={16} className="text-white" />
+          </div>
+          <input 
+            type="file" 
+            accept="image/*" 
+            className="hidden" 
+            onChange={handleAvatarUpload}
+            disabled={uploadingAvatar}
+          />
+        </label>
+
+        {/* Informações */}
+        <div className="flex-1 overflow-hidden">
+          {isEditingName ? (
+            <div className="flex items-center gap-2 mb-1">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                className="w-full bg-gray-100 dark:bg-zinc-800 border-none rounded-lg px-2 py-1 text-sm text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-brand-teal"
+                autoFocus
+              />
+              <button onClick={saveName} className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg">
+                <Check size={14} />
+              </button>
+              <button onClick={() => setIsEditingName(false)} className="p-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-lg">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-gray-800 dark:text-white truncate">
+                {displayName}
+              </h2>
+              {!isGoogleLogin && (
+                <button onClick={() => setIsEditingName(true)} className="p-1 text-gray-400 hover:text-brand-teal transition-colors">
+                  <Edit2 size={12} />
+                </button>
+              )}
+            </div>
+          )}
+          <p className="text-xs text-gray-400 truncate">{user?.email}</p>
         </div>
       </div>
 
