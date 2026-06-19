@@ -11,6 +11,20 @@ import {
   FileDown, Settings, ChevronRight, Moon, Sun, Camera, Edit2, Check, X, LogOut 
 } from 'lucide-react'
 
+// Aqui criamos a regra de tipagem para acalmar o TypeScript no Vercel
+type MenuItem = {
+  icon: any
+  label: string
+  active: boolean
+  href?: string
+  isPro?: boolean // O ponto de interrogação diz que é opcional
+}
+
+type MenuSection = {
+  title: string
+  items: MenuItem[]
+}
+
 export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -91,8 +105,8 @@ export default function MorePage() {
     router.replace('/login')
   }
 
-  // Estrutura do Menu baseada no seu Layout
-  const menuData = [
+  // Estrutura do Menu com a tipagem aplicada
+  const menuData: MenuSection[] = [
     {
       title: 'Organizar',
       items: [
@@ -153,7 +167,7 @@ export default function MorePage() {
           </button>
         </div>
 
-        {/* Perfil Simplificado (Integrado ao novo visual) */}
+        {/* Perfil Simplificado */}
         <div className="flex items-center gap-4 mb-6">
           <label className="relative w-14 h-14 rounded-2xl bg-brand-teal flex items-center justify-center overflow-hidden cursor-pointer shadow-sm group shrink-0">
             {uploadingAvatar ? (
@@ -222,7 +236,6 @@ export default function MorePage() {
                 {section.items.map((item, itemIdx) => {
                   const Icon = item.icon
                   
-                  // Conteúdo interno do botão/link
                   const ItemContent = (
                     <div className={`w-full flex items-center justify-between p-3 rounded-2xl transition-colors ${item.active ? 'hover:bg-gray-100 dark:hover:bg-zinc-900 active:bg-gray-200' : 'opacity-50 cursor-not-allowed'}`}>
                       <div className="flex items-center gap-4">
@@ -243,7 +256,6 @@ export default function MorePage() {
                     </div>
                   )
 
-                  // Se for ativo, renderiza como Link do Next.js (mais rápido). Se não, renderiza como div inativa.
                   if (item.active && item.href) {
                     return (
                       <Link href={item.href} key={itemIdx} className="block">
@@ -263,7 +275,7 @@ export default function MorePage() {
           ))}
         </div>
 
-        {/* Botão de Logout Isolado no final */}
+        {/* Botão de Logout */}
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-zinc-800">
           <button onClick={handleLogout} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
             <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
