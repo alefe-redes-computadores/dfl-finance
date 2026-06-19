@@ -106,7 +106,7 @@ function HomeContent() {
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-28 font-sans">
+    <div className="page-transition min-h-screen bg-slate-50 pb-28 font-sans">
       
       {/* HEADER E MÊS */}
       <div className="pt-6 px-4 bg-white rounded-b-[32px] pb-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mb-6">
