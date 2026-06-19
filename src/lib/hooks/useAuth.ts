@@ -6,20 +6,13 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Verifica se estamos voltando de um login do Google
-    const isOAuthCallback = window.location.href.includes('access_token') || window.location.href.includes('code=');
-
-    // 1. Pega a sessão inicial
+    // Busca a sessão e encerra o carregamento incondicionalmente
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      
-      // Se não for retorno do Google, ou se já tiver usuário, encerra o loading
-      if (!isOAuthCallback || session?.user) {
-        setLoading(false)
-      }
+      setLoading(false) 
     })
 
-    // 2. Escuta qualquer mudança de estado (Removido o bloqueio que causava loading infinito)
+    // Escuta as mudanças de estado (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
