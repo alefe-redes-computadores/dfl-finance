@@ -12,7 +12,6 @@ const tabs = [
   { href: '/more', icon: MoreHorizontal, label: 'Mais' },
 ]
 
-// Rotas onde a barra some completamente
 const HIDDEN_ROUTES = ['/new-transaction', '/accounts', '/categories']
 
 export default function BottomNav() {
@@ -30,64 +29,64 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* Overlay escuro */}
+      {/* Overlay */}
       <div
         className={`fixed inset-0 z-40 bg-black/80 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsOpen(false)}
       />
 
-      {/* Container dos botões flutuantes — overflow visible garantido */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 pointer-events-none">
-          {/* RECEITA — topo esquerda */}
-          <button
-            onClick={() => handleNavigate('/new-transaction?type=income')}
-            className="pointer-events-auto absolute flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-75 duration-200"
-            style={{ bottom: '100px', left: '50%', marginLeft: '-110px' }}
-          >
-            <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
-              <ArrowUp size={26} className="text-emerald-700" />
-            </div>
-            <span className="text-[10px] font-bold text-white uppercase tracking-widest">Receita</span>
-          </button>
+      {/* Botões flutuantes — posicionamento absoluto a partir do centro da tela */}
+      <div
+        className={`fixed inset-0 z-50 pointer-events-none transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+      >
+        {/* RECEITA — cima esquerda */}
+        <button
+          onClick={() => handleNavigate('/new-transaction?type=income')}
+          className={`pointer-events-auto absolute flex flex-col items-center gap-1.5 transition-all duration-300 ${isOpen ? 'scale-100' : 'scale-50'}`}
+          style={{ bottom: '110px', left: 'calc(50% - 110px)' }}
+        >
+          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
+            <ArrowUp size={26} className="text-emerald-700" />
+          </div>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Receita</span>
+        </button>
 
-          {/* CARTÃO — topo direita */}
-          <button
-            onClick={() => { setIsOpen(false); setIsCartaoModal(true) }}
-            className="pointer-events-auto absolute flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-75 duration-200 delay-75"
-            style={{ bottom: '100px', left: '50%', marginLeft: '30px' }}
-          >
-            <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
-              <CreditCard size={26} className="text-orange-500" />
-            </div>
-            <span className="text-[10px] font-bold text-white uppercase tracking-widest">Cartão</span>
-          </button>
+        {/* CARTÃO — cima direita */}
+        <button
+          onClick={() => { setIsOpen(false); setIsCartaoModal(true) }}
+          className={`pointer-events-auto absolute flex flex-col items-center gap-1.5 transition-all duration-300 delay-75 ${isOpen ? 'scale-100' : 'scale-50'}`}
+          style={{ bottom: '110px', left: 'calc(50% + 40px)' }}
+        >
+          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
+            <CreditCard size={26} className="text-orange-500" />
+          </div>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Cartão</span>
+        </button>
 
-          {/* TRANSFERIR — baixo esquerda */}
-          <button
-            onClick={() => handleNavigate('/new-transaction?type=transfer')}
-            className="pointer-events-auto absolute flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-75 duration-200 delay-100"
-            style={{ bottom: '28px', left: '50%', marginLeft: '-175px' }}
-          >
-            <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
-              <ArrowLeftRight size={26} className="text-teal-700" />
-            </div>
-            <span className="text-[10px] font-bold text-white uppercase tracking-widest">Transferir</span>
-          </button>
+        {/* TRANSFERIR — baixo esquerda */}
+        <button
+          onClick={() => handleNavigate('/new-transaction?type=transfer')}
+          className={`pointer-events-auto absolute flex flex-col items-center gap-1.5 transition-all duration-300 delay-100 ${isOpen ? 'scale-100' : 'scale-50'}`}
+          style={{ bottom: '34px', left: 'calc(50% - 175px)' }}
+        >
+          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
+            <ArrowLeftRight size={26} className="text-teal-700" />
+          </div>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Transferir</span>
+        </button>
 
-          {/* DESPESA — baixo direita */}
-          <button
-            onClick={() => handleNavigate('/new-transaction?type=expense')}
-            className="pointer-events-auto absolute flex flex-col items-center gap-1.5 animate-in fade-in zoom-in-75 duration-200 delay-150"
-            style={{ bottom: '28px', left: '50%', marginLeft: '95px' }}
-          >
-            <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
-              <ArrowDown size={26} className="text-red-600" />
-            </div>
-            <span className="text-[10px] font-bold text-white uppercase tracking-widest">Despesa</span>
-          </button>
-        </div>
-      )}
+        {/* DESPESA — baixo direita */}
+        <button
+          onClick={() => handleNavigate('/new-transaction?type=expense')}
+          className={`pointer-events-auto absolute flex flex-col items-center gap-1.5 transition-all duration-300 delay-150 ${isOpen ? 'scale-100' : 'scale-50'}`}
+          style={{ bottom: '34px', left: 'calc(50% + 105px)' }}
+        >
+          <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-2xl">
+            <ArrowDown size={26} className="text-red-600" />
+          </div>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Despesa</span>
+        </button>
+      </div>
 
       {/* Modal cartão em breve */}
       {isCartaoModal && (
@@ -95,10 +94,7 @@ export default function BottomNav() {
           className="fixed inset-0 z-[60] flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={() => setIsCartaoModal(false)}
         >
-          <div
-            className="bg-white w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl mb-4"
-            onClick={e => e.stopPropagation()}
-          >
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl mb-4" onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3">
               <CreditCard size={28} className="text-orange-500" />
             </div>
@@ -106,10 +102,7 @@ export default function BottomNav() {
             <p className="text-gray-500 text-sm mb-5 leading-relaxed">
               A funcionalidade de <b>Despesa no Cartão</b> está sendo preparada com capricho para o DFL Finance!
             </p>
-            <button
-              onClick={() => setIsCartaoModal(false)}
-              className="w-full bg-brand-teal text-white py-3 rounded-xl font-bold"
-            >
+            <button onClick={() => setIsCartaoModal(false)} className="w-full bg-brand-teal text-white py-3 rounded-xl font-bold">
               Entendido
             </button>
           </div>
@@ -134,7 +127,6 @@ export default function BottomNav() {
                     <span className={`text-[10px] ${active ? 'text-brand-teal font-medium' : 'text-gray-400'}`}>{tab.label}</span>
                   </button>
 
-                  {/* FAB */}
                   <button
                     onClick={() => setIsOpen(!isOpen)}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 -mt-5 ${isOpen ? 'bg-zinc-900 rotate-45' : 'bg-brand-teal rotate-0'}`}
