@@ -5,207 +5,80 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { 
-  Wallet, CreditCard, Tags, Hash, PieChart, Target, TrendingUp, 
-  RefreshCw, Landmark, Users, FileText, BarChart2, Bot, ScanLine, 
-  FileDown, Settings, ChevronRight, Moon, Sun, Camera, Edit2, Check, X, LogOut, Lock 
-} from 'lucide-react'
-
-type MenuItem = {
-  icon: any
-  label: string
-  active: boolean
-  href?: string
-  isPro?: boolean
-}
-
-type MenuSection = {
-  title: string
-  items: MenuItem[]
-}
+import { Wallet, CreditCard, Tags, Hash, PieChart, Target, TrendingUp, RefreshCw, Landmark, Users, FileText, BarChart2, Bot, ScanLine, FileDown, Settings, ChevronRight, Moon, Sun, Camera, Edit2, Check, X, LogOut, Lock } from 'lucide-react'
 
 export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
-  const [dark, setDark] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [displayName, setDisplayName] = useState('Usuário')
   const [isEditingName, setIsEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
 
-  const isGoogleLogin = user?.app_metadata?.provider === 'google'
-
-  useEffect(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved === 'dark') {
-      document.documentElement.classList.add('dark')
-      setDark(true)
-    }
-  }, [])
-
   useEffect(() => {
     if (user) {
       setAvatarUrl(user.user_metadata?.avatar_url || user.user_metadata?.picture || '')
-      const name = user.user_metadata?.full_name || user.user_metadata?.name || 'Usuário'
-      setDisplayName(name)
-      setNameInput(name)
+      setDisplayName(user.user_metadata?.full_name || 'Usuário')
+      setNameInput(user.user_metadata?.full_name || 'Usuário')
     }
   }, [user])
 
-  function toggleTheme() {
-    if (dark) {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    } else {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    }
-    setDark(!dark)
-  }
+  const menuAtivos = [
+    { icon: Wallet, label: 'Contas', href: '/accounts' },
+    { icon: Tags, label: 'Categorias', href: '/categories' },
+  ]
 
-  async function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    try {
-      setUploadingAvatar(true)
-      const file = event.target.files?.[0]
-      if (!file) return
-      const filePath = `${user!.id}-${Math.random()}`
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
-      if (uploadError) throw uploadError
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath)
-      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } })
-      setAvatarUrl(publicUrl)
-    } catch (error) { alert('Erro ao enviar foto.') } finally { setUploadingAvatar(false) }
-  }
-
-  async function saveName() {
-    await supabase.auth.updateUser({ data: { full_name: nameInput } })
-    setDisplayName(nameInput)
-    setIsEditingName(false)
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.replace('/login')
-  }
-
-  const menuData: MenuSection[] = [
-    {
-      title: 'Organizar',
-      items: [
-        { icon: Wallet, label: 'Contas', href: '/accounts', active: true },
-        { icon: CreditCard, label: 'Cartões de Crédito', active: false },
-        { icon: Tags, label: 'Categorias', href: '/categories', active: true },
-        { icon: Hash, label: 'Tags', active: false },
-      ]
-    },
-    {
-      title: 'Planejar',
-      items: [
-        { icon: PieChart, label: 'Orçamento', active: false },
-        { icon: Target, label: 'Metas', active: false },
-        { icon: TrendingUp, label: 'Projeções', active: false },
-      ]
-    },
-    {
-      title: 'Acompanhar',
-      items: [
-        { icon: RefreshCw, label: 'Assinaturas', active: false },
-        { icon: Landmark, label: 'Financiamentos', active: false },
-        { icon: Users, label: 'Quem me deve', active: false, isPro: true },
-      ]
-    },
-    {
-      title: 'Analisar',
-      items: [
-        { icon: FileText, label: 'Relatório personalizado', active: false },
-        { icon: BarChart2, label: 'Relatórios avançados', active: false, isPro: true },
-      ]
-    },
-    {
-      title: 'Ferramentas',
-      items: [
-        { icon: Bot, label: 'Assistente IA', active: false },
-        { icon: ScanLine, label: 'Importar comprovante', active: false },
-        { icon: FileDown, label: 'Importar extrato (CSV)', active: false },
-      ]
-    }
+  const menuEmBreve = [
+    { icon: CreditCard, label: 'Cartões de Crédito' },
+    { icon: Hash, label: 'Tags' },
+    { icon: PieChart, label: 'Orçamento' },
+    { icon: Target, label: 'Metas' },
+    { icon: TrendingUp, label: 'Projeções' },
+    { icon: Users, label: 'Quem me deve', isPro: true },
+    { icon: BarChart2, label: 'Relatórios Pro', isPro: true },
   ]
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 pb-24">
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl">
-            <div className="w-16 h-16 bg-brand-teal/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Bot size={32} className="text-brand-teal" />
-            </div>
-            <h3 className="font-bold text-lg mb-2 text-gray-900 dark:text-white">Saindo do forno!</h3>
-            <p className="text-gray-500 mb-6 text-sm">Estamos preparando essa função com todo o capricho para você.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
+          <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 bg-brand-teal/10 rounded-full flex items-center justify-center mx-auto mb-4"><Bot size={32} className="text-brand-teal" /></div>
+            <h3 className="font-bold text-lg mb-2">Saindo do forno!</h3>
+            <p className="text-gray-500 mb-6 text-sm">Estamos preparando essa função com muito capricho.</p>
             <button onClick={() => setModalOpen(false)} className="w-full bg-brand-teal text-white py-3 rounded-xl font-bold">Entendido</button>
           </div>
         </div>
       )}
 
       <div className="max-w-lg mx-auto px-5 pt-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Mais</h1>
-          <button onClick={toggleTheme} className="p-2 text-gray-500 hover:text-yellow-500 transition-colors">
-            {dark ? <Sun size={22} /> : <Moon size={22} />}
-          </button>
+        <h1 className="text-2xl font-semibold mb-6">Mais</h1>
+        
+        <div className="bg-gradient-to-r from-teal-700 to-orange-500 rounded-2xl p-4 mb-8 text-white flex items-center justify-between">
+          <div><h3 className="font-bold">DFL Finance Pro</h3><p className="text-xs text-teal-50">Sem limites e relatórios avançados</p></div>
+          <button className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold">Ver</button>
         </div>
 
-        <div className="flex items-center gap-4 mb-8 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
-          <label className="relative w-14 h-14 rounded-2xl bg-brand-teal flex items-center justify-center overflow-hidden cursor-pointer shadow-sm group shrink-0">
-             {uploadingAvatar ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : 
-              avatarUrl ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : <span className="text-white font-bold text-xl">{displayName.charAt(0).toUpperCase()}</span>}
-             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={18} className="text-white" /></div>
-             <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-          </label>
-          <div className="flex-1 overflow-hidden">
-             {isEditingName ? (
-               <div className="flex items-center gap-2"><input value={nameInput} onChange={(e) => setNameInput(e.target.value)} className="w-full bg-gray-100 dark:bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none" /><button onClick={saveName} className="text-green-500"><Check size={16} /></button><button onClick={() => setIsEditingName(false)} className="text-red-500"><X size={16} /></button></div>
-             ) : (
-               <div className="flex items-center gap-2">
-                 <h2 className="text-lg font-semibold truncate text-gray-900 dark:text-white">{displayName}</h2>
-                 {!isGoogleLogin && <button onClick={() => setIsEditingName(true)} className="text-gray-400"><Edit2 size={12} /></button>}
-               </div>
-             )}
-             <p className="text-sm text-gray-500 truncate">{user?.email}</p>
-          </div>
+        <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 px-1">Menu Principal</h4>
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border mb-6">
+          {menuAtivos.map((item, i) => (
+            <Link key={i} href={item.href!} className="flex items-center justify-between p-4 border-b last:border-0 hover:bg-gray-50">
+              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><item.icon size={16} className="text-brand-teal" /></div><span className="font-medium text-sm">{item.label}</span></div>
+              <ChevronRight size={16} className="text-gray-300" />
+            </Link>
+          ))}
         </div>
 
-        {menuData.map((section, index) => (
-          <div key={index} className="mb-6">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">{section.title}</h4>
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
-              {section.items.map((item, i) => (
-                item.active && item.href ? (
-                  <Link href={item.href} key={i} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-brand-teal/10 flex items-center justify-center"><item.icon size={16} className="text-brand-teal" /></div>
-                      <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{item.label}</span>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-300" />
-                  </Link>
-                ) : (
-                  <button key={i} onClick={() => setModalOpen(true)} className="flex items-center justify-between w-full p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors opacity-60">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center"><item.icon size={16} className="text-gray-500" /></div>
-                      <span className="font-medium text-sm text-gray-600 dark:text-gray-400">{item.label}</span>
-                    </div>
-                    {item.isPro ? <span className="text-[10px] font-bold text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">PRO</span> : <Lock size={14} className="text-gray-300" />}
-                  </button>
-                )
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <button onClick={handleLogout} className="mt-4 w-full flex items-center gap-3 p-4 text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors">
-          <LogOut size={18} /> Sair da conta
-        </button>
+        <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 px-1">No forno</h4>
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border opacity-70">
+          {menuEmBreve.map((item, i) => (
+            <button key={i} onClick={() => setModalOpen(true)} className="w-full flex items-center justify-between p-4 border-b last:border-0 hover:bg-gray-50">
+              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"><item.icon size={16} className="text-gray-500" /></div><span className="font-medium text-sm text-gray-600">{item.label}</span></div>
+              {item.isPro ? <span className="text-[10px] font-bold text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">PRO</span> : <Lock size={14} className="text-gray-300" />}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
