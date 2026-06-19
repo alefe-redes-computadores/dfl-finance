@@ -6,19 +6,30 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 1. Pega a sessão inicial assim que o app abre
+    // Verifica se estamos voltando de um login do Google (a URL terá esses códigos)
+    const isOAuthCallback = window.location.href.includes('access_token') || window.location.href.includes('code=');
+
+    // 1. Pega a sessão inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      setLoading(false)
+      
+      // Se não for um retorno do Google, ou se já achou o usuário, tira o loading
+      if (!isOAuthCallback || session?.user) {
+        setLoading(false)
+      }
     })
 
-    // 2. Fica escutando mudanças (quando você loga pelo Google, ele avisa aqui)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
+    // 2. Escuta mudanças de estado
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        setUser(session?.user ?? null)
+        setLoading(false)
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null)
+        setLoading(false)
+      }
     })
 
-    // Limpa o escutador quando o componente é desmontado
     return () => subscription.unsubscribe()
   }, [])
 
