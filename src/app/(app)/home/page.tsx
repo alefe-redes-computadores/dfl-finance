@@ -8,21 +8,34 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-// Definição de Bancos para buscar os Ícones/Cores (igual da tela Accounts)
-const ALL_BANKS = [
-  { slug: 'bradesco', name: 'Bradesco', color: '#dc2626', emoji: '🔴' },
-  { slug: 'caixa', name: 'Caixa', color: '#0284c7', emoji: '🏦' },
-  { slug: 'carteira', name: 'Carteira', color: '#16a34a', emoji: '👛' },
-  { slug: 'itau', name: 'Itaú', color: '#f97316', emoji: '🟠' },
-  { slug: 'nubank', name: 'Nubank', color: '#8b5cf6', emoji: '🟣' },
-  { slug: 'cora', name: 'Cora', color: '#7c3aed', emoji: '🟣' },
-  { slug: 'ifood-pago', name: 'iFood Pago', color: '#ea1d2c', emoji: '🍔' },
-  { slug: 'infinitpay', name: 'InfinitPay', color: '#111827', emoji: '⚫' },
-  { slug: 'mercado-pago', name: 'Mercado Pago', color: '#009ee3', emoji: '💙' },
-  { slug: 'pagbank', name: 'PagBank', color: '#22c55e', emoji: '💚' },
-  { slug: 'stone', name: 'Stone', color: '#00a868', emoji: '🟢' },
-  { slug: 'outra', name: 'Outra', color: '#94a3b8', emoji: '🏛️' },
-]
+
+// Adiciona esse objeto junto com ALL_BANKS no topo do arquivo
+const BANK_LOGOS: Record<string, string> = {
+  inter: 'https://logo.clearbit.com/inter.co',
+  nubank: 'https://logo.clearbit.com/nubank.com.br',
+  bradesco: 'https://logo.clearbit.com/bradesco.com.br',
+  itau: 'https://logo.clearbit.com/itau.com.br',
+  stone: 'https://logo.clearbit.com/stone.com.br',
+  infinitpay: 'https://logo.clearbit.com/infinitpay.io',
+  bb: 'https://logo.clearbit.com/bb.com.br',
+  caixa: 'https://logo.clearbit.com/caixa.gov.br',
+  c6: 'https://logo.clearbit.com/c6bank.com.br',
+  mercantil: 'https://logo.clearbit.com/mercantil.com.br',
+}
+
+// Substitui o div do emoji dentro do map de accounts por:
+<div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden bg-gray-50 border border-gray-100">
+  {BANK_LOGOS[acc.bank_slug] ? (
+    <img
+      src={BANK_LOGOS[acc.bank_slug]}
+      alt={acc.name}
+      className="w-8 h-8 object-contain"
+      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+    />
+  ) : (
+    <span className="text-xl">{bankDef?.emoji || '🏛️'}</span>
+  )}
+</div>
 
 function HomeContent() {
   const { user } = useAuth()
