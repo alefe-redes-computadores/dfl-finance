@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Paperclip } from 'lucide-react'
@@ -9,11 +9,16 @@ import { ChevronLeft, Paperclip } from 'lucide-react'
 type TxType = 'income' | 'expense' | 'sangria' | 'transfer'
 type Context = 'dfl' | 'personal'
 
+
 export default function NewTransactionPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  const defaultType = (searchParams.get('type') as TxType) || 'expense'
 
-  const [type, setType] = useState<TxType>('expense') // Mudei o padrão para despesa (mais comum)
+  const [type, setType] = useState<TxType>(defaultType)
+
   const [context, setContext] = useState<Context>('dfl')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
