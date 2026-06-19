@@ -97,7 +97,7 @@ function NewTransactionContent() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-950 text-gray-800 dark:text-white">
+    <div className="page-transition min-h-screen bg-white font-sans text-gray-800 pb-32">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2">
