@@ -76,7 +76,7 @@ function AnalysisContent() {
   const COLORS = ['#0d9488', '#16a34a', '#0891b2', '#7c3aed', '#dc2626', '#ea580c', '#ca8a04']
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 pb-28 font-sans">
+    <div className="page-transition max-w-md mx-auto min-h-screen bg-slate-50 pb-28 font-sans">
       <div className="px-4 pt-6 pb-4 bg-white shadow-sm mb-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">Análise</h1>
