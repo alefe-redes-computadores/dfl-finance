@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import './globals.css'
+import { redirect } from 'next/navigation';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -23,10 +23,6 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <body className="overscroll-none">{children}</body>
-    </html>
-  )
+export default function Page() {
+  redirect('/home');
 }
