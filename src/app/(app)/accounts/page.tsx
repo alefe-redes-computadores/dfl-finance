@@ -30,14 +30,23 @@ export default function AccountsPage() {
     setAccounts(data ?? [])
   }
 
+  // Função para selecionar o banco e autopreencher o nome
+  const selectBank = (bank: any) => {
+    setSelectedBank(bank)
+    setName(bank.name) // Preenche o nome da conta com o nome do banco
+  }
+
   const handleSave = async () => {
-    if (!user?.id) { alert("Erro: Usuário não identificado."); return }
+    if (!user?.id) { 
+      alert("Erro: Usuário não autenticado. Tente recarregar a página."); 
+      return 
+    }
     if (!name || !selectedBank) { alert("Escolha um banco e nomeie a conta"); return }
     
     const numericBalance = parseInt(rawBalance || '0', 10) / 100
     
     const { error } = await supabase.from('accounts').insert({
-      user_id: user.id, // ID extraído com segurança do user.id
+      user_id: user.id,
       name: name,
       bank_slug: selectedBank.slug,
       balance: numericBalance,
@@ -52,11 +61,6 @@ export default function AccountsPage() {
     }
     
     setName(''); setRawBalance(''); setShowForm(false); setSelectedBank(null); loadAccounts()
-  }
-
-  const handleDelete = async (id: string) => {
-    await supabase.from('accounts').delete().eq('id', id)
-    loadAccounts()
   }
 
   const banks = context === 'personal' ? [
@@ -91,13 +95,13 @@ export default function AccountsPage() {
       {showForm && (
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl shadow-lg border border-gray-100 mb-6">
           <div className="flex bg-gray-100 p-1 rounded-full mb-4">
-            <button onClick={() => { setContext('dfl'); setSelectedBank(null) }} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'dfl' ? 'bg-white shadow' : ''}`}>DFL</button>
-            <button onClick={() => { setContext('personal'); setSelectedBank(null) }} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'personal' ? 'bg-white shadow' : ''}`}>Pessoal</button>
+            <button onClick={() => { setContext('dfl'); setSelectedBank(null); setName(''); }} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'dfl' ? 'bg-white shadow' : ''}`}>DFL</button>
+            <button onClick={() => { setContext('personal'); setSelectedBank(null); setName(''); }} className={`flex-1 py-2 rounded-full font-bold text-sm ${context === 'personal' ? 'bg-white shadow' : ''}`}>Pessoal</button>
           </div>
           
           <div className="grid grid-cols-4 gap-2 mb-4">
             {banks.map(b => (
-              <button key={b.slug} onClick={() => setSelectedBank(b)} className={`flex flex-col items-center p-2 rounded-xl border ${selectedBank?.slug === b.slug ? 'border-brand-teal bg-brand-teal/10' : 'border-gray-200'}`}>
+              <button key={b.slug} onClick={() => selectBank(b)} className={`flex flex-col items-center p-2 rounded-xl border ${selectedBank?.slug === b.slug ? 'border-brand-teal bg-brand-teal/10' : 'border-gray-200'}`}>
                 <div className="w-8 h-8 rounded-full mb-1" style={{backgroundColor: b.color}} />
                 <span className="text-[9px] truncate w-full text-center">{b.name}</span>
               </button>
