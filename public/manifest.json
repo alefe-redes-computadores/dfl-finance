@@ -1,22 +1,17 @@
 {
   "name": "DFL Finance",
   "short_name": "DFL",
-  "description": "Controle financeiro DFL",
-  "start_url": "/",
+  "description": "Gestão inteligente do seu dinheiro",
+  "start_url": "/home",
   "display": "standalone",
-  "background_color": "#EFF2F3",
-  "theme_color": "#1a6b5c",
-  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#14b8a6",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
