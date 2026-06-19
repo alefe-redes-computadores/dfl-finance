@@ -30,21 +30,33 @@ const BANK_LOGOS: Record<string, string> = {
 export default function AccountsPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context } = useContext_()
+  const contextData = useContext_() 
+  const context = contextData?.context || 'dfl' // Segurança extra
+  
   const [accounts, setAccounts] = useState<any[]>([])
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [bankSlug, setBankSlug] = useState('carteira')
   const [balance, setBalance] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (user) loadAccounts()
+    if (user && context) {
+      loadAccounts()
+    }
   }, [user, context])
 
   async function loadAccounts() {
-    const { data } = await supabase.from('accounts').select('*').eq('user_id', user!.id).eq('context', context).order('created_at', { ascending: true })
+    setLoading(true)
+    const { data } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('user_id', user!.id)
+      .eq('context', context)
+      .order('created_at', { ascending: true })
     setAccounts(data ?? [])
+    setLoading(false)
   }
 
   async function handleSave() {
@@ -59,6 +71,10 @@ export default function AccountsPage() {
   async function handleDelete(id: string) {
     await supabase.from('accounts').delete().eq('id', id)
     loadAccounts()
+  }
+
+  if (loading && accounts.length === 0) {
+    return <div className="flex items-center justify-center min-h-screen text-gray-400">Carregando...</div>
   }
 
   return (
