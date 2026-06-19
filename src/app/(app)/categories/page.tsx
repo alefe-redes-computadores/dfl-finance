@@ -279,6 +279,7 @@ export default function CategoriesPage() {
                   {cat.name}
                 </p>
 
+
                 <span
                   className={`text-[10px] px-2 py-0.5 rounded-full ${
                     cat.is_default
