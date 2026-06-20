@@ -102,15 +102,11 @@ function HomeContent() {
   const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
 
-  const handleOpenCardModal = () => {
-    // Integraremos o seu modal real de criação de cartão aqui
-    console.log('Abrir Modal de Cartão')
-  }
   if (authLoading || dataLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-teal-700">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-teal-700 bg-gray-50">
         <Loader2 className="animate-spin" size={40} />
-        <p className="font-bold">Carregando seus dados...</p>
+        <p className="font-bold">Carregando...</p>
       </div>
     )
   }
@@ -172,6 +168,7 @@ function HomeContent() {
           </div>
         </div>
       </div>
+
       {/* Pendências */}
       <div className="px-4 mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Pendências</h3>
@@ -227,7 +224,7 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Cartões - Fluxo Corrigido */}
+      {/* Cartões */}
       <div className="px-4 mb-8">
         <div className="flex justify-between items-center mb-4 px-1">
           <h3 className="text-[15px] font-bold text-gray-800">Cartões</h3>
@@ -236,7 +233,7 @@ function HomeContent() {
         
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {cards.length === 0 ? (
-            <button onClick={handleOpenCardModal} className="w-full p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
+            <button onClick={() => router.push('/cards')} className="w-full p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-2">
                 <Plus size={20} className="text-gray-400" />
               </div>
@@ -245,9 +242,16 @@ function HomeContent() {
             </button>
           ) : (
             cards.map((card, index) => (
-              <Link href="/cards" key={card.id} className={`flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors block ${index !== cards.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <Link 
+                href="/cards" 
+                key={card.id} 
+                className={`flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors block ${index !== cards.length - 1 ? 'border-b border-gray-50' : ''}`}
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: card.color }}>
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs"
+                    style={{ backgroundColor: card.color }}
+                  >
                     {card.name.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
@@ -275,25 +279,40 @@ function HomeContent() {
             <div className="p-6 text-center text-gray-400 text-sm">Nenhuma transação recente neste mês.</div>
           ) : (
             recentExpenses.map((tx, index) => (
-              <div key={tx.id} onClick={() => router.push('/transactions')} className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <div 
+                key={tx.id} 
+                onClick={() => router.push('/transactions')}
+                className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}>
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+                    style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}
+                  >
                     {tx.categories?.icon || '💸'}
                   </div>
                   <div>
                     <p className="text-[14px] font-medium text-gray-800 uppercase text-xs tracking-wide">{tx.description || tx.categories?.name}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}
+                    </p>
                   </div>
                 </div>
-                <p className="text-[14px] font-bold text-red-500">{hideBalance ? '••••' : formatCurrency(Number(tx.amount))}</p>
+                <p className="text-[14px] font-bold text-red-500">
+                  {hideBalance ? '••••' : formatCurrency(Number(tx.amount))}
+                </p>
               </div>
             ))
           )}
         </div>
       </div>
 
+      {/* Botão de Reordenar */}
       <div className="px-4 flex justify-center mb-8">
-        <button onClick={() => alert('Em breve: Personalize sua tela inicial!')} className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors">
+        <button 
+          onClick={() => console.log('Painel de reordenar')}
+          className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors"
+        >
           <Settings2 size={16} /> Reordenar painel
         </button>
       </div>
