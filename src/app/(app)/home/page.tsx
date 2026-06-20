@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, Plus, SlidersHorizontal, Settings2 } from 'lucide-react'
+import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Plus, Settings2, Loader2 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -23,7 +23,7 @@ function BankInitials({ color, name }: { color: string, name: string }) {
 }
 
 function HomeContent() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { context } = useContext_()
   const [hideBalance, setHideBalance] = useState(false)
@@ -34,7 +34,7 @@ function HomeContent() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
   const [recentExpenses, setRecentExpenses] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
@@ -46,7 +46,7 @@ function HomeContent() {
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
-    setLoading(true)
+    setDataLoading(true)
     
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
@@ -92,7 +92,7 @@ function HomeContent() {
       
     setCards(creditCards ?? [])
 
-    setLoading(false)
+    setDataLoading(false)
   }, [user?.id, context, currentDate])
 
   useEffect(() => {
@@ -103,9 +103,18 @@ function HomeContent() {
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
 
   const handleOpenCardModal = () => {
-     // Aqui você deve colocar a lógica de abrir o seu modal de criação de cartão
-     alert('Modal de criação de cartão aberto')
+    // Integraremos o seu modal real de criação de cartão aqui
+    console.log('Abrir Modal de Cartão')
   }
+  if (authLoading || dataLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-teal-700">
+        <Loader2 className="animate-spin" size={40} />
+        <p className="font-bold">Carregando seus dados...</p>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-28 font-sans relative">
       
