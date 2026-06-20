@@ -10,7 +10,7 @@ import {
   Check, Trash2, Archive 
 } from 'lucide-react'
 
-const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3']
+const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
 
 export default function CardsPage() {
@@ -22,10 +22,14 @@ export default function CardsPage() {
   const [context, setContext] = useState<'dfl' | 'personal'>('dfl')
   const [loading, setLoading] = useState(true)
 
-  // Estados do Modal
+  // Estados do Modal Principal
   const [showForm, setShowForm] = useState(false)
   const [editingCard, setEditingCard] = useState<any | null>(null)
   
+  // Estado do Modal de Cores (Color Picker Customizado)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [tempColor, setTempColor] = useState('')
+
   // Campos do Formulário
   const [name, setName] = useState('')
   const [flag, setFlag] = useState('')
@@ -35,7 +39,7 @@ export default function CardsPage() {
   const [dueDay, setDueDay] = useState('')
   const [paymentAccountId, setPaymentAccountId] = useState('')
   const [color, setColor] = useState(PREDEFINED_COLORS[0])
-  const [limitAmount, setLimitAmount] = useState('')
+  const [limitAmount, setLimitAmount] = useState('0,00')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function CardsPage() {
     setDueDay('')
     setPaymentAccountId('')
     setColor(PREDEFINED_COLORS[0])
-    setLimitAmount('')
+    setLimitAmount('0,00')
     setShowForm(true)
   }
 
@@ -93,17 +97,35 @@ export default function CardsPage() {
     setDueDay(card.due_day?.toString() || '')
     setPaymentAccountId(card.payment_account_id || '')
     setColor(card.color)
-    setLimitAmount(card.limit_amount?.toString() || '')
+    
+    // Formatando o limite vindo do banco para exibir com vírgula
+    const limitStr = card.limit_amount ? Number(card.limit_amount).toFixed(2).replace('.', ',') : '0,00'
+    setLimitAmount(limitStr)
+    
     setShowForm(true)
   }
 
+  // Máscara de Moeda (Digitando da direita para a esquerda)
+  const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '') // Remove tudo que não for número
+    if (value === '') value = '0'
+    const formatted = (Number(value) / 100).toFixed(2).replace('.', ',')
+    setLimitAmount(formatted)
+  }
+
+  // Máscara para Dias (Apenas números até 31)
+  const handleDayChange = (val: string, setter: (v: string) => void) => {
+    const numeric = val.replace(/\D/g, '')
+    if (numeric === '' || (Number(numeric) >= 1 && Number(numeric) <= 31)) {
+      setter(numeric)
+    }
+  }
+
   async function handleSave() {
-    // Validação básica
     if (!name.trim()) {
       alert('Por favor, informe o nome do cartão.')
       return
     }
-    
     setSaving(true)
 
     const payload = {
@@ -113,11 +135,11 @@ export default function CardsPage() {
       flag: flag || null,
       institution: institution || null,
       last_four: lastFour || null,
-      closing_day: closingDay ? parseInt(closingDay) : 1, // Default se vazio
-      due_day: dueDay ? parseInt(dueDay) : 10,           // Default se vazio
+      closing_day: closingDay ? parseInt(closingDay) : 1,
+      due_day: dueDay ? parseInt(dueDay) : 10,
       payment_account_id: paymentAccountId || null,
       color,
-      limit_amount: parseFloat(limitAmount.replace(',', '.') || '0')
+      limit_amount: parseFloat(limitAmount.replace(/\./g, '').replace(',', '.')) || 0
     }
 
     try {
@@ -132,8 +154,7 @@ export default function CardsPage() {
       setShowForm(false)
       loadCards()
     } catch (error: any) {
-      console.error("Erro ao salvar:", error)
-      alert(`Erro ao salvar: ${error.message || 'Verifique o banco de dados.'}`)
+      alert(`Erro ao salvar: ${error.message}`)
     } finally {
       setSaving(false)
     }
@@ -147,6 +168,29 @@ export default function CardsPage() {
   }
 
   const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`
+
+  // Renderiza a Logo Visual do Cartão baseado na bandeira
+  const renderCardLogo = (cardFlag: string) => {
+    switch (cardFlag) {
+      case 'Visa':
+        return <span className="text-xl font-bold italic tracking-tighter text-white">VISA</span>
+      case 'Mastercard':
+        return (
+          <div className="flex">
+            <div className="w-5 h-5 bg-red-500 rounded-full mix-blend-multiply opacity-90" />
+            <div className="w-5 h-5 bg-yellow-500 rounded-full mix-blend-multiply -ml-2 opacity-90" />
+          </div>
+        )
+      case 'Elo':
+        return <span className="text-sm font-bold tracking-tight text-white">elo</span>
+      case 'Amex':
+        return <span className="text-[10px] font-bold text-white bg-blue-500 px-1 py-0.5 rounded">AMEX</span>
+      case 'Hipercard':
+        return <span className="text-xs font-bold text-red-100 italic">HIPER</span>
+      default:
+        return <CreditCard size={20} className="text-white" />
+    }
+  }
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] font-sans pb-24 relative">
@@ -213,13 +257,13 @@ export default function CardsPage() {
               className="bg-white p-4 border border-gray-50 rounded-2xl shadow-sm cursor-pointer hover:border-emerald-100 transition-colors flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
+                {/* Cartãozinho visual na lista */}
                 <div 
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm relative overflow-hidden"
+                  className="w-14 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm relative overflow-hidden"
                   style={{ backgroundColor: card.color }}
                 >
-                   {/* Linha diagonal estilizada para parecer cartão */}
-                  <div className="absolute top-0 right-0 w-8 h-8 bg-white/20 rounded-bl-full" />
-                  {card.flag === 'Visa' ? 'V' : card.flag === 'Mastercard' ? 'M' : card.name.substring(0, 2).toUpperCase()}
+                  <div className="absolute top-0 right-0 w-6 h-6 bg-white/10 rounded-bl-full" />
+                  {renderCardLogo(card.flag)}
                 </div>
                 <div>
                   <p className="text-[14px] font-bold text-gray-800">{card.name}</p>
@@ -237,7 +281,7 @@ export default function CardsPage() {
         )}
       </div>
 
-      {/* Modal Criar/Editar Cartão - AGORA COM Z-INDEX ALTO E FIXED INSET-0 */}
+      {/* MODAL PRINCIPAL: CRIAR/EDITAR CARTÃO */}
       {showForm && (
         <div className="fixed inset-0 z-[9999] bg-[#f8f9fa] overflow-y-auto pb-24 flex flex-col">
           
@@ -251,8 +295,8 @@ export default function CardsPage() {
             <div>
               <p className="text-white/80 text-[11px] font-medium uppercase tracking-wider mb-2">Nome do cartão</p>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white">
-                  <CreditCard size={20} />
+                <div className="w-12 h-8 rounded-md flex items-center justify-center border border-white/20 bg-black/10">
+                   {renderCardLogo(flag)}
                 </div>
                 <input
                   value={name}
@@ -293,7 +337,7 @@ export default function CardsPage() {
                 <Landmark size={18} /> 
                 <div className="flex-1">
                   <span className="text-[13px] font-bold text-gray-800 block mb-1">Instituição</span>
-                  <input value={institution} onChange={e => setInstitution(e.target.value)} placeholder="Nome da instituição (opcional)" className="text-[12px] w-full outline-none text-gray-500" />
+                  <input value={institution} onChange={e => setInstitution(e.target.value)} placeholder="Nome da instituição (opcional)" className="text-[12px] w-full outline-none text-gray-500 font-medium" />
                 </div>
               </div>
             </div>
@@ -304,7 +348,7 @@ export default function CardsPage() {
                 <CreditCard size={18} /> 
                 <span className="text-[13px] font-bold text-gray-800 flex-1">Últimos 4 dígitos</span>
               </div>
-              <input value={lastFour} onChange={e => setLastFour(e.target.value.replace(/\D/g, '').slice(0,4))} placeholder="0000" className="text-[13px] w-16 text-right outline-none text-gray-500" />
+              <input value={lastFour} onChange={e => setLastFour(e.target.value.replace(/\D/g, '').slice(0,4))} placeholder="0000" className="text-[13px] w-16 text-right outline-none text-gray-800 font-bold" />
             </div>
 
             {/* Datas */}
@@ -313,13 +357,13 @@ export default function CardsPage() {
                 <div className="flex items-center gap-3 text-gray-500 mb-2">
                   <Calendar size={18} /> <span className="text-[13px] font-bold text-gray-800">Fechamento</span>
                 </div>
-                <input type="number" min="1" max="31" value={closingDay} onChange={e => setClosingDay(e.target.value)} placeholder="Dia" className="text-[13px] ml-8 outline-none text-gray-500 w-full" />
+                <input type="text" value={closingDay} onChange={e => handleDayChange(e.target.value, setClosingDay)} placeholder="Dia" className="text-[13px] ml-8 outline-none text-gray-800 font-bold w-full" />
               </div>
               <div className="p-4 flex-1">
                 <div className="flex items-center gap-3 text-gray-500 mb-2">
                   <Calendar size={18} /> <span className="text-[13px] font-bold text-gray-800">Vencimento</span>
                 </div>
-                <input type="number" min="1" max="31" value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="Dia" className="text-[13px] ml-8 outline-none text-gray-500 w-full" />
+                <input type="text" value={dueDay} onChange={e => handleDayChange(e.target.value, setDueDay)} placeholder="Dia" className="text-[13px] ml-8 outline-none text-gray-800 font-bold w-full" />
               </div>
             </div>
 
@@ -332,7 +376,7 @@ export default function CardsPage() {
                   <select 
                     value={paymentAccountId} 
                     onChange={e => setPaymentAccountId(e.target.value)}
-                    className="text-[12px] w-full outline-none text-gray-500 bg-transparent appearance-none"
+                    className="text-[12px] font-medium w-full outline-none text-gray-800 bg-transparent appearance-none"
                   >
                     <option value="">Selecionar conta (opcional)</option>
                     {accounts.map(acc => (
@@ -344,13 +388,13 @@ export default function CardsPage() {
               </div>
             </div>
 
-            {/* Cor - COM COLOR PICKER PERSONALIZADO */}
+            {/* Cor */}
             <div className="p-4 border-b border-gray-50 flex flex-col gap-3">
                <div className="flex items-center gap-3 text-gray-500">
                 <Palette size={18} /> <span className="text-[13px] font-bold text-gray-800">Cor do Cartão</span>
               </div>
               <div className="flex gap-2 flex-wrap ml-8 mt-1 items-center">
-                {PREDEFINED_COLORS.map(c => (
+                {PREDEFINED_COLORS.slice(0, 8).map(c => (
                   <button 
                     key={c} onClick={() => setColor(c)}
                     className={`w-8 h-8 rounded-full border-2 ${color === c ? 'border-gray-800' : 'border-transparent'}`}
@@ -358,32 +402,31 @@ export default function CardsPage() {
                   />
                 ))}
                 
-                {/* Seletor de Cores Dinâmico (Disco RGB) */}
-                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-800 transition-colors">
-                  <input 
-                    type="color" 
-                    value={color} 
-                    onChange={(e) => setColor(e.target.value)}
-                    className="absolute inset-0 w-full h-full p-0 border-0 opacity-0 cursor-pointer"
-                  />
-                  {/* Fundo arco-íris simulando disco de cores */}
+                {/* Botão para abrir o Color Picker Customizado */}
+                <button 
+                  onClick={() => {
+                    setTempColor(color)
+                    setShowColorPicker(true)
+                  }}
+                  className="w-8 h-8 rounded-full overflow-hidden border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-gray-800 transition-colors"
+                >
                   <div className="w-full h-full" style={{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }} />
-                </div>
+                </button>
               </div>
             </div>
 
-            {/* Limite */}
+            {/* Limite - COM MÁSCARA DINÂMICA */}
             <div className="p-4 border-b border-gray-50">
               <div className="flex items-center gap-3 text-gray-500 mb-3">
                 <DollarSign size={18} /> <span className="text-[13px] font-bold text-gray-800">Limite de crédito</span>
               </div>
               <div className="ml-8 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-                <span className="text-gray-500 font-bold">R$</span>
+                <span className="text-gray-400 font-bold text-lg">R$</span>
                 <input 
-                  type="number" step="0.01" 
-                  value={limitAmount} onChange={e => setLimitAmount(e.target.value)} 
-                  placeholder="0,00" 
-                  className="bg-transparent w-full outline-none font-bold text-gray-800 text-lg" 
+                  type="text" 
+                  value={limitAmount} 
+                  onChange={handleLimitChange} 
+                  className="bg-transparent w-full outline-none font-black text-gray-800 text-2xl tracking-tight" 
                 />
               </div>
             </div>
@@ -391,10 +434,10 @@ export default function CardsPage() {
             {/* Ações de Edição */}
             {editingCard && (
               <div className="p-4 space-y-2 mt-4">
-                <button className="flex items-center gap-3 text-[13px] font-bold text-gray-600 w-full p-2">
+                <button className="flex items-center gap-3 text-[13px] font-bold text-gray-600 w-full p-2 hover:bg-gray-50 rounded-xl transition-colors">
                   <Archive size={18} /> Arquivar cartão
                 </button>
-                <button onClick={() => handleDelete(editingCard.id)} className="flex items-center gap-3 text-[13px] font-bold text-red-500 w-full p-2">
+                <button onClick={() => handleDelete(editingCard.id)} className="flex items-center gap-3 text-[13px] font-bold text-red-500 w-full p-2 hover:bg-red-50 rounded-xl transition-colors">
                   <Trash2 size={18} /> Excluir cartão
                 </button>
               </div>
@@ -410,7 +453,52 @@ export default function CardsPage() {
           >
             <Check size={28} />
           </button>
+        </div>
+      )}
 
+      {/* MODAL COLOR PICKER CUSTOMIZADO (LIVRE DOS ANOS 70) */}
+      {showColorPicker && (
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowColorPicker(false)}>
+          <div className="bg-[#303030] rounded-3xl p-6 w-full max-w-xs shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-bold text-lg mb-4">Selecionar cor</h3>
+            
+            <div className="grid grid-cols-4 gap-4 mb-6">
+               {PREDEFINED_COLORS.map(c => (
+                  <button 
+                    key={c} onClick={() => setTempColor(c)}
+                    className={`w-12 h-12 rounded-xl mx-auto border-2 ${tempColor === c ? 'border-white' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }}
+                  />
+               ))}
+            </div>
+
+            <div className="flex items-center justify-between mb-8 bg-[#222] p-3 rounded-xl">
+               <span className="text-blue-400 text-sm font-medium">Hexadecimal</span>
+               <div className="flex items-center gap-2">
+                 <div className="w-4 h-4 rounded-full" style={{backgroundColor: tempColor}} />
+                 <input 
+                   type="text" 
+                   value={tempColor} 
+                   onChange={e => setTempColor(e.target.value)} 
+                   className="w-20 bg-transparent text-white text-sm outline-none font-mono uppercase"
+                   maxLength={7}
+                 />
+               </div>
+            </div>
+
+            <div className="flex justify-end gap-6 text-sm font-bold">
+               <button onClick={() => setShowColorPicker(false)} className="text-gray-400">Cancelar</button>
+               <button 
+                 onClick={() => {
+                   setColor(tempColor)
+                   setShowColorPicker(false)
+                 }} 
+                 className="text-blue-400"
+               >
+                 Definir
+               </button>
+            </div>
+          </div>
         </div>
       )}
 
