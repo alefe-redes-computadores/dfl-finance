@@ -94,13 +94,13 @@ function HomeContent() {
 
     setDataLoading(false)
   }, [user?.id, context, currentDate])
+
   useEffect(() => {
     loadData()
   }, [loadData])
 
   const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
-
   if (authLoading || dataLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-teal-700 bg-gray-50">
@@ -167,6 +167,7 @@ function HomeContent() {
           </div>
         </div>
       </div>
+
       {/* Pendências */}
       <div className="px-4 mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Pendências</h3>
@@ -199,7 +200,7 @@ function HomeContent() {
             accounts.map((acc) => (
               <div 
                 key={acc.id} 
-                onClick={() => router.push(`/accounts/${acc.id}`)} 
+                onClick={() => router.push('/accounts')} 
                 className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
@@ -242,6 +243,7 @@ function HomeContent() {
           )}
         </div>
       </div>
+
       {/* Últimas Transações */}
       <div className="px-4 mb-10">
         <div className="flex justify-between items-center mb-4 px-1 cursor-pointer" onClick={() => router.push('/transactions')}>
@@ -250,12 +252,12 @@ function HomeContent() {
         </div>
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {recentExpenses.length === 0 ? (
-            <div className="p-6 text-center text-gray-400 text-sm">Nenhuma transação recente neste mês.</div>
+            <div className="p-6 text-center text-gray-400 text-sm">Nenhuma transação recente.</div>
           ) : (
             recentExpenses.map((tx) => (
               <div 
                 key={tx.id} 
-                onClick={() => router.push(`/transactions/${tx.id}`)}
+                onClick={() => router.push('/transactions')}
                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
