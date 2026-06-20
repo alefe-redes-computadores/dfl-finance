@@ -15,7 +15,6 @@ export default function MorePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
   
-  // Estado para Crop
   const [showCropModal, setShowCropModal] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -48,28 +47,34 @@ export default function MorePage() {
     if (!canvasRef.current) return
     setUploading(true)
     
-    canvasRef.current.toBlob(async (blob) => {
-      if (!blob) return
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    img.src = selectedImage!
+    
+    img.onload = () => {
+      const size = Math.min(img.width, img.height)
+      canvas.width = 400
+      canvas.height = 400
+      ctx?.drawImage(img, (img.width - size)/2, (img.height - size)/2, size, size, 0, 0, 400, 400)
       
-      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
-      const filePath = `${user?.id}-${Date.now()}.jpg`
-
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
-      if (uploadError) { alert('Erro no upload'); return }
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-      await supabase.auth.updateUser({ data: { custom_avatar_url: data.publicUrl } })
-      
-      setShowCropModal(false)
-      window.location.reload()
-    }, 'image/jpeg')
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
+        const filePath = `${user?.id}-${Date.now()}.jpg`
+        const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
+        if (uploadError) { alert('Erro no upload'); return }
+        const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
+        await supabase.auth.updateUser({ data: { custom_avatar_url: data.publicUrl } })
+        setShowCropModal(false)
+        window.location.reload()
+      }, 'image/jpeg')
+    }
     setUploading(false)
   }
-
   return (
     <div className="min-h-screen bg-gray-50 pb-24 px-5 pt-8 font-sans">
       
-      {/* Modal Crop */}
       {showCropModal && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white p-4 rounded-3xl">
@@ -86,7 +91,6 @@ export default function MorePage() {
         </div>
       )}
 
-      {/* Modal Original "No Forno" */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
           <div className="bg-white p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
