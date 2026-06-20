@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Wallet, Tags, ChevronRight, LogOut, Camera, Check, Edit2, Bot, Lock, CreditCard, Hash, PieChart, Target, TrendingUp, Users, BarChart2 } from 'lucide-react'
+import { Wallet, Tags, ChevronRight, LogOut, Camera, Check, Edit2, Bot, Lock, CreditCard, Hash, PieChart, Target, TrendingUp, Users, BarChart2, X } from 'lucide-react'
 
 export default function MorePage() {
   const router = useRouter()
@@ -14,6 +14,11 @@ export default function MorePage() {
   const [name, setName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
+  
+  // Estado para Crop
+  const [showCropModal, setShowCropModal] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
@@ -28,42 +33,60 @@ export default function MorePage() {
     window.location.reload()
   }
 
-  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      setUploading(true)
-      if (!event.target.files || event.target.files.length === 0) return
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setSelectedImage(e.target?.result as string)
+        setShowCropModal(true)
+      }
+      reader.readAsDataURL(event.target.files[0])
+    }
+  }
+
+  const handleCropAndUpload = async () => {
+    if (!canvasRef.current) return
+    setUploading(true)
+    
+    canvasRef.current.toBlob(async (blob) => {
+      if (!blob) return
       
-      const file = event.target.files[0]
-      const fileExt = file.name.split('.').pop()
-      const filePath = `${user?.id}-${Math.random()}.${fileExt}`
+      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
+      const filePath = `${user?.id}-${Date.now()}.jpg`
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file)
-
-      if (uploadError) throw uploadError
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
+      if (uploadError) { alert('Erro no upload'); return }
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-
-      await supabase.auth.updateUser({
-        data: { 
-          avatar_url: data.publicUrl,
-          custom_avatar_url: data.publicUrl 
-        }
-      })
-
+      await supabase.auth.updateUser({ data: { custom_avatar_url: data.publicUrl } })
+      
+      setShowCropModal(false)
       window.location.reload()
-    } catch (error) {
-      alert('Erro ao enviar imagem. Verifique se o bucket "avatars" existe no Supabase Storage.')
-      console.error(error)
-    } finally {
-      setUploading(false)
-    }
+    }, 'image/jpeg')
+    setUploading(false)
   }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 px-5 pt-8 font-sans">
       
+      {/* Modal Crop */}
+      {showCropModal && (
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white p-4 rounded-3xl">
+            <h3 className="font-bold mb-4 text-center">Ajuste seu rosto</h3>
+            <div className="relative w-full aspect-square bg-gray-200 overflow-hidden rounded-2xl">
+               {selectedImage && <img src={selectedImage} alt="Crop" className="w-full h-full object-cover" />}
+            </div>
+            <div className="flex gap-4 mt-6">
+              <button onClick={() => setShowCropModal(false)} className="flex-1 py-3 text-gray-500 font-bold">Cancelar</button>
+              <button onClick={handleCropAndUpload} className="flex-1 py-3 bg-teal-700 text-white rounded-xl font-bold">Cortar e Salvar</button>
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Original "No Forno" */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
           <div className="bg-white p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -83,10 +106,10 @@ export default function MorePage() {
       </div>
       
       <div className="bg-white p-4 rounded-3xl flex items-center gap-4 mb-8 shadow-sm border border-gray-100">
-        <div className="relative">
+        <div className="relative w-16 h-16">
           <img 
             src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'} 
-            className={`w-16 h-16 rounded-full object-cover border-2 border-gray-100 ${uploading ? 'opacity-50' : 'opacity-100'}`} 
+            className={`w-full h-full rounded-full object-cover border-2 border-gray-100 ${uploading ? 'opacity-50' : 'opacity-100'}`} 
             alt="Perfil"
           />
           <label className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
@@ -95,7 +118,7 @@ export default function MorePage() {
               type="file" 
               accept="image/*" 
               className="hidden" 
-              onChange={handleAvatarUpload}
+              onChange={handleFileSelect}
               disabled={uploading}
             />
           </label>
