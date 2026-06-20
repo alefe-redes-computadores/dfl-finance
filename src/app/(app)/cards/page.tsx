@@ -38,7 +38,6 @@ export default function CardsPage() {
   const [limitAmount, setLimitAmount] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // CORREÇÃO DO CARREGAMENTO INFINITO AQUI: Usando user?.id
   useEffect(() => {
     if (user?.id) {
       loadCards()
@@ -48,7 +47,7 @@ export default function CardsPage() {
 
   async function loadCards() {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('credit_cards')
       .select('*')
       .eq('user_id', user!.id)
@@ -56,6 +55,7 @@ export default function CardsPage() {
       .eq('is_archived', false)
       .order('created_at', { ascending: false })
 
+    if (error) console.error("Erro ao buscar cartões:", error)
     setCards(data ?? [])
     setLoading(false)
   }
@@ -98,35 +98,45 @@ export default function CardsPage() {
   }
 
   async function handleSave() {
-    if (!name.trim() || !closingDay || !dueDay) {
-      alert('Preencha o nome, fechamento e vencimento.')
+    // Validação básica
+    if (!name.trim()) {
+      alert('Por favor, informe o nome do cartão.')
       return
     }
+    
     setSaving(true)
 
     const payload = {
       user_id: user!.id,
       context,
       name,
-      flag,
-      institution,
-      last_four: lastFour,
-      closing_day: parseInt(closingDay),
-      due_day: parseInt(dueDay),
+      flag: flag || null,
+      institution: institution || null,
+      last_four: lastFour || null,
+      closing_day: closingDay ? parseInt(closingDay) : 1, // Default se vazio
+      due_day: dueDay ? parseInt(dueDay) : 10,           // Default se vazio
       payment_account_id: paymentAccountId || null,
       color,
       limit_amount: parseFloat(limitAmount.replace(',', '.') || '0')
     }
 
-    if (editingCard) {
-      await supabase.from('credit_cards').update(payload).eq('id', editingCard.id)
-    } else {
-      await supabase.from('credit_cards').insert(payload)
-    }
+    try {
+      if (editingCard) {
+        const { error } = await supabase.from('credit_cards').update(payload).eq('id', editingCard.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('credit_cards').insert(payload)
+        if (error) throw error
+      }
 
-    setShowForm(false)
-    setSaving(false)
-    loadCards()
+      setShowForm(false)
+      loadCards()
+    } catch (error: any) {
+      console.error("Erro ao salvar:", error)
+      alert(`Erro ao salvar: ${error.message || 'Verifique o banco de dados.'}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -204,10 +214,12 @@ export default function CardsPage() {
             >
               <div className="flex items-center gap-3">
                 <div 
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm"
+                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm relative overflow-hidden"
                   style={{ backgroundColor: card.color }}
                 >
-                  {card.name.substring(0, 2).toUpperCase()}
+                   {/* Linha diagonal estilizada para parecer cartão */}
+                  <div className="absolute top-0 right-0 w-8 h-8 bg-white/20 rounded-bl-full" />
+                  {card.flag === 'Visa' ? 'V' : card.flag === 'Mastercard' ? 'M' : card.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
                   <p className="text-[14px] font-bold text-gray-800">{card.name}</p>
@@ -225,9 +237,10 @@ export default function CardsPage() {
         )}
       </div>
 
-      {/* Modal Criar/Editar Cartão */}
+      {/* Modal Criar/Editar Cartão - AGORA COM Z-INDEX ALTO E FIXED INSET-0 */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-[#f8f9fa] overflow-y-auto pb-24 flex flex-col">
+        <div className="fixed inset-0 z-[9999] bg-[#f8f9fa] overflow-y-auto pb-24 flex flex-col">
+          
           {/* Header Colorido Dinâmico */}
           <div className="pt-6 pb-8 px-4 shadow-sm relative transition-colors duration-300" style={{ backgroundColor: color }}>
             <div className="flex items-center justify-between mb-6 text-white">
@@ -283,7 +296,6 @@ export default function CardsPage() {
                   <input value={institution} onChange={e => setInstitution(e.target.value)} placeholder="Nome da instituição (opcional)" className="text-[12px] w-full outline-none text-gray-500" />
                 </div>
               </div>
-              <ChevronRight size={18} className="text-gray-300" />
             </div>
 
             {/* Últimos 4 dígitos */}
@@ -332,12 +344,12 @@ export default function CardsPage() {
               </div>
             </div>
 
-            {/* Cor */}
+            {/* Cor - COM COLOR PICKER PERSONALIZADO */}
             <div className="p-4 border-b border-gray-50 flex flex-col gap-3">
                <div className="flex items-center gap-3 text-gray-500">
                 <Palette size={18} /> <span className="text-[13px] font-bold text-gray-800">Cor do Cartão</span>
               </div>
-              <div className="flex gap-2 flex-wrap ml-8 mt-1">
+              <div className="flex gap-2 flex-wrap ml-8 mt-1 items-center">
                 {PREDEFINED_COLORS.map(c => (
                   <button 
                     key={c} onClick={() => setColor(c)}
@@ -345,6 +357,18 @@ export default function CardsPage() {
                     style={{ backgroundColor: c }}
                   />
                 ))}
+                
+                {/* Seletor de Cores Dinâmico (Disco RGB) */}
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-800 transition-colors">
+                  <input 
+                    type="color" 
+                    value={color} 
+                    onChange={(e) => setColor(e.target.value)}
+                    className="absolute inset-0 w-full h-full p-0 border-0 opacity-0 cursor-pointer"
+                  />
+                  {/* Fundo arco-íris simulando disco de cores */}
+                  <div className="w-full h-full" style={{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }} />
+                </div>
               </div>
             </div>
 
@@ -382,7 +406,7 @@ export default function CardsPage() {
           <button 
             onClick={handleSave} 
             disabled={saving}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-emerald-800 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-emerald-900 transition-colors disabled:opacity-50"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-emerald-800 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-emerald-900 transition-colors disabled:opacity-50 z-[10000]"
           >
             <Check size={28} />
           </button>
@@ -393,4 +417,3 @@ export default function CardsPage() {
     </div>
   )
 }
-
