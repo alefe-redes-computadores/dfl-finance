@@ -94,7 +94,6 @@ function HomeContent() {
 
     setDataLoading(false)
   }, [user?.id, context, currentDate])
-
   useEffect(() => {
     loadData()
   }, [loadData])
@@ -144,7 +143,7 @@ function HomeContent() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 px-2">
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
+          <div onClick={() => router.push('/transactions')} className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50">
              <div className="flex items-center gap-1.5 mb-1.5">
                <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center">
                  <ArrowUp size={12} className="text-emerald-500" />
@@ -155,7 +154,7 @@ function HomeContent() {
                {hideBalance ? '••••' : formatCurrency(summary.income)}
              </p>
           </div>
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
+          <div onClick={() => router.push('/transactions')} className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50">
              <div className="flex items-center gap-1.5 mb-1.5">
                <div className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center">
                  <ArrowDown size={12} className="text-red-400" />
@@ -168,121 +167,96 @@ function HomeContent() {
           </div>
         </div>
       </div>
-
       {/* Pendências */}
       <div className="px-4 mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Pendências</h3>
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center">
+          <div onClick={() => router.push('/transactions')} className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center cursor-pointer hover:bg-gray-50">
             <p className="text-[10px] text-gray-400 font-medium mb-0.5">Pagar</p>
             <p className="text-[13px] font-bold text-red-500">{hideBalance ? '•••' : formatCurrency(pendings.toPay)}</p>
           </div>
-          
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center">
+          <div onClick={() => router.push('/transactions')} className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center cursor-pointer hover:bg-gray-50">
             <p className="text-[10px] text-gray-400 font-medium mb-0.5">Receber</p>
             <p className="text-[13px] font-bold text-emerald-600">{hideBalance ? '•••' : formatCurrency(pendings.toReceive)}</p>
           </div>
-
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center opacity-60">
+          <div onClick={() => router.push('/cards')} className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 text-center cursor-pointer hover:bg-gray-50">
             <p className="text-[10px] text-gray-400 font-medium mb-0.5">Faturas</p>
-            <p className="text-[13px] font-bold text-orange-400">{hideBalance ? '•••' : 'R$ 0,00'}</p>
+            <p className="text-[13px] font-bold text-orange-400">R$ 0,00</p>
           </div>
         </div>
       </div>
 
       {/* Contas */}
       <div className="px-4 mb-8">
-        <div className="flex justify-between items-center mb-4 px-1">
+        <div className="flex justify-between items-center mb-4 px-1 cursor-pointer" onClick={() => router.push('/accounts')}>
           <h3 className="text-[15px] font-bold text-gray-800">Contas</h3>
           <ChevronRight size={18} className="text-gray-400" />
         </div>
-        
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {accounts.length === 0 ? (
-             <div className="p-6 text-center text-gray-400 text-sm">Nenhuma conta cadastrada.</div>
+            <div className="p-6 text-center text-gray-400 text-sm">Nenhuma conta.</div>
           ) : (
-            accounts.map((acc, index) => {
-              const currentBalance = Number(acc.balance)
-              return (
-                <div key={acc.id} className={`flex justify-between items-center p-4 ${index !== accounts.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <BankInitials color={acc.color} name={acc.name} />
-                    <div>
-                      <p className="text-[14px] font-medium text-gray-800">{acc.name}</p>
-                      <p className="text-[11px] text-gray-400">Conta</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-[14px] ${getBalanceStyle(currentBalance)}`}>
-                      {hideBalance ? '••••' : formatCurrency(currentBalance)}
-                    </p>
-                  </div>
+            accounts.map((acc) => (
+              <div 
+                key={acc.id} 
+                onClick={() => router.push(`/accounts/${acc.id}`)} 
+                className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
+              >
+                <div className="flex items-center gap-3">
+                  <BankInitials color={acc.color} name={acc.name} />
+                  <div><p className="text-[14px] font-medium text-gray-800">{acc.name}</p></div>
                 </div>
-              )
-            })
+                <p className={`text-[14px] ${getBalanceStyle(acc.balance)}`}>
+                  {hideBalance ? '••••' : formatCurrency(Number(acc.balance))}
+                </p>
+              </div>
+            ))
           )}
         </div>
       </div>
 
       {/* Cartões */}
       <div className="px-4 mb-8">
-        <div className="flex justify-between items-center mb-4 px-1">
+        <div className="flex justify-between items-center mb-4 px-1 cursor-pointer" onClick={() => router.push('/cards')}>
           <h3 className="text-[15px] font-bold text-gray-800">Cartões</h3>
           <ChevronRight size={18} className="text-gray-400" />
         </div>
-        
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {cards.length === 0 ? (
-            <button onClick={() => router.push('/cards')} className="w-full p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-2">
-                <Plus size={20} className="text-gray-400" />
-              </div>
-              <p className="text-sm font-medium text-gray-800">Nenhum cartão</p>
-              <p className="text-xs text-gray-400 mt-1">Toque para cadastrar</p>
-            </button>
+            <button onClick={() => router.push('/cards')} className="w-full p-6 text-center text-gray-400 text-sm">Cadastrar cartão</button>
           ) : (
-            cards.map((card, index) => (
-              <Link 
-                href="/cards" 
+            cards.map((card) => (
+              <div 
                 key={card.id} 
-                className={`flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors block ${index !== cards.length - 1 ? 'border-b border-gray-50' : ''}`}
+                onClick={() => router.push('/cards')} 
+                className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs"
-                    style={{ backgroundColor: card.color }}
-                  >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: card.color }}>
                     {card.name.substring(0, 2).toUpperCase()}
                   </div>
-                  <div>
-                    <p className="text-[14px] font-medium text-gray-800">{card.name}</p>
-                    <p className="text-[11px] text-gray-400">Sem fatura aberta</p>
-                  </div>
+                  <p className="text-[14px] font-medium text-gray-800">{card.name}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[14px] font-medium text-gray-800">{hideBalance ? '••••' : 'R$ 0,00'}</p>
-                </div>
-              </Link>
+              </div>
             ))
           )}
         </div>
       </div>
-
       {/* Últimas Transações */}
       <div className="px-4 mb-10">
-        <Link href="/transactions" className="flex justify-between items-center mb-4 px-1 cursor-pointer hover:opacity-80 transition-opacity">
+        <div className="flex justify-between items-center mb-4 px-1 cursor-pointer" onClick={() => router.push('/transactions')}>
           <h3 className="text-[15px] font-bold text-gray-800">Despesas recentes</h3>
           <ChevronRight size={18} className="text-gray-400" />
-        </Link>
+        </div>
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {recentExpenses.length === 0 ? (
             <div className="p-6 text-center text-gray-400 text-sm">Nenhuma transação recente neste mês.</div>
           ) : (
-            recentExpenses.map((tx, index) => (
+            recentExpenses.map((tx) => (
               <div 
                 key={tx.id} 
-                onClick={() => router.push('/transactions')}
-                className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}
+                onClick={() => router.push(`/transactions/${tx.id}`)}
+                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
                   <div 
@@ -310,7 +284,7 @@ function HomeContent() {
       {/* Botão de Reordenar */}
       <div className="px-4 flex justify-center mb-8">
         <button 
-          onClick={() => console.log('Painel de reordenar')}
+          onClick={() => console.log('Reordenar painel')}
           className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors"
         >
           <Settings2 size={16} /> Reordenar painel
