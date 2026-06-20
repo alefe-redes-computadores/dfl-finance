@@ -18,8 +18,8 @@ export default function MorePage() {
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
   useEffect(() => { 
-    if (user) setName(user.user_metadata?.full_name || '') 
-  }, [user])
+    if (user?.id) setName(user.user_metadata?.full_name || '') 
+  }, [user?.id, user?.user_metadata?.full_name])
 
   const saveName = async () => {
     if (!name.trim()) return
@@ -45,7 +45,6 @@ export default function MorePage() {
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
 
-      // ATUALIZAÇÃO DE SEGURANÇA: Salvando em custom_avatar_url para blindar contra o Google
       await supabase.auth.updateUser({
         data: { 
           avatar_url: data.publicUrl,
@@ -84,9 +83,7 @@ export default function MorePage() {
       </div>
       
       <div className="bg-white p-4 rounded-3xl flex items-center gap-4 mb-8 shadow-sm border border-gray-100">
-        
         <div className="relative">
-          {/* LÓGICA DE PRIORIDADE: Puxa primeiro a customizada, se não tiver, puxa a oficial */}
           <img 
             src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'} 
             className={`w-16 h-16 rounded-full object-cover border-2 border-gray-100 ${uploading ? 'opacity-50' : 'opacity-100'}`} 
@@ -137,8 +134,16 @@ export default function MorePage() {
           <div className="flex items-center gap-3 font-medium text-gray-700"><Wallet className="text-teal-700" size={20}/> Contas</div>
           <ChevronRight size={18} className="text-gray-400"/>
         </Link>
-        <Link href="/categories" className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+        <Link href="/cards" className="flex items-center justify-between p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3 font-medium text-gray-700"><CreditCard className="text-teal-700" size={20}/> Cartões</div>
+          <ChevronRight size={18} className="text-gray-400"/>
+        </Link>
+        <Link href="/categories" className="flex items-center justify-between p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700"><Tags className="text-teal-700" size={20}/> Categorias</div>
+          <ChevronRight size={18} className="text-gray-400"/>
+        </Link>
+        <Link href="/tags" className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3 font-medium text-gray-700"><Hash className="text-teal-700" size={20}/> Tags</div>
           <ChevronRight size={18} className="text-gray-400"/>
         </Link>
       </div>
@@ -146,8 +151,6 @@ export default function MorePage() {
       <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 px-1">No forno</h4>
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 opacity-70 overflow-hidden">
         {[ 
-          {icon: CreditCard, title: 'Cartões'}, 
-          {icon: Hash, title: 'Tags'}, 
           {icon: PieChart, title: 'Orçamento'}, 
           {icon: Target, title: 'Metas'}, 
           {icon: TrendingUp, title: 'Projeções'}, 
