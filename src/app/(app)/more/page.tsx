@@ -25,7 +25,7 @@ export default function MorePage() {
     if (!name.trim()) return
     await supabase.auth.updateUser({ data: { full_name: name } })
     setIsEditing(false)
-    window.location.reload() // Força o refresh visual para confirmar o salvamento
+    window.location.reload()
   }
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,22 +37,22 @@ export default function MorePage() {
       const fileExt = file.name.split('.').pop()
       const filePath = `${user?.id}-${Math.random()}.${fileExt}`
 
-      // Upload para o bucket 'avatars' no Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file)
 
       if (uploadError) throw uploadError
 
-      // Pega a URL pública gerada
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
 
-      // Atualiza o perfil do usuário
+      // ATUALIZAÇÃO DE SEGURANÇA: Salvando em custom_avatar_url para blindar contra o Google
       await supabase.auth.updateUser({
-        data: { avatar_url: data.publicUrl }
+        data: { 
+          avatar_url: data.publicUrl,
+          custom_avatar_url: data.publicUrl 
+        }
       })
 
-      // Atualiza a página para mostrar a nova foto
       window.location.reload()
     } catch (error) {
       alert('Erro ao enviar imagem. Verifique se o bucket "avatars" existe no Supabase Storage.')
@@ -65,7 +65,6 @@ export default function MorePage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-24 px-5 pt-8 font-sans">
       
-      {/* Modal Em Desenvolvimento */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
           <div className="bg-white p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -79,19 +78,17 @@ export default function MorePage() {
 
       <h1 className="text-2xl font-bold mb-6 text-gray-900">Mais</h1>
       
-      {/* Banner Pro */}
       <div className="bg-gradient-to-r from-teal-700 to-orange-500 rounded-2xl p-4 mb-8 text-white shadow-lg">
         <h3 className="font-bold">DFL Finance Pro</h3>
         <p className="text-xs text-teal-50">Sem limites e relatórios avançados</p>
       </div>
       
-      {/* Perfil */}
       <div className="bg-white p-4 rounded-3xl flex items-center gap-4 mb-8 shadow-sm border border-gray-100">
         
-        {/* Foto de Perfil com Botão de Edição Invisível */}
         <div className="relative">
+          {/* LÓGICA DE PRIORIDADE: Puxa primeiro a customizada, se não tiver, puxa a oficial */}
           <img 
-            src={user?.user_metadata?.avatar_url || '/avatar.png'} 
+            src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'} 
             className={`w-16 h-16 rounded-full object-cover border-2 border-gray-100 ${uploading ? 'opacity-50' : 'opacity-100'}`} 
             alt="Perfil"
           />
@@ -107,7 +104,6 @@ export default function MorePage() {
           </label>
         </div>
 
-        {/* Dados do Usuário */}
         <div className="flex-1">
           {isEditing ? (
             <div className="flex items-center gap-2 mb-1">
