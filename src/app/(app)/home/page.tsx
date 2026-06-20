@@ -200,7 +200,7 @@ function HomeContent() {
             accounts.map((acc) => (
               <div 
                 key={acc.id} 
-                onClick={() => router.push('/accounts')} 
+                onClick={() => router.push(`/accounts/${acc.id}`)} 
                 className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
@@ -224,12 +224,12 @@ function HomeContent() {
         </div>
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {cards.length === 0 ? (
-            <button onClick={() => router.push('/cards')} className="w-full p-6 text-center text-gray-400 text-sm">Cadastrar cartão</button>
+            <button onClick={() => router.push('/cards/new')} className="w-full p-6 text-center text-gray-400 text-sm">Cadastrar cartão</button>
           ) : (
             cards.map((card) => (
               <div 
                 key={card.id} 
-                onClick={() => router.push('/cards')} 
+                onClick={() => router.push(`/cards/${card.id}`)} 
                 className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
@@ -257,7 +257,7 @@ function HomeContent() {
             recentExpenses.map((tx) => (
               <div 
                 key={tx.id} 
-                onClick={() => router.push('/transactions')}
+                onClick={() => router.push(`/transactions/${tx.id}`)}
                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-50 last:border-0"
               >
                 <div className="flex items-center gap-3">
