@@ -71,7 +71,6 @@ function HomeContent() {
     setSummary({ income, expense, balance: income - expense })
     setPendings({ toPay, toReceive })
     
-    // Ajustado para as últimas 5 despesas
     setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
 
     const { data: accs } = await supabase
@@ -83,7 +82,6 @@ function HomeContent() {
 
     setAccounts(accs ?? [])
 
-    // Busca os Cartões no banco de dados
     const { data: creditCards } = await supabase
       .from('credit_cards')
       .select('*')
@@ -104,6 +102,10 @@ function HomeContent() {
   const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace('.', ',')}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
 
+  const handleOpenCardModal = () => {
+     // Aqui você deve colocar a lógica de abrir o seu modal de criação de cartão
+     alert('Modal de criação de cartão aberto')
+  }
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-28 font-sans relative">
       
@@ -161,7 +163,6 @@ function HomeContent() {
           </div>
         </div>
       </div>
-
       {/* Pendências */}
       <div className="px-4 mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-4 px-1">Pendências</h3>
@@ -196,7 +197,6 @@ function HomeContent() {
           ) : (
             accounts.map((acc, index) => {
               const currentBalance = Number(acc.balance)
-              
               return (
                 <div key={acc.id} className={`flex justify-between items-center p-4 ${index !== accounts.length - 1 ? 'border-b border-gray-50' : ''}`}>
                   <div className="flex items-center gap-3">
@@ -218,34 +218,27 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Seção de Cartões (Fiel ao App Referência) */}
+      {/* Cartões - Fluxo Corrigido */}
       <div className="px-4 mb-8">
-        <Link href="/cards" className="flex justify-between items-center mb-4 px-1 cursor-pointer hover:opacity-80 transition-opacity">
+        <div className="flex justify-between items-center mb-4 px-1">
           <h3 className="text-[15px] font-bold text-gray-800">Cartões</h3>
           <ChevronRight size={18} className="text-gray-400" />
-        </Link>
+        </div>
         
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {cards.length === 0 ? (
-            <Link href="/cards" className="p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors block">
+            <button onClick={handleOpenCardModal} className="w-full p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-2">
                 <Plus size={20} className="text-gray-400" />
               </div>
               <p className="text-sm font-medium text-gray-800">Nenhum cartão</p>
               <p className="text-xs text-gray-400 mt-1">Toque para cadastrar</p>
-            </Link>
+            </button>
           ) : (
             cards.map((card, index) => (
-              <Link 
-                href="/cards" 
-                key={card.id} 
-                className={`flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors block ${index !== cards.length - 1 ? 'border-b border-gray-50' : ''}`}
-              >
+              <Link href="/cards" key={card.id} className={`flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors block ${index !== cards.length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs"
-                    style={{ backgroundColor: card.color }}
-                  >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: card.color }}>
                     {card.name.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
@@ -273,40 +266,25 @@ function HomeContent() {
             <div className="p-6 text-center text-gray-400 text-sm">Nenhuma transação recente neste mês.</div>
           ) : (
             recentExpenses.map((tx, index) => (
-              <div 
-                key={tx.id} 
-                onClick={() => router.push('/transactions')}
-                className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}
-              >
+              <div key={tx.id} onClick={() => router.push('/transactions')} className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                    style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}
-                  >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}>
                     {tx.categories?.icon || '💸'}
                   </div>
                   <div>
                     <p className="text-[14px] font-medium text-gray-800 uppercase text-xs tracking-wide">{tx.description || tx.categories?.name}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}
-                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
                   </div>
                 </div>
-                <p className="text-[14px] font-bold text-red-500">
-                  {hideBalance ? '••••' : formatCurrency(Number(tx.amount))}
-                </p>
+                <p className="text-[14px] font-bold text-red-500">{hideBalance ? '••••' : formatCurrency(Number(tx.amount))}</p>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* Botão Flutuante/Inferior de Reordenar */}
       <div className="px-4 flex justify-center mb-8">
-        <button 
-          onClick={() => alert('Em breve: Função de reorganizar os painéis da Home!')}
-          className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors"
-        >
+        <button onClick={() => alert('Em breve: Personalize sua tela inicial!')} className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors">
           <Settings2 size={16} /> Reordenar painel
         </button>
       </div>
