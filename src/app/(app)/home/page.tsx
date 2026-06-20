@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, SlidersHorizontal, Settings2 } from 'lucide-react'
+import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, CreditCard, Plus, SlidersHorizontal, Settings2 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -23,6 +24,7 @@ function BankInitials({ color, name }: { color: string, name: string }) {
 
 function HomeContent() {
   const { user } = useAuth()
+  const router = useRouter()
   const { context } = useContext_()
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -30,6 +32,7 @@ function HomeContent() {
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
+  const [cards, setCards] = useState<any[]>([])
   const [recentExpenses, setRecentExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -67,7 +70,9 @@ function HomeContent() {
 
     setSummary({ income, expense, balance: income - expense })
     setPendings({ toPay, toReceive })
-    setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 4))
+    
+    // Ajustado para as últimas 5 despesas
+    setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
 
     const { data: accs } = await supabase
       .from('accounts')
@@ -77,6 +82,18 @@ function HomeContent() {
       .order('name') 
 
     setAccounts(accs ?? [])
+
+    // Busca os Cartões no banco de dados
+    const { data: creditCards } = await supabase
+      .from('credit_cards')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false })
+      
+    setCards(creditCards ?? [])
+
     setLoading(false)
   }, [user?.id, context, currentDate])
 
@@ -170,6 +187,7 @@ function HomeContent() {
       <div className="px-4 mb-8">
         <div className="flex justify-between items-center mb-4 px-1">
           <h3 className="text-[15px] font-bold text-gray-800">Contas</h3>
+          <ChevronRight size={18} className="text-gray-400" />
         </div>
         
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
@@ -200,39 +218,66 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Seção de Cartões - AGORA COM LINK REAL */}
+      {/* Seção de Cartões (Fiel ao App Referência) */}
       <div className="px-4 mb-8">
-        <div className="flex justify-between items-center mb-4 px-1">
+        <Link href="/cards" className="flex justify-between items-center mb-4 px-1 cursor-pointer hover:opacity-80 transition-opacity">
           <h3 className="text-[15px] font-bold text-gray-800">Cartões</h3>
-        </div>
-        <Link 
-          href="/cards"
-          className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors block"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <CreditCard size={24} className="text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-[14px] font-bold text-gray-800 mb-0.5">Meus Cartões</p>
-              <p className="text-[11px] text-gray-500">Gerenciar limites e faturas</p>
-            </div>
-          </div>
-          <ChevronRight size={20} className="text-gray-300" />
+          <ChevronRight size={18} className="text-gray-400" />
         </Link>
+        
+        <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
+          {cards.length === 0 ? (
+            <Link href="/cards" className="p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors block">
+              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-2">
+                <Plus size={20} className="text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-gray-800">Nenhum cartão</p>
+              <p className="text-xs text-gray-400 mt-1">Toque para cadastrar</p>
+            </Link>
+          ) : (
+            cards.map((card, index) => (
+              <Link 
+                href="/cards" 
+                key={card.id} 
+                className={`flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors block ${index !== cards.length - 1 ? 'border-b border-gray-50' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs"
+                    style={{ backgroundColor: card.color }}
+                  >
+                    {card.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-medium text-gray-800">{card.name}</p>
+                    <p className="text-[11px] text-gray-400">Sem fatura aberta</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[14px] font-medium text-gray-800">{hideBalance ? '••••' : 'R$ 0,00'}</p>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Últimas Transações */}
       <div className="px-4 mb-10">
-        <div className="flex justify-between items-center mb-4 px-1">
-          <h3 className="text-[15px] font-bold text-gray-800">Últimas transações</h3>
-        </div>
+        <Link href="/transactions" className="flex justify-between items-center mb-4 px-1 cursor-pointer hover:opacity-80 transition-opacity">
+          <h3 className="text-[15px] font-bold text-gray-800">Despesas recentes</h3>
+          <ChevronRight size={18} className="text-gray-400" />
+        </Link>
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
           {recentExpenses.length === 0 ? (
             <div className="p-6 text-center text-gray-400 text-sm">Nenhuma transação recente neste mês.</div>
           ) : (
             recentExpenses.map((tx, index) => (
-              <div key={tx.id} className={`flex items-center justify-between p-4 ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <div 
+                key={tx.id} 
+                onClick={() => router.push('/transactions')}
+                className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${index !== recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}
+              >
                 <div className="flex items-center gap-3">
                   <div 
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
@@ -241,8 +286,8 @@ function HomeContent() {
                     {tx.categories?.icon || '💸'}
                   </div>
                   <div>
-                    <p className="text-[14px] font-medium text-gray-800">{tx.description || tx.categories?.name}</p>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-[14px] font-medium text-gray-800 uppercase text-xs tracking-wide">{tx.description || tx.categories?.name}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
                       {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}
                     </p>
                   </div>
@@ -258,7 +303,10 @@ function HomeContent() {
 
       {/* Botão Flutuante/Inferior de Reordenar */}
       <div className="px-4 flex justify-center mb-8">
-        <button className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors">
+        <button 
+          onClick={() => alert('Em breve: Função de reorganizar os painéis da Home!')}
+          className="flex items-center gap-2 text-[13px] font-bold text-gray-400 hover:text-gray-600 bg-gray-200/50 hover:bg-gray-200 px-5 py-2.5 rounded-full transition-colors"
+        >
           <Settings2 size={16} /> Reordenar painel
         </button>
       </div>
