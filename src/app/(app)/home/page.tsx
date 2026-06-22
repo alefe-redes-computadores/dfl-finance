@@ -241,13 +241,13 @@ function HomeContent() {
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3 px-1">
           <h3 className="text-[15px] font-bold text-gray-800 cursor-pointer" onClick={() => router.push('/cards')}>Cartões</h3>
-          <button onClick={() => router.push('/cards/new')} className="p-1 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+           <button onClick={() => router.push('/cards')} className="p-1 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
             <Plus size={20} />
           </button>
         </div>
         <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden p-2">
           {cards.length === 0 ? (
-            <button onClick={() => router.push('/cards/new')} className="w-full p-4 text-center text-teal-700 font-bold text-sm hover:bg-gray-50 rounded-[16px] transition-colors">Cadastrar primeiro cartão</button>
+         <button onClick={() => router.push('/cards')} className="w-full p-4 text-center text-teal-700 font-bold text-sm...">Cadastrar primeiro cartão</button>
           ) : (
             cards.map((card) => (
               <div 
