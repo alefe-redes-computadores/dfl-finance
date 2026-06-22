@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Settings2, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Settings2, Loader2, Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -44,58 +44,63 @@ function HomeContent() {
   }
 
   const loadData = useCallback(async () => {
-    if (!user?.id) return
     setDataLoading(true)
     
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+    try {
+      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    const { data: transactions } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color)')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .gte('date', start)
-      .lte('date', end)
-      .order('date', { ascending: false })
+      // Transações
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select('*, categories(name, icon, color)')
+        .eq('context', context)
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: false })
 
-    const txs = transactions || []
+      const txs = transactions || []
 
-    const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount), 0)
-    const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount), 0)
-    
-    const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0)
-    const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0)
+      // Cálculos blindados com (Number() || 0)
+      const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      
+      const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
 
-    setSummary({ income, expense, balance: income - expense })
-    setPendings({ toPay, toReceive })
-    
-    setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
+      setSummary({ income, expense, balance: income - expense })
+      setPendings({ toPay, toReceive })
+      
+      setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
 
-    const { data: accsData } = await supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name') 
-    
-    // Calcula o saldo previsto para cada conta
-    const accsWithPrevisto = (accsData || []).map(acc => {
-      const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
-      const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0);
-      const pendingExpense = accTxs.filter(t => (t.type === 'expense' || t.type === 'sangria')).reduce((a, t) => a + Number(t.amount), 0);
-      const previsto = Number(acc.balance) + pendingIncome - pendingExpense;
-      return { ...acc, previsto };
-    });
+      // Contas
+      const { data: accsData } = await supabase.from('accounts').select('*').eq('context', context).order('name') 
+      
+      const accsWithPrevisto = (accsData || []).map(acc => {
+        const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
+        const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const pendingExpense = accTxs.filter(t => (t.type === 'expense' || t.type === 'sangria')).reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense;
+        return { ...acc, previsto };
+      });
 
-    setAccounts(accsWithPrevisto)
+      setAccounts(accsWithPrevisto)
 
-    const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
-    setCards(creditCards ?? [])
-
-    setDataLoading(false)
-  }, [user?.id, context, currentDate])
+      // Cartões
+      const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
+      setCards(creditCards ?? [])
+    } catch (err) {
+      console.error("Erro na Home:", err)
+    } finally {
+      setDataLoading(false)
+    }
+  }, [context, currentDate])
 
   useEffect(() => { loadData() }, [loadData])
 
-  const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
-  const totalPrevistoBalance = accounts.reduce((acc, curr) => acc + curr.previsto, 0)
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const totalAccountsBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
+  const totalPrevistoBalance = accounts.reduce((acc, curr) => acc + (curr.previsto || 0), 0)
 
   if (authLoading || dataLoading) {
     return (
@@ -203,11 +208,11 @@ function HomeContent() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`text-[14px] ${getBalanceStyle(acc.balance)}`}>
-                    {hideBalance ? '••••' : formatCurrency(Number(acc.balance))}
+                  <p className={`text-[14px] ${getBalanceStyle(Number(acc.balance) || 0)}`}>
+                    {hideBalance ? '••••' : formatCurrency(Number(acc.balance) || 0)}
                   </p>
-                  <p className={`text-[11px] mt-0.5 ${acc.previsto >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
-                    {hideBalance ? '••••' : formatCurrency(acc.previsto)}
+                  <p className={`text-[11px] mt-0.5 ${(acc.previsto || 0) >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
+                    {hideBalance ? '••••' : formatCurrency(acc.previsto || 0)}
                   </p>
                 </div>
               </div>
@@ -234,13 +239,15 @@ function HomeContent() {
 
       {/* Cartões */}
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/cards')}>
-          <h3 className="text-[15px] font-bold text-gray-800">Cartões</h3>
-          <ChevronRight size={18} className="text-gray-400" />
+        <div className="flex justify-between items-center mb-3 px-1">
+          <h3 className="text-[15px] font-bold text-gray-800 cursor-pointer" onClick={() => router.push('/cards')}>Cartões</h3>
+          <button onClick={() => router.push('/cards/new')} className="p-1 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+            <Plus size={20} />
+          </button>
         </div>
         <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden p-2">
           {cards.length === 0 ? (
-            <button onClick={() => router.push('/cards/new')} className="w-full p-4 text-center text-gray-400 text-sm">Cadastrar cartão</button>
+            <button onClick={() => router.push('/cards/new')} className="w-full p-4 text-center text-teal-700 font-bold text-sm hover:bg-gray-50 rounded-[16px] transition-colors">Cadastrar primeiro cartão</button>
           ) : (
             cards.map((card) => (
               <div 
@@ -303,7 +310,7 @@ function HomeContent() {
                   </div>
                 </div>
                 <p className="text-[14px] font-bold text-red-500">
-                  {hideBalance ? '••••' : formatCurrency(Number(tx.amount))}
+                  {hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
                 </p>
               </div>
             ))
