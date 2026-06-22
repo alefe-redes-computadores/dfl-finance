@@ -208,14 +208,15 @@ export default function AccountStatementPage() {
             />
             
             <div className="flex flex-wrap gap-3 mb-6 items-center">
-              {DEFAULT_COLORS.map(c => (
+                {DEFAULT_COLORS.map(c => (
                 <button 
                   key={c} 
                   onClick={() => setColor(c)} 
                   className={`w-10 h-10 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 scale-110' : 'hover:scale-105'}`} 
-                  style={{backgroundColor: c, ringColor: c}} 
+                  style={{ backgroundColor: c }} 
                 />
               ))}
+
               <label className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
                 <Plus size={18} className="text-gray-400" />
                 <input type="color" className="hidden" onChange={(e) => setColor(e.target.value)} />
