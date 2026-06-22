@@ -198,10 +198,8 @@ export default function AccountStatementPage() {
         </div>
       )}
       
-      {/* Placeholder Modais Funcionais */}
       {showTransferModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTransferModal(false)}><div className="bg-white p-6 rounded-2xl">Transferência em breve</div></div>}
-      {showBalanceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowBalanceModal(false)}><div className="bg-white p-6 rounded-2xl">Ajuste em breve</div></div>}
-      
+      {showBalanceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowBalanceModal(false)}><div className="bg-white p-6 rounded-2xl">Ajuste de saldo em breve</div></div>}
     </div>
   )
 }
