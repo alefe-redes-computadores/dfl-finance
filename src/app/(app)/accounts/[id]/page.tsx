@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Edit2, ArrowRightLeft, Scale, ChevronRight, X, Plus, Loader2 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import TransferModal from '@/components/TransferModal'
+
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -196,12 +198,20 @@ export default function AccountStatementPage() {
       )}
 
       {/* Placeholders para novos modais */}
-      {(showTransfer || showBalance) && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => { setShowTransfer(false); setShowBalance(false) }}>
+      {/* Modais Integrados */}
+      <TransferModal 
+        isOpen={showTransfer} 
+        onClose={() => setShowTransfer(false)} 
+        fromAccountId={id} 
+        onComplete={() => { loadData(); setShowTransfer(false) }} 
+      />
+
+      {showBalance && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowBalance(false)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl text-center" onClick={e => e.stopPropagation()}>
-            <h2 className="font-bold text-xl mb-4">{showTransfer ? "Transferência" : "Ajuste de Saldo"}</h2>
+            <h2 className="font-bold text-xl mb-4">Ajuste de Saldo</h2>
             <p className="text-gray-500 mb-6">Funcionalidade em desenvolvimento.</p>
-            <button onClick={() => { setShowTransfer(false); setShowBalance(false) }} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold">Entendido</button>
+            <button onClick={() => setShowBalance(false)} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold">Entendido</button>
           </div>
         </div>
       )}
