@@ -32,7 +32,7 @@ export default function AccountStatementPage() {
 
   // ... (mantenha os imports e estados como estão, mas altere a função loadData abaixo)
 
-  const loadData = useCallback(async () => {
+    const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
@@ -40,30 +40,31 @@ export default function AccountStatementPage() {
     const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
     if (accData) setAccount(accData)
 
-    // 2. Busca transações - Ajuste: Verificando o ID e filtrando com segurança
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-    // DEBUG: Se não aparecer, vamos testar remover o filtro de data temporariamente depois
-    const { data: txsData, error } = await supabase
+    // 2. BUSCA DE TESTE: Vamos buscar TODAS as transações e filtrar no JavaScript
+    // para ver se o problema é o filtro do Supabase
+    const { data: allTxs, error } = await supabase
       .from('transactions')
-      .select('*, categories(name, icon, color), accounts(name)')
-      .eq('account_id', id)
-      .gte('date', start)
-      .lte('date', end)
+      .select('*, categories(name, icon, color), accounts(id)')
       .order('date', { ascending: false })
 
-    if (error) console.error("Erro Supabase:", error)
-
-    const txs = txsData || []
+    if (error) console.error("Erro:", error)
+    
+    // Filtra manualmente pelo ID da conta no array retornado
+    const txs = allTxs ? allTxs.filter(t => String(t.account_id) === String(id)) : []
+    
     setTransactions(txs)
+    
+    // Log para você ver no console do navegador (F12) o que está acontecendo
+    console.log("Transações encontradas no total:", allTxs?.length)
+    console.log("Transações filtradas para esta conta:", txs.length)
 
     const income = txs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0)
     const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + Number(t.amount), 0)
     
     setSummary({ income, expense })
     setLoading(false)
-  }, [id, currentDate])
+  }, [id])
+
 
 // ... (Restante do arquivo permanece igual)
 
