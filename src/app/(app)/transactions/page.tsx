@@ -38,6 +38,17 @@ export default function TransactionsPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
 
+  // Checa a URL para ver se veio da Home com algum filtro específico
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const queryFilter = params.get('filter') as Filter
+      if (queryFilter && ['all', 'income', 'expense', 'transfer'].includes(queryFilter)) {
+        setFilter(queryFilter)
+      }
+    }
+  }, [])
+
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadTransactions = useCallback(async () => {
