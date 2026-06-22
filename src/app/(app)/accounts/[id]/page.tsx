@@ -185,21 +185,3 @@ export default function AccountStatementPage() {
               {DEFAULT_COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)} className={`w-10 h-10 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: c }} />
               ))}
-              <label className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
-                <Plus size={18} className="text-gray-400" />
-                <input type="color" className="hidden" onChange={(e) => setColor(e.target.value)} />
-              </label>
-            </div>
-
-            <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="R$ 0,00" className="w-full bg-gray-50 p-4 rounded-2xl mb-6 font-bold text-lg text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
-            
-            <button onClick={handleSave} className="w-full bg-teal-700 hover:bg-teal-800 transition-colors text-white py-4 rounded-2xl font-bold flex justify-center items-center">Salvar Alterações</button>
-          </div>
-        </div>
-      )}
-      
-      {showTransferModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTransferModal(false)}><div className="bg-white p-6 rounded-2xl">Transferência em breve</div></div>}
-      {showBalanceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowBalanceModal(false)}><div className="bg-white p-6 rounded-2xl">Ajuste de saldo em breve</div></div>}
-    </div>
-  )
-}
