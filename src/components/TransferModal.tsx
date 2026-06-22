@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { X, ArrowRight, Loader2, Calendar, FileText, Repeat } from 'lucide-react'
+import { X, ArrowRight, Loader2, Calendar, FileText } from 'lucide-react'
 
 export default function TransferModal({ isOpen, onClose, fromAccountId, onComplete }: any) {
   const [step, setStep] = useState(1)
@@ -10,6 +10,8 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
   const [fromAccount, setFromAccount] = useState<any>(null)
   const [toAccount, setToAccount] = useState<any>(null)
   const [amount, setAmount] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -24,17 +26,24 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
   }, [isOpen, fromAccountId])
 
   const handleTransfer = async () => {
+    if (!toAccount || !amount) return
     setLoading(true)
+    
+    // Insere a transferência no banco
     const { error } = await supabase.from('transactions').insert({
-      account_id: fromAccount.id,
+      account_id: fromAccountId,
       to_account_id: toAccount.id,
       amount: parseFloat(amount.replace(',', '.')),
       type: 'transfer',
       status: 'done',
-      date: new Date().toISOString(),
-      description: `Transferência: ${fromAccount.name} -> ${toAccount.name}`
+      date: date,
+      description: description || `Transferência para ${toAccount.name}`
     })
-    if (!error) { onComplete(); onClose() }
+
+    if (!error) {
+      onComplete()
+      onClose()
+    }
     setLoading(false)
   }
 
@@ -42,14 +51,14 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end justify-center">
-      <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl animate-in slide-in-from-bottom">
+      <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl">
         <div className="flex justify-between items-center mb-6">
           <button onClick={onClose}><X size={24} /></button>
-          <h2 className="font-bold text-lg">{step === 1 ? 'Conta de destino' : 'Valor da transferência'}</h2>
+          <h2 className="font-bold text-lg">{step === 1 ? 'Conta de destino' : 'Detalhes'}</h2>
           <div className="w-6" />
         </div>
 
-        {step === 1 && (
+        {step === 1 ? (
           <div className="space-y-2">
             {accounts.filter(a => a.id !== fromAccountId).map(acc => (
               <button key={acc.id} onClick={() => { setToAccount(acc); setStep(2) }} 
@@ -64,10 +73,8 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
               </button>
             ))}
           </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-6">
+        ) : (
+          <div className="space-y-4">
             <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-between text-sm font-bold">
               <span>{fromAccount?.name}</span>
               <ArrowRight size={16} className="text-gray-400" />
@@ -78,8 +85,14 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
               placeholder="R$ 0,00" className="w-full text-center text-4xl font-bold outline-none" />
             
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"><Calendar size={20} className="text-gray-500"/> <span className="text-sm">Hoje</span></div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"><FileText size={20} className="text-gray-500"/> <span className="text-sm">Descrição</span></div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <Calendar size={20} className="text-gray-500"/>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-transparent w-full outline-none text-sm" />
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <FileText size={20} className="text-gray-500"/>
+                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="bg-transparent w-full outline-none text-sm" />
+              </div>
             </div>
 
             <button onClick={handleTransfer} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold">
