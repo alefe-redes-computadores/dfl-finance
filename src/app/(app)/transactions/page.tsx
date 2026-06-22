@@ -65,9 +65,9 @@ export default function TransactionsPage() {
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    let query = supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color), accounts(name)')
+      let query = supabase
+    .from('transactions')
+    .select('*, categories(name, icon, color), accounts!account_id(name)') // A correção está aqui
       .eq('context', context)
       .gte('date', start)
       .lte('date', end)
