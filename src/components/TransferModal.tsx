@@ -29,7 +29,6 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
     if (!toAccount || !amount) return
     setLoading(true)
     
-    // Insere a transferência no banco
     const { error } = await supabase.from('transactions').insert({
       account_id: fromAccountId,
       to_account_id: toAccount.id,
@@ -47,6 +46,13 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
     setLoading(false)
   }
 
+  // Lógica de cores do saldo
+  const getBalanceStyle = (balance: number) => {
+    if (balance > 0) return 'text-emerald-600'
+    if (balance < 0) return 'text-red-600'
+    return 'text-gray-400'
+  }
+
   if (!isOpen) return null
 
   return (
@@ -62,13 +68,19 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
           <div className="space-y-2">
             {accounts.filter(a => a.id !== fromAccountId).map(acc => (
               <button key={acc.id} onClick={() => { setToAccount(acc); setStep(2) }} 
-                className="w-full p-4 bg-gray-50 rounded-2xl flex justify-between items-center hover:bg-gray-100">
+                className="w-full p-4 bg-gray-50 rounded-2xl flex justify-between items-center hover:bg-gray-100 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center font-bold">🏢</div>
-                  <div className="text-left"><p className="font-bold">{acc.name}</p></div>
+                  {/* Ícone real e cor definida no cadastro da conta */}
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-sm" 
+                       style={{ backgroundColor: acc.color || '#64748b' }}>
+                    {acc.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="text-left"><p className="font-bold text-gray-800">{acc.name}</p></div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-emerald-700">R$ {Number(acc.balance).toFixed(2)}</p>
+                  <p className={`font-bold ${getBalanceStyle(Number(acc.balance))}`}>
+                    R$ {Number(acc.balance).toFixed(2)}
+                  </p>
                 </div>
               </button>
             ))}
@@ -82,16 +94,16 @@ export default function TransferModal({ isOpen, onClose, fromAccountId, onComple
             </div>
             
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} 
-              placeholder="R$ 0,00" className="w-full text-center text-4xl font-bold outline-none" />
+              placeholder="R$ 0,00" className="w-full text-center text-4xl font-bold outline-none text-gray-800" />
             
             <div className="space-y-3">
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                 <Calendar size={20} className="text-gray-500"/>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-transparent w-full outline-none text-sm" />
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-transparent w-full outline-none text-sm font-medium" />
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                 <FileText size={20} className="text-gray-500"/>
-                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="bg-transparent w-full outline-none text-sm" />
+                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="bg-transparent w-full outline-none text-sm font-medium" />
               </div>
             </div>
 
