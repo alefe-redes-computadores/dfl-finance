@@ -32,34 +32,43 @@ export default function AccountStatementPage() {
 
   // ... (mantenha os imports e estados como estão, mas altere a função loadData abaixo)
 
-      const loadData = useCallback(async () => {
+        const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
-    // 1. Busca a conta
-    const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
-    if (accData) setAccount(accData)
+    try {
+      // Teste de conexão: Busca apenas o nome da conta
+      const { data: accData, error: accError } = await supabase
+        .from('accounts')
+        .select('name')
+        .eq('id', id)
+        .single()
 
-    // 2. Query que busca tudo dessa conta sem se prender apenas ao mês, 
-    // assim garantimos que se houver uma transação, ela vai aparecer
-    const { data: txsData, error } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color), accounts(name)')
-      .eq('account_id', id)
-      .order('date', { ascending: false })
+      if (accError) {
+        console.error("Erro na busca da conta:", accError)
+        alert("Erro Supabase: " + accError.message)
+      } else {
+        setAccount(accData)
+      }
 
-    if (error) console.error("Erro na busca:", error)
+      // Teste de busca de transações (sem filtros complexos)
+      const { data: txsData, error: txsError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('account_id', id)
 
-    const txs = txsData || []
-    setTransactions(txs)
-
-    const income = txs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0)
-    const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + Number(t.amount), 0)
-    
-    setSummary({ income, expense })
-    setLoading(false)
+      if (txsError) {
+        console.error("Erro na busca de transações:", txsError)
+        alert("Erro nas transações: " + txsError.message)
+      } else {
+        setTransactions(txsData || [])
+      }
+    } catch (err) {
+      console.error("Erro inesperado:", err)
+    } finally {
+      setLoading(false)
+    }
   }, [id])
-
 
 
 // ... (Restante do arquivo permanece igual)
