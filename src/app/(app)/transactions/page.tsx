@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -29,6 +30,7 @@ function dateLabel(dateStr: string) {
 
 export default function TransactionsPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [context, setContext] = useState<Context>('dfl')
   const [transactions, setTransactions] = useState<any[]>([])
   const [filter, setFilter] = useState<Filter>('all')
@@ -76,8 +78,7 @@ export default function TransactionsPage() {
   ]
 
   return (
-    // Exemplo no home:
-    <div className="page-transition max-w-md mx-auto ...">
+    <div className="page-transition max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-24">
       <div className="px-4 pt-6 pb-4 bg-white shadow-sm mb-2">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">Transações</h1>
@@ -130,23 +131,27 @@ export default function TransactionsPage() {
           <div className="space-y-4">
             {sortedDates.map(date => (
               <div key={date}>
-                <p className="text-xs font-bold text-gray-400 uppercase mb-2 px-1">{dateLabel(date)}</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase mb-2 px-1 tracking-wider">{dateLabel(date)}</p>
                 <div className="space-y-2">
                   {grouped[date].map(t => (
-                    <div key={t.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3">
+                    <div 
+                      key={t.id} 
+                      onClick={() => router.push(`/transactions/${t.id}`)}
+                      className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
                       <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl"
                         style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6' }}>
                         {t.categories?.icon ?? (t.type === 'income' ? '💰' : t.type === 'transfer' ? '🔄' : '💸')}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-800 truncate">{t.description ?? t.categories?.name ?? 'Sem descrição'}</p>
-                        <p className="text-xs text-gray-400">{t.categories?.name ?? 'Outros'} • {t.accounts?.name ?? ''}</p>
+                        <p className="text-sm font-bold text-gray-800 truncate uppercase tracking-tight">{t.description ?? t.categories?.name ?? 'Sem descrição'}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{t.categories?.name ?? 'Outros'} • {t.accounts?.name ?? ''}</p>
                       </div>
                       <div className="text-right">
-                        <p className={`text-sm font-bold ${t.type === 'income' ? 'text-teal-600' : t.type === 'expense' ? 'text-red-500' : 'text-gray-700'}`}>
-                          {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''} R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <p className={`text-[14px] font-bold ${t.type === 'income' ? 'text-emerald-600' : t.type === 'expense' || t.type === 'sangria' ? 'text-red-500' : 'text-gray-700'}`}>
+                          {t.type === 'income' ? '+' : t.type === 'expense' || t.type === 'sangria' ? '-' : ''} R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
-                        <p className="text-[10px] text-gray-400">{t.status === 'done' ? '✅' : '⏳'}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{t.status === 'done' ? '✅ Pago' : '⏳ Pendente'}</p>
                       </div>
                     </div>
                   ))}
