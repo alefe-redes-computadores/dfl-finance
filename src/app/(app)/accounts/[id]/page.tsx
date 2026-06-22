@@ -32,7 +32,7 @@ export default function AccountStatementPage() {
 
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
-    const loadData = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
@@ -45,7 +45,7 @@ export default function AccountStatementPage() {
     const { data: txsData } = await supabase
       .from('transactions')
       .select('*, categories(name, icon, color)')
-      .or(`account_id.eq.${id},to_account_id.eq.${id}`)
+      .eq('account_id', id)
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
@@ -53,13 +53,12 @@ export default function AccountStatementPage() {
     const txs = txsData || []
     setTransactions(txs)
 
-    const income = txs.filter(t => t.type === 'income' || (t.type === 'transfer' && t.to_account_id === id)).reduce((a, t) => a + Number(t.amount), 0)
-    const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria' || (t.type === 'transfer' && t.account_id === id)).reduce((a, t) => a + Number(t.amount), 0)
+    const income = txs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0)
+    const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + Number(t.amount), 0)
     
     setSummary({ income, expense })
     setLoading(false)
   }, [id, currentDate])
-
 
   useEffect(() => { loadData() }, [loadData])
 
