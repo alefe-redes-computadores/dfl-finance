@@ -13,6 +13,7 @@ export default function EditTransactionPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tx, setTx] = useState<any>(null)
+  const [isNew, setIsNew] = useState(false) // Flag para saber se é criação ou edição
   
   // Listas para os selects
   const [accounts, setAccounts] = useState<any[]>([])
@@ -21,47 +22,62 @@ export default function EditTransactionPage() {
   // Campos do formulário
   const [amountInput, setAmountInput] = useState('')
   const [isPaid, setIsPaid] = useState(false)
-  const [date, setDate] = useState('')
+  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [notes, setNotes] = useState('')
+  // Adicionando um state default de type para Novas Transações. (Se for editar, ele será sobrescrito)
+  const [txType, setTxType] = useState<'income' | 'expense'>('expense') 
 
-    const loadData = useCallback(async () => {
-    if (!id) return
-    setLoading(true)
-
-    // 1. Busca a transação com tratamento de erro
-    const { data: txData, error: txError } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (txError) {
-      console.error("Erro Supabase (Transação):", txError)
-      alert("Erro ao buscar transação: " + txError.message)
-    } else if (txData) {
-      setTx(txData)
-      setIsPaid(txData.status === 'done')
-      setDate(txData.date)
-      setDescription(txData.description || '')
-      setCategoryId(txData.category_id || '')
-      setAccountId(txData.account_id || '')
-      setNotes(txData.notes || '')
-      setAmountInput(Number(txData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  const loadData = useCallback(async () => {
+    // Se o ID for 'new', estamos criando uma transação
+    if (id === 'new') {
+      setIsNew(true)
     }
 
-    // 2. Busca contas e categorias
-    const { data: accData, error: accError } = await supabase.from('accounts').select('id, name').order('name')
-    if (accError) console.error("Erro Contas:", accError)
-    else setAccounts(accData || [])
+    setLoading(true)
 
-    const { data: catData, error: catError } = await supabase.from('categories').select('id, name, color, icon').order('name')
-    if (catError) console.error("Erro Categorias:", catError)
-    else setCategories(catData || [])
+    try {
+      // 1. Busca contas e categorias (sem filtro de user_id, já que RLS tá off e precisamos ver se carrega)
+      const { data: accData, error: accError } = await supabase.from('accounts').select('id, name').order('name')
+      if (accError) console.error("Erro Contas:", accError)
+      else setAccounts(accData || [])
 
-    setLoading(false)
+      const { data: catData, error: catError } = await supabase.from('categories').select('id, name, color, icon').order('name')
+      if (catError) console.error("Erro Categorias:", catError)
+      else setCategories(catData || [])
+
+      // 2. Se for edição, busca a transação existente
+      if (id && id !== 'new') {
+        const { data: txData, error: txError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', id)
+          .single()
+
+        if (txError) {
+          console.error("Erro Supabase (Transação):", txError)
+          alert("Erro ao buscar transação: " + txError.message)
+        } else if (txData) {
+          setTx(txData)
+          setTxType(txData.type)
+          setIsPaid(txData.status === 'done')
+          setDate(txData.date)
+          setDescription(txData.description || '')
+          setCategoryId(txData.category_id || '')
+          setAccountId(txData.account_id || '')
+          setNotes(txData.notes || '')
+          // Proteção contra NaN
+          const amountSafe = Number(txData.amount) || 0;
+          setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+        }
+      }
+    } catch (err) {
+      console.error("Erro inesperado no loadData:", err)
+    } finally {
+      setLoading(false)
+    }
   }, [id])
 
 
@@ -75,23 +91,47 @@ export default function EditTransactionPage() {
 
   const handleSave = async () => {
     setSaving(true)
-    const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
     
-    await supabase
-      .from('transactions')
-      .update({
-        amount: rawAmount,
-        status: isPaid ? 'done' : 'pending',
-        date,
-        description,
-        category_id: categoryId || null,
-        account_id: accountId || null,
-        notes
-      })
-      .eq('id', id)
-      
-    setSaving(false)
-    router.back()
+    // Proteção contra valores vazios no salvamento
+    const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0;
+    
+    const payload = {
+      amount: rawAmount,
+      status: isPaid ? 'done' : 'pending',
+      date,
+      description: description || null,
+      category_id: categoryId || null,
+      account_id: accountId || null,
+      notes: notes || null,
+      type: txType,
+      context: 'dfl' // Hardcoded para testar a inserção, deve vir do context global depois
+    }
+
+    try {
+      if (isNew) {
+         // Temporariamente removendo user_id do payload para ver se o insert passa
+         const { error } = await supabase.from('transactions').insert([payload])
+         if (error) {
+            console.error("Erro ao inserir:", error)
+            alert("Erro ao salvar: " + error.message)
+         } else {
+            router.back()
+         }
+      } else {
+         const { error } = await supabase.from('transactions').update(payload).eq('id', id)
+         if (error) {
+            console.error("Erro ao atualizar:", error)
+            alert("Erro ao atualizar: " + error.message)
+         } else {
+            router.back()
+         }
+      }
+    } catch (err) {
+       console.error("Catch save:", err)
+       alert("Ocorreu um erro no código ao tentar salvar.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async () => {
@@ -107,11 +147,11 @@ export default function EditTransactionPage() {
     </div>
   )
 
-  if (!tx) return <div className="p-6 text-center text-gray-500">Transação não encontrada.</div>
+  if (!isNew && !tx) return <div className="p-6 text-center text-gray-500">Transação não encontrada.</div>
 
-  const isIncome = tx.type === 'income'
+  const isIncome = txType === 'income'
   const typeLabel = isIncome ? 'receita' : 'despesa'
-  const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800' // Base color for value
+  const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800'
   const toggleBgClass = isPaid 
     ? (isIncome ? 'bg-emerald-600' : 'bg-red-500') 
     : 'bg-gray-300'
@@ -124,12 +164,22 @@ export default function EditTransactionPage() {
         <button onClick={() => router.back()} className="text-gray-800 p-2 -ml-2">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="font-bold text-[16px] text-gray-800 capitalize">Editar {typeLabel}</h1>
+        <h1 className="font-bold text-[16px] text-gray-800 capitalize">{isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}</h1>
         <div className="flex items-center gap-4 text-teal-700">
-          <button><Copy size={20} /></button>
-          <button onClick={handleDelete} className="text-red-500"><Trash2 size={20} /></button>
+          {!isNew && <button><Copy size={20} /></button>}
+          {!isNew && <button onClick={handleDelete} className="text-red-500"><Trash2 size={20} /></button>}
         </div>
       </div>
+
+      {/* Tipo Toggle (Apenas se for Novo) */}
+      {isNew && (
+        <div className="px-6 mb-2">
+           <div className="flex bg-gray-200 rounded-full p-1">
+             <button onClick={() => setTxType('expense')} className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all ${txType === 'expense' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>Despesa</button>
+             <button onClick={() => setTxType('income')} className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all ${txType === 'income' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>Receita</button>
+           </div>
+        </div>
+      )}
 
       {/* Valor Header */}
       <div className="px-6 py-4 mb-4">
@@ -142,6 +192,7 @@ export default function EditTransactionPage() {
             value={amountInput}
             onChange={handleAmountChange}
             className={`text-4xl font-light bg-transparent outline-none w-full ${colorClass}`}
+            placeholder="0,00"
           />
         </div>
       </div>
@@ -174,10 +225,6 @@ export default function EditTransactionPage() {
             onChange={(e) => setDate(e.target.value)}
             className="flex-1 text-[15px] font-bold text-gray-800 outline-none bg-transparent"
           />
-          <div className="flex items-center gap-2 text-gray-400">
-            <ChevronLeft size={18} />
-            <ChevronRight size={18} />
-          </div>
         </div>
 
         {/* Descrição */}
@@ -200,7 +247,7 @@ export default function EditTransactionPage() {
             <select 
               value={categoryId} 
               onChange={(e) => setCategoryId(e.target.value)}
-              className="text-[13px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none"
+              className="text-[13px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer"
             >
               <option value="">Selecione uma categoria...</option>
               {categories.map(c => (
@@ -219,7 +266,7 @@ export default function EditTransactionPage() {
             <select 
               value={accountId} 
               onChange={(e) => setAccountId(e.target.value)}
-              className="text-[13px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none"
+              className="text-[13px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer"
             >
               <option value="">Selecione uma conta...</option>
               {accounts.map(a => (
