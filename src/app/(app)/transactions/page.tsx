@@ -54,29 +54,29 @@ export default function TransactionsPage() {
   const loadTransactions = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+        const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
+    // Query de diagnóstico: removido o filtro .eq('user_id', user.id)
     let query = supabase
       .from('transactions')
       .select('*, categories(name, icon, color), accounts(name)')
-      .eq('user_id', user.id)
       .eq('context', context)
       .gte('date', start).lte('date', end)
       .order('date', { ascending: false })
 
     if (filter !== 'all') query = query.eq('type', filter)
-    const { data } = await query
+    
+    const { data, error } = await query
+    
+    if (error) {
+      console.error("Erro Supabase na listagem:", error)
+      alert("Erro ao carregar transações: " + error.message)
+    }
+    
     setTransactions(data ?? [])
     setLoading(false)
-  }, [user, context, currentDate, filter])
 
-  useEffect(() => { loadTransactions() }, [loadTransactions])
-
-  const filtered = transactions.filter(t =>
-    t.description?.toLowerCase().includes(search.toLowerCase()) ||
-    t.categories?.name?.toLowerCase().includes(search.toLowerCase())
-  )
 
   const grouped = groupByDate(filtered)
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
