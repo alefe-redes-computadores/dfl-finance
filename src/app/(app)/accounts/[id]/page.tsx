@@ -30,23 +30,30 @@ export default function AccountStatementPage() {
 
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
+  // ... (mantenha os imports e estados como estão, mas altere a função loadData abaixo)
+
   const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
+    // 1. Busca a conta
     const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
     if (accData) setAccount(accData)
 
+    // 2. Busca transações - Ajuste: Verificando o ID e filtrando com segurança
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    const { data: txsData } = await supabase
+    // DEBUG: Se não aparecer, vamos testar remover o filtro de data temporariamente depois
+    const { data: txsData, error } = await supabase
       .from('transactions')
-      .select('*, categories(name, icon, color)')
+      .select('*, categories(name, icon, color), accounts(name)')
       .eq('account_id', id)
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
+
+    if (error) console.error("Erro Supabase:", error)
 
     const txs = txsData || []
     setTransactions(txs)
@@ -57,6 +64,9 @@ export default function AccountStatementPage() {
     setSummary({ income, expense })
     setLoading(false)
   }, [id, currentDate])
+
+// ... (Restante do arquivo permanece igual)
+
 
   useEffect(() => { loadData() }, [loadData])
 
