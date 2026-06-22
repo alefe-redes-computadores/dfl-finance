@@ -72,8 +72,18 @@ function HomeContent() {
     
     setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
 
-    const { data: accs } = await supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name') 
-    setAccounts(accs ?? [])
+    const { data: accsData } = await supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name') 
+    
+    // Calcula o saldo previsto para cada conta
+    const accsWithPrevisto = (accsData || []).map(acc => {
+      const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
+      const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0);
+      const pendingExpense = accTxs.filter(t => (t.type === 'expense' || t.type === 'sangria')).reduce((a, t) => a + Number(t.amount), 0);
+      const previsto = Number(acc.balance) + pendingIncome - pendingExpense;
+      return { ...acc, previsto };
+    });
+
+    setAccounts(accsWithPrevisto)
 
     const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
     setCards(creditCards ?? [])
@@ -85,6 +95,7 @@ function HomeContent() {
 
   const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0)
+  const totalPrevistoBalance = accounts.reduce((acc, curr) => acc + curr.previsto, 0)
 
   if (authLoading || dataLoading) {
     return (
@@ -195,6 +206,9 @@ function HomeContent() {
                   <p className={`text-[14px] ${getBalanceStyle(acc.balance)}`}>
                     {hideBalance ? '••••' : formatCurrency(Number(acc.balance))}
                   </p>
+                  <p className={`text-[11px] mt-0.5 ${acc.previsto >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
+                    {hideBalance ? '••••' : formatCurrency(acc.previsto)}
+                  </p>
                 </div>
               </div>
             ))
@@ -205,9 +219,14 @@ function HomeContent() {
                 <p className="text-[14px] font-bold text-gray-800">Total</p>
                 <p className="text-[11px] text-gray-400 mt-0.5">Previsto</p>
               </div>
-              <p className="text-[14px] font-bold text-gray-800">
-                {hideBalance ? '••••' : formatCurrency(totalAccountsBalance)}
-              </p>
+              <div className="text-right">
+                <p className="text-[14px] font-bold text-gray-800">
+                  {hideBalance ? '••••' : formatCurrency(totalAccountsBalance)}
+                </p>
+                <p className={`text-[11px] mt-0.5 ${totalPrevistoBalance >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
+                  {hideBalance ? '••••' : formatCurrency(totalPrevistoBalance)}
+                </p>
+              </div>
             </div>
           )}
         </div>
