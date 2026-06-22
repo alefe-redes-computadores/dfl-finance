@@ -27,18 +27,21 @@ export default function EditTransactionPage() {
   const [accountId, setAccountId] = useState('')
   const [notes, setNotes] = useState('')
 
-  const loadData = useCallback(async () => {
+    const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
-    // 1. Busca a transação
-    const { data: txData } = await supabase
+    // 1. Busca a transação com tratamento de erro
+    const { data: txData, error: txError } = await supabase
       .from('transactions')
       .select('*')
       .eq('id', id)
       .single()
 
-    if (txData) {
+    if (txError) {
+      console.error("Erro Supabase (Transação):", txError)
+      alert("Erro ao buscar transação: " + txError.message)
+    } else if (txData) {
       setTx(txData)
       setIsPaid(txData.status === 'done')
       setDate(txData.date)
@@ -46,20 +49,21 @@ export default function EditTransactionPage() {
       setCategoryId(txData.category_id || '')
       setAccountId(txData.account_id || '')
       setNotes(txData.notes || '')
-      
-      // Formata o valor inicial para exibir
       setAmountInput(Number(txData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
     }
 
-    // 2. Busca contas e categorias para os selects
-    const { data: accData } = await supabase.from('accounts').select('id, name').order('name')
-    if (accData) setAccounts(accData)
+    // 2. Busca contas e categorias
+    const { data: accData, error: accError } = await supabase.from('accounts').select('id, name').order('name')
+    if (accError) console.error("Erro Contas:", accError)
+    else setAccounts(accData || [])
 
-    const { data: catData } = await supabase.from('categories').select('id, name, color, icon').order('name')
-    if (catData) setCategories(catData)
+    const { data: catData, error: catError } = await supabase.from('categories').select('id, name, color, icon').order('name')
+    if (catError) console.error("Erro Categorias:", catError)
+    else setCategories(catData || [])
 
     setLoading(false)
   }, [id])
+
 
   useEffect(() => { loadData() }, [loadData])
 
