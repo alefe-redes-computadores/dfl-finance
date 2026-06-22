@@ -32,7 +32,7 @@ export default function AccountStatementPage() {
 
   // ... (mantenha os imports e estados como estão, mas altere a função loadData abaixo)
 
-    const loadData = useCallback(async () => {
+      const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
@@ -40,23 +40,18 @@ export default function AccountStatementPage() {
     const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
     if (accData) setAccount(accData)
 
-    // 2. BUSCA DE TESTE: Vamos buscar TODAS as transações e filtrar no JavaScript
-    // para ver se o problema é o filtro do Supabase
-    const { data: allTxs, error } = await supabase
+    // 2. Query que busca tudo dessa conta sem se prender apenas ao mês, 
+    // assim garantimos que se houver uma transação, ela vai aparecer
+    const { data: txsData, error } = await supabase
       .from('transactions')
-      .select('*, categories(name, icon, color), accounts(id)')
+      .select('*, categories(name, icon, color), accounts(name)')
+      .eq('account_id', id)
       .order('date', { ascending: false })
 
-    if (error) console.error("Erro:", error)
-    
-    // Filtra manualmente pelo ID da conta no array retornado
-    const txs = allTxs ? allTxs.filter(t => String(t.account_id) === String(id)) : []
-    
+    if (error) console.error("Erro na busca:", error)
+
+    const txs = txsData || []
     setTransactions(txs)
-    
-    // Log para você ver no console do navegador (F12) o que está acontecendo
-    console.log("Transações encontradas no total:", allTxs?.length)
-    console.log("Transações filtradas para esta conta:", txs.length)
 
     const income = txs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0)
     const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + Number(t.amount), 0)
@@ -64,6 +59,7 @@ export default function AccountStatementPage() {
     setSummary({ income, expense })
     setLoading(false)
   }, [id])
+
 
 
 // ... (Restante do arquivo permanece igual)
