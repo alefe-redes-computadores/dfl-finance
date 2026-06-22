@@ -52,7 +52,7 @@ export default function TransactionsPage() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadTransactions = useCallback(async () => {
-    if (!user?.id) return
+    //if (!user?.id) return
     setLoading(true)
         const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
