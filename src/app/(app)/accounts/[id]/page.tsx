@@ -14,19 +14,32 @@ export default function AccountStatementPage() {
   const router = useRouter()
   
   const [account, setAccount] = useState<any>(null)
+  const [allAccounts, setAllAccounts] = useState<any[]>([]) // Para o select de transferência
   const [transactions, setTransactions] = useState<any[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0 })
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
 
+  // Modais
   const [showForm, setShowForm] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showBalanceModal, setShowBalanceModal] = useState(false)
 
+  // Estados - Editar Conta
   const [name, setName] = useState('')
   const [color, setColor] = useState(DEFAULT_COLORS[0])
   const [displayBalance, setDisplayBalance] = useState('')
   const [balanceNum, setBalanceNum] = useState(0)
+
+  // Estados - Ajuste de Saldo (Balança)
+  const [adjustBalanceDisplay, setAdjustBalanceDisplay] = useState('')
+
+  // Estados - Transferência
+  const [destAccountId, setDestAccountId] = useState('')
+  const [transferAmountDisplay, setTransferAmountDisplay] = useState('')
+  const [transferDate, setTransferDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [transferDesc, setTransferDesc] = useState('')
 
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
@@ -38,21 +51,18 @@ export default function AccountStatementPage() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      // Busca a conta
-      const { data: accData, error: accError } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('id', id)
-        .single()
+      // Busca a conta atual
+      const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
+      if (accData) setAccount(accData)
 
-      if (accError) {
-        console.error("Erro na busca da conta:", accError)
-      } else {
-        setAccount(accData)
+      // Busca todas as contas para o select de transferência (excluindo a atual)
+      if (accData) {
+        const { data: allAccs } = await supabase.from('accounts').select('*').eq('context', accData.context)
+        setAllAccounts((allAccs || []).filter(a => a.id !== id))
       }
 
       // Busca as transações
-      const { data: txsData, error: txsError } = await supabase
+      const { data: txsData } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
         .eq('account_id', id)
@@ -60,18 +70,15 @@ export default function AccountStatementPage() {
         .lte('date', end)
         .order('date', { ascending: false })
 
-      if (txsError) {
-        console.error("Erro na busca de transações:", txsError)
-      } else {
-        const txs = txsData || []
-        setTransactions(txs)
+      const txs = txsData || []
+      setTransactions(txs)
 
-        // Calcula resumo blindado contra NaN
-        const income = txs.filter(t => t.type === 'income').reduce((a, t) => a + (Number(t.amount) || 0), 0)
-        const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).reduce((a, t) => a + (Number(t.amount) || 0), 0)
-        
-        setSummary({ income, expense })
-      }
+      // Calcula resumo
+      const income = txs.filter(t => t.type === 'income' || (t.type === 'transfer' && t.description?.includes('de '))).reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria' || (t.type === 'transfer' && t.description?.includes('para '))).reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      
+      setSummary({ income, expense })
+
     } catch (err) {
       console.error("Erro inesperado:", err)
     } finally {
@@ -81,23 +88,90 @@ export default function AccountStatementPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\D/g, '')
+  // --- Handlers de Input de Moeda ---
+  const formatMoneyInput = (value: string) => {
+    const rawValue = value.replace(/\D/g, '')
     const num = Number(rawValue) / 100
-    setBalanceNum(num)
-    setDisplayBalance(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    return { num, display: num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
   }
 
-  const handleSave = async () => {
+  const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { num, display } = formatMoneyInput(e.target.value)
+    setBalanceNum(num); setDisplayBalance(display)
+  }
+
+  const handleAdjustBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdjustBalanceDisplay(formatMoneyInput(e.target.value).display)
+  }
+
+  const handleTransferAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTransferAmountDisplay(formatMoneyInput(e.target.value).display)
+  }
+
+  // --- Ações de Banco de Dados ---
+  const handleSaveAccountInfo = async () => {
     if (!name.trim()) return
-    setLoading(true)
-    const { error } = await supabase.from('accounts').update({ name: name.trim(), balance: balanceNum, color }).eq('id', id)
-    if (!error) {
-      setShowForm(false)
-      loadData()
-    } else {
-      setLoading(false)
-      alert("Erro ao salvar conta: " + error.message)
+    setActionLoading(true)
+    await supabase.from('accounts').update({ name: name.trim(), balance: balanceNum, color }).eq('id', id)
+    setShowForm(false)
+    loadData()
+    setActionLoading(false)
+  }
+
+  const handleAdjustBalanceSubmit = async () => {
+    setActionLoading(true)
+    const rawAmount = parseFloat(adjustBalanceDisplay.replace(/\./g, '').replace(',', '.')) || 0;
+    await supabase.from('accounts').update({ balance: rawAmount }).eq('id', id);
+    setShowBalanceModal(false);
+    loadData();
+    setActionLoading(false)
+  }
+
+  const handleTransferSubmit = async () => {
+    if (!destAccountId || !transferAmountDisplay) return alert("Preencha o destino e o valor.")
+    setActionLoading(true)
+    
+    const rawAmount = parseFloat(transferAmountDisplay.replace(/\./g, '').replace(',', '.')) || 0;
+    const destAcc = allAccounts.find(a => a.id === destAccountId);
+
+    if (!destAcc) return;
+
+    try {
+      // 1. Atualiza saldos
+      await supabase.from('accounts').update({ balance: Number(account.balance) - rawAmount }).eq('id', id);
+      await supabase.from('accounts').update({ balance: Number(destAcc.balance) + rawAmount }).eq('id', destAccountId);
+
+      // 2. Insere transação de saída (Origem)
+      await supabase.from('transactions').insert({
+        account_id: id,
+        type: 'transfer',
+        amount: rawAmount,
+        description: transferDesc || `Transferência para ${destAcc.name}`,
+        date: transferDate,
+        status: 'done',
+        context: account.context
+      });
+
+      // 3. Insere transação de entrada (Destino)
+      await supabase.from('transactions').insert({
+        account_id: destAccountId,
+        type: 'transfer',
+        amount: rawAmount,
+        description: transferDesc || `Transferência de ${account.name}`,
+        date: transferDate,
+        status: 'done',
+        context: account.context
+      });
+
+      setShowTransferModal(false);
+      setTransferAmountDisplay('');
+      setTransferDesc('');
+      loadData();
+    } catch (error) {
+      console.error(error)
+      alert("Erro ao transferir.")
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -109,6 +183,12 @@ export default function AccountStatementPage() {
     setBalanceNum(safeBalance)
     setDisplayBalance(safeBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
     setShowForm(true)
+  }
+
+  const openBalanceModal = () => {
+    const safeBalance = Number(account.balance) || 0
+    setAdjustBalanceDisplay(safeBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+    setShowBalanceModal(true)
   }
 
   const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -125,19 +205,20 @@ export default function AccountStatementPage() {
   const safeBalance = Number(account.balance) || 0
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-20 font-sans relative">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f4f6f8] pb-20 font-sans relative">
       
+      {/* Header com os 3 Botões */}
       <div className="flex justify-between items-center p-4 bg-white">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-700"><ChevronLeft size={24} /></button>
         <div className="flex items-center gap-4 text-gray-700">
-          <button onClick={() => setShowTransferModal(true)}><ArrowRightLeft size={20} /></button>
-          <button onClick={() => setShowBalanceModal(true)}><Scale size={20} /></button>
-          <button onClick={openEditModal}><Edit2 size={20} /></button>
+          <button onClick={() => setShowTransferModal(true)} className="hover:text-teal-700 transition-colors"><ArrowRightLeft size={20} /></button>
+          <button onClick={openBalanceModal} className="hover:text-teal-700 transition-colors"><Scale size={20} /></button>
+          <button onClick={openEditModal} className="hover:text-teal-700 transition-colors"><Edit2 size={20} /></button>
         </div>
       </div>
 
-      <div className="bg-white px-4 pb-6 flex flex-col items-center border-b border-gray-100 shadow-sm">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white mb-3 shadow-md transition-colors" style={{ backgroundColor: account.color || '#f97316' }}>{initials}</div>
+      <div className="bg-white px-4 pb-6 flex flex-col items-center border-b border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+        <div className="w-16 h-16 rounded-[20px] flex items-center justify-center text-xl font-bold text-white mb-3 shadow-md transition-colors" style={{ backgroundColor: account.color || '#f97316' }}>{initials}</div>
         <h1 className="text-xl font-light text-gray-600 mb-1">{account.name}</h1>
         <p className="text-[15px] text-gray-800 mb-6">Saldo atual: <span className="font-bold">{formatCurrency(safeBalance)}</span></p>
 
@@ -149,12 +230,12 @@ export default function AccountStatementPage() {
 
         <div className="flex w-full justify-between px-6 pt-2">
           <div className="text-center">
-            <p className="text-[11px] text-gray-500 font-medium mb-1">Entradas do mês</p>
+            <p className="text-[11px] text-gray-500 font-bold tracking-wider uppercase mb-1">Entradas</p>
             <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(summary.income)}</p>
           </div>
           <div className="w-[1px] bg-gray-200"></div>
           <div className="text-center">
-            <p className="text-[11px] text-gray-500 font-medium mb-1">Saídas do mês</p>
+            <p className="text-[11px] text-gray-500 font-bold tracking-wider uppercase mb-1">Saídas</p>
             <p className="text-[15px] font-bold text-red-500">{formatCurrency(summary.expense)}</p>
           </div>
         </div>
@@ -165,65 +246,119 @@ export default function AccountStatementPage() {
           <p className="text-center text-sm text-gray-400 mt-10">Nenhuma movimentação neste mês.</p>
         ) : (
           <div className="space-y-4">
-            {transactions.map(tx => (
-              <div 
-                key={tx.id} 
-                onClick={() => router.push(`/transactions/${tx.id}`)}
-                className="flex justify-between items-center cursor-pointer hover:bg-gray-100/50 p-2 -mx-2 rounded-xl transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.status === 'done' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-                    {tx.status === 'done' ? '✓' : '◷'}
+            {transactions.map(tx => {
+               // Define se a transferência foi de entrada ou saída visualmente
+               const isTransferIn = tx.type === 'transfer' && tx.description?.includes('de ');
+               const isIncomeVisual = tx.type === 'income' || isTransferIn;
+
+               return (
+                <div 
+                  key={tx.id} 
+                  onClick={() => router.push(`/transactions/${tx.id}`)}
+                  className="flex justify-between items-center bg-white shadow-sm p-4 rounded-[20px] cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-[14px] flex items-center justify-center text-lg" style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}>
+                      {tx.type === 'transfer' ? '🔄' : (tx.categories?.icon || '💸')}
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight truncate max-w-[140px]">{tx.description || tx.categories?.name}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
+                    </div>
                   </div>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}>
-                    {tx.categories?.icon || '💸'}
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight">{tx.description || tx.categories?.name}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{tx.categories?.name || 'Geral'} · {account.name}</p>
+                  <div className="text-right">
+                    <p className={`text-[14px] font-bold ${isIncomeVisual ? 'text-emerald-600' : 'text-gray-800'}`}>
+                      {isIncomeVisual ? '+' : '-'} {formatCurrency(Number(tx.amount) || 0)}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{tx.status === 'done' ? '✅ Pago' : '⏳ Pendente'}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-gray-400 mb-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
-                  <p className={`text-[14px] font-bold ${tx.type === 'income' ? 'text-emerald-600' : 'text-gray-800'}`}>
-                    {formatCurrency(Number(tx.amount) || 0)}
-                  </p>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
+      {/* MODAL 1: EDITAR CONTA (Lápis) */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between mb-4">
+          <div className="bg-white rounded-[24px] w-full max-w-sm p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-6">
               <h2 className="font-bold text-xl text-gray-800">Editar Conta</h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
             </div>
-            
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da Conta" className="w-full bg-gray-50 p-4 rounded-2xl mb-4 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
-            
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da Conta" className="w-full bg-gray-50 p-4 rounded-[16px] mb-4 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
             <div className="flex flex-wrap gap-3 mb-6 items-center">
               {DEFAULT_COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)} className={`w-10 h-10 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: c }} />
               ))}
-              <label className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
-                <Plus size={18} className="text-gray-400" />
-                <input type="color" className="hidden" onChange={(e) => setColor(e.target.value)} />
-              </label>
             </div>
-
-            <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="R$ 0,00" className="w-full bg-gray-50 p-4 rounded-2xl mb-6 font-bold text-lg text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
-            
-            <button onClick={handleSave} className="w-full bg-teal-700 hover:bg-teal-800 transition-colors text-white py-4 rounded-2xl font-bold flex justify-center items-center">Salvar Alterações</button>
+            <button onClick={handleSaveAccountInfo} disabled={actionLoading} className="w-full bg-teal-700 hover:bg-teal-800 transition-colors text-white py-4 rounded-[16px] font-bold flex justify-center items-center">
+              {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Alterações'}
+            </button>
           </div>
         </div>
       )}
 
-      {showTransferModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTransferModal(false)}><div className="bg-white p-6 rounded-2xl">Transferência em breve</div></div>}
-      {showBalanceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowBalanceModal(false)}><div className="bg-white p-6 rounded-2xl">Ajuste de saldo em breve</div></div>}
+      {/* MODAL 2: BALANÇA (Ajuste de Saldo) */}
+      {showBalanceModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 pb-0 sm:pb-4" onClick={() => setShowBalanceModal(false)}>
+          <div className="bg-white rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-6">
+              <div>
+                <h2 className="font-bold text-xl text-gray-800">Ajustar Saldo</h2>
+                <p className="text-[12px] text-gray-500 mt-1">Atualize o saldo real da conta no banco.</p>
+              </div>
+              <button onClick={() => setShowBalanceModal(false)} className="text-gray-400"><X size={20}/></button>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-[20px] mb-6 flex items-center gap-2">
+               <span className="text-xl text-gray-400 font-light">R$</span>
+               <input type="text" inputMode="numeric" value={adjustBalanceDisplay} onChange={handleAdjustBalanceChange} className="w-full bg-transparent text-3xl font-light text-gray-800 outline-none" />
+            </div>
+            <button onClick={handleAdjustBalanceSubmit} disabled={actionLoading} className="w-full bg-gray-900 text-white py-4 rounded-[16px] font-bold flex justify-center items-center">
+              {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Confirmar Novo Saldo'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: TRANSFERÊNCIA */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 pb-0 sm:pb-4" onClick={() => setShowTransferModal(false)}>
+          <div className="bg-white rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-6">
+              <div>
+                <h2 className="font-bold text-xl text-gray-800">Transferência</h2>
+                <p className="text-[12px] text-gray-500 mt-1">Saindo de: <span className="font-bold text-gray-700">{account.name}</span></p>
+              </div>
+              <button onClick={() => setShowTransferModal(false)} className="text-gray-400"><X size={20}/></button>
+            </div>
+
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Conta de Destino</label>
+            <select value={destAccountId} onChange={(e) => setDestAccountId(e.target.value)} className="w-full bg-gray-50 p-4 rounded-[16px] mb-4 text-[14px] font-bold text-gray-800 outline-none appearance-none">
+              <option value="">Selecione o destino...</option>
+              {allAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2">Valor da Transferência</label>
+            <div className="bg-gray-50 p-4 rounded-[16px] mb-4 flex items-center gap-2">
+               <span className="text-xl text-gray-400 font-light">R$</span>
+               <input type="text" inputMode="numeric" value={transferAmountDisplay} onChange={handleTransferAmountChange} placeholder="0,00" className="w-full bg-transparent text-2xl font-light text-gray-800 outline-none" />
+            </div>
+
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2">Data</label>
+            <input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} className="w-full bg-gray-50 p-4 rounded-[16px] mb-4 text-[14px] font-bold text-gray-800 outline-none" />
+
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2">Descrição (Opcional)</label>
+            <input type="text" value={transferDesc} onChange={(e) => setTransferDesc(e.target.value)} placeholder="Ex: Pagamento do empréstimo" className="w-full bg-gray-50 p-4 rounded-[16px] mb-6 text-[14px] font-bold text-gray-800 outline-none" />
+
+            <button onClick={handleTransferSubmit} disabled={actionLoading} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[16px] font-bold flex justify-center items-center">
+              {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Efetuar Transferência'}
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
