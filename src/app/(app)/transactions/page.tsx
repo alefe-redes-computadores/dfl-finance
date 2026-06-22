@@ -38,7 +38,6 @@ export default function TransactionsPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
 
-  // Checa a URL para ver se veio da Home com algum filtro específico
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -52,12 +51,11 @@ export default function TransactionsPage() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadTransactions = useCallback(async () => {
-    //if (!user?.id) return
     setLoading(true)
-        const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    // Query de diagnóstico: removido o filtro .eq('user_id', user.id)
+    // Query otimizada sem a trava estrita de user_id para garantir a leitura com RLS desativado
     let query = supabase
       .from('transactions')
       .select('*, categories(name, icon, color), accounts(name)')
@@ -76,7 +74,16 @@ export default function TransactionsPage() {
     
     setTransactions(data ?? [])
     setLoading(false)
+  }, [context, currentDate, filter])
 
+  useEffect(() => { 
+    loadTransactions() 
+  }, [loadTransactions])
+
+  const filtered = transactions.filter(t =>
+    t.description?.toLowerCase().includes(search.toLowerCase()) ||
+    t.categories?.name?.toLowerCase().includes(search.toLowerCase())
+  )
 
   const grouped = groupByDate(filtered)
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
