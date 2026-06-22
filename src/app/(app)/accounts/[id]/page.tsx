@@ -20,9 +20,6 @@ export default function AccountStatementPage() {
   const [loading, setLoading] = useState(true)
 
   const [showForm, setShowForm] = useState(false)
-  const [showTransferModal, setShowTransferModal] = useState(false)
-  const [showBalanceModal, setShowBalanceModal] = useState(false)
-
   const [name, setName] = useState('')
   const [color, setColor] = useState(DEFAULT_COLORS[0])
   const [displayBalance, setDisplayBalance] = useState('')
@@ -30,25 +27,23 @@ export default function AccountStatementPage() {
 
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
-  // ... (mantenha os imports e estados como estão, mas altere a função loadData abaixo)
-
-      const loadData = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!id) return
     setLoading(true)
 
-    // 1. Busca a conta
     const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
     if (accData) setAccount(accData)
 
-    // 2. Query que busca tudo dessa conta sem se prender apenas ao mês, 
-    // assim garantimos que se houver uma transação, ela vai aparecer
-    const { data: txsData, error } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color), accounts(name)')
-      .eq('account_id', id)
-      .order('date', { ascending: false })
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    if (error) console.error("Erro na busca:", error)
+    const { data: txsData } = await supabase
+      .from('transactions')
+      .select('*, categories(name, icon, color)')
+      .eq('account_id', id)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: false })
 
     const txs = txsData || []
     setTransactions(txs)
@@ -58,12 +53,7 @@ export default function AccountStatementPage() {
     
     setSummary({ income, expense })
     setLoading(false)
-  }, [id])
-
-
-
-// ... (Restante do arquivo permanece igual)
-
+  }, [id, currentDate])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -113,8 +103,8 @@ export default function AccountStatementPage() {
       <div className="flex justify-between items-center p-4 bg-white">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-700"><ChevronLeft size={24} /></button>
         <div className="flex items-center gap-4 text-gray-700">
-          <button onClick={() => setShowTransferModal(true)}><ArrowRightLeft size={20} /></button>
-          <button onClick={() => setShowBalanceModal(true)}><Scale size={20} /></button>
+          <button><ArrowRightLeft size={20} /></button>
+          <button><Scale size={20} /></button>
           <button onClick={openEditModal}><Edit2 size={20} /></button>
         </div>
       </div>
@@ -204,9 +194,6 @@ export default function AccountStatementPage() {
           </div>
         </div>
       )}
-
-      {showTransferModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTransferModal(false)}><div className="bg-white p-6 rounded-2xl">Transferência em breve</div></div>}
-      {showBalanceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowBalanceModal(false)}><div className="bg-white p-6 rounded-2xl">Ajuste de saldo em breve</div></div>}
     </div>
   )
 }
