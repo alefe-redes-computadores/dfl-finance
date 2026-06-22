@@ -137,7 +137,7 @@ function HomeContent() {
 
       {/* Entradas e Saídas */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div onClick={() => router.push('/transactions')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[20px] p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
+        <div onClick={() => router.push('/transactions?filter=income')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[20px] p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-1.5 mb-1.5">
               <ArrowUp size={14} className="text-emerald-500" />
               <span className="text-[12px] text-gray-500 font-bold">Receitas</span>
@@ -146,7 +146,7 @@ function HomeContent() {
               {hideBalance ? '••••' : formatCurrency(summary.income)}
             </p>
         </div>
-        <div onClick={() => router.push('/transactions')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[20px] p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
+        <div onClick={() => router.push('/transactions?filter=expense')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[20px] p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-1.5 mb-1.5">
               <ArrowDown size={14} className="text-red-400" />
               <span className="text-[12px] text-gray-500 font-bold">Despesas</span>
@@ -161,12 +161,12 @@ function HomeContent() {
       <div className="mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-3 px-1">Pendências</h3>
         <div className="grid grid-cols-3 gap-3">
-          <div onClick={() => router.push('/transactions')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50">
+          <div onClick={() => router.push('/transactions?filter=expense')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50">
             <div className="flex justify-center mb-1"><ArrowDown size={14} className="text-red-400 opacity-50" /></div>
             <p className="text-[11px] text-gray-400 font-bold mb-0.5">Pagar</p>
             <p className="text-[13px] font-bold text-red-500">{hideBalance ? '•••' : formatCurrency(pendings.toPay)}</p>
           </div>
-          <div onClick={() => router.push('/transactions')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50">
+          <div onClick={() => router.push('/transactions?filter=income')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50">
             <div className="flex justify-center mb-1"><ArrowUp size={14} className="text-emerald-500 opacity-50" /></div>
             <p className="text-[11px] text-gray-400 font-bold mb-0.5">Receber</p>
             <p className="text-[13px] font-bold text-emerald-600">{hideBalance ? '•••' : formatCurrency(pendings.toReceive)}</p>
@@ -240,7 +240,7 @@ function HomeContent() {
         </div>
         <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden p-2">
           {cards.length === 0 ? (
-            <button onClick={() => router.push('/cards')} className="w-full p-4 text-center text-gray-400 text-sm">Cadastrar cartão</button>
+            <button onClick={() => router.push('/cards/new')} className="w-full p-4 text-center text-gray-400 text-sm">Cadastrar cartão</button>
           ) : (
             cards.map((card) => (
               <div 
