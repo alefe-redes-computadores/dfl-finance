@@ -119,7 +119,15 @@ export default function EditTransactionPage() {
     }
 
     setSaving(true)
-    const rawAmount = parseFloat(amountInput.replace(/./g, '').replace(',', '.')) || 0
+
+    // Converter valor formatado (ex: "1.234,56") para número
+    const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
+
+    if (isNaN(rawAmount) || rawAmount <= 0) {
+      alert('Informe um valor válido.')
+      setSaving(false)
+      return
+    }
 
     let finalNotes = notes
     if (txType === 'expense' && (isRefund || isFinancing || isLoan)) {
@@ -144,31 +152,55 @@ export default function EditTransactionPage() {
     }
 
     try {
-      let accountUpdates: Record<string, number> = {}
+      // --- Estorno do valor antigo (se a transação original estava como 'done') ---
+      if (!isNew && tx && tx.status === 'done' && tx.account_id) {
+        // Buscar saldo atual da conta antiga no banco
+        const { data: oldAccData, error: oldAccError } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', tx.account_id)
+          .single()
 
-      if (!isNew && tx) {
-        if (tx.status === 'done' && tx.account_id) {
-          const oldAcc = accounts.find(a => a.id === tx.account_id)
-          if (oldAcc) {
-            const oldAmount = Number(tx.amount)
-            accountUpdates[tx.account_id] = Number(oldAcc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount)
-            oldAcc.balance = accountUpdates[tx.account_id]
-          }
-        }
+        if (oldAccError) throw oldAccError
+
+        const oldBalance = Number(oldAccData.balance) || 0
+        const oldAmount = Number(tx.amount)
+        const revertedBalance = tx.type === 'income'
+          ? oldBalance - oldAmount
+          : oldBalance + oldAmount
+
+        const { error: revertError } = await supabase
+          .from('accounts')
+          .update({ balance: revertedBalance })
+          .eq('id', tx.account_id)
+
+        if (revertError) throw revertError
       }
 
+      // --- Aplicar o novo valor (se o novo status for 'done' e houver conta) ---
       if (isPaid && accountId) {
-        const newAcc = accounts.find(a => a.id === accountId)
-        if (newAcc) {
-          const currentBalance = accountUpdates[accountId] !== undefined ? accountUpdates[accountId] : Number(newAcc.balance)
-          accountUpdates[accountId] = currentBalance + (txType === 'income' ? rawAmount : -rawAmount)
-        }
+        const { data: newAccData, error: newAccError } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', accountId)
+          .single()
+
+        if (newAccError) throw newAccError
+
+        const currentBalance = Number(newAccData.balance) || 0
+        const updatedBalance = txType === 'income'
+          ? currentBalance + rawAmount
+          : currentBalance - rawAmount
+
+        const { error: applyError } = await supabase
+          .from('accounts')
+          .update({ balance: updatedBalance })
+          .eq('id', accountId)
+
+        if (applyError) throw applyError
       }
 
-      for (const [accId, newBalance] of Object.entries(accountUpdates)) {
-        await supabase.from('accounts').update({ balance: newBalance }).eq('id', accId)
-      }
-
+      // Salvar/atualizar a transação
       if (isNew) {
         const { error } = await supabase.from('transactions').insert([payload])
         if (error) throw error
@@ -180,7 +212,7 @@ export default function EditTransactionPage() {
       router.refresh()
       router.back()
     } catch (err: any) {
-      console.error('Catch save:', err)
+      console.error('Erro ao salvar:', err)
       alert('Erro ao salvar: ' + err.message)
     } finally {
       setSaving(false)
