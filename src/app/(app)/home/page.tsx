@@ -45,6 +45,7 @@ function HomeContent() {
   }
 
   const loadData = useCallback(async () => {
+    if (!user) return;
     setDataLoading(true)
     
     try {
@@ -54,6 +55,7 @@ function HomeContent() {
       const { data: transactions } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
+        .eq('user_id', user.id)
         .eq('context', context)
         .gte('date', start)
         .lte('date', end)
@@ -70,7 +72,13 @@ function HomeContent() {
       setSummary({ income, expense, balance: income - expense })
       setRecentTransactions(txs.slice(0, 5))
 
-      const { data: accsData } = await supabase.from('accounts').select('*').eq('context', context).order('name') 
+      const { data: accsData } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('name')
+        
       const accsWithPrevisto = (accsData || []).map(acc => {
         const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
         const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + (Number(t.amount) || 0), 0);
@@ -80,7 +88,13 @@ function HomeContent() {
       });
       setAccounts(accsWithPrevisto)
 
-      const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
+      const { data: creditCards } = await supabase
+        .from('credit_cards')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
       
       const cardsWithInvoice = (creditCards || []).map(card => {
         const cardTxs = txs.filter(t => t.credit_card_id === card.id);
@@ -98,9 +112,16 @@ function HomeContent() {
     } finally {
       setDataLoading(false)
     }
-  }, [context, currentDate])
+  }, [context, currentDate, user])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Atualiza os dados sempre que o usuário retornar à página/aba
+  useEffect(() => {
+    const handleFocus = () => loadData();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadData])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
