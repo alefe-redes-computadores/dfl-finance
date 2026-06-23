@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Edit2, ArrowRightLeft, Scale, ChevronRight, X, Loader2, Check, Clock } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
@@ -12,6 +13,7 @@ const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '
 export default function AccountStatementPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   
   const [account, setAccount] = useState<any>(null)
   const [allAccounts, setAllAccounts] = useState<any[]>([]) 
@@ -40,30 +42,38 @@ export default function AccountStatementPage() {
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
   const loadData = useCallback(async () => {
-    if (!id) return
+    if (!id || !user) return
     setLoading(true)
 
     try {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      const { data: accData } = await supabase.from('accounts').select('*').eq('id', id).single()
+      const { data: accData } = await supabase
+        .from('accounts')
+        .select('*')
+        .match({ user_id: user.id, id: id })
+        .single()
+
       if (accData) setAccount(accData)
 
       if (accData) {
-        const { data: allAccs } = await supabase.from('accounts').select('*').eq('context', accData.context)
-        setAllAccounts((allAccs || []).filter(a => a.id !== id))
+        const { data: allAccs } = await supabase
+          .from('accounts')
+          .select('*')
+          .match({ user_id: user.id, context: accData.context })
+        setAllAccounts((Array.isArray(allAccs) ? allAccs : []).filter(a => a.id !== id))
       }
 
       const { data: txsData } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
-        .eq('account_id', id)
+        .match({ user_id: user.id, account_id: id })
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: false })
 
-      const txs = txsData || []
+      const txs = Array.isArray(txsData) ? txsData : []
       setTransactions(txs)
 
       const income = txs.filter(t => t.type === 'income' || (t.type === 'transfer' && t.description?.includes('de '))).reduce((a, t) => a + (Number(t.amount) || 0), 0)
@@ -76,7 +86,7 @@ export default function AccountStatementPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, currentDate])
+  }, [id, currentDate, user])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -100,7 +110,7 @@ export default function AccountStatementPage() {
   }
 
   const handleSaveAccountInfo = async () => {
-    if (!name.trim()) return
+    if (!name.trim() || !user) return
     setActionLoading(true)
     await supabase.from('accounts').update({ name: name.trim(), balance: balanceNum, color }).eq('id', id)
     setShowForm(false)
@@ -110,6 +120,7 @@ export default function AccountStatementPage() {
   }
 
   const handleAdjustBalanceSubmit = async () => {
+    if (!user) return
     setActionLoading(true)
     const rawAmount = parseFloat(adjustBalanceDisplay.replace(/\./g, '').replace(',', '.')) || 0;
     await supabase.from('accounts').update({ balance: rawAmount }).eq('id', id);
@@ -121,6 +132,7 @@ export default function AccountStatementPage() {
 
   const handleTransferSubmit = async () => {
     if (!destAccountId || !transferAmountDisplay) return alert("Preencha o destino e o valor.")
+    if (!user) return
     setActionLoading(true)
     
     const rawAmount = parseFloat(transferAmountDisplay.replace(/\./g, '').replace(',', '.')) || 0;
@@ -139,7 +151,8 @@ export default function AccountStatementPage() {
         description: transferDesc || `Transferência para ${destAcc.name}`,
         date: transferDate,
         status: 'done',
-        context: account.context
+        context: account.context,
+        user_id: user.id
       });
 
       await supabase.from('transactions').insert({
@@ -149,7 +162,8 @@ export default function AccountStatementPage() {
         description: transferDesc || `Transferência de ${account.name}`,
         date: transferDate,
         status: 'done',
-        context: account.context
+        context: account.context,
+        user_id: user.id
       });
 
       setShowTransferModal(false);
