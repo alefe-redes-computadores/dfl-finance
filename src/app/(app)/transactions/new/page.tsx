@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
-  Camera, Plus, Hash, ArrowRightLeft, Building, HandCoins
+  Camera, Plus, Hash, ArrowRightLeft, Building, HandCoins, X
 } from 'lucide-react'
 import { addMonths, addWeeks, format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -18,8 +18,12 @@ type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
+// Ícones e cores exatos do seu print
+const CATEGORY_ICONS = ['🛒', '🏍️', '💸', '🔧', '📦', '💰', '🛵', '🍔', '🚗', '💖', '🎮', '🏠', '💼', '💻', '📋', '🎯', '⚡', '🎵']
+const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
+
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v4.1 - Design e Segurança Aplicados")
+  console.log("DFL – Nova Transação v5.0 - Modais Nativos e Criação Integrada")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -47,16 +51,21 @@ function NewTransactionContent() {
   const [repetition, setRepetition] = useState<Repetition>('once')
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const [isRefund, setIsRefund] = useState(false)
-  const [isFinancing, setIsFinancing] = useState(false)
-  const [isLoan, setIsLoan] = useState(false)
 
+  // Modais de Seleção
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
-
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+
+  // Modal de Criação de Categoria
+  const [showCreateCatModal, setShowCreateCatModal] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatIcon, setNewCatIcon] = useState('🍔')
+  const [newCatColor, setNewCatColor] = useState('#22c55e')
+  const [savingCategory, setSavingCategory] = useState(false)
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
@@ -74,9 +83,8 @@ function NewTransactionContent() {
   const selectedAcc = accounts.find(a => a.id === accountId)
   const selectedTag = tags.find(t => t.id === tagId)
 
-  // SEU CÓDIGO ORIGINAL COM TRAVA DE SEGURANÇA REFORÇADA
   const loadData = useCallback(async () => {
-    if (!user || !user.id) return // Impede vazamento de dados
+    if (!user || !user.id) return
     const catType = type === 'income' ? 'income' : 'expense'
 
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
@@ -118,22 +126,44 @@ function NewTransactionContent() {
     }
   }
 
-  const handleCameraCapture = (file: File) => {
-    setReceipt(file)
-    setShowCamera(false)
+  // NOVA FUNÇÃO: Salvar categoria direto no banco
+  const handleSaveCategory = async () => {
+    if (!user?.id || !newCatName.trim()) return
+    setSavingCategory(true)
+
+    try {
+      const { data, error } = await supabase.from('categories').insert({
+        user_id: user.id,
+        name: newCatName.trim(),
+        icon: newCatIcon,
+        color: newCatColor,
+        type: type === 'income' ? 'income' : 'expense',
+        context: context
+      }).select().single()
+
+      if (error) throw error
+
+      if (data) {
+        setCategories(prev => [...prev, data])
+        setCategoryId(data.id) // Já seleciona a categoria recém-criada
+        setShowCreateCatModal(false)
+        setNewCatName('') // Reseta o campo
+      }
+    } catch (error) {
+      console.error("Erro ao criar categoria:", error)
+      alert("Erro ao criar categoria.")
+    } finally {
+      setSavingCategory(false)
+    }
   }
 
-  // SEU CÓDIGO ORIGINAL DE SALVAMENTO (INTOCADO PARA EVITAR BUGS)
   const handleSave = async () => {
     if (!user?.id) return
-
     const rawAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0
     if (rawAmount <= 0) {
       alert('Erro: O valor da transação deve ser maior que R$ 0,00.')
-      setSaving(false)
       return
     }
-
     setSaving(true)
 
     let receiptUrl: string | null = null
@@ -146,12 +176,8 @@ function NewTransactionContent() {
         if (!uploadError && data) {
           const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
           receiptUrl = urlData.publicUrl
-        } else {
-          console.error('Erro no upload do comprovante:', uploadError)
         }
-      } catch (err) {
-        console.error('Erro inesperado no upload:', err)
-      }
+      } catch (err) {}
     }
 
     let totalParcels = 1
@@ -179,17 +205,11 @@ function NewTransactionContent() {
         let installmentDate: string
         if (repetition === 'recurring') {
           const baseDate = new Date(date)
-          if (frequency === 'weekly') {
-            installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
-          } else if (frequency === 'biweekly') {
-            installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
-          } else if (frequency === 'monthly') {
-            installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
-          } else if (frequency === 'bimonthly') {
-            installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
-          } else {
-            installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
-          }
+          if (frequency === 'weekly') installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
+          else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
+          else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+          else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
+          else installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         } else {
           installmentDate = format(addMonths(new Date(date), i), 'yyyy-MM-dd')
         }
@@ -210,26 +230,20 @@ function NewTransactionContent() {
           installment_index: totalParcels > 1 ? i + 1 : 1,
           total_installments: totalParcels > 1 ? totalParcels : 1
         })
-
         if (insertError) throw insertError
 
         if (isPaid && accountId && i === 0) {
           const { data: acc } = await supabase.from('accounts').select('balance').eq('id', accountId).single()
           if (acc) {
             const currentBalance = Number(acc.balance) || 0
-            const newBalance = type === 'income'
-              ? currentBalance + installmentAmount
-              : currentBalance - installmentAmount
-
+            const newBalance = type === 'income' ? currentBalance + installmentAmount : currentBalance - installmentAmount
             await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
           }
         }
       }
-
       router.refresh()
       router.push('/transactions')
     } catch (e) {
-      console.error(e)
       alert('Erro ao salvar transação.')
     } finally {
       setSaving(false)
@@ -238,7 +252,7 @@ function NewTransactionContent() {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-black font-sans text-gray-800 overflow-y-auto pb-32">
-      {/* Header Atualizado com ícone de câmera correto */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-black z-40">
         <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
           <ChevronLeft size={22} className="text-gray-700" />
@@ -249,37 +263,25 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Context Selector */}
       <div className="flex justify-center mt-2 mb-1">
         <div className="flex bg-gray-200 p-1 rounded-full">
           {(['dfl', 'personal'] as Context[]).map(c => (
-            <button
-              key={c}
-              onClick={() => setContext(c)}
-              className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${context === c ? 'bg-white shadow-sm' : 'text-gray-500'}`}
-            >
+            <button key={c} onClick={() => setContext(c)} className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${context === c ? 'bg-white shadow-sm' : 'text-gray-500'}`}>
               {c === 'dfl' ? 'DFL' : 'Pessoal'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Valor */}
       <div className="py-6 text-center px-6">
         <p className="text-gray-400 text-xs mb-2">Valor {isIncome ? 'da Receita' : 'da Despesa'}</p>
         <div className="flex justify-center items-center gap-1">
           <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={amount}
-            onChange={handleAmount}
-            className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`}
-          />
+          <input type="text" inputMode="numeric" value={amount} onChange={handleAmount} className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`} />
         </div>
       </div>
 
-      {/* Card Principal - Design Novo */}
+      {/* Card Principal - Categoria e Conta com Ícones Alinhados */}
       <div className="bg-white rounded-3xl mx-4 shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50">
           <span className="font-bold text-sm text-gray-700">{isIncome ? 'Recebido' : 'Pago'}</span>
@@ -288,28 +290,42 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
-          <div className="flex items-center gap-3">
-            <Tag size={20} className="text-gray-400" />
+        {/* Categoria Selector */}
+        <div className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setShowCatModal(true)}>
+          <div className="flex items-center gap-4">
+            {selectedCat ? (
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${selectedCat.color}20` }}>{selectedCat.icon}</div>
+            ) : (
+              <Tag size={20} className="text-gray-400" />
+            )}
             <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
-              {selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Categoria'}
+              {selectedCat ? selectedCat.name : 'Categoria'}
             </span>
           </div>
-          <Plus size={20} className="text-teal-700" />
-        </button>
+          <button onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+            <Plus size={20} />
+          </button>
+        </div>
 
-        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
-          <div className="flex items-center gap-3">
-            <Wallet size={20} className="text-gray-400" />
+        {/* Conta Selector */}
+        <div className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setShowAccModal(true)}>
+          <div className="flex items-center gap-4">
+            {selectedAcc ? (
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: selectedAcc.color }}>{selectedAcc.name.substring(0, 2).toUpperCase()}</div>
+            ) : (
+              <Wallet size={20} className="text-gray-400" />
+            )}
             <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
               {selectedAcc ? selectedAcc.name : 'Conta'}
             </span>
           </div>
-          <Plus size={20} className="text-teal-700" />
-        </button>
+          <button onClick={(e) => { e.stopPropagation(); router.push('/accounts'); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+            <Plus size={20} />
+          </button>
+        </div>
       </div>
 
-      {/* Detalhes com Design Novo */}
+      {/* Detalhes */}
       <div className="mx-4 mt-4">
         <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
@@ -329,11 +345,7 @@ function NewTransactionContent() {
                   { key: 'installments', label: 'Parcelar' },
                   { key: 'recurring', label: 'Recorrente' }
                 ].map(opt => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setRepetition(opt.key as Repetition)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}
-                  >
+                  <button key={opt.key} onClick={() => setRepetition(opt.key as Repetition)} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}>
                     {opt.label}
                   </button>
                 ))}
@@ -351,23 +363,11 @@ function NewTransactionContent() {
               {repetition === 'recurring' && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {[
-                    { key: 'weekly', label: 'Semanal' },
-                    { key: 'biweekly', label: 'Quinzenal' },
-                    { key: 'monthly', label: 'Mensal' },
-                    { key: 'bimonthly', label: 'Bimestral' },
+                    { key: 'weekly', label: 'Semanal' }, { key: 'biweekly', label: 'Quinzenal' },
+                    { key: 'monthly', label: 'Mensal' }, { key: 'bimonthly', label: 'Bimestral' },
                     { key: 'custom', label: 'Personalizar' }
                   ].map(f => (
-                    <button
-                      key={f.key}
-                      onClick={() => {
-                        if (f.key === 'custom') {
-                          setShowComingSoon(true)
-                          return
-                        }
-                        setFrequency(f.key as Frequency)
-                      }}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}
-                    >
+                    <button key={f.key} onClick={() => f.key === 'custom' ? setShowComingSoon(true) : setFrequency(f.key as Frequency)} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}>
                       {f.label}
                     </button>
                   ))}
@@ -378,9 +378,7 @@ function NewTransactionContent() {
             <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
               <div className="flex items-center gap-3">
                 <Tag size={20} className="text-gray-400" />
-                <span className={`text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>
-                  {selectedTag ? selectedTag.name : 'Tags'}
-                </span>
+                <span className={`text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>{selectedTag ? selectedTag.name : 'Tags'}</span>
               </div>
               <Plus size={20} className="text-teal-700" />
             </button>
@@ -389,11 +387,8 @@ function NewTransactionContent() {
               <div className="p-5 space-y-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3"><ArrowRightLeft size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">É uma devolução / estorno</span></div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                 </div>
-                {/* Botões visuais de "Em Breve" desabilitados visualmente */}
                 <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
                   <div className="flex items-center gap-3"><Building size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">Financiamento</span></div>
                   <div className="w-12 h-6 rounded-full bg-gray-200"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
@@ -414,34 +409,31 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* MODAIS APRIMORADOS */}
+      {/* --- MODAIS INFERIORES DE SELEÇÃO --- */}
+
+      {/* MODAL LISTA DE CATEGORIAS */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
               <h3 className="font-bold text-lg">Categorias</h3>
-              <button onClick={() => router.push('/categories')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
+              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {categories.map(cat => {
-                const isActive = cat.id === categoryId;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{cat.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700" />}
-                  </button>
-                );
-              })}
+              {categories.map(cat => (
+                <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${cat.id === categoryId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
+                  <span className="flex-1 text-left font-medium text-gray-800">{cat.name}</span>
+                  {cat.id === categoryId && <Check size={20} className="text-teal-700" />}
+                </button>
+              ))}
+              {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL LISTA DE CONTAS */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -450,25 +442,19 @@ function NewTransactionContent() {
               <button onClick={() => router.push('/accounts')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {accounts.map(acc => {
-                const isActive = acc.id === accountId;
-                return (
-                  <button
-                    key={acc.id}
-                    onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{acc.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700" />}
-                  </button>
-                );
-              })}
+              {accounts.map(acc => (
+                <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${acc.id === accountId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                  <span className="flex-1 text-left font-medium text-gray-800">{acc.name}</span>
+                  {acc.id === accountId && <Check size={20} className="text-teal-700" />}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL LISTA DE TAGS */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -477,20 +463,72 @@ function NewTransactionContent() {
               <button onClick={() => router.push('/tags')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {tags.map(tag => {
-                const isActive = tag.id === tagId;
-                return (
-                  <button
-                    key={tag.id}
-                    onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{tag.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700" />}
-                  </button>
-                );
-              })}
+              {tags.map(tag => (
+                <button key={tag.id} onClick={() => { setTagId(tag.id); setShowTagModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${tag.id === tagId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                  <span className="flex-1 text-left font-medium text-gray-800">{tag.name}</span>
+                  {tag.id === tagId && <Check size={20} className="text-teal-700" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- NOVO MODAL: CRIAÇÃO DE CATEGORIA --- */}
+      {showCreateCatModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800">Nova categoria</h3>
+              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            
+            <div className="space-y-6">
+              <input 
+                type="text" 
+                value={newCatName} 
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Nome da categoria" 
+                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
+              />
+
+              <div>
+                <p className="text-sm text-gray-500 font-medium mb-3">Ícone</p>
+                <div className="flex flex-wrap gap-3">
+                  {CATEGORY_ICONS.map(i => (
+                    <button 
+                      key={i} 
+                      onClick={() => setNewCatIcon(i)}
+                      className={`w-12 h-12 flex items-center justify-center text-2xl rounded-2xl transition-all ${newCatIcon === i ? 'bg-teal-700 scale-110 shadow-md' : 'bg-gray-50 hover:bg-gray-100'}`}
+                    >
+                      {i}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
+                <div className="flex flex-wrap gap-3">
+                  {CATEGORY_COLORS.map(c => (
+                    <button 
+                      key={c} 
+                      onClick={() => setNewCatColor(c)}
+                      className={`w-10 h-10 rounded-full transition-transform ${newCatColor === c ? 'scale-125 border-4 border-white shadow-md' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <button 
+                onClick={handleSaveCategory} 
+                disabled={savingCategory || !newCatName.trim()}
+                className="w-full bg-[#82a99c] hover:bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 transition-colors disabled:opacity-50 flex justify-center items-center"
+              >
+                {savingCategory ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : 'Salvar categoria'}
+              </button>
             </div>
           </div>
         </div>
