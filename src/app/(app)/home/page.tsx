@@ -30,7 +30,7 @@ function HomeContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
-  const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0 })
+  const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0, faturas: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
   const [recentExpenses, setRecentExpenses] = useState<any[]>([])
@@ -51,6 +51,7 @@ function HomeContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
+      // Busca Transações do Mês
       const { data: transactions } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
@@ -61,19 +62,19 @@ function HomeContent() {
 
       const txs = transactions || []
 
+      // Cálculos Gerais
       const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       
-      const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      // Contas a pagar normais (ISOLAMOS os cartões de crédito aqui usando !t.credit_card_id)
+      const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id).reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
 
       setSummary({ income, expense, balance: income - expense })
-      setPendings({ toPay, toReceive })
-      
       setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
 
+      // Busca Contas
       const { data: accsData } = await supabase.from('accounts').select('*').eq('context', context).order('name') 
-      
       const accsWithPrevisto = (accsData || []).map(acc => {
         const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
         const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + (Number(t.amount) || 0), 0);
@@ -81,11 +82,23 @@ function HomeContent() {
         const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense;
         return { ...acc, previsto };
       });
-
       setAccounts(accsWithPrevisto)
 
+      // Busca Cartões e Calcula a Fatura
       const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
-      setCards(creditCards ?? [])
+      
+      const cardsWithInvoice = (creditCards || []).map(card => {
+        // Soma as despesas vinculadas a este cartão no mês
+        const cardTxs = txs.filter(t => t.credit_card_id === card.id);
+        const faturaAtual = cardTxs.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+        return { ...card, faturaAtual };
+      });
+
+      const totalFaturas = cardsWithInvoice.reduce((acc, c) => acc + c.faturaAtual, 0);
+      
+      setCards(cardsWithInvoice)
+      setPendings({ toPay, toReceive, faturas: totalFaturas }) // Atualiza o state com o total das faturas
+      
     } catch (err) {
       console.error("Erro na Home:", err)
     } finally {
@@ -98,6 +111,7 @@ function HomeContent() {
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
   const totalPrevistoBalance = accounts.reduce((acc, curr) => acc + (curr.previsto || 0), 0)
+  const somaFaturasGeral = pendings.faturas
 
   if (authLoading || dataLoading) {
     return (
@@ -156,6 +170,7 @@ function HomeContent() {
         </div>
       </div>
 
+      {/* PENDÊNCIAS COM A FATURA DINÂMICA */}
       <div className="mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-3 px-1">Pendências</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -172,7 +187,7 @@ function HomeContent() {
           <div onClick={() => router.push('/cards')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50">
             <div className="flex justify-center mb-1"><div className="w-3.5 h-3.5 border-2 border-orange-300 rounded-[4px] opacity-50" /></div>
             <p className="text-[11px] text-gray-400 font-bold mb-0.5">Faturas</p>
-            <p className="text-[13px] font-bold text-orange-400">R$ 0,00</p>
+            <p className="text-[13px] font-bold text-orange-400">{hideBalance ? '•••' : formatCurrency(pendings.faturas)}</p>
           </div>
         </div>
       </div>
@@ -229,16 +244,15 @@ function HomeContent() {
         </div>
       </div>
 
+      {/* CARTÕES COM A FATURA DINÂMICA */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3 px-1">
           <h3 className="text-[15px] font-bold text-gray-800 cursor-pointer" onClick={() => router.push('/cards')}>Cartões</h3>
-          {/* Ícone fixado diretamente em /cards/new */}
           <button onClick={() => router.push('/cards/new')} className="p-1 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
             <Plus size={20} />
           </button>
         </div>
         
-        {/* Bloco de Cartões com botão gigante para Novo Cartão caso a lista esteja vazia */}
         <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden p-2">
           {cards.length === 0 ? (
             <div className="p-2">
@@ -262,8 +276,13 @@ function HomeContent() {
                   </div>
                   <p className="text-[14px] font-bold text-gray-800">{card.name}</p>
                 </div>
-                <div className="text-right">
-                   <p className="text-[14px] font-bold text-gray-800">R$ 0,00 <span className="text-emerald-500 ml-1">✓</span></p>
+                <div className="text-right flex items-center gap-1">
+                   {/* Se tiver fatura > 0, exibe o valor em laranja. Senão, fica verde com OK */}
+                   {card.faturaAtual > 0 ? (
+                     <p className="text-[14px] font-bold text-orange-500">{hideBalance ? '•••' : formatCurrency(card.faturaAtual)}</p>
+                   ) : (
+                     <p className="text-[14px] font-bold text-gray-800">R$ 0,00 <span className="text-emerald-500 ml-1">✓</span></p>
+                   )}
                 </div>
               </div>
             ))
@@ -271,10 +290,9 @@ function HomeContent() {
           {cards.length > 0 && (
             <div className="flex justify-between items-center p-3 mt-1 border-t border-gray-50">
               <div>
-                <p className="text-[14px] font-bold text-gray-800">Total</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Próxima</p>
+                <p className="text-[14px] font-bold text-gray-800">Total Faturas</p>
               </div>
-              <p className="text-[14px] font-bold text-gray-800">R$ 0,00</p>
+              <p className="text-[14px] font-bold text-gray-800">{hideBalance ? '••••' : formatCurrency(somaFaturasGeral)}</p>
             </div>
           )}
         </div>
