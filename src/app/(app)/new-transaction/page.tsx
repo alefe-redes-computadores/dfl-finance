@@ -57,20 +57,20 @@ function NewTransactionContent() {
     if (!user?.id) return
     const catType = type === 'income' ? 'income' : 'expense'
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context).eq('type', catType),
-      supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context),
-      supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context)
+      supabase.from('categories').select('*').match({ user_id: user.id, context: context, type: catType }),
+      supabase.from('accounts').select('*').match({ user_id: user.id, context: context }).order('name'),
+      supabase.from('tags').select('*').match({ user_id: user.id, context: context }).order('name')
     ])
-    setCategories(cats ?? [])
-    setAccounts(accs ?? [])
-    setTags(tgs ?? [])
+    setCategories(Array.isArray(cats) ? cats : [])
+    setAccounts(Array.isArray(accs) ? accs : [])
+    setTags(Array.isArray(tgs) ? tgs : [])
   }, [user, context, type])
 
   useEffect(() => {
     loadData()
   }, [loadData])
 
-    const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setAmount(val) // Atualiza o visual
     
@@ -79,7 +79,6 @@ function NewTransactionContent() {
     const num = parseFloat(rawValue)
     setAmountNum(isNaN(num) ? 0 : num) 
   }
-
 
   const handleSave = async () => {
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -121,17 +120,16 @@ function NewTransactionContent() {
       if (isPaid && accountId) {
         const { data: acc } = await supabase.from('accounts').select('balance').eq('id', accountId).single()
         
-      // Verificação de segurança adicionada aqui
-      if (acc) {
-         const currentBalance = Number(acc.balance) || 0
-         const newBalance = type === 'income'
+        // Verificação de segurança adicionada aqui
+        if (acc) {
+          const currentBalance = Number(acc.balance) || 0
+          const newBalance = type === 'income'
             ? currentBalance + amountNum
             : currentBalance - amountNum
 
-         await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
+          await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
         }
       }
-
 
       router.refresh()
       router.push('/transactions')
