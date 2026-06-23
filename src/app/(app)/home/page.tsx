@@ -55,13 +55,12 @@ function HomeContent() {
       const { data: transactions } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
-        .eq('user_id', user.id)
-        .eq('context', context)
+        .match({ user_id: user.id, context: context })
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: false })
 
-      const txs = transactions || []
+      const txs = Array.isArray(transactions) ? transactions : []
 
       const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
@@ -75,11 +74,10 @@ function HomeContent() {
       const { data: accsData } = await supabase
         .from('accounts')
         .select('*')
-        .eq('user_id', user.id)
-        .eq('context', context)
+        .match({ user_id: user.id, context: context })
         .order('name')
         
-      const accsWithPrevisto = (accsData || []).map(acc => {
+      const accsWithPrevisto = (Array.isArray(accsData) ? accsData : []).map(acc => {
         const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
         const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + (Number(t.amount) || 0), 0);
         const pendingExpense = accTxs.filter(t => (t.type === 'expense' || t.type === 'sangria')).reduce((a, t) => a + (Number(t.amount) || 0), 0);
@@ -91,12 +89,10 @@ function HomeContent() {
       const { data: creditCards } = await supabase
         .from('credit_cards')
         .select('*')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .eq('is_archived', false)
+        .match({ user_id: user.id, context: context, is_archived: false })
         .order('created_at', { ascending: false })
       
-      const cardsWithInvoice = (creditCards || []).map(card => {
+      const cardsWithInvoice = (Array.isArray(creditCards) ? creditCards : []).map(card => {
         const cardTxs = txs.filter(t => t.credit_card_id === card.id);
         const faturaAtual = cardTxs.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
         return { ...card, faturaAtual };
