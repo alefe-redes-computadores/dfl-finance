@@ -26,25 +26,21 @@ export default function CardsListPage() {
       const { data: creditCards } = await supabase
         .from('credit_cards')
         .select('*')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .eq('is_archived', false)
+        .match({ user_id: user.id, context: context, is_archived: false })
         .order('created_at', { ascending: false })
 
       // 2. Busca as transações de cartão (status pending)
       const { data: cardTxs } = await supabase
         .from('transactions')
         .select('amount, credit_card_id')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .eq('status', 'pending')
+        .match({ user_id: user.id, context: context, status: 'pending' })
         .not('credit_card_id', 'is', null)
 
-      const txs = cardTxs || []
+      const txs = Array.isArray(cardTxs) ? cardTxs : []
 
       // 3. Monta o cálculo por cartão
       let somaTotal = 0;
-      const processedCards = (creditCards || []).map(card => {
+      const processedCards = (Array.isArray(creditCards) ? creditCards : []).map(card => {
         const fatura = txs.filter(t => t.credit_card_id === card.id).reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
         const limiteLivre = (Number(card.limit_amount) || 0) - fatura
         somaTotal += fatura;
