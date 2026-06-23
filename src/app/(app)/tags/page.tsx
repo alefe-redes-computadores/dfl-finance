@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, ChevronRight, GripVertical, Trash2, X } from 'lucide-react'
+import { ChevronLeft, Plus, ChevronRight, GripVertical, Trash2, X, Loader2 } from 'lucide-react'
 
-// Paleta de cores baseada no seu print
+// Paleta de cores premium (tons pastéis e sóbrios)
 const TAG_COLORS = [
   '#264653', '#2a9d8f', '#1d3557', '#e76f51', '#2ecc71', '#00b894',
   '#ff7675', '#d63031', '#fdcb6e', '#e17055', '#74b9ff', '#0984e3',
@@ -29,7 +29,6 @@ export default function TagsPage() {
   const [color, setColor] = useState(TAG_COLORS[0])
   const [saving, setSaving] = useState(false)
 
-  // CORREÇÃO DO CARREGAMENTO INFINITO AQUI: Usando user?.id
   useEffect(() => {
     if (user?.id) {
       loadTags()
@@ -38,13 +37,17 @@ export default function TagsPage() {
 
   async function loadTags() {
     setLoading(true)
-    const { data } = await supabase
+    // Buscando apenas pelo nome para não quebrar com colunas inexistentes (ex: sort_order)
+    const { data, error } = await supabase
       .from('tags')
       .select('*')
       .eq('user_id', user!.id)
       .eq('context', context)
-      .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
+
+    if (error) {
+      console.error("Erro ao carregar tags:", error)
+    }
 
     setTags(data ?? [])
     setLoading(false)
@@ -65,56 +68,75 @@ export default function TagsPage() {
   }
 
   async function handleSave() {
-    if (!name.trim()) return
+    if (!name.trim() || !user?.id) return
     setSaving(true)
 
-    if (editingTag) {
-      await supabase.from('tags').update({ name, color }).eq('id', editingTag.id)
-    } else {
-      await supabase.from('tags').insert({
-        user_id: user!.id,
-        context,
-        name,
-        color,
-        sort_order: tags.length + 1
-      })
+    const payload = {
+      user_id: user.id,
+      context,
+      name: name.trim(),
+      color
     }
 
-    setShowForm(false)
-    setSaving(false)
-    loadTags()
+    try {
+      if (editingTag) {
+        const { error } = await supabase.from('tags').update(payload).eq('id', editingTag.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('tags').insert([payload])
+        if (error) throw error
+      }
+
+      setShowForm(false)
+      loadTags()
+    } catch (err: any) {
+      console.error("Erro ao salvar tag:", err)
+      alert("Erro ao salvar tag: " + err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Deseja realmente excluir esta tag?')) return
-    await supabase.from('tags').delete().eq('id', id)
-    setShowForm(false)
-    loadTags()
+    setSaving(true)
+    
+    try {
+      const { error } = await supabase.from('tags').delete().eq('id', id)
+      if (error) throw error
+      setShowForm(false)
+      loadTags()
+    } catch (err: any) {
+      console.error("Erro ao excluir:", err)
+      alert("Erro ao excluir: " + err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-24 font-sans">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-24 font-sans relative">
       
-      {/* Header */}
-      <div className="bg-white px-4 pt-6 pb-4 shadow-sm mb-4">
+      {/* Header Premium */}
+      <div className="bg-[#f8f9fa] px-4 pt-6 pb-2 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-6">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 hover:text-gray-600 transition-colors">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800">Tags</h1>
-          <button onClick={openNew} className="p-2 -mr-2 text-emerald-800">
+          <h1 className="text-[17px] font-bold text-gray-800">Tags</h1>
+          <button onClick={openNew} className="p-2 -mr-2 text-teal-700 hover:text-teal-800 transition-colors">
             <Plus size={24} />
           </button>
         </div>
 
-        {/* Seletor DFL / Pessoal */}
-        <div className="flex bg-gray-100 rounded-full p-1 w-full max-w-[200px] mx-auto">
+        {/* Seletor Estilo Kontto */}
+        <div className="flex bg-white rounded-full p-1 border border-gray-100 max-w-[220px] mx-auto shadow-sm">
           {(['dfl', 'personal'] as const).map(c => (
             <button
               key={c}
               onClick={() => setContext(c)}
-              className={`flex-1 py-1.5 rounded-full text-[13px] font-bold transition-colors ${
-                context === c ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'
+              className={`flex-1 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 ${
+                context === c ? 'bg-[#f4f6f8] text-gray-800 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400'
               }`}
             >
               {c === 'dfl' ? 'DFL' : 'Pessoal'}
@@ -124,93 +146,104 @@ export default function TagsPage() {
       </div>
 
       {/* Lista de Tags */}
-      <div className="px-4 space-y-1">
+      <div className="px-4 mt-6">
         {loading ? (
-          <div className="text-center py-10 text-gray-400 text-sm">Carregando tags...</div>
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
         ) : tags.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">Nenhuma tag cadastrada.</div>
+          <div className="text-center py-20 text-gray-400 text-[14px]">Nenhuma tag cadastrada.</div>
         ) : (
-          tags.map(tag => (
-            <div key={tag.id} className="flex items-center justify-between bg-white px-4 py-3 border-b border-gray-50 last:border-0 rounded-xl mb-2 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full" style={{ backgroundColor: tag.color }}></div>
-                <div>
-                  <p className="text-[15px] font-bold text-gray-800">{tag.name}</p>
-                  <p className="text-[11px] text-gray-400 font-medium">0 transações</p>
+          <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-50 overflow-hidden">
+            {tags.map((tag, index) => (
+              <div 
+                key={tag.id} 
+                className={`flex items-center justify-between px-5 py-4 bg-white hover:bg-gray-50 transition-colors cursor-pointer ${index !== tags.length - 1 ? 'border-b border-gray-50' : ''}`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-6 h-6 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: tag.color }}></div>
+                  <div>
+                    <p className="text-[15px] font-bold text-gray-800">{tag.name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-gray-300">
+                  <button onClick={(e) => { e.stopPropagation(); openEdit(tag); }} className="p-2 hover:text-teal-700 transition-colors">
+                    <ChevronRight size={18} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-gray-400">
-                <button className="cursor-grab active:cursor-grabbing hover:text-gray-600">
-                  <GripVertical size={18} />
-                </button>
-                <button onClick={() => openEdit(tag)} className="hover:text-emerald-700">
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
       {/* Modal Nova/Editar Tag */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-[#f8f9fa] flex flex-col" onClick={() => setShowForm(false)}>
-          <div className="bg-white flex-1 w-full max-w-md mx-auto relative shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col justify-end" onClick={() => setShowForm(false)}>
+          <div className="bg-white flex-1 w-full max-w-md mx-auto mt-24 rounded-t-[32px] relative shadow-2xl flex flex-col animate-in slide-in-from-bottom-full duration-300" onClick={e => e.stopPropagation()}>
             
-            <div className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-gray-100">
-              <button onClick={() => setShowForm(false)} className="p-2 -ml-2"><ChevronLeft size={24} className="text-gray-800"/></button>
-              <h2 className="font-bold text-lg text-gray-800">{editingTag ? 'Editar Tag' : 'Nova Tag'}</h2>
-              <div className="w-8"></div> {/* Espaçador */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-50">
+              <h2 className="font-bold text-[17px] text-gray-800">{editingTag ? 'Editar Tag' : 'Nova Tag'}</h2>
+              <button onClick={() => setShowForm(false)} className="p-2 -mr-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <X size={24} />
+              </button>
             </div>
 
-            <div className="p-6">
-              {/* Preview Badge */}
+            <div className="p-6 overflow-y-auto flex-1">
+              
+              {/* Preview Badge Elegante */}
               <div className="flex justify-center mb-8">
-                <div className="inline-flex items-center gap-2 border border-gray-200 rounded-full px-4 py-1.5 shadow-sm">
-                  <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color }}></div>
-                  <span className="text-sm font-bold text-gray-700">{name || 'sua tag'}</span>
+                <div className="inline-flex items-center gap-3 border border-gray-100 bg-gray-50 rounded-full px-5 py-2 shadow-sm">
+                  <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
+                  <span className="text-[15px] font-bold text-gray-700">{name || 'Nome da tag'}</span>
                 </div>
               </div>
 
               <div className="mb-8">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Nome</label>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Nome</label>
                 <input
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Ex: viagem, reembolso, presente"
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500 font-medium text-gray-800"
+                  placeholder="Ex: viagem, reembolso, ifood"
+                  className="w-full bg-transparent border-b-2 border-gray-100 py-3 text-[16px] outline-none focus:border-teal-600 font-bold text-gray-800 transition-colors placeholder:text-gray-300 placeholder:font-normal"
                 />
               </div>
 
               <div className="mb-8">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">Cor</label>
-                <div className="flex flex-wrap gap-3">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 block">Cor da Tag</label>
+                <div className="grid grid-cols-5 gap-4">
                   {TAG_COLORS.map(c => (
                     <button
                       key={c}
                       onClick={() => setColor(c)}
-                      className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-                      style={{ backgroundColor: c }}
+                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm"
+                      style={{ 
+                        backgroundColor: c,
+                        transform: color === c ? 'scale(1.15)' : 'scale(1)',
+                        boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none'
+                      }}
                     >
-                      {color === c && <ChevronRight size={16} className="text-white transform rotate-90" />}
                     </button>
                   ))}
                 </div>
               </div>
 
               {editingTag && (
-                <div className="flex justify-center mb-6">
-                  <button onClick={() => handleDelete(editingTag.id)} className="flex items-center gap-2 text-red-500 font-bold text-sm py-2 px-4 rounded-xl hover:bg-red-50 transition-colors">
-                    <Trash2 size={16} /> Excluir tag
+                <div className="flex justify-center mt-10">
+                  <button onClick={() => handleDelete(editingTag.id)} className="flex items-center gap-2 text-red-500 font-bold text-[14px] py-2 px-4 rounded-xl hover:bg-red-50 transition-colors">
+                    <Trash2 size={18} /> Excluir tag
                   </button>
                 </div>
               )}
 
             </div>
 
-            <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t border-gray-50">
-              <button onClick={handleSave} disabled={saving || !name.trim()} className="w-full bg-emerald-800 text-white py-3.5 rounded-xl font-bold disabled:opacity-50">
-                {saving ? 'Salvando...' : editingTag ? 'Salvar' : 'Criar tag'}
+            {/* Botão Salvar Estilo Kontto */}
+            <div className="p-6 bg-white border-t border-gray-50 pb-8">
+              <button 
+                onClick={handleSave} 
+                disabled={saving || !name.trim()} 
+                className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[20px] font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center h-14"
+              >
+                {saving ? <Loader2 className="animate-spin" size={24} /> : (editingTag ? 'Salvar Alterações' : 'Criar Tag')}
               </button>
             </div>
 
