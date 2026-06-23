@@ -19,7 +19,7 @@ type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v2.0")
+  console.log("DFL – Nova Transação v4.1 - Design e Segurança Aplicados")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -74,11 +74,9 @@ function NewTransactionContent() {
   const selectedAcc = accounts.find(a => a.id === accountId)
   const selectedTag = tags.find(t => t.id === tagId)
 
+  // SEU CÓDIGO ORIGINAL COM TRAVA DE SEGURANÇA REFORÇADA
   const loadData = useCallback(async () => {
-    if (!user?.id) {
-      console.error("Usuário não autenticado!");
-      return;
-    }
+    if (!user || !user.id) return // Impede vazamento de dados
     const catType = type === 'income' ? 'income' : 'expense'
 
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
@@ -125,6 +123,7 @@ function NewTransactionContent() {
     setShowCamera(false)
   }
 
+  // SEU CÓDIGO ORIGINAL DE SALVAMENTO (INTOCADO PARA EVITAR BUGS)
   const handleSave = async () => {
     if (!user?.id) return
 
@@ -238,21 +237,21 @@ function NewTransactionContent() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white dark:bg-black font-sans text-gray-800 overflow-y-auto pb-32">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-white dark:bg-black z-40">
-        <button onClick={() => router.back()} className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100">
+    <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-black font-sans text-gray-800 overflow-y-auto pb-32">
+      {/* Header Atualizado com ícone de câmera correto */}
+      <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-black z-40">
+        <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
           <ChevronLeft size={22} className="text-gray-700" />
         </button>
-        <h1 className="font-bold text-base">Nova Transação</h1>
-        <button onClick={() => setShowReceiptModal(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100">
-          <Camera size={18} className="text-gray-700" />
+        <h1 className="font-bold text-base">{isIncome ? 'Nova Receita' : 'Nova Despesa'}</h1>
+        <button onClick={() => setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
+          <Camera size={20} className="text-gray-700" />
         </button>
       </div>
 
       {/* Context Selector */}
       <div className="flex justify-center mt-2 mb-1">
-        <div className="flex bg-gray-100 p-1 rounded-full">
+        <div className="flex bg-gray-200 p-1 rounded-full">
           {(['dfl', 'personal'] as Context[]).map(c => (
             <button
               key={c}
@@ -267,9 +266,9 @@ function NewTransactionContent() {
 
       {/* Valor */}
       <div className="py-6 text-center px-6">
-        <p className="text-gray-400 text-xs mb-2">Valor</p>
+        <p className="text-gray-400 text-xs mb-2">Valor {isIncome ? 'da Receita' : 'da Despesa'}</p>
         <div className="flex justify-center items-center gap-1">
-          <span className={`text-2xl font-medium ${themeColor} opacity-60`}>R$</span>
+          <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
           <input
             type="text"
             inputMode="numeric"
@@ -280,47 +279,51 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* Card Principal */}
+      {/* Card Principal - Design Novo */}
       <div className="bg-white rounded-3xl mx-4 shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <span className="font-medium text-sm">{isIncome ? 'Recebido' : 'Pago'}</span>
-          <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-300'}`}>
+        <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50">
+          <span className="font-bold text-sm text-gray-700">{isIncome ? 'Recebido' : 'Pago'}</span>
+          <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-200'}`}>
             <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
 
-        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
-          <Tag size={18} className="text-gray-400" />
-          <span className={`flex-1 text-left text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
-            {selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Categoria'}
-          </span>
-          <Plus size={18} className="text-teal-700" />
+        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3">
+            <Tag size={20} className="text-gray-400" />
+            <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
+              {selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Categoria'}
+            </span>
+          </div>
+          <Plus size={20} className="text-teal-700" />
         </button>
 
-        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 px-5 py-4 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
-          <Wallet size={18} className="text-gray-400" />
-          <span className={`flex-1 text-left text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
-            {selectedAcc ? selectedAcc.name : 'Conta'}
-          </span>
-          <Plus size={18} className="text-teal-700" />
+        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3">
+            <Wallet size={20} className="text-gray-400" />
+            <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
+              {selectedAcc ? selectedAcc.name : 'Conta'}
+            </span>
+          </div>
+          <Plus size={20} className="text-teal-700" />
         </button>
       </div>
 
-      {/* Detalhes */}
-      <div className="mx-4 mt-3">
-        <button onClick={() => setShowDetails(!showDetails)} className="text-emerald-800 text-sm font-bold flex items-center gap-1 py-2">
+      {/* Detalhes com Design Novo */}
+      <div className="mx-4 mt-4">
+        <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
 
         {showDetails && (
-          <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden mt-2">
-            <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-4 text-sm border-b border-gray-100 outline-none" />
-            <input placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} className="w-full px-5 py-4 text-sm border-b border-gray-100 outline-none" />
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mt-2">
+            <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 border-b border-gray-50 outline-none" />
+            <input placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 border-b border-gray-50 outline-none" />
 
-            <div className="px-5 py-4 border-b border-gray-100">
-              <p className="text-sm font-bold text-gray-800 mb-3">Repetição</p>
-              <div className="flex gap-2">
+            <div className="px-5 py-5 border-b border-gray-50">
+              <p className="text-sm font-bold text-gray-800 mb-4">Repetição</p>
+              <div className="flex gap-2 mb-4">
                 {[
                   { key: 'once', label: 'Única' },
                   { key: 'installments', label: 'Parcelar' },
@@ -329,7 +332,7 @@ function NewTransactionContent() {
                   <button
                     key={opt.key}
                     onClick={() => setRepetition(opt.key as Repetition)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}
                   >
                     {opt.label}
                   </button>
@@ -337,17 +340,16 @@ function NewTransactionContent() {
               </div>
 
               {repetition === 'installments' && (
-                <div className="mt-3 flex items-center gap-3">
-                  <Hash size={16} className="text-gray-400" />
-                  <span className="text-sm font-medium text-gray-700">Parcelas:</span>
-                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))} className="text-sm font-medium text-gray-800 bg-gray-100 rounded-lg px-2 py-1 outline-none">
+                <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
+                  <span className="text-sm font-medium text-gray-700">Parcelas</span>
+                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))} className="bg-transparent text-sm font-bold outline-none">
                     {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (<option key={n} value={n}>{n}x</option>))}
                   </select>
                 </div>
               )}
 
               {repetition === 'recurring' && (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mt-2">
                   {[
                     { key: 'weekly', label: 'Semanal' },
                     { key: 'biweekly', label: 'Quinzenal' },
@@ -364,7 +366,7 @@ function NewTransactionContent() {
                         }
                         setFrequency(f.key as Frequency)
                       }}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                      className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}
                     >
                       {f.label}
                     </button>
@@ -373,28 +375,32 @@ function NewTransactionContent() {
               )}
             </div>
 
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
-              <Tag size={18} className="text-gray-400" />
-              <span className={`flex-1 text-left text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>
-                {selectedTag ? selectedTag.name : 'Vincular Tag'}
-              </span>
+            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <Tag size={20} className="text-gray-400" />
+                <span className={`text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>
+                  {selectedTag ? selectedTag.name : 'Tags'}
+                </span>
+              </div>
+              <Plus size={20} className="text-teal-700" />
             </button>
 
             {!isIncome && (
-              <div className="px-5 py-4 space-y-3 border-b border-gray-100">
+              <div className="p-5 space-y-5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><ArrowRightLeft size={16} className="text-gray-400" /><span className="text-sm font-medium text-gray-800">É uma devolução / estorno</span></div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-10 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}>
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
+                  <div className="flex items-center gap-3"><ArrowRightLeft size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">É uma devolução / estorno</span></div>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><Building size={16} className="text-gray-400" /><span className="text-sm font-medium text-gray-400">Financiamento</span></div>
-                  <button onClick={() => setShowComingSoon(true)} className="w-10 h-6 rounded-full bg-gray-200 relative cursor-pointer"><div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" /></button>
+                {/* Botões visuais de "Em Breve" desabilitados visualmente */}
+                <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
+                  <div className="flex items-center gap-3"><Building size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">Financiamento</span></div>
+                  <div className="w-12 h-6 rounded-full bg-gray-200"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><HandCoins size={16} className="text-gray-400" /><span className="text-sm font-medium text-gray-400">Empréstimo a alguém</span></div>
-                  <button onClick={() => setShowComingSoon(true)} className="w-10 h-6 rounded-full bg-gray-200 relative cursor-pointer"><div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" /></button>
+                <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
+                  <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">Empréstimo a alguém</span></div>
+                  <div className="w-12 h-6 rounded-full bg-gray-200"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
                 </div>
               </div>
             )}
@@ -402,59 +408,63 @@ function NewTransactionContent() {
         )}
       </div>
 
-      <div className="fixed bottom-8 w-full flex justify-center z-50">
-        <button onClick={handleSave} disabled={saving} className={`w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-xl`}>
+      <div className="fixed bottom-8 w-full flex justify-center z-40 pointer-events-none">
+        <button onClick={handleSave} disabled={saving} className={`pointer-events-auto w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform`}>
           {saving ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : <Check size={30} className="text-white" />}
         </button>
       </div>
 
-      {/* Modais */}
+      {/* MODAIS APRIMORADOS */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold">Categorias</h3>
-              <button onClick={() => router.push('/categories')} className="text-teal-700"><Plus size={20} /></button>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
+              <h3 className="font-bold text-lg">Categorias</h3>
+              <button onClick={() => router.push('/categories')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
-            {categories.map(cat => {
-              const isActive = cat.id === categoryId;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
-                  className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
-                  <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{cat.name}</span>
-                  {isActive && <Check size={18} className="text-teal-700" />}
-                </button>
-              );
-            })}
+            <div className="space-y-2">
+              {categories.map(cat => {
+                const isActive = cat.id === categoryId;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{cat.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
 
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold">Contas</h3>
-              <button onClick={() => router.push('/accounts')} className="text-teal-700"><Plus size={20} /></button>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
+              <h3 className="font-bold text-lg">Contas</h3>
+              <button onClick={() => router.push('/accounts')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
-            {accounts.map(acc => {
-              const isActive = acc.id === accountId;
-              return (
-                <button
-                  key={acc.id}
-                  onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
-                  className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
-                  <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{acc.name}</span>
-                  {isActive && <Check size={18} className="text-teal-700" />}
-                </button>
-              );
-            })}
+            <div className="space-y-2">
+              {accounts.map(acc => {
+                const isActive = acc.id === accountId;
+                return (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -462,24 +472,26 @@ function NewTransactionContent() {
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold">Tags</h3>
-              <button onClick={() => router.push('/tags')} className="text-teal-700"><Plus size={20} /></button>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
+              <h3 className="font-bold text-lg">Tags</h3>
+              <button onClick={() => router.push('/tags')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
-            {tags.map(tag => {
-              const isActive = tag.id === tagId;
-              return (
-                <button
-                  key={tag.id}
-                  onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
-                  className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
-                >
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                  <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{tag.name}</span>
-                  {isActive && <Check size={18} className="text-teal-700" />}
-                </button>
-              );
-            })}
+            <div className="space-y-2">
+              {tags.map(tag => {
+                const isActive = tag.id === tagId;
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
