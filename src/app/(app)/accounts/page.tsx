@@ -39,20 +39,23 @@ export default function AccountsPage() {
   }
 
   const loadAccounts = useCallback(async () => {
+    if (!user) return;
     setLoading(true)
     const { data } = await supabase
       .from('accounts')
       .select('*')
+      .eq('user_id', user.id)
       .eq('context', context)
       .order('name')
     
     setAccounts(data ?? [])
     setLoading(false)
-  }, [context])
+  }, [context, user])
 
   useEffect(() => { loadAccounts() }, [loadAccounts])
 
   const handleSave = async () => {
+    if (!user) return;
     if (!name.trim()) return
     setLoading(true)
     const data = { 
@@ -60,7 +63,8 @@ export default function AccountsPage() {
       balance: balanceNum, 
       context, 
       color,
-      allow_negative: allowNegative
+      allow_negative: allowNegative,
+      user_id: user.id
     }
     await supabase.from('accounts').insert(data)
     setShowForm(false)
