@@ -56,11 +56,28 @@ function NewTransactionContent() {
   const loadData = useCallback(async () => {
     if (!user?.id) return
     const catType = type === 'income' ? 'income' : 'expense'
+
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
-      supabase.from('categories').select('*').match({ user_id: user.id, context: context, type: catType }),
-      supabase.from('accounts').select('*').match({ user_id: user.id, context: context }).order('name'),
-      supabase.from('tags').select('*').match({ user_id: user.id, context: context }).order('name')
+      supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .eq('type', catType),
+      supabase
+        .from('accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('name'),
+      supabase
+        .from('tags')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('name')
     ])
+
     setCategories(Array.isArray(cats) ? cats : [])
     setAccounts(Array.isArray(accs) ? accs : [])
     setTags(Array.isArray(tgs) ? tgs : [])
@@ -81,9 +98,12 @@ function NewTransactionContent() {
   }
 
   const handleSave = async () => {
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert('Informe um valor válido.')
-      return
+    const rawAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0;
+    
+    if (rawAmount <= 0) {
+      alert("Erro: O valor da transação deve ser maior que R$ 0,00.");
+      setSaving(false);
+      return;
     }
 
     setSaving(true)
@@ -104,7 +124,7 @@ function NewTransactionContent() {
       const { error } = await supabase.from('transactions').insert({
         user_id: user!.id,
         type,
-        amount: amountNum,
+        amount: rawAmount,
         description: desc || null,
         category_id: categoryId || null,
         account_id: accountId || null,
@@ -120,12 +140,11 @@ function NewTransactionContent() {
       if (isPaid && accountId) {
         const { data: acc } = await supabase.from('accounts').select('balance').eq('id', accountId).single()
         
-        // Verificação de segurança adicionada aqui
         if (acc) {
           const currentBalance = Number(acc.balance) || 0
           const newBalance = type === 'income'
-            ? currentBalance + amountNum
-            : currentBalance - amountNum
+            ? currentBalance + rawAmount
+            : currentBalance - rawAmount
 
           await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
         }
