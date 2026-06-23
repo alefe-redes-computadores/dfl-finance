@@ -70,14 +70,16 @@ function NewTransactionContent() {
     loadData()
   }, [loadData])
 
-  const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '').replace(',', '.')
+    const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setAmount(val) // Atualiza o visual
+    
+    // Converte para número de forma segura
+    const rawValue = val.replace(/\./g, '').replace(',', '.')
     const num = parseFloat(rawValue)
-    if (!isNaN(num) && num > 0) {
-      setAmountNum(num)
-    }
-    setAmount(e.target.value)
+    setAmountNum(isNaN(num) ? 0 : num) 
   }
+
 
   const handleSave = async () => {
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -118,12 +120,18 @@ function NewTransactionContent() {
 
       if (isPaid && accountId) {
         const { data: acc } = await supabase.from('accounts').select('balance').eq('id', accountId).single()
-        const newBalance = type === 'income'
-          ? Number(acc.balance) + amountNum
-          : Number(acc.balance) - amountNum
+        
+      // Verificação de segurança adicionada aqui
+      if (acc) {
+         const currentBalance = Number(acc.balance) || 0
+         const newBalance = type === 'income'
+            ? currentBalance + amountNum
+            : currentBalance - amountNum
 
-        await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
+         await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
+        }
       }
+
 
       router.refresh()
       router.push('/transactions')
