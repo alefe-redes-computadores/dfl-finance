@@ -34,12 +34,10 @@ export default function TagsPage() {
     if (!user?.id) return
     setLoading(true)
 
-    // CORREÇÃO: Removido o .order('sort_order') que causava o erro no Supabase
     const { data, error } = await supabase
       .from('tags')
       .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
+      .match({ user_id: user.id, context: context })
       .order('name', { ascending: true })
 
     if (error) {
@@ -47,7 +45,7 @@ export default function TagsPage() {
       alert("Erro ao carregar tags: " + error.message)
     }
 
-    setTags(data ?? [])
+    setTags(Array.isArray(data) ? data : [])
     setLoading(false)
   }, [user?.id, context])
 
