@@ -128,18 +128,18 @@ export default function EditTransactionPage() {
     }
     
     const payload = {
-      user_id: user.id, // Correção Principal do Bug!
+      user_id: user.id,
       amount: rawAmount,
       status: isPaid ? 'done' : 'pending',
       date,
       description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
-      tag_id: tagId || null,
       notes: finalNotes || null,
       type: txType,
-      context: 'dfl' // Posteriormente podemos dinamizar
+      context: 'dfl'
     }
+
 
     try {
       if (isNew) {
