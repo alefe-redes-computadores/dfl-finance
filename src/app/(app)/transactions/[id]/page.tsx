@@ -48,6 +48,8 @@ export default function EditTransactionPage() {
   }
 
   const loadData = useCallback(async () => {
+    if (!user?.id) return
+
     if (id === 'new') {
       setIsNew(true)
       const paramType = searchParams.get('type')
@@ -61,20 +63,20 @@ export default function EditTransactionPage() {
 
     try {
       const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
-        supabase.from('accounts').select('id, name, balance').order('name'),
-        supabase.from('categories').select('id, name, color, icon').order('name'),
-        supabase.from('tags').select('id, name').order('name')
+        supabase.from('accounts').select('id, name, balance').match({ user_id: user.id }).order('name'),
+        supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id }).order('name'),
+        supabase.from('tags').select('id, name').match({ user_id: user.id }).order('name')
       ])
 
-      setAccounts(accData || [])
-      setCategories(catData || [])
-      setTags(tagData || [])
+      setAccounts(Array.isArray(accData) ? accData : [])
+      setCategories(Array.isArray(catData) ? catData : [])
+      setTags(Array.isArray(tagData) ? tagData : [])
 
       if (id && id !== 'new') {
         const { data: txData, error: txError } = await supabase
           .from('transactions')
           .select('*')
-          .eq('id', id)
+          .match({ id: id, user_id: user.id })
           .single()
 
         if (txError) {
@@ -100,7 +102,7 @@ export default function EditTransactionPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, searchParams])
+  }, [id, searchParams, user])
 
   useEffect(() => {
     loadData()
@@ -158,7 +160,7 @@ export default function EditTransactionPage() {
         const { data: oldAccData, error: oldAccError } = await supabase
           .from('accounts')
           .select('balance')
-          .eq('id', tx.account_id)
+          .match({ id: tx.account_id, user_id: user.id })
           .single()
 
         if (oldAccError) throw oldAccError
@@ -172,7 +174,7 @@ export default function EditTransactionPage() {
         const { error: revertError } = await supabase
           .from('accounts')
           .update({ balance: revertedBalance })
-          .eq('id', tx.account_id)
+          .match({ id: tx.account_id, user_id: user.id })
 
         if (revertError) throw revertError
       }
@@ -182,7 +184,7 @@ export default function EditTransactionPage() {
         const { data: newAccData, error: newAccError } = await supabase
           .from('accounts')
           .select('balance')
-          .eq('id', accountId)
+          .match({ id: accountId, user_id: user.id })
           .single()
 
         if (newAccError) throw newAccError
@@ -195,7 +197,7 @@ export default function EditTransactionPage() {
         const { error: applyError } = await supabase
           .from('accounts')
           .update({ balance: updatedBalance })
-          .eq('id', accountId)
+          .match({ id: accountId, user_id: user.id })
 
         if (applyError) throw applyError
       }
@@ -205,7 +207,7 @@ export default function EditTransactionPage() {
         const { error } = await supabase.from('transactions').insert([payload])
         if (error) throw error
       } else {
-        const { error } = await supabase.from('transactions').update(payload).eq('id', id)
+        const { error } = await supabase.from('transactions').update(payload).match({ id: id, user_id: user.id })
         if (error) throw error
       }
 
@@ -220,19 +222,29 @@ export default function EditTransactionPage() {
   }
 
   const handleDelete = async () => {
+    if (!user?.id) return
     if (!confirm('Tem certeza que deseja excluir esta transação?')) return
     setSaving(true)
 
     if (tx && tx.status === 'done' && tx.account_id) {
-      const acc = accounts.find(a => a.id === tx.account_id)
-      if (acc) {
+      // Buscar saldo atual da conta diretamente do banco
+      const { data: accData, error: accError } = await supabase
+        .from('accounts')
+        .select('balance')
+        .match({ id: tx.account_id, user_id: user.id })
+        .single()
+
+      if (!accError && accData) {
         const oldAmount = Number(tx.amount)
-        const newBalance = Number(acc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount)
-        await supabase.from('accounts').update({ balance: newBalance }).eq('id', tx.account_id)
+        const currentBalance = Number(accData.balance) || 0
+        const newBalance = tx.type === 'income'
+          ? currentBalance - oldAmount
+          : currentBalance + oldAmount
+        await supabase.from('accounts').update({ balance: newBalance }).match({ id: tx.account_id, user_id: user.id })
       }
     }
 
-    await supabase.from('transactions').delete().eq('id', id)
+    await supabase.from('transactions').delete().match({ id: id, user_id: user.id })
 
     router.refresh()
     router.back()
