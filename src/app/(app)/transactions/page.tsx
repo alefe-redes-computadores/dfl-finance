@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -38,6 +39,7 @@ function dateLabel(dateStr: string) {
 }
 
 export default function TransactionsPage() {
+  const { user } = useAuth()
   const router = useRouter()
   const [context, setContext] = useState<Context>('dfl')
   const [transactions, setTransactions] = useState<any[]>([])
@@ -61,6 +63,7 @@ export default function TransactionsPage() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadTransactions = useCallback(async () => {
+    if (!user) return;
     setLoading(true)
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
@@ -68,7 +71,7 @@ export default function TransactionsPage() {
     let query = supabase
       .from('transactions')
       .select('*, categories(name, icon, color), accounts!account_id(name)')
-      .eq('context', context)
+      .match({ user_id: user.id, context: context })
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
@@ -81,9 +84,9 @@ export default function TransactionsPage() {
       console.error("Erro na listagem de transações:", error)
     }
     
-    setTransactions(data ?? [])
+    setTransactions(Array.isArray(data) ? data : [])
     setLoading(false)
-  }, [context, currentDate, filter])
+  }, [context, currentDate, filter, user])
 
   useEffect(() => { loadTransactions() }, [loadTransactions])
 
