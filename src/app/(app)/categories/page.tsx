@@ -59,13 +59,14 @@ export default function CategoriesPage() {
   }
 
   async function ensureDefaultCategories() {
+    if (!user) return
     const { data: existing } = await supabase
       .from('categories')
       .select('name,type,context')
-      .eq('user_id', user!.id)
+      .match({ user_id: user.id })
 
     const existingKeys = new Set(
-      (existing ?? []).map(
+      (Array.isArray(existing) ? existing : []).map(
         c => `${c.name}-${c.type}-${c.context}`
       )
     )
@@ -82,23 +83,22 @@ export default function CategoriesPage() {
     await supabase.from('categories').insert(
       missing.map(cat => ({
         ...cat,
-        user_id: user!.id,
+        user_id: user.id,
         is_default: true,
       }))
     )
   }
 
   async function loadCategories() {
+    if (!user) return
     const { data } = await supabase
       .from('categories')
       .select('*')
-      .eq('user_id', user!.id)
-      .eq('type', tab)
-      .eq('context', context)
+      .match({ user_id: user.id, type: tab, context: context })
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
 
-    setCategories(data ?? [])
+    setCategories(Array.isArray(data) ? data : [])
   }
 
   // NOVO: Função para abrir modal de edição
