@@ -33,23 +33,24 @@ export default function CardExpensePage() {
   const [installments, setInstallments] = useState(1) // Parcelas
 
   const loadData = useCallback(async () => {
+    if (!user?.id) return
     setLoading(true)
     try {
       const [{ data: cardData }, { data: catData }, { data: tagData }] = await Promise.all([
-        supabase.from('credit_cards').select('id, name, last_four, color').eq('is_archived', false).order('name'),
-        supabase.from('categories').select('id, name, color, icon').eq('type', 'expense').order('name'),
-        supabase.from('tags').select('id, name').order('name')
+        supabase.from('credit_cards').select('id, name, last_four, color').match({ user_id: user.id, is_archived: false }).order('name'),
+        supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, type: 'expense' }).order('name'),
+        supabase.from('tags').select('id, name').match({ user_id: user.id }).order('name')
       ])
       
-      setCards(cardData || [])
-      setCategories(catData || [])
-      setTags(tagData || [])
+      setCards(Array.isArray(cardData) ? cardData : [])
+      setCategories(Array.isArray(catData) ? catData : [])
+      setTags(Array.isArray(tagData) ? tagData : [])
     } catch (err) {
       console.error("Erro ao carregar dados:", err)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => { loadData() }, [loadData])
 
