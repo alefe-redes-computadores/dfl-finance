@@ -44,11 +44,10 @@ export default function AccountsPage() {
     const { data } = await supabase
       .from('accounts')
       .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
+      .match({ user_id: user.id, context: context })
       .order('name')
     
-    setAccounts(data ?? [])
+    setAccounts(Array.isArray(data) ? data : [])
     setLoading(false)
   }, [context, user])
 
