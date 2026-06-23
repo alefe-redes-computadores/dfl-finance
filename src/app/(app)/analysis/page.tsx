@@ -30,12 +30,11 @@ function AnalysisContent() {
     const { data } = await supabase
       .from('transactions')
       .select('*, categories(name, icon, color)')
-      .eq('user_id', user.id)
-      .eq('context', context) 
+      .match({ user_id: user.id, context: context })
       .gte('date', start)
       .lte('date', end)
 
-    const txs = data ?? []
+    const txs = Array.isArray(data) ? data : []
     const income = txs.filter(t => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0)
     const expense = txs.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + Number(t.amount), 0)
     setSummary({ income, expense })
