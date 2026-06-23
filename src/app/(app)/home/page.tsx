@@ -14,7 +14,7 @@ function BankInitials({ color, name }: { color: string, name: string }) {
   const initials = name ? name.substring(0, 2).toUpperCase() : '??';
   return (
     <div 
-      className="w-10 h-10 rounded-[14px] flex items-center justify-center text-xs font-bold text-white shadow-sm"
+      className="w-10 h-10 rounded-[14px] flex items-center justify-center text-xs font-bold text-white shadow-sm flex-shrink-0"
       style={{ backgroundColor: color || '#64748b' }}
     >
       {initials}
@@ -68,8 +68,6 @@ function HomeContent() {
       const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
 
       setSummary({ income, expense, balance: income - expense })
-      
-      // AGORA PUXA TANTO DESPESA QUANTO RECEITA (ATÉ 5)
       setRecentTransactions(txs.slice(0, 5))
 
       const { data: accsData } = await supabase.from('accounts').select('*').eq('context', context).order('name') 
@@ -265,7 +263,7 @@ function HomeContent() {
                 className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 rounded-[16px] transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{ backgroundColor: card.color }}>
+                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0" style={{ backgroundColor: card.color }}>
                     {card.name.substring(0, 2).toUpperCase()}
                   </div>
                   <p className="text-[14px] font-bold text-gray-800">{card.name}</p>
@@ -304,23 +302,28 @@ function HomeContent() {
               <div 
                 key={tx.id} 
                 onClick={() => router.push(`/transactions/${tx.id}`)}
-                className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 rounded-[16px] transition-colors"
+                className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 rounded-[16px] transition-colors gap-3"
               >
-                <div className="flex items-center gap-3">
+                {/* CAIXA DA ESQUERDA: ÍCONE + TEXTO BLINDADO */}
+                <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
                   <div 
-                    className="w-10 h-10 rounded-[14px] flex items-center justify-center text-lg"
+                    className="w-10 h-10 rounded-[14px] flex items-center justify-center text-lg flex-shrink-0"
                     style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}
                   >
                     {tx.categories?.icon || (tx.type === 'income' ? '💰' : '💸')}
                   </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight truncate">
+                      {tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5 truncate">
                       {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}
                     </p>
                   </div>
                 </div>
-                <p className={`text-[14px] font-bold ${tx.type === 'income' ? 'text-emerald-500' : 'text-red-500'}`}>
+                
+                {/* CAIXA DA DIREITA: VALOR BLINDADO */}
+                <p className={`text-[14px] font-bold whitespace-nowrap flex-shrink-0 ${tx.type === 'income' ? 'text-emerald-500' : 'text-red-500'}`}>
                   {tx.type === 'income' ? '+' : '-'} {hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
                 </p>
               </div>
