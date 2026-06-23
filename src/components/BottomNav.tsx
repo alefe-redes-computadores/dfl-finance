@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Home, ArrowLeftRight, BarChart2, MoreHorizontal, ArrowUp, ArrowDown, CreditCard, Plus } from 'lucide-react'
 import React from 'react'
-import TransferModal from './TransferModal' // Ajuste o caminho se o seu Modal de Transferência estiver em outra pasta
+import TransferModal from './TransferModal'
 
 const tabs = [
   { href: '/home', icon: Home, label: 'Início' },
@@ -34,6 +34,12 @@ export default function BottomNav() {
     setIsTransferModalOpen(true)
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    alert("Função de Despesa no Cartão em desenvolvimento!")
+    setIsOpen(false)
+  }
+
   return (
     <>
       {/* Overlay Escurecido com Blur */}
@@ -49,7 +55,7 @@ export default function BottomNav() {
         {/* RECEITA — Arco Cima Esquerda */}
         <button
           onClick={() => handleNavigate('/transactions/new?type=income')}
-          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 ${isOpen ? '-translate-x-[100px] -translate-y-[90px]' : 'translate-x-0 translate-y-0'}`}
+          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 ${isOpen ? '-translate-x-[75px] -translate-y-[100px]' : 'translate-x-0 translate-y-0'}`}
         >
           <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl">
             <ArrowUp size={24} className="text-emerald-500" />
@@ -59,19 +65,19 @@ export default function BottomNav() {
 
         {/* CARTÃO — Arco Cima Direita */}
         <button
-          onClick={() => handleNavigate('/cards')}
-          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 delay-75 ${isOpen ? 'translate-x-[100px] -translate-y-[90px]' : 'translate-x-0 translate-y-0'}`}
+          onClick={handleCardClick}
+          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 delay-75 ${isOpen ? 'translate-x-[75px] -translate-y-[100px]' : 'translate-x-0 translate-y-0'}`}
         >
           <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl">
             <CreditCard size={24} className="text-orange-400" />
           </div>
-          <span className="text-[11px] font-bold text-white tracking-wide">Cartão</span>
+          <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap">Desp. Cartão</span>
         </button>
 
         {/* TRANSFERIR — Arco Baixo Esquerda */}
         <button
           onClick={handleOpenTransfer}
-          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 delay-100 ${isOpen ? '-translate-x-[130px] -translate-y-[10px]' : 'translate-x-0 translate-y-0'}`}
+          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 delay-100 ${isOpen ? '-translate-x-[105px] -translate-y-[20px]' : 'translate-x-0 translate-y-0'}`}
         >
           <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl">
             <ArrowLeftRight size={24} className="text-teal-600" />
@@ -82,7 +88,7 @@ export default function BottomNav() {
         {/* DESPESA — Arco Baixo Direita */}
         <button
           onClick={() => handleNavigate('/transactions/new?type=expense')}
-          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 delay-150 ${isOpen ? 'translate-x-[130px] -translate-y-[10px]' : 'translate-x-0 translate-y-0'}`}
+          className={`absolute flex flex-col items-center gap-2 transition-all duration-300 delay-150 ${isOpen ? 'translate-x-[105px] -translate-y-[20px]' : 'translate-x-0 translate-y-0'}`}
         >
           <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl">
             <ArrowDown size={24} className="text-red-500" />
