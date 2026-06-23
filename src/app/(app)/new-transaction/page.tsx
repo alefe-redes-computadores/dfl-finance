@@ -1,84 +1,22 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
+import { useState, useCallback, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
-  Camera, Plus, Hash, X, ArrowRightLeft, Building, HandCoins
+  Camera, Plus, Hash, ArrowRightLeft, Building, HandCoins
 } from 'lucide-react'
 import { addMonths, addWeeks, format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
 import ComingSoonModal from '@/components/ComingSoonModal'
+import CameraCapture from '@/components/CameraCapture'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
-
-function CameraCapture({ isOpen, onClose, onCapture }: { isOpen: boolean; onClose: () => void; onCapture: (file: File) => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [stream, setStream] = useState<MediaStream | null>(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!isOpen) return
-    const startCamera = async () => {
-      try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        setStream(mediaStream)
-        if (videoRef.current) videoRef.current.srcObject = mediaStream
-      } catch (err) {
-        setError('Não foi possível acessar a câmera. Verifique as permissões.')
-      }
-    }
-    startCamera()
-    return () => { stream?.getTracks().forEach(track => track.stop()) }
-  }, [isOpen])
-
-  const handleCapture = () => {
-    if (!videoRef.current || !canvasRef.current) return
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d')?.drawImage(video, 0, 0)
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' })
-        onCapture(file)
-        onClose()
-      }
-    }, 'image/jpeg')
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-black flex flex-col">
-      <div className="flex justify-between items-center p-4 text-white">
-        <button onClick={onClose} className="p-2"><X size={24} /></button>
-        <span className="font-bold">Tirar foto</span>
-        <div className="w-10" />
-      </div>
-      {error ? (
-        <div className="flex-1 flex items-center justify-center text-white p-4 text-center"><p>{error}</p></div>
-      ) : (
-        <>
-          <video ref={videoRef} autoPlay playsInline className="flex-1 w-full object-cover" />
-          <div className="p-6 flex justify-center">
-            <button onClick={handleCapture} className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
-              <div className="w-14 h-14 rounded-full border-2 border-gray-800" />
-            </button>
-          </div>
-          <canvas ref={canvasRef} className="hidden" />
-        </>
-      )}
-    </div>
-  )
-}
 
 function NewTransactionContent() {
   console.log("DFL – Nova Transação v2.0")
@@ -351,7 +289,6 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        {/* Botão Categoria com visual melhorado */}
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
           <Tag size={18} className="text-gray-400" />
           <span className={`flex-1 text-left text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
@@ -360,7 +297,6 @@ function NewTransactionContent() {
           <Plus size={18} className="text-teal-700" />
         </button>
 
-        {/* Botão Conta com visual melhorado */}
         <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 px-5 py-4 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
           <Wallet size={18} className="text-gray-400" />
           <span className={`flex-1 text-left text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
@@ -472,7 +408,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modal Categoria – item ativo destacado */}
+      {/* Modais */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -498,7 +434,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Conta – item ativo destacado */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -524,7 +459,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Tags – item ativo destacado */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
