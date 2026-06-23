@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { 
-  ChevronLeft, Tag, Landmark, 
+  ChevronLeft, ChevronRight, Tag, Landmark, 
   CreditCard, Calendar, PiggyBank, Palette, DollarSign, 
   Check, Loader2 
 } from 'lucide-react'
