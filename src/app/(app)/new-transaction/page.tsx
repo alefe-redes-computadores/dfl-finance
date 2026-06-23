@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Calendar, Tag, Wallet, ChevronDown, ChevronUp, Check, Paperclip, X } from 'lucide-react'
+import { ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check, Paperclip } from 'lucide-react'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -26,7 +26,7 @@ function NewTransactionContent() {
   const [tagId, setTagId] = useState('')
   const [showDetails, setShowDetails] = useState(false)
   const [saving, setSaving] = useState(false)
-  
+
   const [categories, setCategories] = useState<any[]>([])
   const [accounts, setAccounts] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
@@ -35,6 +35,16 @@ function NewTransactionContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
+
+  const handleDateChange = (newDateStr: string) => {
+    setDate(newDateStr)
+    const selectedDate = new Date(newDateStr + 'T12:00:00')
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    selectedDate.setHours(0, 0, 0, 0)
+
+    setIsPaid(selectedDate <= today)
+  }
 
   const isIncome = type === 'income'
   const themeColor = isIncome ? 'text-emerald-700' : 'text-red-600'
@@ -56,30 +66,38 @@ function NewTransactionContent() {
     setTags(tgs ?? [])
   }, [user, context, type])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '')
+    const val = e.target.value.replace(/D/g, '')
     const num = Number(val) / 100
     setAmountNum(num)
     setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
   const handleSave = async () => {
-    if (amountNum <= 0) { alert('Informe um valor.'); return }
+    if (amountNum <= 0) {
+      alert('Informe um valor.')
+      return
+    }
+
     setSaving(true)
     try {
       let receiptUrl = null
+
       if (receipt) {
         const ext = receipt.name.split('.').pop()
         const path = `${user!.id}/${Date.now()}.${ext}`
         const { data } = await supabase.storage.from('receipts').upload(path, receipt)
+
         if (data) {
           const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
           receiptUrl = urlData.publicUrl
         }
       }
-      
+
       const { error } = await supabase.from('transactions').insert({
         user_id: user!.id,
         type,
@@ -93,21 +111,22 @@ function NewTransactionContent() {
         context,
         receipt_url: receiptUrl,
       })
+
       if (error) throw error
 
-      // ATUALIZA O SALDO DA CONTA SE A TRANSAÇÃO ESTIVER PAGA
       if (isPaid && accountId) {
         const acc = accounts.find(a => a.id === accountId)
         if (acc) {
-          const newBalance = type === 'income' 
-            ? Number(acc.balance) + amountNum 
-            : Number(acc.balance) - amountNum
-          
+          const newBalance =
+            type === 'income'
+              ? Number(acc.balance) + amountNum
+              : Number(acc.balance) - amountNum
+
           await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
         }
       }
 
-      router.refresh() // <--- ATUALIZA A HOME
+      router.refresh()
       router.push('/transactions')
     } catch (e) {
       console.error(e)
@@ -126,15 +145,25 @@ function NewTransactionContent() {
         <h1 className="font-bold text-base">Nova Transação</h1>
         <label className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 cursor-pointer">
           <Paperclip size={18} className={receipt ? 'text-emerald-700' : 'text-gray-500'} />
-          <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setReceipt(e.target.files?.[0] ?? null)} />
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={e => setReceipt(e.target.files?.[0] ?? null)}
+          />
         </label>
       </div>
 
       <div className="flex justify-center mt-2 mb-1">
         <div className="flex bg-gray-100 p-1 rounded-full">
           {(['dfl', 'personal'] as Context[]).map(c => (
-            <button key={c} onClick={() => setContext(c)}
-              className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${context === c ? 'bg-white shadow-sm' : 'text-gray-500'}`}>
+            <button
+              key={c}
+              onClick={() => setContext(c)}
+              className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                context === c ? 'bg-white shadow-sm' : 'text-gray-500'
+              }`}
+            >
               {c === 'dfl' ? 'DFL' : 'Pessoal'}
             </button>
           ))}
@@ -145,8 +174,13 @@ function NewTransactionContent() {
         <p className="text-gray-400 text-xs mb-2">Valor</p>
         <div className="flex justify-center items-center gap-1">
           <span className={`text-2xl font-medium ${themeColor} opacity-60`}>R$</span>
-          <input type="text" inputMode="numeric" value={amount} onChange={handleAmount}
-            className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`} />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={amount}
+            onChange={handleAmount}
+            className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`}
+          />
         </div>
       </div>
 
@@ -157,12 +191,14 @@ function NewTransactionContent() {
             <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
+
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100">
           <Tag size={18} className="text-gray-400" />
           <span className={`flex-1 text-left text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
             {selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Categoria'}
           </span>
         </button>
+
         <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 px-5 py-4">
           <Wallet size={18} className="text-gray-400" />
           <span className={`flex-1 text-left text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
@@ -176,10 +212,21 @@ function NewTransactionContent() {
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
+
         {showDetails && (
           <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden mt-2">
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full px-5 py-4 text-sm border-b border-gray-100 outline-none" />
-            <input placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} className="w-full px-5 py-4 text-sm border-b border-gray-100 outline-none" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => handleDateChange(e.target.value)}
+              className="w-full px-5 py-4 text-sm border-b border-gray-100 outline-none"
+            />
+            <input
+              placeholder="Descrição"
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              className="w-full px-5 py-4 text-sm border-b border-gray-100 outline-none"
+            />
             <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 px-5 py-4">
               <Tag size={18} className="text-gray-400" />
               <span className={`text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>
@@ -198,43 +245,50 @@ function NewTransactionContent() {
 
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-             <h3 className="font-bold mb-4">Categorias</h3>
-             {categories.map(cat => (
-               <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className="w-full p-3 flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{backgroundColor: `${cat.color}20`}}>{cat.icon}</div>
-                 {cat.name}
-               </button>
-             ))}
-           </div>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-4">Categorias</h3>
+            {categories.map(cat => (
+              <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className="w-full p-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.color}20` }}>
+                  {cat.icon}
+                </div>
+                {cat.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-             <h3 className="font-bold mb-4">Selecionar Conta</h3>
-             {accounts.map(acc => (
-               <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className="w-full p-3 flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{backgroundColor: acc.color}}>{acc.name.substring(0,2).toUpperCase()}</div>
-                 {acc.name}
-               </button>
-             ))}
-           </div>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-4">Selecionar Conta</h3>
+            {accounts.map(acc => (
+              <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className="w-full p-3 flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                  style={{ backgroundColor: acc.color }}
+                >
+                  {acc.name.substring(0, 2).toUpperCase()}
+                </div>
+                {acc.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-             <h3 className="font-bold mb-4">Selecionar Tag</h3>
-             {tags.map(tag => (
-               <button key={tag.id} onClick={() => { setTagId(tag.id); setShowTagModal(false) }} className="w-full p-3 flex items-center gap-3">
-                 <div className="w-4 h-4 rounded-full" style={{backgroundColor: tag.color}} />
-                 {tag.name}
-               </button>
-             ))}
-           </div>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-4">Selecionar Tag</h3>
+            {tags.map(tag => (
+              <button key={tag.id} onClick={() => { setTagId(tag.id); setShowTagModal(false) }} className="w-full p-3 flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                {tag.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
