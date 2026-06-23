@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { X, ArrowRight, Loader2, Calendar, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function TransferModal({ isOpen, onClose, initialFromAccountId = null, onComplete = () => {} }: any) {
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const [accounts, setAccounts] = useState<any[]>([])
   
@@ -19,7 +21,7 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
 
   // Reseta e carrega as contas sempre que o modal abre
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && user?.id) {
       setStep(initialFromAccountId ? 2 : 1)
       setFromAccount(null)
       setToAccount(null)
@@ -28,8 +30,8 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
       setDate(format(new Date(), 'yyyy-MM-dd'))
       setLoading(true)
 
-      supabase.from('accounts').select('*').order('name').then(({ data }) => {
-        const accs = data || []
+      supabase.from('accounts').select('*').match({ user_id: user.id }).order('name').then(({ data }) => {
+        const accs = Array.isArray(data) ? data : []
         setAccounts(accs)
         
         if (initialFromAccountId) {
@@ -39,7 +41,7 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
         setLoading(false)
       })
     }
-  }, [isOpen, initialFromAccountId])
+  }, [isOpen, initialFromAccountId, user])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -48,7 +50,7 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
   }
 
   const handleTransfer = async () => {
-    if (!fromAccount || !toAccount || !amountInput) return
+    if (!user?.id || !fromAccount || !toAccount || !amountInput) return
     setLoading(true)
     
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0
@@ -69,17 +71,17 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
       // 1. Atualiza o saldo da conta de ORIGEM (subtrai)
       await supabase.from('accounts').update({ 
         balance: Number(fromAccount.balance) - rawAmount 
-      }).eq('id', fromAccount.id)
+      }).match({ id: fromAccount.id, user_id: user.id })
 
       // 2. Atualiza o saldo da conta de DESTINO (soma)
       await supabase.from('accounts').update({ 
         balance: Number(toAccount.balance) + rawAmount 
-      }).eq('id', toAccount.id)
+      }).match({ id: toAccount.id, user_id: user.id })
 
       // 3. Registra a saída no extrato da ORIGEM
       await supabase.from('transactions').insert({
         account_id: fromAccount.id,
-        user_id: fromAccount.user_id,
+        user_id: user.id,
         context: fromAccount.context,
         type: 'transfer',
         amount: rawAmount,
@@ -91,7 +93,7 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
       // 4. Registra a entrada no extrato do DESTINO
       await supabase.from('transactions').insert({
         account_id: toAccount.id,
-        user_id: toAccount.user_id,
+        user_id: user.id,
         context: toAccount.context,
         type: 'transfer',
         amount: rawAmount,
