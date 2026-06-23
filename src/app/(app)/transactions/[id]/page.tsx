@@ -43,11 +43,9 @@ export default function EditTransactionPage() {
   const loadData = useCallback(async () => {
     if (id === 'new') {
       setIsNew(true)
-      // Pega o tipo da URL se vier do Menu em Arco
       const paramType = searchParams.get('type')
       if (paramType === 'income' || paramType === 'expense') {
         setTxType(paramType)
-        // Se for receita, já vem marcado como recebido por padrão no app original
         if (paramType === 'income') setIsPaid(true) 
       }
     }
@@ -55,9 +53,9 @@ export default function EditTransactionPage() {
     setLoading(true)
 
     try {
-      // 1. Busca contas, categorias e tags
+      // 1. Busca contas (AGORA COM BALANCE PARA FAZER A MATEMÁTICA), categorias e tags
       const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
-        supabase.from('accounts').select('id, name').order('name'),
+        supabase.from('accounts').select('id, name, balance').order('name'),
         supabase.from('categories').select('id, name, color, icon').order('name'),
         supabase.from('tags').select('id, name').order('name')
       ])
@@ -108,7 +106,6 @@ export default function EditTransactionPage() {
   }
 
   const handleSave = async () => {
-    // Agora exigimos o usuário logado para não dar erro no banco
     if (!user?.id) {
         alert("Sessão expirada. Faça login novamente.")
         return
@@ -117,7 +114,6 @@ export default function EditTransactionPage() {
     setSaving(true)
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0;
     
-    // Preparando as observações extras (caso seja despesa)
     let finalNotes = notes;
     if (txType === 'expense' && (isRefund || isFinancing || isLoan)) {
         const flags = []
@@ -140,17 +136,45 @@ export default function EditTransactionPage() {
       context: 'dfl'
     }
 
-
     try {
+      // === LÓGICA INTELIGENTE DE SALDO ===
+      let accountUpdates: Record<string, number> = {};
+
+      if (!isNew && tx) {
+          // Desfaz a operação antiga se ela estava 'done' (paga)
+          if (tx.status === 'done' && tx.account_id) {
+              const oldAcc = accounts.find(a => a.id === tx.account_id);
+              if (oldAcc) {
+                  const oldAmount = Number(tx.amount);
+                  accountUpdates[tx.account_id] = Number(oldAcc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount);
+                  oldAcc.balance = accountUpdates[tx.account_id]; // Atualiza localmente para a próxima etapa
+              }
+          }
+      }
+
+      // Aplica a nova operação se estiver 'done' (paga)
+      if (isPaid && accountId) {
+          const newAcc = accounts.find(a => a.id === accountId);
+          if (newAcc) {
+              const currentBalance = accountUpdates[accountId] !== undefined ? accountUpdates[accountId] : Number(newAcc.balance);
+              accountUpdates[accountId] = currentBalance + (txType === 'income' ? rawAmount : -rawAmount);
+          }
+      }
+
+      // Salva as atualizações de saldo no banco
+      for (const [accId, newBalance] of Object.entries(accountUpdates)) {
+          await supabase.from('accounts').update({ balance: newBalance }).eq('id', accId);
+      }
+      // ===================================
+
       if (isNew) {
          const { error } = await supabase.from('transactions').insert([payload])
          if (error) throw error
-         router.back()
       } else {
          const { error } = await supabase.from('transactions').update(payload).eq('id', id)
          if (error) throw error
-         router.back()
       }
+      router.back()
     } catch (err: any) {
        console.error("Catch save:", err)
        alert("Erro ao salvar: " + err.message)
@@ -162,6 +186,18 @@ export default function EditTransactionPage() {
   const handleDelete = async () => {
     if (!confirm('Tem certeza que deseja excluir esta transação?')) return
     setSaving(true)
+    
+    // === DEVOLVE O SALDO CASO ESTIVESSE PAGO ===
+    if (tx && tx.status === 'done' && tx.account_id) {
+        const acc = accounts.find(a => a.id === tx.account_id);
+        if (acc) {
+            const oldAmount = Number(tx.amount);
+            const newBalance = Number(acc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount);
+            await supabase.from('accounts').update({ balance: newBalance }).eq('id', tx.account_id);
+        }
+    }
+    // ===========================================
+
     await supabase.from('transactions').delete().eq('id', id)
     router.back()
   }
