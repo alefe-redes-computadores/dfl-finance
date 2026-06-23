@@ -194,7 +194,6 @@ function NewTransactionContent() {
 
     setSaving(true)
 
-    // Upload do comprovante
     let receiptUrl: string | null = null
     if (receipt) {
       try {
@@ -202,7 +201,6 @@ function NewTransactionContent() {
         const uniqueName = `${crypto.randomUUID()}.${ext}`
         const path = `${user.id}/${uniqueName}`
         const { data, error: uploadError } = await supabase.storage.from('receipts').upload(path, receipt)
-
         if (!uploadError && data) {
           const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
           receiptUrl = urlData.publicUrl
@@ -214,7 +212,6 @@ function NewTransactionContent() {
       }
     }
 
-    // Lógica de recorrência (ATUALIZADA)
     let totalParcels = 1
     let recurringGroupId: string | null = null
 
@@ -223,13 +220,12 @@ function NewTransactionContent() {
       recurringGroupId = crypto.randomUUID()
     } else if (repetition === 'recurring') {
       recurringGroupId = crypto.randomUUID()
-      // Define o número de parcelas com base na frequência
       switch (frequency) {
         case 'weekly': totalParcels = 52; break
         case 'biweekly': totalParcels = 24; break
         case 'monthly': totalParcels = 12; break
         case 'bimonthly': totalParcels = 6; break
-        case 'custom': totalParcels = 12; break // temporário até personalizar
+        case 'custom': totalParcels = 12; break
         default: totalParcels = 12
       }
     }
@@ -240,7 +236,6 @@ function NewTransactionContent() {
       for (let i = 0; i < totalParcels; i++) {
         let installmentDate: string
         if (repetition === 'recurring') {
-          // Calcula a data com base na frequência
           const baseDate = new Date(date)
           if (frequency === 'weekly') {
             installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
@@ -251,11 +246,9 @@ function NewTransactionContent() {
           } else if (frequency === 'bimonthly') {
             installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
           } else {
-            // custom ou outro: fallback para mensal
             installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
           }
         } else {
-          // parcelamento ou único: addMonths simples
           installmentDate = format(addMonths(new Date(date), i), 'yyyy-MM-dd')
         }
 
