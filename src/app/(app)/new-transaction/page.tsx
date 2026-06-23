@@ -79,6 +79,7 @@ function NewTransactionContent() {
           receiptUrl = urlData.publicUrl
         }
       }
+      
       const { error } = await supabase.from('transactions').insert({
         user_id: user!.id,
         type,
@@ -93,6 +94,19 @@ function NewTransactionContent() {
         receipt_url: receiptUrl,
       })
       if (error) throw error
+
+      // ATUALIZA O SALDO DA CONTA SE A TRANSAÇÃO ESTIVER PAGA
+      if (isPaid && accountId) {
+        const acc = accounts.find(a => a.id === accountId)
+        if (acc) {
+          const newBalance = type === 'income' 
+            ? Number(acc.balance) + amountNum 
+            : Number(acc.balance) - amountNum
+          
+          await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
+        }
+      }
+
       router.push('/transactions')
     } catch (e) {
       console.error(e)
@@ -183,7 +197,7 @@ function NewTransactionContent() {
 
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => setCategories(categories)}>
+           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
              <h3 className="font-bold mb-4">Categorias</h3>
              {categories.map(cat => (
                <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className="w-full p-3 flex items-center gap-3">
@@ -195,9 +209,23 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {showAccModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
+           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+             <h3 className="font-bold mb-4">Selecionar Conta</h3>
+             {accounts.map(acc => (
+               <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className="w-full p-3 flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{backgroundColor: acc.color}}>{acc.name.substring(0,2).toUpperCase()}</div>
+                 {acc.name}
+               </button>
+             ))}
+           </div>
+        </div>
+      )}
+
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => setTags(tags)}>
+           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
              <h3 className="font-bold mb-4">Selecionar Tag</h3>
              {tags.map(tag => (
                <button key={tag.id} onClick={() => { setTagId(tag.id); setShowTagModal(false) }} className="w-full p-3 flex items-center gap-3">
