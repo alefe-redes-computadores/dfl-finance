@@ -18,7 +18,6 @@ type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
-// Ícones e cores
 const CATEGORY_ICONS = ['🛒', '🏍️', '💸', '🔧', '📦', '💰', '🛵', '🍔', '🚗', '💖', '🎮', '🏠', '💼', '💻', '📋', '🎯', '⚡', '🎵']
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
@@ -38,7 +37,7 @@ function NewTransactionContent() {
   const [desc, setDesc] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
-  const [tagId, setTagId] = useState('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -52,7 +51,6 @@ function NewTransactionContent() {
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const [isRefund, setIsRefund] = useState(false)
 
-  // Modais de Seleção
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
@@ -60,18 +58,21 @@ function NewTransactionContent() {
   const [showComingSoon, setShowComingSoon] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
 
-  // Modal de Criação de Categoria
   const [showCreateCatModal, setShowCreateCatModal] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [newCatIcon, setNewCatIcon] = useState('🍔')
   const [newCatColor, setNewCatColor] = useState('#22c55e')
   const [savingCategory, setSavingCategory] = useState(false)
 
-  // Modal de Criação de Conta
   const [showCreateAccModal, setShowCreateAccModal] = useState(false)
   const [newAccName, setNewAccName] = useState('')
   const [newAccColor, setNewAccColor] = useState('#14b8a6')
   const [savingAccount, setSavingAccount] = useState(false)
+
+  const [showCreateTagModal, setShowCreateTagModal] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#22c55e')
+  const [savingTag, setSavingTag] = useState(false)
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
@@ -88,14 +89,20 @@ function NewTransactionContent() {
   
   const selectedCat = categories.find(c => c.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
-  const selectedTag = tags.find(t => t.id === tagId)
+
+  const toggleTag = (id: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(id)) return prev.filter(t => t !== id)
+      if (prev.length >= 5) return prev
+      return [...prev, id]
+    })
+  }
 
   const loadData = useCallback(async () => {
     if (!user || !user.id) return
-    const catType = type === 'income' ? 'income' : 'expense'
 
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context).eq('type', catType),
+      supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context),
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
       supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name')
     ])
@@ -103,7 +110,7 @@ function NewTransactionContent() {
     setCategories(Array.isArray(cats) ? cats : [])
     setAccounts(Array.isArray(accs) ? accs : [])
     setTags(Array.isArray(tgs) ? tgs : [])
-  }, [user, context, type])
+  }, [user, context])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -133,7 +140,11 @@ function NewTransactionContent() {
     }
   }
 
-  // CRIAR CATEGORIA
+  const handleCameraCapture = (file: File) => {
+    setReceipt(file)
+    setShowCamera(false)
+  }
+
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
     setSavingCategory(true)
@@ -143,7 +154,6 @@ function NewTransactionContent() {
         name: newCatName.trim(),
         icon: newCatIcon,
         color: newCatColor,
-        type: type === 'income' ? 'income' : 'expense',
         context: context
       }).select().single()
 
@@ -162,7 +172,6 @@ function NewTransactionContent() {
     }
   }
 
-  // CRIAR CONTA
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
     setSavingAccount(true)
@@ -189,7 +198,32 @@ function NewTransactionContent() {
     }
   }
 
-  // SALVAR TRANSAÇÃO
+  const handleSaveTag = async () => {
+    if (!user?.id || !newTagName.trim()) return
+    setSavingTag(true)
+    try {
+      const { data, error } = await supabase.from('tags').insert({
+        user_id: user.id,
+        name: newTagName.trim(),
+        color: newTagColor,
+        context: context
+      }).select().single()
+
+      if (error) throw error
+      if (data) {
+        setTags(prev => [...prev, data])
+        setSelectedTags(prev => prev.length < 5 ? [...prev, data.id] : prev)
+        setShowCreateTagModal(false)
+        setNewTagName('') 
+      }
+    } catch (error) {
+      console.error("Erro ao criar tag:", error)
+      alert("Erro ao criar tag.")
+    } finally {
+      setSavingTag(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!user?.id) return
     const rawAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0
@@ -254,7 +288,7 @@ function NewTransactionContent() {
           description: desc || null,
           category_id: categoryId || null,
           account_id: accountId || null,
-          tag_id: tagId || null,
+          tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
           status: isPaid ? 'done' : 'pending',
           context,
@@ -413,7 +447,11 @@ function NewTransactionContent() {
             <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
               <div className="flex items-center gap-3">
                 <Tag size={20} className="text-gray-400" />
-                <span className={`text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>{selectedTag ? selectedTag.name : 'Tags'}</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {selectedTags.length > 0 
+                    ? `${selectedTags.length} tag(ns) selecionada(s)` 
+                    : 'Tags'}
+                </span>
               </div>
               <Plus size={20} className="text-teal-700" />
             </button>
@@ -443,8 +481,6 @@ function NewTransactionContent() {
           {saving ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : <Check size={30} className="text-white" />}
         </button>
       </div>
-
-      {/* --- MODAIS DE LISTA --- */}
 
       {/* Modal Lista de Categorias */}
       {showCatModal && (
@@ -493,25 +529,27 @@ function NewTransactionContent() {
       {/* Modal Lista de Tags */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
               <h3 className="font-bold text-lg">Tags</h3>
-              <button onClick={() => router.push('/tags')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
+              <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {tags.map(tag => (
-                <button key={tag.id} onClick={() => { setTagId(tag.id); setShowTagModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${tag.id === tagId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                  <span className="flex-1 text-left font-medium text-gray-800">{tag.name}</span>
-                  {tag.id === tagId && <Check size={20} className="text-teal-700" />}
-                </button>
-              ))}
+              {tags.map(tag => {
+                const isActive = selectedTags.includes(tag.id);
+                return (
+                  <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <span className="flex-1 text-left font-medium text-gray-800">{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                  </button>
+                );
+              })}
+              {tags.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma tag encontrada.</p>}
             </div>
           </div>
         </div>
       )}
-
-      {/* --- MODAIS DE CRIAÇÃO (SOBREPOSIÇÃO) --- */}
 
       {/* Modal Criar Categoria */}
       {showCreateCatModal && (
@@ -603,6 +641,47 @@ function NewTransactionContent() {
                 className="w-full bg-[#82a99c] hover:bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 transition-colors disabled:opacity-50 flex justify-center items-center"
               >
                 {savingAccount ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : 'Salvar conta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Criar Tag */}
+      {showCreateTagModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800">Nova tag</h3>
+              <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-6">
+              <input 
+                type="text" 
+                value={newTagName} 
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="Nome da tag" 
+                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
+              />
+              <div>
+                <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
+                <div className="flex flex-wrap gap-3">
+                  {CATEGORY_COLORS.map(c => (
+                    <button 
+                      key={c} 
+                      onClick={() => setNewTagColor(c)}
+                      className={`w-10 h-10 rounded-full transition-transform ${newTagColor === c ? 'scale-125 border-4 border-white shadow-md' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <button 
+                onClick={handleSaveTag} 
+                disabled={savingTag || !newTagName.trim()}
+                className="w-full bg-[#82a99c] hover:bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 transition-colors disabled:opacity-50 flex justify-center items-center"
+              >
+                {savingTag ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : 'Salvar tag'}
               </button>
             </div>
           </div>
