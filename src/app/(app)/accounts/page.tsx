@@ -21,7 +21,7 @@ export default function AccountsPage() {
   const router = useRouter()
   
   const [accounts, setAccounts] = useState<any[]>([])
-  const [context, setContext] = useState<'personal' | 'dfl'>('personal')
+  const [context, setContext] = useState<'personal' | 'dfl'>('dfl') // Começando com DFL por padrão
   const [loading, setLoading] = useState(true)
   
   const [showForm, setShowForm] = useState(false)
@@ -29,6 +29,7 @@ export default function AccountsPage() {
   const [color, setColor] = useState(DEFAULT_COLORS[0])
   const [displayBalance, setDisplayBalance] = useState('')
   const [balanceNum, setBalanceNum] = useState(0)
+  const [allowNegative, setAllowNegative] = useState(false) // Estado do Cheque Especial
 
   const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -58,7 +59,8 @@ export default function AccountsPage() {
       name: name.trim(), 
       balance: balanceNum, 
       context, 
-      color 
+      color,
+      allow_negative: allowNegative // Salvando a permissão no banco
     }
     await supabase.from('accounts').insert(data)
     setShowForm(false)
@@ -66,6 +68,7 @@ export default function AccountsPage() {
     setDisplayBalance('')
     setBalanceNum(0)
     setColor(DEFAULT_COLORS[0])
+    setAllowNegative(false) // Reseta o toggle
     loadAccounts()
   }
 
@@ -73,6 +76,8 @@ export default function AccountsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] pb-24 font-sans relative">
+      
+      {/* Header */}
       <div className="p-4 flex items-center justify-between bg-white border-b border-gray-100">
         <button onClick={() => router.back()} className="text-gray-800"><ChevronLeft size={24} /></button>
         <h1 className="font-bold text-lg text-gray-800">Contas</h1>
@@ -80,52 +85,76 @@ export default function AccountsPage() {
       </div>
 
       <div className="p-4">
+        {/* NOVO: Seletor Compacto (Estilo Análise/Home) */}
+        <div className="flex bg-gray-100 p-1 rounded-full mb-6 max-w-[240px] mx-auto">
+          <button 
+            onClick={() => setContext('dfl')} 
+            className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${context === 'dfl' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          >
+            DFL
+          </button>
+          <button 
+            onClick={() => setContext('personal')} 
+            className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${context === 'personal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          >
+            Pessoal
+          </button>
+        </div>
+
         <div className="bg-white rounded-3xl p-6 shadow-sm mb-6 border border-gray-100 text-center">
           <p className="text-gray-400 text-[11px] font-bold uppercase tracking-wider mb-1">Saldo total</p>
           <p className="text-3xl font-light text-gray-800">
             R$ {totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
-
-        <div className="flex bg-gray-200 rounded-full p-1 mb-6">
-          <button onClick={() => setContext('dfl')} className={`flex-1 py-2.5 rounded-full text-sm font-bold transition-all ${context === 'dfl' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>DFL</button>
-          <button onClick={() => setContext('personal')} className={`flex-1 py-2.5 rounded-full text-sm font-bold transition-all ${context === 'personal' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>Pessoal</button>
-        </div>
       </div>
 
+      {/* Lista de Contas */}
       <div className="px-4 space-y-3">
         {loading ? (
           <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
         ) : accounts.length === 0 ? (
           <div className="text-center p-6 text-gray-400 text-sm">Nenhuma conta encontrada neste contexto.</div>
         ) : (
-          accounts.map((acc) => (
-            <div key={acc.id} onClick={() => router.push(`/accounts/${acc.id}`)} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-gray-100 cursor-pointer hover:bg-gray-50">
-              <div className="flex items-center gap-4">
-                <GripVertical className="text-gray-300 cursor-grab" size={20} />
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: acc.color }}>
-                  {acc.name.substring(0, 2).toUpperCase()}
+          accounts.map((acc) => {
+            const bal = safeNum(acc.balance);
+            // Lógica dinâmica de cores para o Saldo
+            let balanceColorClass = 'text-gray-400'; // Zerado (Cinza)
+            if (bal > 0) balanceColorClass = 'text-teal-700'; // Positivo (Verde)
+            if (bal < 0) balanceColorClass = 'text-red-500'; // Negativo (Vermelho)
+
+            return (
+              <div key={acc.id} onClick={() => router.push(`/accounts/${acc.id}`)} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-gray-100 cursor-pointer hover:bg-gray-50">
+                <div className="flex items-center gap-4">
+                  {/* Ícone de Arrastar */}
+                  <GripVertical className="text-gray-300 cursor-grab hover:text-gray-500 transition-colors" size={20} />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: acc.color }}>
+                    {acc.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-[14px] text-gray-800">{acc.name}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide mt-0.5">Conta Corrente</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-[14px] text-gray-800">{acc.name}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide mt-0.5">Conta Corrente</p>
-                </div>
+                <p className={`font-bold text-[14px] ${balanceColorClass}`}>
+                  R$ {bal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
               </div>
-              <p className={`font-bold text-[14px] ${safeNum(acc.balance) >= 0 ? 'text-teal-700' : 'text-red-500'}`}>
-                R$ {safeNum(acc.balance).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 
+      {/* MODAL COMPLETO DE CRIAÇÃO (Blindado e com Cheque Especial) */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-[24px] w-full max-w-sm p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-bold text-xl text-gray-800">Nova Conta</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400"><X size={20}/></button>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={20}/></button>
             </div>
+
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Nome</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Nubank, Inter" className="w-full bg-gray-50 p-4 rounded-2xl mb-6 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
             
@@ -134,12 +163,31 @@ export default function AccountsPage() {
                 {DEFAULT_COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)} className={`w-10 h-10 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: c }} />
               ))}
-              <label className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer"><Plus size={18} className="text-gray-400" /><input type="color" className="hidden" onChange={(e) => setColor(e.target.value)} /></label>
+              <label className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer">
+                <Plus size={18} className="text-gray-400" />
+                <input type="color" className="hidden" onChange={(e) => setColor(e.target.value)} />
+              </label>
             </div>
 
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Saldo Inicial (R$)</label>
-            <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="0,00" className="w-full bg-gray-50 p-4 rounded-2xl mb-8 font-bold text-lg text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
-            <button onClick={handleSave} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold">Salvar Conta</button>
+            <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="0,00" className="w-full bg-gray-50 p-4 rounded-2xl mb-6 font-bold text-lg text-gray-800 outline-none focus:ring-2 focus:ring-teal-500" />
+            
+            {/* NOVO: Toggle de Permitir Saldo Negativo (Cheque Especial) */}
+            <label className="flex items-center gap-3 mb-8 cursor-pointer">
+              <div className="relative">
+                <input type="checkbox" className="sr-only" checked={allowNegative} onChange={(e) => setAllowNegative(e.target.checked)} />
+                <div className={`block w-10 h-6 rounded-full transition-colors ${allowNegative ? 'bg-teal-500' : 'bg-gray-200'}`}></div>
+                <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${allowNegative ? 'transform translate-x-4' : ''}`}></div>
+              </div>
+              <div>
+                <p className="text-[13px] font-bold text-gray-800">Permitir Saldo Negativo</p>
+                <p className="text-[11px] text-gray-400">Conta com cheque especial / limite</p>
+              </div>
+            </label>
+
+            <button onClick={handleSave} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold shadow-md transition-all">
+              Salvar Conta
+            </button>
           </div>
         </div>
       )}
