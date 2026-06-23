@@ -51,7 +51,6 @@ function HomeContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      // Transações
       const { data: transactions } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
@@ -62,7 +61,6 @@ function HomeContent() {
 
       const txs = transactions || []
 
-      // Cálculos blindados com (Number() || 0)
       const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       
@@ -74,7 +72,6 @@ function HomeContent() {
       
       setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
 
-      // Contas
       const { data: accsData } = await supabase.from('accounts').select('*').eq('context', context).order('name') 
       
       const accsWithPrevisto = (accsData || []).map(acc => {
@@ -87,7 +84,6 @@ function HomeContent() {
 
       setAccounts(accsWithPrevisto)
 
-      // Cartões
       const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
       setCards(creditCards ?? [])
     } catch (err) {
@@ -114,7 +110,6 @@ function HomeContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f4f6f8] pb-28 font-sans relative px-4 pt-4">
       
-      {/* Topo: Contexto e Navegação de Mês */}
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
         <div className="flex items-center gap-3">
@@ -128,7 +123,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Saldo Total */}
       <div className="bg-white rounded-[24px] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mb-4 text-center">
         <div className="flex items-center justify-center gap-2 mb-2">
           <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Saldo total</span>
@@ -141,7 +135,6 @@ function HomeContent() {
         </h1>
       </div>
 
-      {/* Entradas e Saídas */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div onClick={() => router.push('/transactions?filter=income')} className="bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-[20px] p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -163,7 +156,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Pendências */}
       <div className="mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-3 px-1">Pendências</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -185,7 +177,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Contas */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/accounts')}>
           <h3 className="text-[15px] font-bold text-gray-800">Contas</h3>
@@ -238,17 +229,26 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Cartões */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3 px-1">
           <h3 className="text-[15px] font-bold text-gray-800 cursor-pointer" onClick={() => router.push('/cards')}>Cartões</h3>
-           <button onClick={() => router.push('/cards/new')} className="p-1 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+          {/* Ícone fixado diretamente em /cards/new */}
+          <button onClick={() => router.push('/cards/new')} className="p-1 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
             <Plus size={20} />
           </button>
         </div>
+        
+        {/* Bloco de Cartões com botão gigante para Novo Cartão caso a lista esteja vazia */}
         <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden p-2">
           {cards.length === 0 ? (
-         <button onClick={() => router.push('/cards/new')} className="w-full p-4 text-center text-teal-700 font-bold text-[14px]">Cadastrar primeiro cartão</button>
+            <div className="p-2">
+              <button 
+                onClick={() => router.push('/cards/new')} 
+                className="w-full p-4 text-center text-teal-700 bg-teal-50/50 hover:bg-teal-50 rounded-[16px] font-bold text-[14px] transition-colors border border-teal-100/50"
+              >
+                Cadastrar primeiro cartão
+              </button>
+            </div>
           ) : (
             cards.map((card) => (
               <div 
@@ -280,7 +280,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Últimas Transações */}
       <div className="mb-10">
         <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/transactions')}>
           <h3 className="text-[15px] font-bold text-gray-800">Despesas recentes</h3>
@@ -319,7 +318,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Botão de Reordenar */}
       <div className="flex justify-center mb-4">
         <button className="flex items-center gap-2 text-[12px] font-bold text-gray-500 hover:text-gray-700 transition-colors">
           <Settings2 size={14} /> Gerenciar tela inicial
