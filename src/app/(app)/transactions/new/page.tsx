@@ -18,12 +18,12 @@ type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
-// Ícones e cores exatos do seu print
+// Ícones e cores
 const CATEGORY_ICONS = ['🛒', '🏍️', '💸', '🔧', '📦', '💰', '🛵', '🍔', '🚗', '💖', '🎮', '🏠', '💼', '💻', '📋', '🎯', '⚡', '🎵']
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v5.0 - Modais Nativos e Criação Integrada")
+  console.log("DFL – Nova Transação v6.0 - Ícones à direita e Modal de Conta")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -67,6 +67,12 @@ function NewTransactionContent() {
   const [newCatColor, setNewCatColor] = useState('#22c55e')
   const [savingCategory, setSavingCategory] = useState(false)
 
+  // Modal de Criação de Conta
+  const [showCreateAccModal, setShowCreateAccModal] = useState(false)
+  const [newAccName, setNewAccName] = useState('')
+  const [newAccColor, setNewAccColor] = useState('#14b8a6')
+  const [savingAccount, setSavingAccount] = useState(false)
+
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
     const selectedDate = new Date(newDateStr + 'T12:00:00')
@@ -79,6 +85,7 @@ function NewTransactionContent() {
   const isIncome = type === 'income'
   const themeColor = isIncome ? 'text-emerald-700' : 'text-red-600'
   const bgColor = isIncome ? 'bg-emerald-700' : 'bg-red-600'
+  
   const selectedCat = categories.find(c => c.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
   const selectedTag = tags.find(t => t.id === tagId)
@@ -126,11 +133,10 @@ function NewTransactionContent() {
     }
   }
 
-  // NOVA FUNÇÃO: Salvar categoria direto no banco
+  // CRIAR CATEGORIA
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
     setSavingCategory(true)
-
     try {
       const { data, error } = await supabase.from('categories').insert({
         user_id: user.id,
@@ -142,12 +148,11 @@ function NewTransactionContent() {
       }).select().single()
 
       if (error) throw error
-
       if (data) {
         setCategories(prev => [...prev, data])
-        setCategoryId(data.id) // Já seleciona a categoria recém-criada
+        setCategoryId(data.id) 
         setShowCreateCatModal(false)
-        setNewCatName('') // Reseta o campo
+        setNewCatName('') 
       }
     } catch (error) {
       console.error("Erro ao criar categoria:", error)
@@ -157,6 +162,34 @@ function NewTransactionContent() {
     }
   }
 
+  // CRIAR CONTA
+  const handleSaveAccount = async () => {
+    if (!user?.id || !newAccName.trim()) return
+    setSavingAccount(true)
+    try {
+      const { data, error } = await supabase.from('accounts').insert({
+        user_id: user.id,
+        name: newAccName.trim(),
+        color: newAccColor,
+        context: context
+      }).select().single()
+
+      if (error) throw error
+      if (data) {
+        setAccounts(prev => [...prev, data])
+        setAccountId(data.id) 
+        setShowCreateAccModal(false)
+        setNewAccName('') 
+      }
+    } catch (error) {
+      console.error("Erro ao criar conta:", error)
+      alert("Erro ao criar conta.")
+    } finally {
+      setSavingAccount(false)
+    }
+  }
+
+  // SALVAR TRANSAÇÃO
   const handleSave = async () => {
     if (!user?.id) return
     const rawAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0
@@ -281,7 +314,7 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* Card Principal - Categoria e Conta com Ícones Alinhados */}
+      {/* Card Principal - Categoria e Conta */}
       <div className="bg-white rounded-3xl mx-4 shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50">
           <span className="font-bold text-sm text-gray-700">{isIncome ? 'Recebido' : 'Pago'}</span>
@@ -290,39 +323,41 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        {/* Categoria Selector */}
-        <div className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setShowCatModal(true)}>
+        {/* --- SELETOR DE CATEGORIA (Ícone selecionado grudado no + da direita) --- */}
+        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-4">
-            {selectedCat ? (
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${selectedCat.color}20` }}>{selectedCat.icon}</div>
-            ) : (
-              <Tag size={20} className="text-gray-400" />
-            )}
+            <Tag size={20} className="text-gray-400" />
             <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
               {selectedCat ? selectedCat.name : 'Categoria'}
             </span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
-            <Plus size={20} />
-          </button>
-        </div>
-
-        {/* Conta Selector */}
-        <div className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setShowAccModal(true)}>
-          <div className="flex items-center gap-4">
-            {selectedAcc ? (
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: selectedAcc.color }}>{selectedAcc.name.substring(0, 2).toUpperCase()}</div>
-            ) : (
-              <Wallet size={20} className="text-gray-400" />
+          <div className="flex items-center gap-2">
+            {selectedCat && (
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${selectedCat.color}20` }}>{selectedCat.icon}</div>
             )}
+            <div onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+              <Plus size={20} />
+            </div>
+          </div>
+        </button>
+
+        {/* --- SELETOR DE CONTA (Ícone selecionado grudado no + da direita) --- */}
+        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-4">
+            <Wallet size={20} className="text-gray-400" />
             <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
               {selectedAcc ? selectedAcc.name : 'Conta'}
             </span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); router.push('/accounts'); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
-            <Plus size={20} />
-          </button>
-        </div>
+          <div className="flex items-center gap-2">
+            {selectedAcc && (
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: selectedAcc.color }}>{selectedAcc.name.substring(0, 2).toUpperCase()}</div>
+            )}
+            <div onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+              <Plus size={20} />
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* Detalhes */}
@@ -409,9 +444,9 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* --- MODAIS INFERIORES DE SELEÇÃO --- */}
+      {/* --- MODAIS DE LISTA --- */}
 
-      {/* MODAL LISTA DE CATEGORIAS */}
+      {/* Modal Lista de Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -433,13 +468,13 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* MODAL LISTA DE CONTAS */}
+      {/* Modal Lista de Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
               <h3 className="font-bold text-lg">Contas</h3>
-              <button onClick={() => router.push('/accounts')} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
+              <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {accounts.map(acc => (
@@ -449,12 +484,13 @@ function NewTransactionContent() {
                   {acc.id === accountId && <Check size={20} className="text-teal-700" />}
                 </button>
               ))}
+              {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL LISTA DE TAGS */}
+      {/* Modal Lista de Tags */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -475,7 +511,9 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* --- NOVO MODAL: CRIAÇÃO DE CATEGORIA --- */}
+      {/* --- MODAIS DE CRIAÇÃO (SOBREPOSIÇÃO) --- */}
+
+      {/* Modal Criar Categoria */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -483,7 +521,6 @@ function NewTransactionContent() {
               <h3 className="font-bold text-lg text-gray-800">Nova categoria</h3>
               <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
             </div>
-            
             <div className="space-y-6">
               <input 
                 type="text" 
@@ -492,7 +529,6 @@ function NewTransactionContent() {
                 placeholder="Nome da categoria" 
                 className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
               />
-
               <div>
                 <p className="text-sm text-gray-500 font-medium mb-3">Ícone</p>
                 <div className="flex flex-wrap gap-3">
@@ -507,7 +543,6 @@ function NewTransactionContent() {
                   ))}
                 </div>
               </div>
-
               <div>
                 <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
                 <div className="flex flex-wrap gap-3">
@@ -521,13 +556,53 @@ function NewTransactionContent() {
                   ))}
                 </div>
               </div>
-
               <button 
                 onClick={handleSaveCategory} 
                 disabled={savingCategory || !newCatName.trim()}
                 className="w-full bg-[#82a99c] hover:bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 transition-colors disabled:opacity-50 flex justify-center items-center"
               >
                 {savingCategory ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : 'Salvar categoria'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Criar Conta */}
+      {showCreateAccModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800">Nova conta</h3>
+              <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-6">
+              <input 
+                type="text" 
+                value={newAccName} 
+                onChange={(e) => setNewAccName(e.target.value)}
+                placeholder="Nome da conta" 
+                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
+              />
+              <div>
+                <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
+                <div className="flex flex-wrap gap-3">
+                  {CATEGORY_COLORS.map(c => (
+                    <button 
+                      key={c} 
+                      onClick={() => setNewAccColor(c)}
+                      className={`w-10 h-10 rounded-full transition-transform ${newAccColor === c ? 'scale-125 border-4 border-white shadow-md' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <button 
+                onClick={handleSaveAccount} 
+                disabled={savingAccount || !newAccName.trim()}
+                className="w-full bg-[#82a99c] hover:bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 transition-colors disabled:opacity-50 flex justify-center items-center"
+              >
+                {savingAccount ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : 'Salvar conta'}
               </button>
             </div>
           </div>
