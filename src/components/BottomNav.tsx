@@ -13,7 +13,8 @@ const tabs = [
   { href: '/more', icon: MoreHorizontal, label: 'Mais' },
 ]
 
-const HIDDEN_ROUTES = ['/new-transaction', '/accounts', '/categories', '/cards/new']
+// Adicionado a nova rota do cartão para esconder o menu inferior nela
+const HIDDEN_ROUTES = ['/new-transaction', '/accounts', '/categories', '/cards/new', '/transactions/card-expense']
 
 export default function BottomNav() {
   const pathname = usePathname()
@@ -33,25 +34,26 @@ export default function BottomNav() {
     setIsTransferModalOpen(true)
   }
 
+  // ROTA ATUALIZADA: Agora aponta direto para a tela nova!
   const handleCardClick = (e: React.MouseEvent) => {
     e.preventDefault()
-    alert("Função de Despesa no Cartão em desenvolvimento!")
     setIsOpen(false)
+    router.push('/transactions/card-expense')
   }
 
   return (
     <>
-      {/* Overlay Escurecido (Z-50) - Cobre toda a tela, inclusive a barra branca */}
+      {/* Overlay Escurecido (Z-50) */}
       <div
         className={`fixed inset-0 z-50 bg-[#121414]/80 backdrop-blur-[2px] transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsOpen(false)}
       />
 
-      {/* Container Z-60: Fica por cima do Overlay. Garante que o botão não afunde! */}
-      <div className="fixed bottom-0 left-0 w-full z-60 pointer-events-none pb-safe flex flex-col items-center">
+      {/* Container Z-60: Totalmente isolado para o botão flutuante nunca sumir */}
+      <div className="fixed bottom-[30px] left-1/2 -translate-x-1/2 z-60 pointer-events-none flex flex-col items-center">
         
-        {/* O Arco de Botões (Ancorado a 80px do fundo) */}
-        <div className={`absolute bottom-[80px] w-full flex justify-center transition-all duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none scale-50'}`}>
+        {/* O Arco de Botões */}
+        <div className={`absolute bottom-[65px] w-full flex justify-center transition-all duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none scale-50'}`}>
           <button onClick={() => handleNavigate('/transactions/new?type=income')} className={`absolute flex flex-col items-center gap-2 transition-all duration-300 ${isOpen ? '-translate-x-[68px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'}`}>
             <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl"><ArrowUp size={24} className="text-emerald-500" /></div>
             <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Receita</span>
@@ -73,10 +75,10 @@ export default function BottomNav() {
           </button>
         </div>
 
-        {/* Botão Central (+) - Com margin-bottom para se encaixar na barra branca perfeitamente */}
+        {/* Botão Central (+) */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`mb-[10px] w-[56px] h-[56px] rounded-full flex items-center justify-center shadow-lg transition-all duration-300 pointer-events-auto border-4 ${isOpen ? 'bg-gray-800 rotate-45 border-transparent' : 'bg-teal-700 rotate-0 border-white'}`}
+          className={`pointer-events-auto relative w-[56px] h-[56px] rounded-full flex items-center justify-center shadow-lg transition-all duration-300 border-4 ${isOpen ? 'bg-gray-800 rotate-45 border-transparent' : 'bg-teal-700 rotate-0 border-white'}`}
         >
           <Plus className="text-white" size={28} />
         </button>
@@ -96,7 +98,7 @@ export default function BottomNav() {
                     <Icon size={22} className={active ? 'text-teal-700' : 'text-gray-400'} />
                     <span className={`text-[10px] ${active ? 'text-teal-700 font-bold' : 'text-gray-400 font-medium'}`}>{tab.label}</span>
                   </button>
-                  {/* Espaço vazio onde o botão flutuante se encaixa */}
+                  {/* Buraco no meio para o botão flutuante respirar */}
                   <div className="w-[60px]" />
                 </React.Fragment>
               )
