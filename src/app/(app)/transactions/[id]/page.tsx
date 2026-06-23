@@ -174,6 +174,8 @@ export default function EditTransactionPage() {
          const { error } = await supabase.from('transactions').update(payload).eq('id', id)
          if (error) throw error
       }
+      
+      router.refresh() // <--- ATUALIZA A HOME
       router.back()
     } catch (err: any) {
        console.error("Catch save:", err)
@@ -199,6 +201,8 @@ export default function EditTransactionPage() {
     // ===========================================
 
     await supabase.from('transactions').delete().eq('id', id)
+    
+    router.refresh() // <--- ATUALIZA A HOME
     router.back()
   }
 
