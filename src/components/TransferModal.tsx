@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -55,6 +54,13 @@ export default function TransferModal({ isOpen, onClose, initialFromAccountId = 
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0
     if (rawAmount <= 0) {
       alert("O valor da transferência deve ser maior que zero.")
+      setLoading(false)
+      return
+    }
+
+    // 🚨 NOVA TRAVA DE SEGURANÇA: Impede transferência se a conta não tiver cheque especial
+    if (!fromAccount.allow_negative && (Number(fromAccount.balance) - rawAmount < 0)) {
+      alert(`A conta ${fromAccount.name} não permite saldo negativo. Seu saldo atual é R$ ${Number(fromAccount.balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`)
       setLoading(false)
       return
     }
