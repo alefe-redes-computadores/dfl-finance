@@ -71,15 +71,17 @@ function NewTransactionContent() {
   }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '')
-    const num = Number(val) / 100
-    setAmountNum(num)
-    setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+    const rawValue = e.target.value.replace(/\./g, '').replace(',', '.')
+    const num = parseFloat(rawValue)
+    if (!isNaN(num) && num > 0) {
+      setAmountNum(num)
+    }
+    setAmount(e.target.value)
   }
 
   const handleSave = async () => {
-    if (amountNum <= 0) {
-      alert('Informe um valor.')
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert('Informe um valor válido.')
       return
     }
 
