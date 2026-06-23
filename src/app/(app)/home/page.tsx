@@ -33,7 +33,7 @@ function HomeContent() {
   const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0, faturas: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
-  const [recentExpenses, setRecentExpenses] = useState<any[]>([])
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
@@ -51,7 +51,6 @@ function HomeContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      // Busca Transações do Mês
       const { data: transactions } = await supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
@@ -62,18 +61,17 @@ function HomeContent() {
 
       const txs = transactions || []
 
-      // Cálculos Gerais
       const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       
-      // Contas a pagar normais (ISOLAMOS os cartões de crédito aqui usando !t.credit_card_id)
       const toPay = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id).reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const toReceive = txs.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
 
       setSummary({ income, expense, balance: income - expense })
-      setRecentExpenses(txs.filter(t => (t.type === 'expense' || t.type === 'sangria')).slice(0, 5))
+      
+      // AGORA PUXA TANTO DESPESA QUANTO RECEITA (ATÉ 5)
+      setRecentTransactions(txs.slice(0, 5))
 
-      // Busca Contas
       const { data: accsData } = await supabase.from('accounts').select('*').eq('context', context).order('name') 
       const accsWithPrevisto = (accsData || []).map(acc => {
         const accTxs = txs.filter(t => t.account_id === acc.id && t.status === 'pending');
@@ -84,11 +82,9 @@ function HomeContent() {
       });
       setAccounts(accsWithPrevisto)
 
-      // Busca Cartões e Calcula a Fatura
       const { data: creditCards } = await supabase.from('credit_cards').select('*').eq('context', context).eq('is_archived', false).order('created_at', { ascending: false })
       
       const cardsWithInvoice = (creditCards || []).map(card => {
-        // Soma as despesas vinculadas a este cartão no mês
         const cardTxs = txs.filter(t => t.credit_card_id === card.id);
         const faturaAtual = cardTxs.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
         return { ...card, faturaAtual };
@@ -97,7 +93,7 @@ function HomeContent() {
       const totalFaturas = cardsWithInvoice.reduce((acc, c) => acc + c.faturaAtual, 0);
       
       setCards(cardsWithInvoice)
-      setPendings({ toPay, toReceive, faturas: totalFaturas }) // Atualiza o state com o total das faturas
+      setPendings({ toPay, toReceive, faturas: totalFaturas }) 
       
     } catch (err) {
       console.error("Erro na Home:", err)
@@ -170,7 +166,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* PENDÊNCIAS COM A FATURA DINÂMICA */}
       <div className="mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 mb-3 px-1">Pendências</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -244,7 +239,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* CARTÕES COM A FATURA DINÂMICA */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3 px-1">
           <h3 className="text-[15px] font-bold text-gray-800 cursor-pointer" onClick={() => router.push('/cards')}>Cartões</h3>
@@ -277,7 +271,6 @@ function HomeContent() {
                   <p className="text-[14px] font-bold text-gray-800">{card.name}</p>
                 </div>
                 <div className="text-right flex items-center gap-1">
-                   {/* Se tiver fatura > 0, exibe o valor em laranja. Senão, fica verde com OK */}
                    {card.faturaAtual > 0 ? (
                      <p className="text-[14px] font-bold text-orange-500">{hideBalance ? '•••' : formatCurrency(card.faturaAtual)}</p>
                    ) : (
@@ -300,14 +293,14 @@ function HomeContent() {
 
       <div className="mb-10">
         <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/transactions')}>
-          <h3 className="text-[15px] font-bold text-gray-800">Despesas recentes</h3>
+          <h3 className="text-[15px] font-bold text-gray-800">Transações recentes</h3>
           <ChevronRight size={18} className="text-gray-400" />
         </div>
         <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden p-2">
-          {recentExpenses.length === 0 ? (
+          {recentTransactions.length === 0 ? (
             <div className="p-4 text-center text-gray-400 text-sm">Nenhuma transação recente.</div>
           ) : (
-            recentExpenses.map((tx) => (
+            recentTransactions.map((tx) => (
               <div 
                 key={tx.id} 
                 onClick={() => router.push(`/transactions/${tx.id}`)}
@@ -318,17 +311,17 @@ function HomeContent() {
                     className="w-10 h-10 rounded-[14px] flex items-center justify-center text-lg"
                     style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}
                   >
-                    {tx.categories?.icon || '💸'}
+                    {tx.categories?.icon || (tx.type === 'income' ? '💰' : '💸')}
                   </div>
                   <div>
-                    <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight">{tx.description || tx.categories?.name}</p>
+                    <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">
                       {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}
                     </p>
                   </div>
                 </div>
-                <p className="text-[14px] font-bold text-red-500">
-                  {hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
+                <p className={`text-[14px] font-bold ${tx.type === 'income' ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {tx.type === 'income' ? '+' : '-'} {hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
                 </p>
               </div>
             ))
