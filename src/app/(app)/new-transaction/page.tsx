@@ -71,7 +71,7 @@ function NewTransactionContent() {
   }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/D/g, '')
+    const val = e.target.value.replace(/\D/g, '')
     const num = Number(val) / 100
     setAmountNum(num)
     setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
@@ -115,15 +115,12 @@ function NewTransactionContent() {
       if (error) throw error
 
       if (isPaid && accountId) {
-        const acc = accounts.find(a => a.id === accountId)
-        if (acc) {
-          const newBalance =
-            type === 'income'
-              ? Number(acc.balance) + amountNum
-              : Number(acc.balance) - amountNum
+        const { data: acc } = await supabase.from('accounts').select('balance').eq('id', accountId).single()
+        const newBalance = type === 'income'
+          ? Number(acc.balance) + amountNum
+          : Number(acc.balance) - amountNum
 
-          await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
-        }
+        await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
       }
 
       router.refresh()
