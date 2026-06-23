@@ -42,9 +42,8 @@ export default function NewCardPage() {
       const { data } = await supabase
         .from('accounts')
         .select('id, name')
-        .eq('user_id', user.id)
-        .eq('context', 'dfl') // Assumindo DFL como padrão para o novo cartão
-      setAccounts(data ?? [])
+        .match({ user_id: user.id, context: 'dfl' })
+      setAccounts(Array.isArray(data) ? data : [])
     }
     loadAccounts()
   }, [user?.id])
