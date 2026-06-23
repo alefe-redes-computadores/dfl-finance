@@ -81,6 +81,8 @@ function CameraCapture({ isOpen, onClose, onCapture }: { isOpen: boolean; onClos
 }
 
 function NewTransactionContent() {
+  console.log("DFL – Nova Transação v2.0")
+
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -135,7 +137,10 @@ function NewTransactionContent() {
   const selectedTag = tags.find(t => t.id === tagId)
 
   const loadData = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.error("Usuário não autenticado!");
+      return;
+    }
     const catType = type === 'income' ? 'income' : 'expense'
 
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
@@ -346,7 +351,8 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100">
+        {/* Botão Categoria com visual melhorado */}
+        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
           <Tag size={18} className="text-gray-400" />
           <span className={`flex-1 text-left text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
             {selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Categoria'}
@@ -354,7 +360,8 @@ function NewTransactionContent() {
           <Plus size={18} className="text-teal-700" />
         </button>
 
-        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 px-5 py-4">
+        {/* Botão Conta com visual melhorado */}
+        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 px-5 py-4 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
           <Wallet size={18} className="text-gray-400" />
           <span className={`flex-1 text-left text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
             {selectedAcc ? selectedAcc.name : 'Conta'}
@@ -430,7 +437,7 @@ function NewTransactionContent() {
               )}
             </div>
 
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100">
+            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-100 bg-white rounded-2xl hover:bg-gray-50 transition-colors">
               <Tag size={18} className="text-gray-400" />
               <span className={`flex-1 text-left text-sm font-medium ${selectedTag ? 'text-gray-800' : 'text-gray-400'}`}>
                 {selectedTag ? selectedTag.name : 'Vincular Tag'}
@@ -465,43 +472,80 @@ function NewTransactionContent() {
         </button>
       </div>
 
+      {/* Modal Categoria – item ativo destacado */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4"><h3 className="font-bold">Categorias</h3><button onClick={() => router.push('/categories')} className="text-teal-700"><Plus size={20} /></button></div>
-            {categories.map(cat => (
-              <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className="w-full p-3 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
-                {cat.name}
-              </button>
-            ))}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">Categorias</h3>
+              <button onClick={() => router.push('/categories')} className="text-teal-700"><Plus size={20} /></button>
+            </div>
+            {categories.map(cat => {
+              const isActive = cat.id === categoryId;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
+                  className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
+                  <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{cat.name}</span>
+                  {isActive && <Check size={18} className="text-teal-700" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
+      {/* Modal Conta – item ativo destacado */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4"><h3 className="font-bold">Contas</h3><button onClick={() => router.push('/accounts')} className="text-teal-700"><Plus size={20} /></button></div>
-            {accounts.map(acc => (
-              <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className="w-full p-3 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
-                {acc.name}
-              </button>
-            ))}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">Contas</h3>
+              <button onClick={() => router.push('/accounts')} className="text-teal-700"><Plus size={20} /></button>
+            </div>
+            {accounts.map(acc => {
+              const isActive = acc.id === accountId;
+              return (
+                <button
+                  key={acc.id}
+                  onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                  className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                  <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{acc.name}</span>
+                  {isActive && <Check size={18} className="text-teal-700" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
+      {/* Modal Tags – item ativo destacado */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[50vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4"><h3 className="font-bold">Tags</h3><button onClick={() => router.push('/tags')} className="text-teal-700"><Plus size={20} /></button></div>
-            {tags.map(tag => (
-              <button key={tag.id} onClick={() => { setTagId(tag.id); setShowTagModal(false) }} className="w-full p-3 flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />{tag.name}
-              </button>
-            ))}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">Tags</h3>
+              <button onClick={() => router.push('/tags')} className="text-teal-700"><Plus size={20} /></button>
+            </div>
+            {tags.map(tag => {
+              const isActive = tag.id === tagId;
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
+                  className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                  <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800'}`}>{tag.name}</span>
+                  {isActive && <Check size={18} className="text-teal-700" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
