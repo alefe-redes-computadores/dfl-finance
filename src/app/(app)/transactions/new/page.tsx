@@ -98,20 +98,29 @@ function NewTransactionContent() {
     })
   }
 
-  const loadData = useCallback(async () => {
-    if (!user || !user.id) return
+ const loadData = useCallback(async () => {
+  if (!user || !user.id) return
+  const catType = type === 'income' ? 'income' : 'expense'
 
-    const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context),
-      supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
-      supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name')
-    ])
+  const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
+    supabase.from('categories').select('*')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .eq('type', catType),
+    supabase.from('accounts').select('*')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .order('name'),
+    supabase.from('tags').select('*')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .order('name')
+  ])
 
-    setCategories(Array.isArray(cats) ? cats : [])
-    setAccounts(Array.isArray(accs) ? accs : [])
-    setTags(Array.isArray(tgs) ? tgs : [])
-  }, [user, context])
-
+  setCategories(Array.isArray(cats) ? cats : [])
+  setAccounts(Array.isArray(accs) ? accs : [])
+  setTags(Array.isArray(tgs) ? tgs : [])
+}, [user, context, type])
   useEffect(() => { loadData() }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
