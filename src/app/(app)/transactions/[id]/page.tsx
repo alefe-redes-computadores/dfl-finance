@@ -1,52 +1,70 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, CreditCard, RefreshCw, Check, Loader2, ChevronRight, ArrowLeftRight } from 'lucide-react'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function EditTransactionPage() {
   const { id } = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user } = useAuth()
   
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tx, setTx] = useState<any>(null)
-  const [isNew, setIsNew] = useState(false) // Flag para saber se é criação ou edição
+  const [isNew, setIsNew] = useState(false)
   
-  // Listas para os selects
+  // Listas para os selects do Banco de Dados
   const [accounts, setAccounts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [tags, setTags] = useState<any[]>([])
 
-  // Campos do formulário
+  // Estados Base
   const [amountInput, setAmountInput] = useState('')
   const [isPaid, setIsPaid] = useState(false)
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
-  const [notes, setNotes] = useState('')
-  // Adicionando um state default de type para Novas Transações. (Se for editar, ele será sobrescrito)
   const [txType, setTxType] = useState<'income' | 'expense'>('expense') 
+  
+  // Estados de "Mais Detalhes"
+  const [showDetails, setShowDetails] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [tagId, setTagId] = useState('')
+  const [isRefund, setIsRefund] = useState(false)
+  const [isFinancing, setIsFinancing] = useState(false)
+  const [isLoan, setIsLoan] = useState(false)
 
   const loadData = useCallback(async () => {
-    // Se o ID for 'new', estamos criando uma transação
     if (id === 'new') {
       setIsNew(true)
+      // Pega o tipo da URL se vier do Menu em Arco
+      const paramType = searchParams.get('type')
+      if (paramType === 'income' || paramType === 'expense') {
+        setTxType(paramType)
+        // Se for receita, já vem marcado como recebido por padrão no app original
+        if (paramType === 'income') setIsPaid(true) 
+      }
     }
 
     setLoading(true)
 
     try {
-      // 1. Busca contas e categorias (sem filtro de user_id, já que RLS tá off e precisamos ver se carrega)
-      const { data: accData, error: accError } = await supabase.from('accounts').select('id, name').order('name')
-      if (accError) console.error("Erro Contas:", accError)
-      else setAccounts(accData || [])
-
-      const { data: catData, error: catError } = await supabase.from('categories').select('id, name, color, icon').order('name')
-      if (catError) console.error("Erro Categorias:", catError)
-      else setCategories(catData || [])
+      // 1. Busca contas, categorias e tags
+      const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
+        supabase.from('accounts').select('id, name').order('name'),
+        supabase.from('categories').select('id, name, color, icon').order('name'),
+        supabase.from('tags').select('id, name').order('name')
+      ])
+      
+      setAccounts(accData || [])
+      setCategories(catData || [])
+      setTags(tagData || [])
 
       // 2. Se for edição, busca a transação existente
       if (id && id !== 'new') {
@@ -58,7 +76,7 @@ export default function EditTransactionPage() {
 
         if (txError) {
           console.error("Erro Supabase (Transação):", txError)
-          alert("Erro ao buscar transação: " + txError.message)
+          alert("Erro ao buscar transação.")
         } else if (txData) {
           setTx(txData)
           setTxType(txData.type)
@@ -67,8 +85,9 @@ export default function EditTransactionPage() {
           setDescription(txData.description || '')
           setCategoryId(txData.category_id || '')
           setAccountId(txData.account_id || '')
+          setTagId(txData.tag_id || '')
           setNotes(txData.notes || '')
-          // Proteção contra NaN
+          
           const amountSafe = Number(txData.amount) || 0;
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
         }
@@ -78,8 +97,7 @@ export default function EditTransactionPage() {
     } finally {
       setLoading(false)
     }
-  }, [id])
-
+  }, [id, searchParams])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -90,45 +108,52 @@ export default function EditTransactionPage() {
   }
 
   const handleSave = async () => {
+    // Agora exigimos o usuário logado para não dar erro no banco
+    if (!user?.id) {
+        alert("Sessão expirada. Faça login novamente.")
+        return
+    }
+
     setSaving(true)
-    
-    // Proteção contra valores vazios no salvamento
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0;
     
+    // Preparando as observações extras (caso seja despesa)
+    let finalNotes = notes;
+    if (txType === 'expense' && (isRefund || isFinancing || isLoan)) {
+        const flags = []
+        if (isRefund) flags.push('[Devolução/Estorno]')
+        if (isFinancing) flags.push('[Financiamento]')
+        if (isLoan) flags.push('[Empréstimo]')
+        finalNotes = `${flags.join(' ')} ${notes}`.trim()
+    }
+    
     const payload = {
+      user_id: user.id, // Correção Principal do Bug!
       amount: rawAmount,
       status: isPaid ? 'done' : 'pending',
       date,
       description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
-      notes: notes || null,
+      tag_id: tagId || null,
+      notes: finalNotes || null,
       type: txType,
-      context: 'dfl' // Hardcoded para testar a inserção, deve vir do context global depois
+      context: 'dfl' // Posteriormente podemos dinamizar
     }
 
     try {
       if (isNew) {
-         // Temporariamente removendo user_id do payload para ver se o insert passa
          const { error } = await supabase.from('transactions').insert([payload])
-         if (error) {
-            console.error("Erro ao inserir:", error)
-            alert("Erro ao salvar: " + error.message)
-         } else {
-            router.back()
-         }
+         if (error) throw error
+         router.back()
       } else {
          const { error } = await supabase.from('transactions').update(payload).eq('id', id)
-         if (error) {
-            console.error("Erro ao atualizar:", error)
-            alert("Erro ao atualizar: " + error.message)
-         } else {
-            router.back()
-         }
+         if (error) throw error
+         router.back()
       }
-    } catch (err) {
+    } catch (err: any) {
        console.error("Catch save:", err)
-       alert("Ocorreu um erro no código ao tentar salvar.")
+       alert("Erro ao salvar: " + err.message)
     } finally {
       setSaving(false)
     }
@@ -147,14 +172,10 @@ export default function EditTransactionPage() {
     </div>
   )
 
-  if (!isNew && !tx) return <div className="p-6 text-center text-gray-500">Transação não encontrada.</div>
-
   const isIncome = txType === 'income'
   const typeLabel = isIncome ? 'receita' : 'despesa'
   const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800'
-  const toggleBgClass = isPaid 
-    ? (isIncome ? 'bg-emerald-600' : 'bg-red-500') 
-    : 'bg-gray-300'
+  const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-600' : 'bg-teal-700') : 'bg-gray-300'
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] font-sans pb-24 relative">
@@ -170,16 +191,6 @@ export default function EditTransactionPage() {
           {!isNew && <button onClick={handleDelete} className="text-red-500"><Trash2 size={20} /></button>}
         </div>
       </div>
-
-      {/* Tipo Toggle (Apenas se for Novo) */}
-      {isNew && (
-        <div className="px-6 mb-2">
-           <div className="flex bg-gray-200 rounded-full p-1">
-             <button onClick={() => setTxType('expense')} className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all ${txType === 'expense' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>Despesa</button>
-             <button onClick={() => setTxType('income')} className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all ${txType === 'income' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>Receita</button>
-           </div>
-        </div>
-      )}
 
       {/* Valor Header */}
       <div className="px-6 py-4 mb-4">
@@ -197,7 +208,7 @@ export default function EditTransactionPage() {
         </div>
       </div>
 
-      {/* Card Principal de Opções */}
+      {/* Card Principal */}
       <div className="bg-white rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] space-y-6">
         
         {/* Toggle Pago/Recebido */}
@@ -208,10 +219,7 @@ export default function EditTransactionPage() {
             </div>
             <span className="font-bold text-[15px] text-gray-800">{isIncome ? 'Recebido' : 'Pago'}</span>
           </div>
-          <button 
-            onClick={() => setIsPaid(!isPaid)} 
-            className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}
-          >
+          <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}>
             <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
           </button>
         </div>
@@ -219,24 +227,13 @@ export default function EditTransactionPage() {
         {/* Data */}
         <div className="flex items-center gap-4 border-b border-gray-100 pb-5 relative">
           <Calendar size={22} className="text-gray-400" />
-          <input 
-            type="date" 
-            value={date} 
-            onChange={(e) => setDate(e.target.value)}
-            className="flex-1 text-[15px] font-bold text-gray-800 outline-none bg-transparent"
-          />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="flex-1 text-[15px] font-bold text-gray-800 outline-none bg-transparent" />
         </div>
 
         {/* Descrição */}
         <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
           <Edit3 size={22} className="text-gray-400" />
-          <input 
-            type="text" 
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Descrição (ex: Corte de Cabelo)"
-            className="flex-1 text-[15px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300"
-          />
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 text-[15px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300" />
         </div>
 
         {/* Categoria */}
@@ -244,15 +241,9 @@ export default function EditTransactionPage() {
           <Tag size={22} className="text-gray-400" />
           <div className="flex-1 flex flex-col">
             <span className="font-bold text-[14px] text-gray-800">Categoria</span>
-            <select 
-              value={categoryId} 
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="text-[13px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer"
-            >
-              <option value="">Selecione uma categoria...</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="text-[14px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer">
+              <option value="">Selecione...</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <ChevronRight size={18} className="text-gray-300" />
@@ -263,49 +254,105 @@ export default function EditTransactionPage() {
           <Wallet size={22} className="text-gray-400" />
           <div className="flex-1 flex flex-col">
             <span className="font-bold text-[14px] text-gray-800">Conta</span>
-            <select 
-              value={accountId} 
-              onChange={(e) => setAccountId(e.target.value)}
-              className="text-[13px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer"
-            >
-              <option value="">Selecione uma conta...</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="text-[14px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer">
+              <option value="">Selecione...</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <ChevronRight size={18} className="text-gray-300" />
         </div>
 
-        {/* Repetição */}
-        <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-          <RefreshCw size={22} className="text-gray-400" />
-          <div className="flex-1 flex flex-col gap-2">
-            <span className="font-bold text-[14px] text-gray-800">Repetição</span>
-            <div className="flex items-center gap-2">
-              <button className="px-4 py-1.5 rounded-full border border-teal-700 text-teal-700 bg-teal-50 text-[13px] font-medium">Única</button>
-              <button className="px-4 py-1.5 rounded-full bg-gray-100 text-gray-500 text-[13px] font-medium">Parcelar</button>
-              <button className="px-4 py-1.5 rounded-full bg-gray-100 text-gray-500 text-[13px] font-medium">Recorrente</button>
-            </div>
-          </div>
+        {/* Botão Mostrar/Ocultar Detalhes */}
+        <div className="flex justify-center pt-2 pb-2">
+          <button onClick={() => setShowDetails(!showDetails)} className="text-[14px] font-bold text-teal-700 hover:text-teal-800 transition-colors">
+            {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
+          </button>
         </div>
 
-        {/* Observações */}
-        <div className="flex items-center gap-4 pb-5">
-          <Edit3 size={22} className="text-gray-400 opacity-50" />
-          <input 
-            type="text" 
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Observações"
-            className="flex-1 text-[14px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300"
-          />
-        </div>
+        {/* --- DETALHES AVANÇADOS --- */}
+        {showDetails && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+            
+            {/* Repetição */}
+            <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
+              <RefreshCw size={22} className="text-gray-400" />
+              <div className="flex-1 flex flex-col gap-3">
+                <span className="font-bold text-[14px] text-gray-800">Repetição</span>
+                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+                  <button className="px-4 py-1.5 rounded-full border border-teal-700 text-teal-700 bg-teal-50 text-[13px] font-medium whitespace-nowrap">Única</button>
+                  <button className="px-4 py-1.5 rounded-full bg-gray-50 text-gray-500 text-[13px] font-medium whitespace-nowrap">Parcelar</button>
+                  <button className="px-4 py-1.5 rounded-full bg-gray-50 text-gray-500 text-[13px] font-medium whitespace-nowrap">Recorrente</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Toggles Específicos para Despesa */}
+            {!isIncome && (
+              <>
+                <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                  <div className="flex items-center gap-4">
+                    <ArrowRightLeft size={22} className="text-gray-400" />
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[14px] text-gray-800">É uma devolução / estorno</span>
+                      <span className="text-[11px] text-gray-400">Abate o gasto da categoria no relatório</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                  <div className="flex items-center gap-4">
+                    <Building size={22} className="text-gray-400" />
+                    <span className="font-bold text-[14px] text-gray-800">Financiamento</span>
+                  </div>
+                  <button onClick={() => setIsFinancing(!isFinancing)} className={`w-11 h-6 rounded-full relative transition-colors ${isFinancing ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isFinancing ? 'right-1' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                  <div className="flex items-center gap-4">
+                    <HandCoins size={22} className="text-gray-400" />
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[14px] text-gray-800">Empréstimo a alguém</span>
+                      <span className="text-[11px] text-gray-400">Vira saldo a receber em "Quem me deve"</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsLoan(!isLoan)} className={`w-11 h-6 rounded-full relative transition-colors ${isLoan ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isLoan ? 'right-1' : 'left-1'}`} />
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Observações */}
+            <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
+              <Edit3 size={22} className="text-gray-400 opacity-50" />
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações" className="flex-1 text-[14px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300" />
+            </div>
+
+            {/* Tags */}
+            <div className="flex items-center gap-4 pb-2">
+              <Tag size={22} className="text-gray-400 opacity-50" />
+              <div className="flex-1 flex flex-col">
+                <span className="font-bold text-[14px] text-gray-800">Tags</span>
+                <select value={tagId} onChange={(e) => setTagId(e.target.value)} className="text-[14px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer">
+                  <option value="">Nenhuma tag</option>
+                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <ChevronRight size={18} className="text-gray-300" />
+            </div>
+
+          </div>
+        )}
 
       </div>
 
       {/* Botão de Salvar Flutuante */}
-      <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none">
+      <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
         <button 
           onClick={handleSave}
           disabled={saving}
