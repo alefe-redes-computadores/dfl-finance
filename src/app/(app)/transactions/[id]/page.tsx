@@ -12,27 +12,24 @@ export default function EditTransactionPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tx, setTx] = useState<any>(null)
   const [isNew, setIsNew] = useState(false)
-  
-  // Listas para os selects do Banco de Dados
+
   const [accounts, setAccounts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
 
-  // Estados Base
   const [amountInput, setAmountInput] = useState('')
   const [isPaid, setIsPaid] = useState(false)
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
-  const [txType, setTxType] = useState<'income' | 'expense'>('expense') 
-  
-  // Estados de "Mais Detalhes"
+  const [txType, setTxType] = useState<'income' | 'expense'>('expense')
+
   const [showDetails, setShowDetails] = useState(false)
   const [notes, setNotes] = useState('')
   const [tagId, setTagId] = useState('')
@@ -40,31 +37,39 @@ export default function EditTransactionPage() {
   const [isFinancing, setIsFinancing] = useState(false)
   const [isLoan, setIsLoan] = useState(false)
 
+  const handleDateChange = (newDateStr: string) => {
+    setDate(newDateStr)
+    const selectedDate = new Date(newDateStr + 'T12:00:00')
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    selectedDate.setHours(0, 0, 0, 0)
+
+    setIsPaid(selectedDate <= today)
+  }
+
   const loadData = useCallback(async () => {
     if (id === 'new') {
       setIsNew(true)
       const paramType = searchParams.get('type')
       if (paramType === 'income' || paramType === 'expense') {
         setTxType(paramType)
-        if (paramType === 'income') setIsPaid(true) 
+        if (paramType === 'income') setIsPaid(true)
       }
     }
 
     setLoading(true)
 
     try {
-      // 1. Busca contas (AGORA COM BALANCE PARA FAZER A MATEMÁTICA), categorias e tags
       const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
         supabase.from('accounts').select('id, name, balance').order('name'),
         supabase.from('categories').select('id, name, color, icon').order('name'),
         supabase.from('tags').select('id, name').order('name')
       ])
-      
+
       setAccounts(accData || [])
       setCategories(catData || [])
       setTags(tagData || [])
 
-      // 2. Se for edição, busca a transação existente
       if (id && id !== 'new') {
         const { data: txData, error: txError } = await supabase
           .from('transactions')
@@ -73,8 +78,8 @@ export default function EditTransactionPage() {
           .single()
 
         if (txError) {
-          console.error("Erro Supabase (Transação):", txError)
-          alert("Erro ao buscar transação.")
+          console.error('Erro Supabase (Transação):', txError)
+          alert('Erro ao buscar transação.')
         } else if (txData) {
           setTx(txData)
           setTxType(txData.type)
@@ -85,19 +90,21 @@ export default function EditTransactionPage() {
           setAccountId(txData.account_id || '')
           setTagId(txData.tag_id || '')
           setNotes(txData.notes || '')
-          
-          const amountSafe = Number(txData.amount) || 0;
+
+          const amountSafe = Number(txData.amount) || 0
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
         }
       }
     } catch (err) {
-      console.error("Erro inesperado no loadData:", err)
+      console.error('Erro inesperado no loadData:', err)
     } finally {
       setLoading(false)
     }
   }, [id, searchParams])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -107,22 +114,22 @@ export default function EditTransactionPage() {
 
   const handleSave = async () => {
     if (!user?.id) {
-        alert("Sessão expirada. Faça login novamente.")
-        return
+      alert('Sessão expirada. Faça login novamente.')
+      return
     }
 
     setSaving(true)
-    const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0;
-    
-    let finalNotes = notes;
+    const rawAmount = parseFloat(amountInput.replace(/./g, '').replace(',', '.')) || 0
+
+    let finalNotes = notes
     if (txType === 'expense' && (isRefund || isFinancing || isLoan)) {
-        const flags = []
-        if (isRefund) flags.push('[Devolução/Estorno]')
-        if (isFinancing) flags.push('[Financiamento]')
-        if (isLoan) flags.push('[Empréstimo]')
-        finalNotes = `${flags.join(' ')} ${notes}`.trim()
+      const flags = []
+      if (isRefund) flags.push('[Devolução/Estorno]')
+      if (isFinancing) flags.push('[Financiamento]')
+      if (isLoan) flags.push('[Empréstimo]')
+      finalNotes = `${flags.join(' ')} ${notes}`.trim()
     }
-    
+
     const payload = {
       user_id: user.id,
       amount: rawAmount,
@@ -137,49 +144,44 @@ export default function EditTransactionPage() {
     }
 
     try {
-      // === LÓGICA INTELIGENTE DE SALDO ===
-      let accountUpdates: Record<string, number> = {};
+      let accountUpdates: Record<string, number> = {}
 
       if (!isNew && tx) {
-          // Desfaz a operação antiga se ela estava 'done' (paga)
-          if (tx.status === 'done' && tx.account_id) {
-              const oldAcc = accounts.find(a => a.id === tx.account_id);
-              if (oldAcc) {
-                  const oldAmount = Number(tx.amount);
-                  accountUpdates[tx.account_id] = Number(oldAcc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount);
-                  oldAcc.balance = accountUpdates[tx.account_id]; // Atualiza localmente para a próxima etapa
-              }
+        if (tx.status === 'done' && tx.account_id) {
+          const oldAcc = accounts.find(a => a.id === tx.account_id)
+          if (oldAcc) {
+            const oldAmount = Number(tx.amount)
+            accountUpdates[tx.account_id] = Number(oldAcc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount)
+            oldAcc.balance = accountUpdates[tx.account_id]
           }
+        }
       }
 
-      // Aplica a nova operação se estiver 'done' (paga)
       if (isPaid && accountId) {
-          const newAcc = accounts.find(a => a.id === accountId);
-          if (newAcc) {
-              const currentBalance = accountUpdates[accountId] !== undefined ? accountUpdates[accountId] : Number(newAcc.balance);
-              accountUpdates[accountId] = currentBalance + (txType === 'income' ? rawAmount : -rawAmount);
-          }
+        const newAcc = accounts.find(a => a.id === accountId)
+        if (newAcc) {
+          const currentBalance = accountUpdates[accountId] !== undefined ? accountUpdates[accountId] : Number(newAcc.balance)
+          accountUpdates[accountId] = currentBalance + (txType === 'income' ? rawAmount : -rawAmount)
+        }
       }
 
-      // Salva as atualizações de saldo no banco
       for (const [accId, newBalance] of Object.entries(accountUpdates)) {
-          await supabase.from('accounts').update({ balance: newBalance }).eq('id', accId);
+        await supabase.from('accounts').update({ balance: newBalance }).eq('id', accId)
       }
-      // ===================================
 
       if (isNew) {
-         const { error } = await supabase.from('transactions').insert([payload])
-         if (error) throw error
+        const { error } = await supabase.from('transactions').insert([payload])
+        if (error) throw error
       } else {
-         const { error } = await supabase.from('transactions').update(payload).eq('id', id)
-         if (error) throw error
+        const { error } = await supabase.from('transactions').update(payload).eq('id', id)
+        if (error) throw error
       }
-      
-      router.refresh() // <--- ATUALIZA A HOME
+
+      router.refresh()
       router.back()
     } catch (err: any) {
-       console.error("Catch save:", err)
-       alert("Erro ao salvar: " + err.message)
+      console.error('Catch save:', err)
+      alert('Erro ao salvar: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -188,29 +190,29 @@ export default function EditTransactionPage() {
   const handleDelete = async () => {
     if (!confirm('Tem certeza que deseja excluir esta transação?')) return
     setSaving(true)
-    
-    // === DEVOLVE O SALDO CASO ESTIVESSE PAGO ===
+
     if (tx && tx.status === 'done' && tx.account_id) {
-        const acc = accounts.find(a => a.id === tx.account_id);
-        if (acc) {
-            const oldAmount = Number(tx.amount);
-            const newBalance = Number(acc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount);
-            await supabase.from('accounts').update({ balance: newBalance }).eq('id', tx.account_id);
-        }
+      const acc = accounts.find(a => a.id === tx.account_id)
+      if (acc) {
+        const oldAmount = Number(tx.amount)
+        const newBalance = Number(acc.balance) + (tx.type === 'income' ? -oldAmount : oldAmount)
+        await supabase.from('accounts').update({ balance: newBalance }).eq('id', tx.account_id)
+      }
     }
-    // ===========================================
 
     await supabase.from('transactions').delete().eq('id', id)
-    
-    router.refresh() // <--- ATUALIZA A HOME
+
+    router.refresh()
     router.back()
   }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
-      <Loader2 className="animate-spin text-teal-700" size={40} />
-    </div>
-  )
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
+        <Loader2 className="animate-spin text-teal-700" size={40} />
+      </div>
+    )
+  }
 
   const isIncome = txType === 'income'
   const typeLabel = isIncome ? 'receita' : 'despesa'
@@ -219,8 +221,6 @@ export default function EditTransactionPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] font-sans pb-24 relative">
-      
-      {/* Header */}
       <div className="flex justify-between items-center p-4">
         <button onClick={() => router.back()} className="text-gray-800 p-2 -ml-2">
           <ChevronLeft size={24} />
@@ -232,13 +232,12 @@ export default function EditTransactionPage() {
         </div>
       </div>
 
-      {/* Valor Header */}
       <div className="px-6 py-4 mb-4">
         <p className="text-gray-500 text-[13px] font-medium mb-2 capitalize">Valor da {typeLabel}</p>
         <div className="flex items-center gap-2">
           <span className="text-3xl text-gray-400 font-light">R$</span>
-          <input 
-            type="text" 
+          <input
+            type="text"
             inputMode="numeric"
             value={amountInput}
             onChange={handleAmountChange}
@@ -248,10 +247,7 @@ export default function EditTransactionPage() {
         </div>
       </div>
 
-      {/* Card Principal */}
       <div className="bg-white rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] space-y-6">
-        
-        {/* Toggle Pago/Recebido */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-5">
           <div className="flex items-center gap-4">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid ? 'bg-gray-800' : 'bg-gray-300'}`}>
@@ -264,19 +260,27 @@ export default function EditTransactionPage() {
           </button>
         </div>
 
-        {/* Data */}
         <div className="flex items-center gap-4 border-b border-gray-100 pb-5 relative">
           <Calendar size={22} className="text-gray-400" />
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="flex-1 text-[15px] font-bold text-gray-800 outline-none bg-transparent" />
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="flex-1 text-[15px] font-bold text-gray-800 outline-none bg-transparent"
+          />
         </div>
 
-        {/* Descrição */}
         <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
           <Edit3 size={22} className="text-gray-400" />
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 text-[15px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300" />
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Descrição"
+            className="flex-1 text-[15px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300"
+          />
         </div>
 
-        {/* Categoria */}
         <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
           <Tag size={22} className="text-gray-400" />
           <div className="flex-1 flex flex-col">
@@ -289,7 +293,6 @@ export default function EditTransactionPage() {
           <ChevronRight size={18} className="text-gray-300" />
         </div>
 
-        {/* Conta */}
         <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
           <Wallet size={22} className="text-gray-400" />
           <div className="flex-1 flex flex-col">
@@ -302,18 +305,14 @@ export default function EditTransactionPage() {
           <ChevronRight size={18} className="text-gray-300" />
         </div>
 
-        {/* Botão Mostrar/Ocultar Detalhes */}
         <div className="flex justify-center pt-2 pb-2">
           <button onClick={() => setShowDetails(!showDetails)} className="text-[14px] font-bold text-teal-700 hover:text-teal-800 transition-colors">
             {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           </button>
         </div>
 
-        {/* --- DETALHES AVANÇADOS --- */}
         {showDetails && (
           <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            
-            {/* Repetição */}
             <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
               <RefreshCw size={22} className="text-gray-400" />
               <div className="flex-1 flex flex-col gap-3">
@@ -326,7 +325,6 @@ export default function EditTransactionPage() {
               </div>
             </div>
 
-            {/* Toggles Específicos para Despesa */}
             {!isIncome && (
               <>
                 <div className="flex items-center justify-between border-b border-gray-100 pb-5">
@@ -367,13 +365,17 @@ export default function EditTransactionPage() {
               </>
             )}
 
-            {/* Observações */}
             <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
               <Edit3 size={22} className="text-gray-400 opacity-50" />
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações" className="flex-1 text-[14px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300" />
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observações"
+                className="flex-1 text-[14px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300"
+              />
             </div>
 
-            {/* Tags */}
             <div className="flex items-center gap-4 pb-2">
               <Tag size={22} className="text-gray-400 opacity-50" />
               <div className="flex-1 flex flex-col">
@@ -385,15 +387,12 @@ export default function EditTransactionPage() {
               </div>
               <ChevronRight size={18} className="text-gray-300" />
             </div>
-
           </div>
         )}
-
       </div>
 
-      {/* Botão de Salvar Flutuante */}
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
-        <button 
+        <button
           onClick={handleSave}
           disabled={saving}
           className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-teal-800 transition-colors"
@@ -401,7 +400,6 @@ export default function EditTransactionPage() {
           {saving ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
         </button>
       </div>
-
     </div>
   )
 }
