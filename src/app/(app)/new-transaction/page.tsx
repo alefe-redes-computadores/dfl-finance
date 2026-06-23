@@ -107,6 +107,7 @@ function NewTransactionContent() {
         }
       }
 
+      router.refresh() // <--- ATUALIZA A HOME
       router.push('/transactions')
     } catch (e) {
       console.error(e)
