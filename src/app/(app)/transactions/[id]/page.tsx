@@ -4,22 +4,17 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
+import * as Icons from 'lucide-react'
 import {
-  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  Plus, X
+  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X
 } from 'lucide-react'
 import { format } from 'date-fns'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+// Helper para renderizar os ícones dinamicamente (aceitando lowercase do banco antigo e PascalCase do novo)
+const getDynamicIcon = (iconName: string) => {
+  if (!iconName) return Icons.Tag
+  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
+  return (Icons as any)[formattedName] || Icons.Tag
 }
 
 export default function EditTransactionPage() {
@@ -483,7 +478,7 @@ export default function EditTransactionPage() {
             </div>
             <div className="space-y-2">
               {categories.map(cat => {
-                const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const IconComp = getDynamicIcon(cat.icon)
                 const subCount = subcategories[cat.id]?.length || 0
                 const isActive = cat.id === categoryId
                 return (
@@ -533,7 +528,7 @@ export default function EditTransactionPage() {
             </div>
             <div className="space-y-2">
               {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
-                const SubIconComp = ICON_MAP[sub.icon] || ICON_MAP['other']
+                const SubIconComp = getDynamicIcon(sub.icon)
                 const isActive = sub.id === categoryId
                 return (
                   <button
