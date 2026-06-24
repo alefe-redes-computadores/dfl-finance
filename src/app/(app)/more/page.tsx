@@ -19,6 +19,7 @@ export default function MorePage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportRange, setExportRange] = useState('30')
+  const [exportContext, setExportContext] = useState<'dfl' | 'personal'>('dfl')
   const [name, setName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -84,7 +85,7 @@ export default function MorePage() {
   const handleExport = (type: string) => {
     if (!user) return
     const endpoint = type === 'transactions' ? 'export-transactions' : 'export-analysis'
-    window.open(`/api/${endpoint}?userId=${user.id}&context=dfl&range=${exportRange}`, '_blank')
+    window.open(`/api/${endpoint}?userId=${user.id}&context=${exportContext}&range=${exportRange}`, '_blank')
     setShowExportModal(false)
   }
 
@@ -113,6 +114,20 @@ export default function MorePage() {
           <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-100">Exportar Dados</h3>
             
+            {/* Seletor DFL/Pessoal */}
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Contexto</p>
+            <div className="flex gap-2 mb-4">
+              {(['dfl', 'personal'] as const).map(c => (
+                <button
+                  key={c}
+                  onClick={() => setExportContext(c)}
+                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${exportContext === c ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}
+                >
+                  {c === 'dfl' ? 'DFL' : 'Pessoal'}
+                </button>
+              ))}
+            </div>
+
             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Período</p>
             <div className="flex gap-2 mb-4">
               {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Total' }].map(opt => (
@@ -255,12 +270,10 @@ export default function MorePage() {
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Target className="text-teal-700 dark:text-teal-400" size={20}/> Orçamentos</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
-        {/* NOVO: Metas */}
         <Link href="/goals" className="flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><PiggyBank className="text-teal-700 dark:text-teal-400" size={20}/> Metas</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
-        {/* Exportar Dados */}
         <button onClick={() => setShowExportModal(true)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Download className="text-teal-700 dark:text-teal-400" size={20}/> Exportar Dados</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
