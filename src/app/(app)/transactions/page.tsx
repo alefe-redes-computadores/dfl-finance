@@ -5,13 +5,30 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check } from 'lucide-react'
+import { 
+  Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check,
+  // Ícones Lucide para categorias
+  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
+  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
+  ArrowLeftRight
+} from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
 type Context = 'dfl' | 'personal'
+
+// Mapa de ícones (mesmo padrão do restante do projeto)
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
+  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
+  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
+  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
+  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
+  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+}
 
 const safeNum = (val: any) => {
   if (!val) return 0;
@@ -197,6 +214,9 @@ export default function TransactionsPage() {
                     const isIncomeVisual = t.type === 'income' || isTransferIn;
                     const isPending = t.status === 'pending';
                     
+                    // Renderiza o ícone da categoria usando o ICON_MAP
+                    const IconComp = t.type === 'transfer' ? ArrowLeftRight : (ICON_MAP[t.categories?.icon] || ICON_MAP['other'])
+                    
                     return (
                       <div 
                         key={t.id} 
@@ -215,9 +235,9 @@ export default function TransactionsPage() {
                         )}
 
                         {/* Ícone da Categoria */}
-                        <div className="w-10 h-10 rounded-[12px] flex items-center justify-center text-[18px] flex-shrink-0"
-                          style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6' }}>
-                          {t.type === 'transfer' ? '🔄' : (t.categories?.icon ?? (t.type === 'income' ? '💰' : '💸'))}
+                        <div className="w-10 h-10 rounded-[12px] flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6', color: t.categories?.color || '#64748b' }}>
+                          <IconComp size={18} />
                         </div>
                         
                         {/* Textos da Esquerda */}
