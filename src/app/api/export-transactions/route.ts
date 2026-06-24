@@ -16,10 +16,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Usuário não autenticado' }, { status: 401 })
   }
 
-  // Calcula a data de início com base no range
   const startDate = new Date()
   if (range === 'total') {
-    startDate.setFullYear(startDate.getFullYear() - 10) // desde sempre
+    startDate.setFullYear(startDate.getFullYear() - 10)
   } else {
     startDate.setDate(startDate.getDate() - parseInt(range))
   }
@@ -27,10 +26,9 @@ export async function GET(req: NextRequest) {
   const start = startDate.toISOString().split('T')[0]
   const end = new Date().toISOString().split('T')[0]
 
-  // Busca transações
   const { data: transactions } = await supabase
     .from('transactions')
-    .select('date, description, type, amount, status, categories(name), accounts(name)')
+    .select('date, description, type, amount, status, categories!inner(name), accounts!inner(name)')
     .eq('user_id', userId)
     .eq('context', context)
     .gte('date', start)
@@ -41,20 +39,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Nenhuma transação encontrada' }, { status: 404 })
   }
 
-  // Monta o CSV
   const header = 'Data,Descrição,Categoria,Conta,Tipo,Valor,Status\n'
   const rows = transactions.map(t => {
     const date = t.date || ''
     const desc = `"${(t.description || '').replace(/"/g, '""')}"`
-    const cat = `"${(t.categories?.name || 'Geral').replace(/"/g, '""')}"`
-    const acc = `"${(t.accounts?.name || '').replace(/"/g, '""')}"`
+    const cat = `"${((t.categories as any)?.name || 'Geral').replace(/"/g, '""')}"`
+    const acc = `"${((t.accounts as any)?.name || '').replace(/"/g, '""')}"`
     const type = t.type === 'income' ? 'Receita' : t.type === 'transfer' ? 'Transferência' : 'Despesa'
     const amount = (Number(t.amount) || 0).toFixed(2).replace('.', ',')
     const status = t.status === 'done' ? 'Efetivada' : 'Pendente'
     return `${date},${desc},${cat},${acc},${type},${amount},${status}`
   }).join('\n')
 
-  // Totais
   const income = transactions.filter(t => t.type === 'income' && t.status === 'done')
     .reduce((a, t) => a + (Number(t.amount) || 0), 0)
   const expense = transactions.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
