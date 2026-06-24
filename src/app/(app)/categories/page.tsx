@@ -3,43 +3,32 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import * as Icons from 'lucide-react'
 import { 
-  ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+  ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag 
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
-const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
+import IconPicker from '@/components/IconPicker' // Importando o nosso modal
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
 const DEFAULT_CATEGORIES = [
-  { name:'Insumos', icon:'shopping', color:'#16a34a', type:'expense', context:'dfl', sort_order:1 },
-  { name:'Embalagens', icon:'gift', color:'#0891b2', type:'expense', context:'dfl', sort_order:2 },
-  { name:'Fornecedores', icon:'briefcase', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
-  { name:'Marketing', icon:'trending', color:'#ec4899', type:'expense', context:'dfl', sort_order:4 },
-  { name:'Manutenção', icon:'wrench', color:'#ca8a04', type:'expense', context:'dfl', sort_order:5 },
-  { name:'Vendas', icon:'shopping', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
-  { name:'Delivery', icon:'car', color:'#0891b2', type:'income', context:'dfl', sort_order:2 },
-  { name:'Eventos', icon:'music', color:'#ec4899', type:'income', context:'dfl', sort_order:3 },
-  { name:'Moradia', icon:'home', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
-  { name:'Alimentação', icon:'utensils', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
-  { name:'Transporte', icon:'car', color:'#0891b2', type:'expense', context:'personal', sort_order:3 },
-  { name:'Saúde', icon:'heart', color:'#dc2626', type:'expense', context:'personal', sort_order:4 },
-  { name:'Lazer', icon:'gamepad', color:'#7c3aed', type:'expense', context:'personal', sort_order:5 },
-  { name:'Salário', icon:'briefcase', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
-  { name:'Freelance', icon:'laptop', color:'#0891b2', type:'income', context:'personal', sort_order:2 },
-  { name:'Investimentos', icon:'trending', color:'#ca8a04', type:'income', context:'personal', sort_order:3 },
+  { name:'Insumos', icon:'ShoppingBag', color:'#16a34a', type:'expense', context:'dfl', sort_order:1 },
+  { name:'Embalagens', icon:'Gift', color:'#0891b2', type:'expense', context:'dfl', sort_order:2 },
+  { name:'Fornecedores', icon:'Briefcase', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
+  { name:'Marketing', icon:'TrendingUp', color:'#ec4899', type:'expense', context:'dfl', sort_order:4 },
+  { name:'Manutenção', icon:'Wrench', color:'#ca8a04', type:'expense', context:'dfl', sort_order:5 },
+  { name:'Vendas', icon:'ShoppingCart', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
+  { name:'Delivery', icon:'Car', color:'#0891b2', type:'income', context:'dfl', sort_order:2 },
+  { name:'Eventos', icon:'Music', color:'#ec4899', type:'income', context:'dfl', sort_order:3 },
+  { name:'Moradia', icon:'Home', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
+  { name:'Alimentação', icon:'Utensils', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
+  { name:'Transporte', icon:'Car', color:'#0891b2', type:'expense', context:'personal', sort_order:3 },
+  { name:'Saúde', icon:'HeartPulse', color:'#dc2626', type:'expense', context:'personal', sort_order:4 },
+  { name:'Lazer', icon:'Gamepad2', color:'#7c3aed', type:'expense', context:'personal', sort_order:5 },
+  { name:'Salário', icon:'Briefcase', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
+  { name:'Freelance', icon:'Laptop', color:'#0891b2', type:'income', context:'personal', sort_order:2 },
+  { name:'Investimentos', icon:'TrendingUp', color:'#ca8a04', type:'income', context:'personal', sort_order:3 },
 ]
 
 export default function CategoriesPage() {
@@ -53,9 +42,10 @@ export default function CategoriesPage() {
   const [context, setContext] = useState<'dfl'|'personal'>('dfl')
   
   const [showForm, setShowForm] = useState(false)
+  const [showIconModal, setShowIconModal] = useState(false) // Controle do Modal de Ícones
   const [editingCategory, setEditingCategory] = useState<any | null>(null)
   const [name, setName] = useState('')
-  const [icon, setIcon] = useState('other')
+  const [icon, setIcon] = useState('Tag') // PascalCase para o Lucide
   const [color, setColor] = useState('#16a34a')
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -141,16 +131,24 @@ export default function CategoriesPage() {
     if (cat.is_default) return
     setEditingCategory(cat)
     setName(cat.name)
-    setIcon(cat.icon)
     setColor(cat.color)
     setParentId(cat.parent_id || null)
+    
+    // Tratativa para ícones minúsculos vindo do banco antigo
+    if (cat.icon) {
+      const formattedIcon = cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1)
+      setIcon(formattedIcon)
+    } else {
+      setIcon('Tag')
+    }
+    
     setShowForm(true)
   }
 
   function openNew(parentId: string | null = null) {
     setEditingCategory(null)
     setName('')
-    setIcon('other')
+    setIcon('Tag')
     setColor('#16a34a')
     setParentId(parentId)
     setShowForm(true)
@@ -192,6 +190,9 @@ export default function CategoriesPage() {
     await supabase.from('categories').delete().eq('id', id)
     loadCategories()
   }
+
+  // Componente dinâmico do ícone selecionado no form
+  const FormIconComp = (Icons as any)[icon] || Icons.Tag
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 pb-10 bg-[#f8f9fa] dark:bg-slate-900 min-h-screen transition-colors duration-300">
@@ -269,23 +270,22 @@ export default function CategoriesPage() {
             </select>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Ícone</label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORY_ICON_NAMES.map(iconName => {
-                const IconComp = ICON_MAP[iconName]
-                const isSelected = icon === iconName
-                return (
-                  <button 
-                    key={iconName} 
-                    onClick={() => setIcon(iconName)}
-                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-                    style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: 'transparent', color: '#9ca3af' }}
-                  >
-                    <IconComp size={20} />
-                  </button>
-                )
-              })}
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Ícone</label>
+              <button 
+                onClick={() => setShowIconModal(true)}
+                className="flex items-center gap-3 bg-gray-100 dark:bg-slate-700 rounded-xl px-3 py-2 w-full text-left"
+              >
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center" 
+                  style={{ backgroundColor: `${color}20`, color: color }}
+                >
+                  <FormIconComp size={18} />
+                </div>
+                <span className="text-sm text-gray-800 dark:text-white flex-1">{icon}</span>
+                <ChevronDown size={16} className="text-gray-400" />
+              </button>
             </div>
           </div>
 
@@ -324,7 +324,10 @@ export default function CategoriesPage() {
       ) : (
         <div className="space-y-2">
           {categories.map(cat => {
-            const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+            // Ajuste para renderizar ícones dinâmicos nas categorias da lista
+            const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
+            const ListIconComp = (Icons as any)[catIconName] || Icons.Tag
+            
             const subCount = subcategories[cat.id]?.length || 0
             const isExpanded = expandedId === cat.id
             
@@ -339,7 +342,7 @@ export default function CategoriesPage() {
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
                       style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
                     >
-                      <IconComp size={20} />
+                      <ListIconComp size={20} />
                     </div>
 
                     <div className="flex-1">
@@ -383,7 +386,10 @@ export default function CategoriesPage() {
                 {isExpanded && (
                   <div className="ml-6 mt-1 space-y-1">
                     {subcategories[cat.id]?.map((sub: any) => {
-                      const SubIconComp = ICON_MAP[sub.icon] || ICON_MAP['other']
+                      // Ajuste de ícone dinâmico para subcategorias
+                      const subIconName = sub.icon ? sub.icon.charAt(0).toUpperCase() + sub.icon.slice(1) : 'Tag'
+                      const SubIconComp = (Icons as any)[subIconName] || Icons.Tag
+                      
                       return (
                         <div
                           key={sub.id}
@@ -421,6 +427,14 @@ export default function CategoriesPage() {
           })}
         </div>
       )}
+
+      {/* Renderizando o Modal do IconPicker (oculto por padrão) */}
+      <IconPicker
+        isOpen={showIconModal}
+        onClose={() => setShowIconModal(false)}
+        selectedIcon={icon}
+        onSelect={setIcon}
+      />
     </div>
   )
 }
