@@ -434,35 +434,36 @@ function NewTransactionContent() {
       }
       router.refresh()
       router.push('/transactions')
-    } catch (e) {
-      alert('Erro ao salvar transação.')
+   } catch (e: any) {
+      alert('ERRO DO BANCO:\n' + (e.message || JSON.stringify(e)))
     } finally {
+
       setSaving(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-black font-sans text-gray-800 overflow-y-auto pb-32">
+    <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-black z-40">
-        <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
-          <ChevronLeft size={22} className="text-gray-700" />
+      <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
+        <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
+          <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
         </button>
-        <h1 className="font-bold text-base">{isIncome ? 'Nova Receita' : 'Nova Despesa'}</h1>
+        <h1 className="font-bold text-base text-gray-800 dark:text-gray-100">{isIncome ? 'Nova Receita' : 'Nova Despesa'}</h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowQRScanner(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
-            <QrCode size={20} className="text-gray-700" />
+          <button onClick={() => setShowQRScanner(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
+            <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
-          <button onClick={() => setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
-            <Camera size={20} className="text-gray-700" />
+          <button onClick={() => setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
+            <Camera size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
         </div>
       </div>
 
       <div className="flex justify-center mt-2 mb-1">
-        <div className="flex bg-gray-200 p-1 rounded-full">
+        <div className="flex bg-gray-200 dark:bg-slate-700 p-1 rounded-full">
           {(['dfl', 'personal'] as Context[]).map(c => (
-            <button key={c} onClick={() => setContext(c)} className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${context === c ? 'bg-white shadow-sm' : 'text-gray-500'}`}>
+            <button key={c} onClick={() => setContext(c)} className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${context === c ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
               {c === 'dfl' ? 'DFL' : 'Pessoal'}
             </button>
           ))}
@@ -470,7 +471,7 @@ function NewTransactionContent() {
       </div>
 
       <div className="py-6 text-center px-6">
-        <p className="text-gray-400 text-xs mb-2">Valor {isIncome ? 'da Receita' : 'da Despesa'}</p>
+        <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">Valor {isIncome ? 'da Receita' : 'da Despesa'}</p>
         <div className="flex justify-center items-center gap-1">
           <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
           <input type="text" inputMode="numeric" value={amount} onChange={handleAmount} className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`} />
@@ -478,18 +479,18 @@ function NewTransactionContent() {
       </div>
 
       {/* Card Principal */}
-      <div className="bg-white rounded-3xl mx-4 shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50">
-          <span className="font-bold text-sm text-gray-700">{isIncome ? 'Recebido' : 'Pago'}</span>
-          <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-200'}`}>
+      <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+          <span className="font-bold text-sm text-gray-700 dark:text-gray-300">{isIncome ? 'Recebido' : 'Pago'}</span>
+          <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-200 dark:bg-gray-600'}`}>
             <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
 
-        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-4">
-            <Tag size={20} className="text-gray-400" />
-            <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800' : 'text-gray-400'}`}>
+            <Tag size={20} className="text-gray-400 dark:text-gray-500" />
+            <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
               {selectedCat ? selectedCat.name : 'Categoria'}
             </span>
           </div>
@@ -502,16 +503,16 @@ function NewTransactionContent() {
                 </div>
               )
             })()}
-            <div onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+            <div onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors">
               <Plus size={20} />
             </div>
           </div>
         </button>
 
-        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
+        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-4">
-            <Wallet size={20} className="text-gray-400" />
-            <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800' : 'text-gray-400'}`}>
+            <Wallet size={20} className="text-gray-400 dark:text-gray-500" />
+            <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
               {selectedAcc ? selectedAcc.name : 'Conta'}
             </span>
           </div>
@@ -519,7 +520,7 @@ function NewTransactionContent() {
             {selectedAcc && (
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: selectedAcc.color }}>{selectedAcc.name.substring(0, 2).toUpperCase()}</div>
             )}
-            <div onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
+            <div onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true); }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors">
               <Plus size={20} />
             </div>
           </div>
@@ -528,34 +529,34 @@ function NewTransactionContent() {
 
       {/* Detalhes */}
       <div className="mx-4 mt-4">
-        <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 text-sm font-bold flex items-center gap-1 mx-auto py-2">
+        <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
 
         {showDetails && (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mt-2">
-            <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 border-b border-gray-50 outline-none" />
-            <input placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 border-b border-gray-50 outline-none" />
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
+            <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
+            <input placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
 
-            <div className="px-5 py-5 border-b border-gray-50">
-              <p className="text-sm font-bold text-gray-800 mb-4">Repetição</p>
+            <div className="px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+              <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-4">Repetição</p>
               <div className="flex gap-2 mb-4">
                 {[
                   { key: 'once', label: 'Única' },
                   { key: 'installments', label: 'Parcelar' },
                   { key: 'recurring', label: 'Recorrente' }
                 ].map(opt => (
-                  <button key={opt.key} onClick={() => setRepetition(opt.key as Repetition)} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}>
+                  <button key={opt.key} onClick={() => setRepetition(opt.key as Repetition)} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 dark:border-teal-500 text-teal-800 dark:text-teal-300' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'}`}>
                     {opt.label}
                   </button>
                 ))}
               </div>
 
               {repetition === 'installments' && (
-                <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl">
-                  <span className="text-sm font-medium text-gray-700">Parcelas</span>
-                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))} className="bg-transparent text-sm font-bold outline-none">
+                <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Parcelas</span>
+                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))} className="bg-transparent text-sm font-bold outline-none text-gray-800 dark:text-gray-200">
                     {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (<option key={n} value={n}>{n}x</option>))}
                   </select>
                 </div>
@@ -575,14 +576,14 @@ function NewTransactionContent() {
                           setFrequency(f.key as Frequency)
                           if (f.key === 'custom') setShowCustomRecurrenceModal(true)
                         }} 
-                        className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}
+                        className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 dark:border-teal-500 text-teal-800 dark:text-teal-300' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'}`}
                       >
                         {f.label}
                       </button>
                     ))}
                   </div>
                   {frequency === 'custom' && (
-                    <p className="text-xs text-teal-700 font-medium ml-1 mt-1">
+                    <p className="text-xs text-teal-700 dark:text-teal-400 font-medium ml-1 mt-1">
                       Serão geradas {customParcels} parcelas, a cada {customInterval} mês(es).
                     </p>
                   )}
@@ -590,31 +591,31 @@ function NewTransactionContent() {
               )}
             </div>
 
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
               <div className="flex items-center gap-3">
-                <Tag size={20} className="text-gray-400" />
-                <span className="text-sm font-medium text-gray-800">
+                <Tag size={20} className="text-gray-400 dark:text-gray-500" />
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
                   {selectedTags.length > 0 
                     ? `${selectedTags.length} tag(ns) selecionada(s)` 
                     : 'Tags'}
                 </span>
               </div>
-              <Plus size={20} className="text-teal-700" />
+              <Plus size={20} className="text-teal-700 dark:text-teal-400" />
             </button>
 
             {!isIncome && (
               <div className="p-5 space-y-5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3"><ArrowRightLeft size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">É uma devolução / estorno</span></div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                  <div className="flex items-center gap-3"><ArrowRightLeft size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span></div>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                 </div>
                 <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
-                  <div className="flex items-center gap-3"><Building size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">Financiamento</span></div>
-                  <div className="w-12 h-6 rounded-full bg-gray-200"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
+                  <div className="flex items-center gap-3"><Building size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span></div>
+                  <div className="w-12 h-6 rounded-full bg-gray-200 dark:bg-gray-600"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
                 </div>
                 <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
-                  <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800">Empréstimo a alguém</span></div>
-                  <div className="w-12 h-6 rounded-full bg-gray-200"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
+                  <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span></div>
+                  <div className="w-12 h-6 rounded-full bg-gray-200 dark:bg-gray-600"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
                 </div>
               </div>
             )}
@@ -631,30 +632,30 @@ function NewTransactionContent() {
       {/* MODAL: RECORRÊNCIA PERSONALIZADA */}
       {showCustomRecurrenceModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800">Recorrência Personalizada</h3>
-              <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Recorrência Personalizada</h3>
+              <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-2 block">Número de parcelas</label>
+                <label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Número de parcelas</label>
                 <input 
                   type="number" 
                   value={customParcels} 
                   onChange={e => setCustomParcels(Number(e.target.value))} 
-                  className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors" 
+                  className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors" 
                   min={1} 
                   max={120} 
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-2 block">Intervalo (em meses)</label>
+                <label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Intervalo (em meses)</label>
                 <input 
                   type="number" 
                   value={customInterval} 
                   onChange={e => setCustomInterval(Number(e.target.value))} 
-                  className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors" 
+                  className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors" 
                   min={1} 
                   max={24} 
                 />
@@ -673,10 +674,10 @@ function NewTransactionContent() {
       {/* Modal Lista de Categorias (HIERARQUIA) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
-              <h3 className="font-bold text-lg">Categorias</h3>
-              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {categories.map(cat => {
@@ -695,21 +696,21 @@ function NewTransactionContent() {
                         setShowCatModal(false)
                       }
                     }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
                       <IconComp size={20} />
                     </div>
-                    <span className="flex-1 text-left font-medium text-gray-800">{cat.name}</span>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
                     {subCount > 0 && (
-                      <span className="text-xs text-gray-400 font-medium mr-2">{subCount}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 font-medium mr-2">{subCount}</span>
                     )}
-                    {isActive && <Check size={20} className="text-teal-700" />}
-                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300" />}
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
                   </button>
                 )
               })}
-              {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
+              {categories.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
         </div>
@@ -718,14 +719,14 @@ function NewTransactionContent() {
       {/* Modal de Subcategorias (SEGUNDO NÍVEL) */}
       {showSubCatModal && selectedParentCat && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white py-2">
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2">
-                <ChevronLeft size={22} className="text-gray-700" />
+                <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
               </button>
               <div>
-                <h3 className="font-bold text-lg">Subcategorias</h3>
-                <p className="text-xs text-gray-500">{selectedParentCat.name}</p>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{selectedParentCat.name}</p>
               </div>
             </div>
             <div className="space-y-2">
@@ -736,19 +737,19 @@ function NewTransactionContent() {
                   <button
                     key={sub.id}
                     onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
                       <SubIconComp size={20} />
                     </div>
-                    <span className="flex-1 text-left font-medium text-gray-800">{sub.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700" />}
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
               <button
                 onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }}
-                className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors text-gray-500 font-medium"
+                className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors text-gray-500 dark:text-gray-400 font-medium"
               >
                 Usar "{selectedParentCat.name}" sem subcategoria
               </button>
@@ -760,20 +761,23 @@ function NewTransactionContent() {
       {/* Modal Lista de Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
-              <h3 className="font-bold text-lg">Contas</h3>
-              <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {accounts.map(acc => (
-                <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${acc.id === accountId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
-                  <span className="flex-1 text-left font-medium text-gray-800">{acc.name}</span>
-                  {acc.id === accountId && <Check size={20} className="text-teal-700" />}
-                </button>
-              ))}
-              {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
+              {accounts.map(acc => {
+                const isActive = acc.id === accountId
+                return (
+                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {accounts.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma conta encontrada.</p>}
             </div>
           </div>
         </div>
@@ -782,23 +786,23 @@ function NewTransactionContent() {
       {/* Modal Lista de Tags */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white py-2">
-              <h3 className="font-bold text-lg">Tags</h3>
-              <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {tags.map(tag => {
                 const isActive = selectedTags.includes(tag.id);
                 return (
-                  <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                  <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                    <span className="flex-1 text-left font-medium text-gray-800">{tag.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700" />}
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 );
               })}
-              {tags.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma tag encontrada.</p>}
+              {tags.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma tag encontrada.</p>}
             </div>
           </div>
         </div>
@@ -807,10 +811,10 @@ function NewTransactionContent() {
       {/* Modal Criar Categoria */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800">Nova categoria</h3>
-              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova categoria</h3>
+              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-6">
               <input 
@@ -818,10 +822,10 @@ function NewTransactionContent() {
                 value={newCatName} 
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="Nome da categoria" 
-                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
+                className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors"
               />
               <div>
-                <p className="text-sm text-gray-500 font-medium mb-3">Ícone</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-3">Ícone</p>
                 <div className="flex flex-wrap gap-3">
                   {CATEGORY_ICON_NAMES.map(iconName => {
                     const IconComp = ICON_MAP[iconName]
@@ -830,7 +834,7 @@ function NewTransactionContent() {
                       <button 
                         key={iconName} 
                         onClick={() => setNewCatIcon(iconName)}
-                        className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100'}`}
+                        className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
                         style={isSelected ? { backgroundColor: `${newCatColor}20`, color: newCatColor } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
                       >
                         <IconComp size={24} />
@@ -840,13 +844,13 @@ function NewTransactionContent() {
                 </div>
               </div>
               <div>
-                <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-3">Cor</p>
                 <div className="flex flex-wrap gap-3">
                   {CATEGORY_COLORS.map(c => (
                     <button 
                       key={c} 
                       onClick={() => setNewCatColor(c)}
-                      className={`w-10 h-10 rounded-full transition-transform ${newCatColor === c ? 'scale-125 border-4 border-white shadow-md' : 'hover:scale-110'}`}
+                      className={`w-10 h-10 rounded-full transition-transform ${newCatColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -867,10 +871,10 @@ function NewTransactionContent() {
       {/* Modal Criar Conta */}
       {showCreateAccModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800">Nova conta</h3>
-              <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova conta</h3>
+              <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-6">
               <input 
@@ -878,16 +882,16 @@ function NewTransactionContent() {
                 value={newAccName} 
                 onChange={(e) => setNewAccName(e.target.value)}
                 placeholder="Nome da conta" 
-                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
+                className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors"
               />
               <div>
-                <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-3">Cor</p>
                 <div className="flex flex-wrap gap-3">
                   {CATEGORY_COLORS.map(c => (
                     <button 
                       key={c} 
                       onClick={() => setNewAccColor(c)}
-                      className={`w-10 h-10 rounded-full transition-transform ${newAccColor === c ? 'scale-125 border-4 border-white shadow-md' : 'hover:scale-110'}`}
+                      className={`w-10 h-10 rounded-full transition-transform ${newAccColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -908,10 +912,10 @@ function NewTransactionContent() {
       {/* Modal Criar Tag */}
       {showCreateTagModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800">Nova tag</h3>
-              <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova tag</h3>
+              <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-6">
               <input 
@@ -919,16 +923,16 @@ function NewTransactionContent() {
                 value={newTagName} 
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder="Nome da tag" 
-                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors"
+                className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors"
               />
               <div>
-                <p className="text-sm text-gray-500 font-medium mb-3">Cor</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-3">Cor</p>
                 <div className="flex flex-wrap gap-3">
                   {CATEGORY_COLORS.map(c => (
                     <button 
                       key={c} 
                       onClick={() => setNewTagColor(c)}
-                      className={`w-10 h-10 rounded-full transition-transform ${newTagColor === c ? 'scale-125 border-4 border-white shadow-md' : 'hover:scale-110'}`}
+                      className={`w-10 h-10 rounded-full transition-transform ${newTagColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
