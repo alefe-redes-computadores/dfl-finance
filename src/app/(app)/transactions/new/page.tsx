@@ -6,7 +6,11 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
-  Camera, Plus, Hash, ArrowRightLeft, Building, HandCoins, X
+  Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
+  // Novos ícones importados
+  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
+  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
 } from 'lucide-react'
 import { addMonths, addWeeks, format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -18,11 +22,21 @@ type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
-const CATEGORY_ICONS = ['🛒', '🏍️', '💸', '🔧', '📦', '💰', '🛵', '🍔', '🚗', '💖', '🎮', '🏠', '💼', '💻', '📋', '🎯', '⚡', '🎵']
+// Mapa de Ícones do Lucide Substituindo os Emojis
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
+  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
+  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
+  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
+  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
+  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+}
+const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
+
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v6.0 - Ícones à direita e Modal de Conta")
+  console.log("DFL – Nova Transação v7.0 - OCR Mantido + Ícones Premium")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -60,7 +74,7 @@ function NewTransactionContent() {
 
   const [showCreateCatModal, setShowCreateCatModal] = useState(false)
   const [newCatName, setNewCatName] = useState('')
-  const [newCatIcon, setNewCatIcon] = useState('🍔')
+  const [newCatIcon, setNewCatIcon] = useState('utensils') // Mudado do hambúrguer para o ícone
   const [newCatColor, setNewCatColor] = useState('#22c55e')
   const [savingCategory, setSavingCategory] = useState(false)
 
@@ -102,6 +116,7 @@ function NewTransactionContent() {
     if (!user || !user.id) return
     const catType = type === 'income' ? 'income' : 'expense'
 
+    // Deixei sua consulta exatamente igual, com a trava do tipo
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
       supabase.from('categories').select('*')
         .eq('user_id', user.id)
@@ -125,35 +140,30 @@ function NewTransactionContent() {
   useEffect(() => { loadData() }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-  // Remove tudo o que não for número
-  const digits = e.target.value.replace(/\D/g, '')
-  
-  if (!digits) {
-    setAmount('0,00')
-    setAmountNum(0)
-    return
+    const digits = e.target.value.replace(/\D/g, '')
+    
+    if (!digits) {
+      setAmount('0,00')
+      setAmountNum(0)
+      return
+    }
+
+    const numValue = parseFloat(digits) / 100
+    setAmountNum(numValue)
+
+    const formatted = new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numValue)
+
+    setAmount(formatted)
   }
 
-  // Transforma em valor numérico real movendo a casa dos centavos (ex: 666 vira 6.66)
-  const numValue = parseFloat(digits) / 100
-  setAmountNum(numValue)
-
-  // Formata no padrão brasileiro de moeda: 1.234,56
-  const formatted = new Intl.NumberFormat('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(numValue)
-
-  setAmount(formatted)
-}
-
-  // Formata valor extraído para exibição
   const formatAmount = (value: string) => {
     const num = parseFloat(value.replace(/\./g, '').replace(',', '.'))
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  // Processa o comprovante e preenche campos automaticamente
   const processReceipt = async (file: File) => {
     setReceipt(file)
 
@@ -220,7 +230,8 @@ function NewTransactionContent() {
         name: newCatName.trim(),
         icon: newCatIcon,
         color: newCatColor,
-        context: context
+        context: context,
+        type: type === 'income' ? 'income' : 'expense' // Garantindo que salva com o type correto
       }).select().single()
 
       if (error) throw error
@@ -423,7 +434,7 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        {/* --- SELETOR DE CATEGORIA (Ícone selecionado grudado no + da direita) --- */}
+        {/* --- SELETOR DE CATEGORIA COM NOVO ÍCONE --- */}
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-4">
             <Tag size={20} className="text-gray-400" />
@@ -432,16 +443,21 @@ function NewTransactionContent() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {selectedCat && (
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${selectedCat.color}20` }}>{selectedCat.icon}</div>
-            )}
+            {selectedCat && (() => {
+              const IconComp = ICON_MAP[selectedCat.icon] || ICON_MAP['other']
+              return (
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}>
+                  <IconComp size={20} />
+                </div>
+              )
+            })()}
             <div onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); }} className="p-2 -mr-2 text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
               <Plus size={20} />
             </div>
           </div>
         </button>
 
-        {/* --- SELETOR DE CONTA (Ícone selecionado grudado no + da direita) --- */}
+        {/* --- SELETOR DE CONTA --- */}
         <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-4">
             <Wallet size={20} className="text-gray-400" />
@@ -548,7 +564,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modal Lista de Categorias */}
+      {/* Modal Lista de Categorias (COM ÍCONES NOVOS) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -557,13 +573,18 @@ function NewTransactionContent() {
               <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); }} className="text-teal-700 bg-teal-50 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {categories.map(cat => (
-                <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${cat.id === categoryId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ backgroundColor: `${cat.color}20` }}>{cat.icon}</div>
-                  <span className="flex-1 text-left font-medium text-gray-800">{cat.name}</span>
-                  {cat.id === categoryId && <Check size={20} className="text-teal-700" />}
-                </button>
-              ))}
+              {categories.map(cat => {
+                const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                return (
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${cat.id === categoryId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
+                      <IconComp size={20} />
+                    </div>
+                    <span className="flex-1 text-left font-medium text-gray-800">{cat.name}</span>
+                    {cat.id === categoryId && <Check size={20} className="text-teal-700" />}
+                  </button>
+                )
+              })}
               {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
@@ -617,7 +638,7 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Criar Categoria */}
+      {/* Modal Criar Categoria (COM GRADE DE ÍCONES NOVA E ESTILIZADA) */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -636,15 +657,20 @@ function NewTransactionContent() {
               <div>
                 <p className="text-sm text-gray-500 font-medium mb-3">Ícone</p>
                 <div className="flex flex-wrap gap-3">
-                  {CATEGORY_ICONS.map(i => (
-                    <button 
-                      key={i} 
-                      onClick={() => setNewCatIcon(i)}
-                      className={`w-12 h-12 flex items-center justify-center text-2xl rounded-2xl transition-all ${newCatIcon === i ? 'bg-teal-700 scale-110 shadow-md' : 'bg-gray-50 hover:bg-gray-100'}`}
-                    >
-                      {i}
-                    </button>
-                  ))}
+                  {CATEGORY_ICON_NAMES.map(iconName => {
+                    const IconComp = ICON_MAP[iconName]
+                    const isSelected = newCatIcon === iconName
+                    return (
+                      <button 
+                        key={iconName} 
+                        onClick={() => setNewCatIcon(iconName)}
+                        className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100'}`}
+                        style={isSelected ? { backgroundColor: `${newCatColor}20`, color: newCatColor } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
+                      >
+                        <IconComp size={24} />
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <div>
