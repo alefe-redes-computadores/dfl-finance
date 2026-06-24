@@ -45,27 +45,31 @@ function AnalysisContent() {
     if (!user?.id) return
     setLoading(true)
 
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-    const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+    // Busca 12 meses em uma única query
+    const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
+    const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    // Busca transações do mês atual
-    const { data: currentTxs } = await supabase
+    const { data: allTxs } = await supabase
       .from('transactions')
       .select('*, categories(name, icon, color)')
       .match({ user_id: user.id, context: context })
-      .gte('date', start)
-      .lte('date', end)
+      .gte('date', start12)
+      .lte('date', endNow)
 
-    const txs = Array.isArray(currentTxs) ? currentTxs : []
-    const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-    const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+    const txs = Array.isArray(allTxs) ? allTxs : []
+
+    // ---- Mês atual ----
+    const currentStart = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+    const currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
+
+    const income = currentTxs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+    const expense = currentTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
     setSummary({ income, expense, balance: income - expense })
 
-    // Agrupa despesas por categoria
+    // Categorias do mês atual
     const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-    txs.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
+    currentTxs.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
       const key = t.category_id ?? 'sem'
       if (!catMap[key]) {
         catMap[key] = {
@@ -85,24 +89,15 @@ function AnalysisContent() {
 
     setByCategory(categoriesArray)
 
-    // Fluxo mensal (últimos 6 meses)
+    // ---- Fluxo mensal (6 meses) ----
     const flowData: any[] = []
     for (let i = 5; i >= 0; i--) {
       const d = subMonths(currentDate, i)
       const s = format(startOfMonth(d), 'yyyy-MM-dd')
       const e = format(endOfMonth(d), 'yyyy-MM-dd')
-
-      const { data: monthTxs } = await supabase
-        .from('transactions')
-        .select('type, amount, status')
-        .match({ user_id: user.id, context: context })
-        .gte('date', s)
-        .lte('date', e)
-
-      const arr = Array.isArray(monthTxs) ? monthTxs : []
-      const inc = arr.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-      const exp = arr.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-
+      const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
+      const inc = monthTxs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const exp = monthTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
       flowData.push({
         name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
         Receitas: inc,
@@ -111,7 +106,8 @@ function AnalysisContent() {
     }
     setMonthlyFlow(flowData)
 
-    // Patrimônio (últimos 12 meses)
+    // ---- Patrimônio (12 meses) ----
+    // Busca saldo atual das contas
     const { data: allAccounts } = await supabase
       .from('accounts')
       .select('balance')
@@ -124,39 +120,27 @@ function AnalysisContent() {
       const d = subMonths(currentDate, i)
       const s = format(startOfMonth(d), 'yyyy-MM-dd')
       const e = format(endOfMonth(d), 'yyyy-MM-dd')
-
-      const { data: monthTxs } = await supabase
-        .from('transactions')
-        .select('type, amount, status')
-        .match({ user_id: user.id, context: context })
-        .gte('date', s)
-        .lte('date', e)
-
-      const arr = Array.isArray(monthTxs) ? monthTxs : []
-      const inc = arr.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-      const exp = arr.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
+      const inc = monthTxs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const exp = monthTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
 
       patrimData.push({
         name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
         Patrimônio: currentBalance + patrimData.reduce((a, c) => a + (c.Receitas || 0) - (c.Despesas || 0), 0) + inc - exp
       })
     }
-
     setPatrimony(patrimData)
     const first = patrimData[0]?.Patrimônio || 0
     const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
     setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
 
-    // Novos gastos (categorias que não existiam no mês anterior)
-    const { data: prevTxs } = await supabase
-      .from('transactions')
-      .select('category_id, categories(name, icon, color), amount')
-      .match({ user_id: user.id, context: context })
-      .gte('date', prevStart)
-      .lte('date', prevEnd)
+    // ---- Novos gastos (categorias que não existiam no mês anterior) ----
+    const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+    const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+    const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
 
-    const prevCategories = new Set(Array.isArray(prevTxs) ? prevTxs.map(t => t.category_id).filter(Boolean) : [])
-    const newOnes = txs.filter(t => t.category_id && !prevCategories.has(t.category_id))
+    const prevCategories = new Set(prevTxs.map(t => t.category_id).filter(Boolean))
+    const newOnes = currentTxs.filter(t => t.category_id && !prevCategories.has(t.category_id))
 
     const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
     newOnes.forEach(t => {
