@@ -197,8 +197,13 @@ export default function MorePage() {
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Tags className="text-teal-700 dark:text-teal-400" size={20}/> Categorias</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
-        <Link href="/tags" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+        <Link href="/tags" className="flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Hash className="text-teal-700 dark:text-teal-400" size={20}/> Tags</div>
+          <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
+        </Link>
+        {/* NOVO LINK: Orçamentos */}
+        <Link href="/budgets" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+          <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Target className="text-teal-700 dark:text-teal-400" size={20}/> Orçamentos</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
       </div>
@@ -206,8 +211,7 @@ export default function MorePage() {
       <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 px-1">No forno</h4>
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 opacity-70 overflow-hidden">
         {[ 
-          {icon: PieChart, title: 'Orçamento'}, 
-          {icon: Target, title: 'Metas'}, 
+          {icon: PieChart, title: 'Metas'}, 
           {icon: TrendingUp, title: 'Projeções'}, 
           {icon: Users, title: 'Assinaturas'}, 
           {icon: BarChart2, title: 'Relatórios'} 
