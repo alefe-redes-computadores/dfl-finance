@@ -47,7 +47,7 @@ export default function EditTransactionPage() {
 
   const [showDetails, setShowDetails] = useState(false)
   const [notes, setNotes] = useState('')
-  const [tagId, setTagId] = useState('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([]) // ALTERADO
   const [isRefund, setIsRefund] = useState(false)
   const [isFinancing, setIsFinancing] = useState(false)
   const [isLoan, setIsLoan] = useState(false)
@@ -108,7 +108,7 @@ export default function EditTransactionPage() {
           setDescription(txData.description || '')
           setCategoryId(txData.category_id || '')
           setAccountId(txData.account_id || '')
-          setTagId(txData.tag_id || '')
+          setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : []) // ALTERADO
           setNotes(txData.notes || '')
 
           const amountSafe = Number(txData.amount) || 0
@@ -130,6 +130,14 @@ export default function EditTransactionPage() {
     const rawValue = e.target.value.replace(/\D/g, '')
     const num = Number(rawValue) / 100
     setAmountInput(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  }
+
+  const toggleTag = (id: string) => { // NOVO
+    setSelectedTags(prev => {
+      if (prev.includes(id)) return prev.filter(t => t !== id)
+      if (prev.length >= 5) return prev
+      return [...prev, id]
+    })
   }
 
   const handleSave = async () => {
@@ -165,7 +173,7 @@ export default function EditTransactionPage() {
       description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
-      tag_id: tagId || null,
+      tag_ids: selectedTags.length > 0 ? selectedTags : null, // CORRIGIDO
       notes: finalNotes || null,
       type: txType,
       context: 'dfl'
@@ -278,7 +286,6 @@ export default function EditTransactionPage() {
 
   const selectedCat = categories.find(c => c.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
-  const selectedTag = tags.find(t => t.id === tagId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
@@ -433,12 +440,14 @@ export default function EditTransactionPage() {
               />
             </div>
 
-            {/* Tag com modal estilizado */}
+            {/* Tag com modal estilizado - múltipla seleção */}
             <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
               <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
               <div className="flex-1 flex flex-col text-left">
                 <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Tags</span>
-                <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedTag ? selectedTag.name : 'Nenhuma tag'}</span>
+                <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Nenhuma tag'}
+                </span>
               </div>
               <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
             </button>
@@ -506,6 +515,7 @@ export default function EditTransactionPage() {
         </div>
       )}
 
+      {/* Modal Tags com seleção múltipla */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -515,18 +525,18 @@ export default function EditTransactionPage() {
             </div>
             <div className="space-y-2">
               {tags.map(tag => {
-                const isActive = tag.id === tagId
+                const isActive = selectedTags.includes(tag.id);
                 return (
                   <button
                     key={tag.id}
-                    onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
+                    onClick={() => toggleTag(tag.id)}
                     className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
-                )
+                );
               })}
               {tags.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma tag encontrada.</p>}
             </div>
