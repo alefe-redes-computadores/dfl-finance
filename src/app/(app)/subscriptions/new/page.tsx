@@ -9,7 +9,7 @@ import {
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  Calendar, Hash
+  Calendar
 } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
@@ -48,7 +48,6 @@ function NewSubscriptionContent() {
 
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
-  const [showIconModal, setShowIconModal] = useState(false)
 
   const loadData = async () => {
     if (!user?.id) return
@@ -135,7 +134,9 @@ function NewSubscriptionContent() {
 
   const selectedCat = categories.find(c => c.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
-  const IconComp = ICON_MAP[icon] || ICON_MAP['repeat']
+
+  // Gera dias 1 a 31 para o dropdown
+  const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -185,14 +186,15 @@ function NewSubscriptionContent() {
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Dia do vencimento</label>
           <div className="flex items-center gap-3">
             <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
-            <input
-              type="number"
+            <select
               value={dueDay}
               onChange={e => setDueDay(e.target.value)}
-              min={1}
-              max={31}
-              className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none w-16"
-            />
+              className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none appearance-none cursor-pointer pr-4"
+            >
+              {days.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
             <span className="text-[14px] text-gray-400 dark:text-gray-500">de cada mês</span>
           </div>
         </div>
@@ -242,22 +244,26 @@ function NewSubscriptionContent() {
           </div>
         </div>
 
-        {/* Ícone */}
-        <button
-          onClick={() => setShowIconModal(true)}
-          className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}20`, color: color }}>
-              <IconComp size={18} />
-            </div>
-            <div className="text-left">
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Ícone</span>
-              <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{icon}</span>
-            </div>
+        {/* Grade de Ícones (AGORA INLINE) */}
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3">Ícone</p>
+          <div className="flex flex-wrap gap-3">
+            {ICON_NAMES.map(iconName => {
+              const Ico = ICON_MAP[iconName]
+              const isSelected = icon === iconName
+              return (
+                <button
+                  key={iconName}
+                  onClick={() => setIcon(iconName)}
+                  className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                  style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
+                >
+                  <Ico size={22} />
+                </button>
+              )
+            })}
           </div>
-          <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-        </button>
+        </div>
       </div>
 
       {/* Modal Categorias */}
@@ -327,34 +333,6 @@ function NewSubscriptionContent() {
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color || '#14b8a6' }}>{acc.name.substring(0, 2).toUpperCase()}</div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Ícones */}
-      {showIconModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowIconModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Ícone</h3>
-              <button onClick={() => setShowIconModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {ICON_NAMES.map(iconName => {
-                const Ico = ICON_MAP[iconName]
-                const isSelected = icon === iconName
-                return (
-                  <button
-                    key={iconName}
-                    onClick={() => { setIcon(iconName); setShowIconModal(false) }}
-                    className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-                    style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
-                  >
-                    <Ico size={22} />
                   </button>
                 )
               })}
