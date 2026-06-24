@@ -4,12 +4,10 @@ import { useState, useCallback, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
   QrCode, ChevronRight
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
@@ -18,26 +16,24 @@ import ComingSoonModal from '@/components/ComingSoonModal'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
+import IconPicker from '@/components/IconPicker'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
-const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
-
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
+// Helper para renderizar os ícones dinamicamente (aceitando lowercase do banco antigo e PascalCase do novo)
+const getDynamicIcon = (iconName: string) => {
+  if (!iconName) return Icons.Tag
+  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
+  return (Icons as any)[formattedName] || Icons.Tag
+}
+
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v9.0 - Subcategorias")
+  console.log("DFL – Nova Transação v9.1 - Subcategorias e IconPicker")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -85,8 +81,9 @@ function NewTransactionContent() {
   const [showCamera, setShowCamera] = useState(false)
 
   const [showCreateCatModal, setShowCreateCatModal] = useState(false)
+  const [showIconPicker, setShowIconPicker] = useState(false) // Novo estado para o IconPicker
   const [newCatName, setNewCatName] = useState('')
-  const [newCatIcon, setNewCatIcon] = useState('utensils')
+  const [newCatIcon, setNewCatIcon] = useState('Utensils') // Inicializado com PascalCase
   const [newCatColor, setNewCatColor] = useState('#22c55e')
   const [savingCategory, setSavingCategory] = useState(false)
 
@@ -606,7 +603,7 @@ function NewTransactionContent() {
           </div>
           <div className="flex items-center gap-2">
             {selectedCat && (() => {
-              const IconComp = ICON_MAP[selectedCat.icon] || ICON_MAP['other']
+              const IconComp = getDynamicIcon(selectedCat.icon)
               return (
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}>
                   <IconComp size={20} />
@@ -739,7 +736,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* MODAL: RECORRÊNCIA PERSONALIZADA */}
+      {/* MODAL: RECORRência PERSONALIZADA */}
       {showCustomRecurrenceModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-auto" onClick={e => e.stopPropagation()}>
@@ -791,7 +788,7 @@ function NewTransactionContent() {
             </div>
             <div className="space-y-2">
               {categories.map(cat => {
-                const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const IconComp = getDynamicIcon(cat.icon)
                 const subCount = subcategories[cat.id]?.length || 0
                 const isActive = cat.id === categoryId
                 return (
@@ -841,7 +838,7 @@ function NewTransactionContent() {
             </div>
             <div className="space-y-2">
               {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
-                const SubIconComp = ICON_MAP[sub.icon] || ICON_MAP['other']
+                const SubIconComp = getDynamicIcon(sub.icon)
                 const isActive = sub.id === categoryId
                 return (
                   <button
@@ -936,22 +933,22 @@ function NewTransactionContent() {
               />
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-3">Ícone</p>
-                <div className="flex flex-wrap gap-3">
-                  {CATEGORY_ICON_NAMES.map(iconName => {
-                    const IconComp = ICON_MAP[iconName]
-                    const isSelected = newCatIcon === iconName
-                    return (
-                      <button 
-                        key={iconName} 
-                        onClick={() => setNewCatIcon(iconName)}
-                        className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-                        style={isSelected ? { backgroundColor: `${newCatColor}20`, color: newCatColor } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
-                      >
-                        <IconComp size={24} />
-                      </button>
-                    )
-                  })}
-                </div>
+                <button 
+                  onClick={() => setShowIconPicker(true)}
+                  className="flex items-center gap-3 bg-gray-100 dark:bg-slate-700 rounded-xl px-4 py-3 w-full text-left"
+                >
+                  <div 
+                    className="w-8 h-8 rounded-lg flex items-center justify-center" 
+                    style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}
+                  >
+                    {(() => {
+                      const NewCatIconComp = getDynamicIcon(newCatIcon)
+                      return <NewCatIconComp size={18} />
+                    })()}
+                  </div>
+                  <span className="text-sm font-medium text-gray-800 dark:text-white flex-1">{newCatIcon}</span>
+                  <ChevronDown size={16} className="text-gray-400" />
+                </button>
               </div>
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-3">Cor</p>
@@ -1070,6 +1067,14 @@ function NewTransactionContent() {
           onResult={handleQRResult}
         />
       )}
+
+      {/* O NOSSO ÍCONE PICKER */}
+      <IconPicker
+        isOpen={showIconPicker}
+        onClose={() => setShowIconPicker(false)}
+        selectedIcon={newCatIcon}
+        onSelect={setNewCatIcon}
+      />
     </div>
   )
 }
