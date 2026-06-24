@@ -8,7 +8,7 @@ import {
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp as TrendingUpIcon, ShoppingCart, ReceiptIcon, Zap, Music,
-  ArrowUp, ArrowDown, Wallet, Tag, SlidersHorizontal, X
+  ArrowUp, ArrowDown, Wallet, Tag, SlidersHorizontal, X, Download
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -36,6 +36,7 @@ function AnalysisContent() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'month' | 'new'>('month')
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [newGastos, setNewGastos] = useState<any[]>([])
   const [newGastosSummary, setNewGastosSummary] = useState({ total: 0, count: 0, average: 0, maiorPeso: { name: '', percent: '0' } })
 
@@ -45,7 +46,6 @@ function AnalysisContent() {
     if (!user?.id) return
     setLoading(true)
 
-    // Busca 12 meses em uma única query
     const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
     const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
@@ -58,7 +58,6 @@ function AnalysisContent() {
 
     const txs = Array.isArray(allTxs) ? allTxs : []
 
-    // ---- Mês atual ----
     const currentStart = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
     const currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
@@ -67,7 +66,6 @@ function AnalysisContent() {
     const expense = currentTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
     setSummary({ income, expense, balance: income - expense })
 
-    // Categorias do mês atual
     const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
     currentTxs.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
       const key = t.category_id ?? 'sem'
@@ -89,7 +87,6 @@ function AnalysisContent() {
 
     setByCategory(categoriesArray)
 
-    // ---- Fluxo mensal (6 meses) ----
     const flowData: any[] = []
     for (let i = 5; i >= 0; i--) {
       const d = subMonths(currentDate, i)
@@ -106,8 +103,6 @@ function AnalysisContent() {
     }
     setMonthlyFlow(flowData)
 
-    // ---- Patrimônio (12 meses) ----
-    // Busca saldo atual das contas
     const { data: allAccounts } = await supabase
       .from('accounts')
       .select('balance')
@@ -134,7 +129,6 @@ function AnalysisContent() {
     const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
     setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
 
-    // ---- Novos gastos (categorias que não existiam no mês anterior) ----
     const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
     const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
     const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
@@ -177,6 +171,12 @@ function AnalysisContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+  const handleExport = (range: string) => {
+    setShowExportMenu(false)
+    if (!user) return
+    window.open(`/api/export-analysis?userId=${user.id}&context=${context}&range=${range}`, '_blank')
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
@@ -188,6 +188,23 @@ function AnalysisContent() {
             <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"><ChevronLeft size={18} /></button>
             <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide">{monthLabel}</span>
             <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"><ChevronRight size={18} /></button>
+          </div>
+          {/* Botão Exportar */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
+            >
+              <Download size={18} className="text-gray-700 dark:text-gray-300" />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-[42px] w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Exportar análise</p>
+                {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
+                  <button key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
+                ))}
+              </div>
+            )}
           </div>
           <button 
             onClick={() => setShowFilterDrawer(true)}
@@ -221,7 +238,6 @@ function AnalysisContent() {
       ) : activeTab === 'new' ? (
         /* ===== ABA NOVOS GASTOS ===== */
         <div className="space-y-6">
-          {/* Card de resumo */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-50 dark:border-slate-700">
               <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
@@ -250,7 +266,6 @@ function AnalysisContent() {
             </div>
           </div>
 
-          {/* Gráfico Donut e lista */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             {newGastos.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Nenhum novo gasto neste mês.</p>
@@ -316,7 +331,6 @@ function AnalysisContent() {
       ) : (
         /* ===== ABA NO MÊS ===== */
         <div className="space-y-6">
-          {/* Cards de Resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
@@ -343,7 +357,6 @@ function AnalysisContent() {
             </div>
           </div>
 
-          {/* Gráfico Donut */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Distribuição de Gastos</h3>
             {byCategory.length === 0 ? (
@@ -377,7 +390,6 @@ function AnalysisContent() {
             )}
           </div>
 
-          {/* Lista de Categorias com Progress Bar */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Gastos por Categoria</h3>
             {byCategory.length === 0 ? (
@@ -413,7 +425,6 @@ function AnalysisContent() {
             )}
           </div>
 
-          {/* Fluxo Mensal - Gráfico de Barras */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Fluxo Mensal</h3>
             {monthlyFlow.length === 0 ? (
@@ -432,7 +443,6 @@ function AnalysisContent() {
             )}
           </div>
 
-          {/* Patrimônio - Gráfico de Área */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Patrimônio</h3>
