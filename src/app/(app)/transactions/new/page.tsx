@@ -73,8 +73,8 @@ function NewTransactionContent() {
   const [showQRScanner, setShowQRScanner] = useState(false)
 
   const [showCatModal, setShowCatModal] = useState(false)
-  const [showSubCatModal, setShowSubCatModal] = useState(false) // NOVO
-  const [selectedParentCat, setSelectedParentCat] = useState<any>(null) // NOVO
+  const [showSubCatModal, setShowSubCatModal] = useState(false)
+  const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
@@ -132,12 +132,10 @@ function NewTransactionContent() {
       supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name')
     ])
 
-    // Separa categorias principais e subcategorias
     const allCats = Array.isArray(cats) ? cats : []
     const mainCats = allCats.filter(c => !c.parent_id)
     const subCats = allCats.filter(c => c.parent_id)
     
-    // Organiza subcategorias por parent_id
     const subsMap: Record<string, any[]> = {}
     subCats.forEach(sub => {
       const key = sub.parent_id
@@ -414,7 +412,7 @@ function NewTransactionContent() {
           description: desc || null,
           category_id: categoryId || null,
           account_id: accountId || null,
-          tag_ids: selectedTags.length > 0 ? selectedTags : null,
+          tag_id: selectedTags.length > 0 ? selectedTags[0] : null,
           date: installmentDate,
           status: isPaid ? 'done' : 'pending',
           context,
@@ -691,11 +689,9 @@ function NewTransactionContent() {
                     onClick={() => {
                       setCategoryId(cat.id)
                       setSelectedParentCat(cat)
-                      // Se tem subcategorias, abre o segundo modal
                       if (subCount > 0) {
                         setShowSubCatModal(true)
                       } else {
-                        // Se não tem, fecha o modal diretamente
                         setShowCatModal(false)
                       }
                     }}
