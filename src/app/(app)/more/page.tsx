@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import {
   Wallet, Tags, ChevronRight, LogOut, Camera, Check, Edit2, Bot, Lock,
   CreditCard, Hash, PieChart, Target, TrendingUp, Users, X,
-  Sun, Moon, Download, ReceiptText, PiggyBank
+  Sun, Moon, Download, ReceiptText, PiggyBank, Repeat
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -114,7 +114,6 @@ export default function MorePage() {
           <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-100">Exportar Dados</h3>
             
-            {/* Seletor DFL/Pessoal */}
             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Contexto</p>
             <div className="flex gap-2 mb-4">
               {(['dfl', 'personal'] as const).map(c => (
@@ -274,6 +273,11 @@ export default function MorePage() {
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><PiggyBank className="text-teal-700 dark:text-teal-400" size={20}/> Metas</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
+        {/* NOVO: Assinaturas */}
+        <Link href="/subscriptions" className="flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+          <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Repeat className="text-teal-700 dark:text-teal-400" size={20}/> Assinaturas</div>
+          <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
+        </Link>
         <button onClick={() => setShowExportModal(true)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Download className="text-teal-700 dark:text-teal-400" size={20}/> Exportar Dados</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
@@ -283,8 +287,7 @@ export default function MorePage() {
       <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 px-1">No forno</h4>
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 opacity-70 overflow-hidden">
         {[ 
-          {icon: TrendingUp, title: 'Projeções'}, 
-          {icon: Users, title: 'Assinaturas'}
+          {icon: TrendingUp, title: 'Projeções'}
         ].map((item, i) => (
           <button key={i} onClick={() => setModalOpen(true)} className="w-full flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
             <div className="flex items-center gap-3">
