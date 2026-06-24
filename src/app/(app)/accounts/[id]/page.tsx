@@ -4,11 +4,26 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Edit2, ArrowRightLeft, Scale, ChevronRight, X, Loader2, Check, Clock } from 'lucide-react'
+import {
+  ChevronLeft, Edit2, ArrowRightLeft, Scale, ChevronRight, X, Loader2, Check, Clock,
+  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
+  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
+  ArrowLeftRight as ArrowLeftRightIcon, Wallet
+} from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
+  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
+  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
+  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
+  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
+  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+}
 
 export default function AccountStatementPage() {
   const { id } = useParams()
@@ -26,6 +41,7 @@ export default function AccountStatementPage() {
   const [showForm, setShowForm] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showBalanceModal, setShowBalanceModal] = useState(false)
+  const [showDestAccModal, setShowDestAccModal] = useState(false)
 
   const [name, setName] = useState('')
   const [color, setColor] = useState(DEFAULT_COLORS[0])
@@ -207,6 +223,7 @@ export default function AccountStatementPage() {
 
   const initials = account.name ? account.name.substring(0, 2).toUpperCase() : '??'
   const safeBalance = Number(account.balance) || 0
+  const selectedDestAcc = allAccounts.find(a => a.id === destAccountId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
@@ -257,6 +274,7 @@ export default function AccountStatementPage() {
                const isTransferIn = tx.type === 'transfer' && tx.description?.includes('de ');
                const isIncomeVisual = tx.type === 'income' || isTransferIn;
                const isPending = tx.status === 'pending';
+               const IconComp = tx.type === 'transfer' ? ArrowLeftRightIcon : (ICON_MAP[tx.categories?.icon] || ICON_MAP['other'])
 
                return (
                 <div 
@@ -275,8 +293,8 @@ export default function AccountStatementPage() {
                   )}
 
                   <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                    <div className="w-10 h-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}>
-                      {tx.type === 'transfer' ? '🔄' : (tx.categories?.icon || '💸')}
+                    <div className="w-10 h-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0" style={{ backgroundColor: tx.categories?.color ? `${tx.categories.color}20` : '#f3f4f6', color: tx.categories?.color || '#64748b' }}>
+                      <IconComp size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 uppercase tracking-tight truncate">{tx.description || tx.categories?.name}</p>
@@ -352,10 +370,12 @@ export default function AccountStatementPage() {
             </div>
 
             <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Conta de Destino</label>
-            <select value={destAccountId} onChange={(e) => setDestAccountId(e.target.value)} className="w-full bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[16px] mb-4 text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none appearance-none shadow-sm">
-              <option value="">Selecione o destino...</option>
-              {allAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            <button onClick={() => setShowDestAccModal(true)} className="w-full flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[16px] mb-4 text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none shadow-sm">
+              <span className={selectedDestAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}>
+                {selectedDestAcc ? selectedDestAcc.name : 'Selecione o destino...'}
+              </span>
+              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
+            </button>
 
             <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 mt-4">Valor da Transferência</label>
             <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-[16px] mb-4 flex items-center gap-2 border border-gray-100 dark:border-slate-600">
@@ -372,6 +392,35 @@ export default function AccountStatementPage() {
             <button onClick={handleTransferSubmit} disabled={actionLoading} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[20px] font-bold flex justify-center items-center shadow-lg shadow-teal-700/20">
               {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Efetuar Transferência'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de seleção de conta destino */}
+      {showDestAccModal && (
+        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowDestAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Conta de Destino</h3>
+              <button onClick={() => setShowDestAccModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {allAccounts.map(acc => {
+                const isActive = acc.id === destAccountId
+                return (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setDestAccountId(acc.id); setShowDestAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {allAccounts.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma conta disponível.</p>}
+            </div>
           </div>
         </div>
       )}
