@@ -10,7 +10,7 @@ import {
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  QrCode
+  QrCode, ChevronRight
 } from 'lucide-react'
 import { addMonths, addWeeks, format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -23,7 +23,6 @@ type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
-// Mapa de Ícones do Lucide Substituindo os Emojis
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
   graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
@@ -37,7 +36,7 @@ const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v8.0 - Recorrência Personalizada & QR Code")
+  console.log("DFL – Nova Transação v9.0 - Subcategorias")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -57,6 +56,7 @@ function NewTransactionContent() {
   const [saving, setSaving] = useState(false)
 
   const [categories, setCategories] = useState<any[]>([])
+  const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [accounts, setAccounts] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
   const [receipt, setReceipt] = useState<File | null>(null)
@@ -66,15 +66,15 @@ function NewTransactionContent() {
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const [isRefund, setIsRefund] = useState(false)
 
-  // ESTADOS DA MISSÃO 2 - RECORRÊNCIA PERSONALIZADA
   const [showCustomRecurrenceModal, setShowCustomRecurrenceModal] = useState(false)
   const [customParcels, setCustomParcels] = useState(12)
-  const [customInterval, setCustomInterval] = useState(1) // Em meses
+  const [customInterval, setCustomInterval] = useState(1)
 
-  // ESTADO DO QR CODE SCANNER
   const [showQRScanner, setShowQRScanner] = useState(false)
 
   const [showCatModal, setShowCatModal] = useState(false)
+  const [showSubCatModal, setShowSubCatModal] = useState(false) // NOVO
+  const [selectedParentCat, setSelectedParentCat] = useState<any>(null) // NOVO
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
@@ -110,7 +110,8 @@ function NewTransactionContent() {
   const themeColor = isIncome ? 'text-emerald-700' : 'text-red-600'
   const bgColor = isIncome ? 'bg-emerald-700' : 'bg-red-600'
   
-  const selectedCat = categories.find(c => c.id === categoryId)
+  const selectedCat = categories.find(c => c.id === categoryId) || 
+    Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
 
   const toggleTag = (id: string) => {
@@ -131,7 +132,21 @@ function NewTransactionContent() {
       supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name')
     ])
 
-    setCategories(Array.isArray(cats) ? cats : [])
+    // Separa categorias principais e subcategorias
+    const allCats = Array.isArray(cats) ? cats : []
+    const mainCats = allCats.filter(c => !c.parent_id)
+    const subCats = allCats.filter(c => c.parent_id)
+    
+    // Organiza subcategorias por parent_id
+    const subsMap: Record<string, any[]> = {}
+    subCats.forEach(sub => {
+      const key = sub.parent_id
+      if (!subsMap[key]) subsMap[key] = []
+      subsMap[key].push(sub)
+    })
+
+    setCategories(mainCats)
+    setSubcategories(subsMap)
     setAccounts(Array.isArray(accs) ? accs : [])
     setTags(Array.isArray(tgs) ? tgs : [])
   }, [user, context, type])
@@ -220,18 +235,13 @@ function NewTransactionContent() {
     setShowCamera(false)
   }
 
-  // Processa o resultado do QR Code (PIX, boleto, etc.)
   const handleQRResult = (text: string) => {
     console.log('QR Code lido:', text)
     
-    // Tenta extrair valor de PIX (formato: 000201...)
-    // PIX tem um formato específico, aqui fazemos uma extração básica
     let extractedAmount: string | null = null
     let extractedDesc: string | null = null
 
-    // Se for PIX (começa com 000201)
     if (text.startsWith('000201')) {
-      // Extrai o valor do PIX (campo 54 para valor)
       const amountMatch = text.match(/54(\d{2})(\d+)/)
       if (amountMatch) {
         const amountStr = amountMatch[2]
@@ -239,21 +249,17 @@ function NewTransactionContent() {
         extractedAmount = amountNum.toFixed(2).replace('.', ',')
       }
       
-      // Extrai o nome do beneficiário (campo 26)
       const nameMatch = text.match(/26(\d{2})([^5]+)/)
       if (nameMatch) {
         extractedDesc = `PIX: ${nameMatch[2].trim()}`
       }
     } else if (text.includes('|') && text.includes('BOLETO')) {
-      // Tenta extrair de boleto
       const parts = text.split('|')
       extractedDesc = parts[0]?.trim()
     } else {
-      // Para outros tipos, usa o texto bruto
       extractedDesc = text.length > 30 ? text.substring(0, 30) + '...' : text
     }
 
-    // Preenche os campos
     if (extractedAmount) {
       setAmount(formatAmount(extractedAmount))
       setAmountNum(parseFloat(extractedAmount.replace(/\./g, '').replace(',', '.')))
@@ -473,7 +479,7 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* Card Principal - Categoria e Conta */}
+      {/* Card Principal */}
       <div className="bg-white rounded-3xl mx-4 shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50">
           <span className="font-bold text-sm text-gray-700">{isIncome ? 'Recebido' : 'Pago'}</span>
@@ -482,7 +488,6 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        {/* --- SELETOR DE CATEGORIA --- */}
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-4">
             <Tag size={20} className="text-gray-400" />
@@ -505,7 +510,6 @@ function NewTransactionContent() {
           </div>
         </button>
 
-        {/* --- SELETOR DE CONTA --- */}
         <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-4">
             <Wallet size={20} className="text-gray-400" />
@@ -668,7 +672,7 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Lista de Categorias */}
+      {/* Modal Lista de Categorias (HIERARQUIA) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -679,17 +683,79 @@ function NewTransactionContent() {
             <div className="space-y-2">
               {categories.map(cat => {
                 const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const subCount = subcategories[cat.id]?.length || 0
+                const isActive = cat.id === categoryId
                 return (
-                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${cat.id === categoryId ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      setCategoryId(cat.id)
+                      setSelectedParentCat(cat)
+                      // Se tem subcategorias, abre o segundo modal
+                      if (subCount > 0) {
+                        setShowSubCatModal(true)
+                      } else {
+                        // Se não tem, fecha o modal diretamente
+                        setShowCatModal(false)
+                      }
+                    }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                  >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
                       <IconComp size={20} />
                     </div>
                     <span className="flex-1 text-left font-medium text-gray-800">{cat.name}</span>
-                    {cat.id === categoryId && <Check size={20} className="text-teal-700" />}
+                    {subCount > 0 && (
+                      <span className="text-xs text-gray-400 font-medium mr-2">{subCount}</span>
+                    )}
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300" />}
                   </button>
                 )
               })}
               {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Subcategorias (SEGUNDO NÍVEL) */}
+      {showSubCatModal && selectedParentCat && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white py-2">
+              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2">
+                <ChevronLeft size={22} className="text-gray-700" />
+              </button>
+              <div>
+                <h3 className="font-bold text-lg">Subcategorias</h3>
+                <p className="text-xs text-gray-500">{selectedParentCat.name}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
+                const SubIconComp = ICON_MAP[sub.icon] || ICON_MAP['other']
+                const isActive = sub.id === categoryId
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
+                      <SubIconComp size={20} />
+                    </div>
+                    <span className="flex-1 text-left font-medium text-gray-800">{sub.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }}
+                className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors text-gray-500 font-medium"
+              >
+                Usar "{selectedParentCat.name}" sem subcategoria
+              </button>
             </div>
           </div>
         </div>
@@ -742,7 +808,7 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Criar Categoria (COM GRADE DE ÍCONES NOVA E ESTILIZADA) */}
+      {/* Modal Criar Categoria */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -888,7 +954,6 @@ function NewTransactionContent() {
       <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
       <ComingSoonModal isOpen={showComingSoon} onClose={() => setShowComingSoon(false)} />
 
-      {/* QR Code Scanner Modal */}
       {showQRScanner && (
         <QRCodeScanner
           onClose={() => setShowQRScanner(false)}
