@@ -8,7 +8,8 @@ import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins,
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
+  Plus, X
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -61,7 +62,6 @@ export default function EditTransactionPage() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     selectedDate.setHours(0, 0, 0, 0)
-
     setIsPaid(selectedDate <= today)
   }
 
@@ -342,25 +342,25 @@ export default function EditTransactionPage() {
           />
         </div>
 
-        {/* Categoria com modal */}
-        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+        {/* Categoria com modal estilizado */}
+        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
           <Tag size={22} className="text-gray-400 dark:text-gray-500" />
-          <button onClick={() => setShowCatModal(true)} className="flex-1 flex flex-col text-left">
+          <div className="flex-1 flex flex-col text-left">
             <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Categoria</span>
-            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedCat ? selectedCat.name : 'Selecione...'}</span>
-          </button>
+            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Selecione...'}</span>
+          </div>
           <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-        </div>
+        </button>
 
-        {/* Conta com modal */}
-        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+        {/* Conta com modal estilizado */}
+        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
           <Wallet size={22} className="text-gray-400 dark:text-gray-500" />
-          <button onClick={() => setShowAccModal(true)} className="flex-1 flex flex-col text-left">
+          <div className="flex-1 flex flex-col text-left">
             <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Conta</span>
             <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedAcc ? selectedAcc.name : 'Selecione...'}</span>
-          </button>
+          </div>
           <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-        </div>
+        </button>
 
         <div className="flex justify-center pt-2 pb-2">
           <button onClick={() => setShowDetails(!showDetails)} className="text-[14px] font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
@@ -433,19 +433,20 @@ export default function EditTransactionPage() {
               />
             </div>
 
-            <div className="flex items-center gap-4 pb-2">
+            {/* Tag com modal estilizado */}
+            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
               <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
-              <button onClick={() => setShowTagModal(true)} className="flex-1 flex flex-col text-left">
+              <div className="flex-1 flex flex-col text-left">
                 <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Tags</span>
                 <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedTag ? selectedTag.name : 'Nenhuma tag'}</span>
-              </button>
+              </div>
               <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-            </div>
+            </button>
           </div>
         )}
       </div>
 
-      {/* Modais de seleção */}
+      {/* Modais de seleção (estilizados, sem <select>) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
