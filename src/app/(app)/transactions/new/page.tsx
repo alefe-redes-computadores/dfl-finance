@@ -125,12 +125,27 @@ function NewTransactionContent() {
   useEffect(() => { loadData() }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    setAmount(val)
-    const rawValue = val.replace(/\./g, '').replace(',', '.')
-    const num = parseFloat(rawValue)
-    setAmountNum(isNaN(num) ? 0 : num)
+  // Remove tudo o que não for número
+  const digits = e.target.value.replace(/\D/g, '')
+  
+  if (!digits) {
+    setAmount('0,00')
+    setAmountNum(0)
+    return
   }
+
+  // Transforma em valor numérico real movendo a casa dos centavos (ex: 666 vira 6.66)
+  const numValue = parseFloat(digits) / 100
+  setAmountNum(numValue)
+
+  // Formata no padrão brasileiro de moeda: 1.234,56
+  const formatted = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numValue)
+
+  setAmount(formatted)
+}
 
   // Formata valor extraído para exibição
   const formatAmount = (value: string) => {
