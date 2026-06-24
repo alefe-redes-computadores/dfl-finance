@@ -35,11 +35,18 @@ export async function GET(req: NextRequest) {
     .lte('date', end)
     .order('date', { ascending: false })
 
-  if (!transactions) {
-    return NextResponse.json({ error: 'Nenhuma transação encontrada' }, { status: 404 })
+  const header = 'Data,Descrição,Categoria,Conta,Tipo,Valor,Status\n'
+
+  if (!transactions || transactions.length === 0) {
+    // Retorna CSV vazio com cabeçalho
+    return new NextResponse(header, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename=extrato-${start}-a-${end}.csv`
+      }
+    })
   }
 
-  const header = 'Data,Descrição,Categoria,Conta,Tipo,Valor,Status\n'
   const rows = transactions.map(t => {
     const date = t.date || ''
     const desc = `"${(t.description || '').replace(/"/g, '""')}"`
