@@ -5,10 +5,26 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Settings2, Loader2, Plus, Clock, Check } from 'lucide-react'
+import { 
+  Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Settings2, Loader2, Plus, Clock, Check,
+  // Ícones Lucide para categorias
+  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
+  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+} from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+
+// Mapa de ícones (mesmo padrão do restante do projeto)
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
+  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
+  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
+  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
+  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
+  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+}
 
 function BankInitials({ color, name }: { color: string, name: string }) {
   const initials = name ? name.substring(0, 2).toUpperCase() : '??';
@@ -262,6 +278,8 @@ function HomeContent() {
           ) : (
             recentTransactions.map((tx, index) => {
                const isPending = tx.status === 'pending';
+               // Renderiza o ícone da categoria usando o ICON_MAP
+               const IconComp = ICON_MAP[tx.categories?.icon] || ICON_MAP['other']
                return (
                 <div 
                   key={tx.id} 
@@ -281,9 +299,9 @@ function HomeContent() {
                   <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
                     <div 
                       className="w-10 h-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0"
-                      style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20` }}
+                      style={{ backgroundColor: `${tx.categories?.color || '#cbd5e1'}20`, color: tx.categories?.color || '#64748b' }}
                     >
-                      {tx.categories?.icon || (tx.type === 'income' ? '💰' : '💸')}
+                      <IconComp size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold text-gray-800 uppercase tracking-tight truncate">
