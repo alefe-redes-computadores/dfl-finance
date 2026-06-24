@@ -4,25 +4,37 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, ChevronRight, Loader2, TrendingUp, Sparkles,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp as TrendingUpIcon, ShoppingCart, ReceiptIcon, Zap, Music,
-  ArrowUp, ArrowDown, Wallet, Tag, SlidersHorizontal, X, Download
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  TrendingUp,
+  Sparkles,
+  ArrowUp,
+  ArrowDown,
+  Wallet,
+  Tag,
+  SlidersHorizontal,
+  X,
+  Download
 } from 'lucide-react'
+import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, AreaChart, Area } from 'recharts'
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ReTooltip,
+  AreaChart,
+  Area
+} from 'recharts'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUpIcon, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
 
 function AnalysisContent() {
   const { user } = useAuth()
@@ -38,7 +50,12 @@ function AnalysisContent() {
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [newGastos, setNewGastos] = useState<any[]>([])
-  const [newGastosSummary, setNewGastosSummary] = useState({ total: 0, count: 0, average: 0, maiorPeso: { name: '', percent: '0' } })
+  const [newGastosSummary, setNewGastosSummary] = useState({
+    total: 0,
+    count: 0,
+    average: 0,
+    maiorPeso: { name: '', percent: '0' }
+  })
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
@@ -62,28 +79,39 @@ function AnalysisContent() {
     const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
     const currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
 
-    const income = currentTxs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-    const expense = currentTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+    const income = currentTxs
+      .filter(t => t.type === 'income' && t.status === 'done')
+      .reduce((a, t) => a + Number(t.amount || 0), 0)
+    const expense = currentTxs
+      .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+      .reduce((a, t) => a + Number(t.amount || 0), 0)
     setSummary({ income, expense, balance: income - expense })
 
-    const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-    currentTxs.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
-      const key = t.category_id ?? 'sem'
-      if (!catMap[key]) {
-        catMap[key] = {
-          name: t.categories?.name ?? 'Sem categoria',
-          color: t.categories?.color ?? '#64748b',
-          icon: t.categories?.icon ?? 'other',
-          total: 0
+    const catMap: Record<
+      string,
+      { name: string; color: string; icon: string; total: number }
+    > = {}
+    currentTxs
+      .filter(t => t.type === 'expense' || t.type === 'sangria')
+      .forEach(t => {
+        const key = t.category_id ?? 'sem'
+        if (!catMap[key]) {
+          catMap[key] = {
+            name: t.categories?.name ?? 'Sem categoria',
+            color: t.categories?.color ?? '#64748b',
+            icon: t.categories?.icon ?? 'other',
+            total: 0
+          }
         }
-      }
-      catMap[key].total += Number(t.amount || 0)
-    })
+        catMap[key].total += Number(t.amount || 0)
+      })
 
-    const categoriesArray = Object.values(catMap).map(cat => ({
-      ...cat,
-      percent: expense > 0 ? (cat.total / expense) * 100 : 0
-    })).sort((a, b) => b.total - a.total)
+    const categoriesArray = Object.values(catMap)
+      .map(cat => ({
+        ...cat,
+        percent: expense > 0 ? (cat.total / expense) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total)
 
     setByCategory(categoriesArray)
 
@@ -93,8 +121,12 @@ function AnalysisContent() {
       const s = format(startOfMonth(d), 'yyyy-MM-dd')
       const e = format(endOfMonth(d), 'yyyy-MM-dd')
       const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
-      const inc = monthTxs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-      const exp = monthTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const inc = monthTxs
+        .filter(t => t.type === 'income' && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
+      const exp = monthTxs
+        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
       flowData.push({
         name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
         Receitas: inc,
@@ -108,7 +140,9 @@ function AnalysisContent() {
       .select('balance')
       .match({ user_id: user.id, context: context })
 
-    const currentBalance = Array.isArray(allAccounts) ? allAccounts.reduce((a, c) => a + (Number(c.balance) || 0), 0) : 0
+    const currentBalance = Array.isArray(allAccounts)
+      ? allAccounts.reduce((a, c) => a + (Number(c.balance) || 0), 0)
+      : 0
 
     const patrimData: any[] = []
     for (let i = 11; i >= 0; i--) {
@@ -116,12 +150,20 @@ function AnalysisContent() {
       const s = format(startOfMonth(d), 'yyyy-MM-dd')
       const e = format(endOfMonth(d), 'yyyy-MM-dd')
       const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
-      const inc = monthTxs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
-      const exp = monthTxs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const inc = monthTxs
+        .filter(t => t.type === 'income' && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
+      const exp = monthTxs
+        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
 
       patrimData.push({
         name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
-        Patrimônio: currentBalance + patrimData.reduce((a, c) => a + (c.Receitas || 0) - (c.Despesas || 0), 0) + inc - exp
+        Patrimônio:
+          currentBalance +
+          patrimData.reduce((a, c) => a + (c.Receitas || 0) - (c.Despesas || 0), 0) +
+          inc -
+          exp
       })
     }
     setPatrimony(patrimData)
@@ -134,9 +176,14 @@ function AnalysisContent() {
     const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
 
     const prevCategories = new Set(prevTxs.map(t => t.category_id).filter(Boolean))
-    const newOnes = currentTxs.filter(t => t.category_id && !prevCategories.has(t.category_id))
+    const newOnes = currentTxs.filter(
+      t => t.category_id && !prevCategories.has(t.category_id)
+    )
 
-    const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
+    const newCatMap: Record<
+      string,
+      { name: string; color: string; icon: string; total: number }
+    > = {}
     newOnes.forEach(t => {
       const key = t.category_id ?? 'sem'
       if (!newCatMap[key]) {
@@ -150,10 +197,12 @@ function AnalysisContent() {
       newCatMap[key].total += Number(t.amount || 0)
     })
 
-    const newCatArray = Object.values(newCatMap).map(cat => ({
-      ...cat,
-      percent: expense > 0 ? (cat.total / expense) * 100 : 0
-    })).sort((a, b) => b.total - a.total)
+    const newCatArray = Object.values(newCatMap)
+      .map(cat => ({
+        ...cat,
+        percent: expense > 0 ? (cat.total / expense) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total)
 
     setNewGastos(newCatArray)
 
@@ -161,37 +210,66 @@ function AnalysisContent() {
     const newCount = newCatArray.length
     const newAverage = newCount > 0 ? newTotal / newCount : 0
     const maiorPesoName = newCatArray.length > 0 ? newCatArray[0].name : '-'
-    const maiorPesoPercent = newCatArray.length > 0 && newTotal > 0 ? ((newCatArray[0].total / newTotal) * 100).toFixed(0) : '0'
-    setNewGastosSummary({ total: newTotal, count: newCount, average: newAverage, maiorPeso: { name: maiorPesoName, percent: maiorPesoPercent } })
+    const maiorPesoPercent =
+      newCatArray.length > 0 && newTotal > 0
+        ? ((newCatArray[0].total / newTotal) * 100).toFixed(0)
+        : '0'
+    setNewGastosSummary({
+      total: newTotal,
+      count: newCount,
+      average: newAverage,
+      maiorPeso: { name: maiorPesoName, percent: maiorPesoPercent }
+    })
 
     setLoading(false)
   }, [user, context, currentDate])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`
 
   const handleExport = (range: string) => {
     setShowExportMenu(false)
     if (!user) return
-    window.open(`/api/export-analysis?userId=${user.id}&context=${context}&range=${range}`, '_blank')
+    window.open(
+      `/api/export-analysis?userId=${user.id}&context=${context}&range=${range}`,
+      '_blank'
+    )
   }
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-            <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"><ChevronLeft size={18} /></button>
-            <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide">{monthLabel}</span>
-            <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"><ChevronRight size={18} /></button>
+            <button
+              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+              className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide">
+              {monthLabel}
+            </span>
+            <button
+              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+              className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
+
           {/* Botão Exportar */}
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowExportMenu(!showExportMenu)}
               className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
             >
@@ -199,14 +277,28 @@ function AnalysisContent() {
             </button>
             {showExportMenu && (
               <div className="absolute right-0 top-[42px] w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Exportar análise</p>
-                {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
-                  <button key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">
+                  Exportar análise
+                </p>
+                {[
+                  { key: '7', label: '7 dias' },
+                  { key: '14', label: '14 dias' },
+                  { key: '30', label: '30 dias' },
+                  { key: 'total', label: 'Todo período' }
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => handleExport(opt.key)}
+                    className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700"
+                  >
+                    {opt.label}
+                  </button>
                 ))}
               </div>
             )}
           </div>
-          <button 
+
+          <button
             onClick={() => setShowFilterDrawer(true)}
             className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
           >
@@ -215,26 +307,38 @@ function AnalysisContent() {
         </div>
       </div>
 
-      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Análise</h2>
+      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">
+        Análise
+      </h2>
 
       {/* Abas */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
         <button
           onClick={() => setActiveTab('month')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${activeTab === 'month' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}
+          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
+            activeTab === 'month'
+              ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]'
+              : 'text-gray-400 dark:text-gray-500'
+          }`}
         >
           No mês
         </button>
         <button
           onClick={() => setActiveTab('new')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${activeTab === 'new' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}
+          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
+            activeTab === 'new'
+              ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]'
+              : 'text-gray-400 dark:text-gray-500'
+          }`}
         >
           Novos gastos
         </button>
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
+        <div className="flex justify-center p-10">
+          <Loader2 className="animate-spin text-teal-700" size={32} />
+        </div>
       ) : activeTab === 'new' ? (
         /* ===== ABA NOVOS GASTOS ===== */
         <div className="space-y-6">
@@ -244,37 +348,61 @@ function AnalysisContent() {
                 <Sparkles size={20} className="text-teal-700 dark:text-teal-400" />
               </div>
               <div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">Novos gastos do mês</p>
-                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{formatCurrency(newGastosSummary.total)}</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">
+                  Novos gastos do mês
+                </p>
+                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">
+                  {formatCurrency(newGastosSummary.total)}
+                </p>
               </div>
             </div>
 
             <div className="flex justify-between items-end">
               <div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Categorias</p>
-                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{newGastosSummary.count}</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">
+                  Categorias
+                </p>
+                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">
+                  {newGastosSummary.count}
+                </p>
               </div>
               <div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Média</p>
-                <p className="text-[14px] font-bold text-red-400">{formatCurrency(newGastosSummary.average)}</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">
+                  Média
+                </p>
+                <p className="text-[14px] font-bold text-red-400">
+                  {formatCurrency(newGastosSummary.average)}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Maior peso</p>
-                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate max-w-[100px]">{newGastosSummary.maiorPeso.name}</p>
-                <span className="text-[11px] text-red-400 font-bold">{newGastosSummary.maiorPeso.percent}%</span>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">
+                  Maior peso
+                </p>
+                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate max-w-[100px]">
+                  {newGastosSummary.maiorPeso.name}
+                </p>
+                <span className="text-[11px] text-red-400 font-bold">
+                  {newGastosSummary.maiorPeso.percent}%
+                </span>
               </div>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             {newGastos.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Nenhum novo gasto neste mês.</p>
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
+                Nenhum novo gasto neste mês.
+              </p>
             ) : (
               <>
                 <div className="h-48 relative flex items-center justify-center mb-6">
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total</p>
-                    <p className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{formatCurrency(newGastosSummary.total)}</p>
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">
+                      Total
+                    </p>
+                    <p className="text-[18px] font-bold text-gray-800 dark:text-gray-100">
+                      {formatCurrency(newGastosSummary.total)}
+                    </p>
                   </div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -299,25 +427,40 @@ function AnalysisContent() {
 
                 <div className="space-y-4">
                   {newGastos.map(c => {
-                    const IconComp = ICON_MAP[c.icon] || ICON_MAP['other']
+                    const IconComp = getDynamicIcon(c.icon)
                     return (
                       <div key={c.name}>
                         <div className="flex justify-between items-center mb-2">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${c.color}20`, color: c.color }}>
+                            <div
+                              className="w-9 h-9 rounded-xl flex items-center justify-center"
+                              style={{
+                                backgroundColor: `${c.color}20`,
+                                color: c.color
+                              }}
+                            >
                               <IconComp size={18} />
                             </div>
-                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{c.name}</span>
+                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
+                              {c.name}
+                            </span>
                           </div>
                           <div className="text-right">
-                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{formatCurrency(c.total)}</span>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">{c.percent.toFixed(1)}%</p>
+                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
+                              {formatCurrency(c.total)}
+                            </span>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">
+                              {c.percent.toFixed(1)}%
+                            </p>
                           </div>
                         </div>
                         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-1000 ease-out"
-                            style={{ width: `${c.percent}%`, backgroundColor: c.color }}
+                            style={{
+                              width: `${c.percent}%`,
+                              backgroundColor: c.color
+                            }}
                           />
                         </div>
                       </div>
@@ -336,36 +479,58 @@ function AnalysisContent() {
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
                 <ArrowUp size={16} className="text-emerald-600" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Receitas</p>
-              <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(summary.income)}</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">
+                Receitas
+              </p>
+              <p className="text-[15px] font-bold text-emerald-600">
+                {formatCurrency(summary.income)}
+              </p>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-2">
                 <ArrowDown size={16} className="text-red-500" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Despesas</p>
-              <p className="text-[15px] font-bold text-red-500">{formatCurrency(summary.expense)}</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">
+                Despesas
+              </p>
+              <p className="text-[15px] font-bold text-red-500">
+                {formatCurrency(summary.expense)}
+              </p>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
                 <Wallet size={16} className="text-teal-700 dark:text-teal-400" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Saldo</p>
-              <p className={`text-[15px] font-bold ${summary.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">
+                Saldo
+              </p>
+              <p
+                className={`text-[15px] font-bold ${
+                  summary.balance >= 0 ? 'text-emerald-600' : 'text-red-500'
+                }`}
+              >
                 {formatCurrency(summary.balance)}
               </p>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Distribuição de Gastos</h3>
+            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
+              Distribuição de Gastos
+            </h3>
             {byCategory.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Nenhuma despesa neste mês.</p>
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
+                Nenhuma despesa neste mês.
+              </p>
             ) : (
               <div className="h-56 relative flex items-center justify-center">
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total Gasto</p>
-                  <p className="text-[20px] font-bold text-gray-800 dark:text-gray-100">{formatCurrency(summary.expense)}</p>
+                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">
+                    Total Gasto
+                  </p>
+                  <p className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
+                    {formatCurrency(summary.expense)}
+                  </p>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -391,31 +556,50 @@ function AnalysisContent() {
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Gastos por Categoria</h3>
+            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
+              Gastos por Categoria
+            </h3>
             {byCategory.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">Nenhuma despesa neste mês.</p>
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">
+                Nenhuma despesa neste mês.
+              </p>
             ) : (
               <div className="space-y-4">
                 {byCategory.map(c => {
-                  const IconComp = ICON_MAP[c.icon] || ICON_MAP['other']
+                  const IconComp = getDynamicIcon(c.icon)
                   return (
                     <div key={c.name}>
                       <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${c.color}20`, color: c.color }}>
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center"
+                            style={{
+                              backgroundColor: `${c.color}20`,
+                              color: c.color
+                            }}
+                          >
                             <IconComp size={18} />
                           </div>
-                          <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{c.name}</span>
+                          <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
+                            {c.name}
+                          </span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{formatCurrency(c.total)}</span>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">{c.percent.toFixed(1)}%</p>
+                          <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
+                            {formatCurrency(c.total)}
+                          </span>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">
+                            {c.percent.toFixed(1)}%
+                          </p>
                         </div>
                       </div>
                       <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-1000 ease-out"
-                          style={{ width: `${c.percent}%`, backgroundColor: c.color }}
+                          style={{
+                            width: `${c.percent}%`,
+                            backgroundColor: c.color
+                          }}
                         />
                       </div>
                     </div>
@@ -426,13 +610,21 @@ function AnalysisContent() {
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Fluxo Mensal</h3>
+            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
+              Fluxo Mensal
+            </h3>
             {monthlyFlow.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Sem dados para exibir.</p>
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
+                Sem dados para exibir.
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={monthlyFlow}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#e5e7eb"
+                    className="dark:opacity-20"
+                  />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
                   <ReTooltip formatter={(value: number) => formatCurrency(value)} />
@@ -445,13 +637,22 @@ function AnalysisContent() {
 
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Patrimônio</h3>
-              <span className={`text-[14px] font-bold ${patrimonyGrowth >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {patrimonyGrowth >= 0 ? '+' : ''}{patrimonyGrowth.toFixed(1)}%
+              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">
+                Patrimônio
+              </h3>
+              <span
+                className={`text-[14px] font-bold ${
+                  patrimonyGrowth >= 0 ? 'text-emerald-600' : 'text-red-500'
+                }`}
+              >
+                {patrimonyGrowth >= 0 ? '+' : ''}
+                {patrimonyGrowth.toFixed(1)}%
               </span>
             </div>
             {patrimony.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Sem dados para exibir.</p>
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
+                Sem dados para exibir.
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height={180}>
                 <AreaChart data={patrimony}>
@@ -461,11 +662,21 @@ function AnalysisContent() {
                       <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#e5e7eb"
+                    className="dark:opacity-20"
+                  />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
                   <ReTooltip formatter={(value: number) => formatCurrency(value)} />
-                  <Area type="monotone" dataKey="Patrimônio" stroke="#14b8a6" fill="url(#colorPat)" strokeWidth={2} />
+                  <Area
+                    type="monotone"
+                    dataKey="Patrimônio"
+                    stroke="#14b8a6"
+                    fill="url(#colorPat)"
+                    strokeWidth={2}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -475,35 +686,57 @@ function AnalysisContent() {
 
       {/* Filter Drawer */}
       {showFilterDrawer && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowFilterDrawer(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50"
+          onClick={() => setShowFilterDrawer(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[70vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Filtros</h3>
-              <button onClick={() => setShowFilterDrawer(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">
+                Filtros
+              </h3>
+              <button
+                onClick={() => setShowFilterDrawer(false)}
+                className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"
+              >
+                <X size={20} />
+              </button>
             </div>
             <div className="space-y-6">
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">Conta</label>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
+                  Conta
+                </label>
                 <select className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200">
                   <option value="">Todas as contas</option>
                 </select>
               </div>
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">Categoria</label>
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
+                  Categoria
+                </label>
                 <select className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200">
                   <option value="">Todas as categorias</option>
                 </select>
               </div>
-              <button className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold">Aplicar Filtros</button>
+              <button className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold">
+                Aplicar Filtros
+              </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   )
 }
 
 export default function AnalysisPage() {
-  return <ContextProvider><AnalysisContent /></ContextProvider>
+  return (
+    <ContextProvider>
+      <AnalysisContent />
+    </ContextProvider>
+  )
 }
