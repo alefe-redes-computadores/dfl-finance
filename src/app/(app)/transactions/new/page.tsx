@@ -9,12 +9,14 @@ import {
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
+  QrCode
 } from 'lucide-react'
 import { addMonths, addWeeks, format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
 import ComingSoonModal from '@/components/ComingSoonModal'
 import CameraCapture from '@/components/CameraCapture'
+import QRCodeScanner from '@/components/QRCodeScanner'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -35,7 +37,7 @@ const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v8.0 - Recorrência Personalizada & Bug Fix")
+  console.log("DFL – Nova Transação v8.0 - Recorrência Personalizada & QR Code")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -68,6 +70,9 @@ function NewTransactionContent() {
   const [showCustomRecurrenceModal, setShowCustomRecurrenceModal] = useState(false)
   const [customParcels, setCustomParcels] = useState(12)
   const [customInterval, setCustomInterval] = useState(1) // Em meses
+
+  // ESTADO DO QR CODE SCANNER
+  const [showQRScanner, setShowQRScanner] = useState(false)
 
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
@@ -215,6 +220,49 @@ function NewTransactionContent() {
     setShowCamera(false)
   }
 
+  // Processa o resultado do QR Code (PIX, boleto, etc.)
+  const handleQRResult = (text: string) => {
+    console.log('QR Code lido:', text)
+    
+    // Tenta extrair valor de PIX (formato: 000201...)
+    // PIX tem um formato específico, aqui fazemos uma extração básica
+    let extractedAmount: string | null = null
+    let extractedDesc: string | null = null
+
+    // Se for PIX (começa com 000201)
+    if (text.startsWith('000201')) {
+      // Extrai o valor do PIX (campo 54 para valor)
+      const amountMatch = text.match(/54(\d{2})(\d+)/)
+      if (amountMatch) {
+        const amountStr = amountMatch[2]
+        const amountNum = parseFloat(amountStr) / 100
+        extractedAmount = amountNum.toFixed(2).replace('.', ',')
+      }
+      
+      // Extrai o nome do beneficiário (campo 26)
+      const nameMatch = text.match(/26(\d{2})([^5]+)/)
+      if (nameMatch) {
+        extractedDesc = `PIX: ${nameMatch[2].trim()}`
+      }
+    } else if (text.includes('|') && text.includes('BOLETO')) {
+      // Tenta extrair de boleto
+      const parts = text.split('|')
+      extractedDesc = parts[0]?.trim()
+    } else {
+      // Para outros tipos, usa o texto bruto
+      extractedDesc = text.length > 30 ? text.substring(0, 30) + '...' : text
+    }
+
+    // Preenche os campos
+    if (extractedAmount) {
+      setAmount(formatAmount(extractedAmount))
+      setAmountNum(parseFloat(extractedAmount.replace(/\./g, '').replace(',', '.')))
+    }
+    if (extractedDesc) {
+      setDesc(extractedDesc)
+    }
+  }
+
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
     setSavingCategory(true)
@@ -331,12 +379,11 @@ function NewTransactionContent() {
         case 'biweekly': totalParcels = 24; break
         case 'monthly': totalParcels = 12; break
         case 'bimonthly': totalParcels = 6; break
-        case 'custom': totalParcels = customParcels; break // USA O ESTADO DO MODAL
+        case 'custom': totalParcels = customParcels; break
         default: totalParcels = 12
       }
     }
 
-    // BUG CORRIGIDO AQUI: Só divide o valor se for 'installments'. Se for 'recurring', mantém o valor integral por mês.
     const installmentAmount = totalParcels > 1 && repetition === 'installments' ? rawAmount / totalParcels : rawAmount
 
     try {
@@ -348,7 +395,7 @@ function NewTransactionContent() {
           else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
           else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
           else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
-          else if (frequency === 'custom') installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd') // USA O INTERVALO DO MODAL
+          else if (frequency === 'custom') installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd')
           else installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         } else {
           installmentDate = format(addMonths(new Date(date), i), 'yyyy-MM-dd')
@@ -398,9 +445,14 @@ function NewTransactionContent() {
           <ChevronLeft size={22} className="text-gray-700" />
         </button>
         <h1 className="font-bold text-base">{isIncome ? 'Nova Receita' : 'Nova Despesa'}</h1>
-        <button onClick={() => setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
-          <Camera size={20} className="text-gray-700" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowQRScanner(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
+            <QrCode size={20} className="text-gray-700" />
+          </button>
+          <button onClick={() => setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm">
+            <Camera size={20} className="text-gray-700" />
+          </button>
+        </div>
       </div>
 
       <div className="flex justify-center mt-2 mb-1">
@@ -527,7 +579,6 @@ function NewTransactionContent() {
                       </button>
                     ))}
                   </div>
-                  {/* Resumo da recorrência personalizada */}
                   {frequency === 'custom' && (
                     <p className="text-xs text-teal-700 font-medium ml-1 mt-1">
                       Serão geradas {customParcels} parcelas, a cada {customInterval} mês(es).
@@ -836,6 +887,14 @@ function NewTransactionContent() {
       <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />
       <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
       <ComingSoonModal isOpen={showComingSoon} onClose={() => setShowComingSoon(false)} />
+
+      {/* QR Code Scanner Modal */}
+      {showQRScanner && (
+        <QRCodeScanner
+          onClose={() => setShowQRScanner(false)}
+          onResult={handleQRResult}
+        />
+      )}
     </div>
   )
 }
