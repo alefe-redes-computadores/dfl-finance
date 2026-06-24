@@ -35,6 +35,7 @@ export default function EditTransactionPage() {
 
   const [accounts, setAccounts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [tags, setTags] = useState<any[]>([])
 
   const [amountInput, setAmountInput] = useState('')
@@ -47,12 +48,14 @@ export default function EditTransactionPage() {
 
   const [showDetails, setShowDetails] = useState(false)
   const [notes, setNotes] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([]) // ALTERADO
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isRefund, setIsRefund] = useState(false)
   const [isFinancing, setIsFinancing] = useState(false)
   const [isLoan, setIsLoan] = useState(false)
 
   const [showCatModal, setShowCatModal] = useState(false)
+  const [showSubCatModal, setShowSubCatModal] = useState(false)
+  const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
 
@@ -80,14 +83,28 @@ export default function EditTransactionPage() {
     setLoading(true)
 
     try {
+      const catType = txType === 'income' ? 'income' : 'expense'
+
       const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
         supabase.from('accounts').select('id, name, balance').match({ user_id: user.id }).order('name'),
-        supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id }).order('name'),
+        supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
         supabase.from('tags').select('id, name').match({ user_id: user.id }).order('name')
       ])
 
       setAccounts(Array.isArray(accData) ? accData : [])
-      setCategories(Array.isArray(catData) ? catData : [])
+      const allCats = Array.isArray(catData) ? catData : []
+      const mainCats = allCats.filter(c => !c.parent_id)
+      const subCats = allCats.filter(c => c.parent_id)
+      
+      const subsMap: Record<string, any[]> = {}
+      subCats.forEach(sub => {
+        const key = sub.parent_id
+        if (!subsMap[key]) subsMap[key] = []
+        subsMap[key].push(sub)
+      })
+
+      setCategories(mainCats)
+      setSubcategories(subsMap)
       setTags(Array.isArray(tagData) ? tagData : [])
 
       if (id && id !== 'new') {
@@ -108,7 +125,7 @@ export default function EditTransactionPage() {
           setDescription(txData.description || '')
           setCategoryId(txData.category_id || '')
           setAccountId(txData.account_id || '')
-          setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : []) // ALTERADO
+          setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
           setNotes(txData.notes || '')
 
           const amountSafe = Number(txData.amount) || 0
@@ -120,7 +137,7 @@ export default function EditTransactionPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, searchParams, user])
+  }, [id, searchParams, user, txType])
 
   useEffect(() => {
     loadData()
@@ -132,7 +149,7 @@ export default function EditTransactionPage() {
     setAmountInput(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
 
-  const toggleTag = (id: string) => { // NOVO
+  const toggleTag = (id: string) => {
     setSelectedTags(prev => {
       if (prev.includes(id)) return prev.filter(t => t !== id)
       if (prev.length >= 5) return prev
@@ -173,7 +190,7 @@ export default function EditTransactionPage() {
       description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
-      tag_ids: selectedTags.length > 0 ? selectedTags : null, // CORRIGIDO
+      tag_ids: selectedTags.length > 0 ? selectedTags : null,
       notes: finalNotes || null,
       type: txType,
       context: 'dfl'
@@ -284,7 +301,8 @@ export default function EditTransactionPage() {
   const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800 dark:text-gray-200'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-600' : 'bg-teal-700') : 'bg-gray-300 dark:bg-gray-600'
 
-  const selectedCat = categories.find(c => c.id === categoryId)
+  const selectedCat = categories.find(c => c.id === categoryId) || 
+    Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
 
   return (
@@ -349,12 +367,12 @@ export default function EditTransactionPage() {
           />
         </div>
 
-        {/* Categoria com modal estilizado */}
+        {/* Categoria com modal hierárquico */}
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
           <Tag size={22} className="text-gray-400 dark:text-gray-500" />
           <div className="flex-1 flex flex-col text-left">
             <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Categoria</span>
-            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedCat ? `${selectedCat.icon} ${selectedCat.name}` : 'Selecione...'}</span>
+            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedCat ? selectedCat.name : 'Selecione...'}</span>
           </div>
           <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
         </button>
@@ -455,7 +473,7 @@ export default function EditTransactionPage() {
         )}
       </div>
 
-      {/* Modais de seleção (estilizados, sem <select>) */}
+      {/* Modal Categorias com HIERARQUIA */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -466,22 +484,77 @@ export default function EditTransactionPage() {
             <div className="space-y-2">
               {categories.map(cat => {
                 const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const subCount = subcategories[cat.id]?.length || 0
                 const isActive = cat.id === categoryId
                 return (
                   <button
                     key={cat.id}
-                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
+                    onClick={() => {
+                      setCategoryId(cat.id)
+                      setSelectedParentCat(cat)
+                      if (subCount > 0) {
+                        setShowSubCatModal(true)
+                      } else {
+                        setShowCatModal(false)
+                      }
+                    }}
                     className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
                       <IconComp size={20} />
                     </div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
+                    {subCount > 0 && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500 font-medium mr-2">{subCount}</span>
+                    )}
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
                   </button>
                 )
               })}
               {categories.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma categoria encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Subcategorias */}
+      {showSubCatModal && selectedParentCat && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2">
+                <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
+              </button>
+              <div>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{selectedParentCat.name}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
+                const SubIconComp = ICON_MAP[sub.icon] || ICON_MAP['other']
+                const isActive = sub.id === categoryId
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
+                      <SubIconComp size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }}
+                className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors text-gray-500 dark:text-gray-400 font-medium"
+              >
+                Usar "{selectedParentCat.name}" sem subcategoria
+              </button>
             </div>
           </div>
         </div>
@@ -515,7 +588,6 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Modal Tags com seleção múltipla */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
