@@ -5,12 +5,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import * as Icons from 'lucide-react'
 import { 
-  Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Settings2, Loader2, Plus, Clock, Check,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  CreditCard, Target
+  Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Loader2, Plus, Clock, Check, CreditCard
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -18,13 +15,11 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import NetworkStatus from '@/components/NetworkStatus'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+// Helper para renderizar os ícones dinamicamente
+const getDynamicIcon = (iconName: string) => {
+  if (!iconName) return Icons.Tag
+  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
+  return (Icons as any)[formattedName] || Icons.Tag
 }
 
 function BankInitials({ color, name }: { color: string, name: string }) {
@@ -249,7 +244,7 @@ function HomeContent() {
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
             {budgets.map((budget) => {
-              const IconComp = ICON_MAP[budget.icon] || ICON_MAP['other']
+              const IconComp = getDynamicIcon(budget.icon)
               const isOverBudget = budget.remaining < 0
               const isWarning = budget.percent >= 75 && budget.percent < 100
 
@@ -394,7 +389,7 @@ function HomeContent() {
           ) : (
             recentTransactions.map((tx, index) => {
                const isPending = tx.status === 'pending';
-               const IconComp = ICON_MAP[tx.categories?.icon] || ICON_MAP['other']
+               const IconComp = getDynamicIcon(tx.categories?.icon)
                return (
                 <div 
                   key={tx.id} 
