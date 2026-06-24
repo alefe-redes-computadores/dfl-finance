@@ -4,8 +4,22 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins } from 'lucide-react'
+import {
+  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins,
+  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
+  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+} from 'lucide-react'
 import { format } from 'date-fns'
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
+  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
+  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
+  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
+  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
+  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+}
 
 export default function EditTransactionPage() {
   const { id } = useParams()
@@ -36,6 +50,10 @@ export default function EditTransactionPage() {
   const [isRefund, setIsRefund] = useState(false)
   const [isFinancing, setIsFinancing] = useState(false)
   const [isLoan, setIsLoan] = useState(false)
+
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [showAccModal, setShowAccModal] = useState(false)
+  const [showTagModal, setShowTagModal] = useState(false)
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
@@ -122,7 +140,6 @@ export default function EditTransactionPage() {
 
     setSaving(true)
 
-    // Converter valor formatado (ex: "1.234,56") para número
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
 
     if (isNaN(rawAmount) || rawAmount <= 0) {
@@ -148,15 +165,14 @@ export default function EditTransactionPage() {
       description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
+      tag_id: tagId || null,
       notes: finalNotes || null,
       type: txType,
       context: 'dfl'
     }
 
     try {
-      // --- Estorno do valor antigo (se a transação original estava como 'done') ---
       if (!isNew && tx && tx.status === 'done' && tx.account_id) {
-        // Buscar saldo atual da conta antiga no banco
         const { data: oldAccData, error: oldAccError } = await supabase
           .from('accounts')
           .select('balance')
@@ -179,7 +195,6 @@ export default function EditTransactionPage() {
         if (revertError) throw revertError
       }
 
-      // --- Aplicar o novo valor (se o novo status for 'done' e houver conta) ---
       if (isPaid && accountId) {
         const { data: newAccData, error: newAccError } = await supabase
           .from('accounts')
@@ -202,7 +217,6 @@ export default function EditTransactionPage() {
         if (applyError) throw applyError
       }
 
-      // Salvar/atualizar a transação
       if (isNew) {
         const { error } = await supabase.from('transactions').insert([payload])
         if (error) throw error
@@ -227,7 +241,6 @@ export default function EditTransactionPage() {
     setSaving(true)
 
     if (tx && tx.status === 'done' && tx.account_id) {
-      // Buscar saldo atual da conta diretamente do banco
       const { data: accData, error: accError } = await supabase
         .from('accounts')
         .select('balance')
@@ -252,7 +265,7 @@ export default function EditTransactionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
         <Loader2 className="animate-spin text-teal-700" size={40} />
       </div>
     )
@@ -260,26 +273,30 @@ export default function EditTransactionPage() {
 
   const isIncome = txType === 'income'
   const typeLabel = isIncome ? 'receita' : 'despesa'
-  const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800'
-  const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-600' : 'bg-teal-700') : 'bg-gray-300'
+  const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800 dark:text-gray-200'
+  const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-600' : 'bg-teal-700') : 'bg-gray-300 dark:bg-gray-600'
+
+  const selectedCat = categories.find(c => c.id === categoryId)
+  const selectedAcc = accounts.find(a => a.id === accountId)
+  const selectedTag = tags.find(t => t.id === tagId)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] font-sans pb-24 relative">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
       <div className="flex justify-between items-center p-4">
-        <button onClick={() => router.back()} className="text-gray-800 p-2 -ml-2">
+        <button onClick={() => router.back()} className="text-gray-800 dark:text-gray-200 p-2 -ml-2">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="font-bold text-[16px] text-gray-800 capitalize">{isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}</h1>
-        <div className="flex items-center gap-4 text-teal-700">
+        <h1 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 capitalize">{isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}</h1>
+        <div className="flex items-center gap-4 text-teal-700 dark:text-teal-400">
           {!isNew && <button><Copy size={20} /></button>}
           {!isNew && <button onClick={handleDelete} className="text-red-500"><Trash2 size={20} /></button>}
         </div>
       </div>
 
       <div className="px-6 py-4 mb-4">
-        <p className="text-gray-500 text-[13px] font-medium mb-2 capitalize">Valor da {typeLabel}</p>
+        <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mb-2 capitalize">Valor da {typeLabel}</p>
         <div className="flex items-center gap-2">
-          <span className="text-3xl text-gray-400 font-light">R$</span>
+          <span className="text-3xl text-gray-400 dark:text-gray-500 font-light">R$</span>
           <input
             type="text"
             inputMode="numeric"
@@ -291,149 +308,230 @@ export default function EditTransactionPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] space-y-6">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+      <div className="bg-white dark:bg-slate-800 rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] dark:shadow-none space-y-6 transition-colors duration-300">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
           <div className="flex items-center gap-4">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid ? 'bg-gray-800' : 'bg-gray-300'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid ? 'bg-gray-800 dark:bg-gray-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
               <Check size={14} />
             </div>
-            <span className="font-bold text-[15px] text-gray-800">{isIncome ? 'Recebido' : 'Pago'}</span>
+            <span className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{isIncome ? 'Recebido' : 'Pago'}</span>
           </div>
           <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}>
             <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
           </button>
         </div>
 
-        <div className="flex items-center gap-4 border-b border-gray-100 pb-5 relative">
-          <Calendar size={22} className="text-gray-400" />
+        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 relative">
+          <Calendar size={22} className="text-gray-400 dark:text-gray-500" />
           <input
             type="date"
             value={date}
             onChange={(e) => handleDateChange(e.target.value)}
-            className="flex-1 text-[15px] font-bold text-gray-800 outline-none bg-transparent"
+            className="flex-1 text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none bg-transparent"
           />
         </div>
 
-        <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-          <Edit3 size={22} className="text-gray-400" />
+        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+          <Edit3 size={22} className="text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Descrição"
-            className="flex-1 text-[15px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300"
+            className="flex-1 text-[15px] text-gray-800 dark:text-gray-200 outline-none bg-transparent placeholder:text-gray-300 dark:placeholder-gray-500"
           />
         </div>
 
-        <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-          <Tag size={22} className="text-gray-400" />
-          <div className="flex-1 flex flex-col">
-            <span className="font-bold text-[14px] text-gray-800">Categoria</span>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="text-[14px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer">
-              <option value="">Selecione...</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <ChevronRight size={18} className="text-gray-300" />
+        {/* Categoria com modal */}
+        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+          <Tag size={22} className="text-gray-400 dark:text-gray-500" />
+          <button onClick={() => setShowCatModal(true)} className="flex-1 flex flex-col text-left">
+            <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Categoria</span>
+            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedCat ? selectedCat.name : 'Selecione...'}</span>
+          </button>
+          <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
         </div>
 
-        <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-          <Wallet size={22} className="text-gray-400" />
-          <div className="flex-1 flex flex-col">
-            <span className="font-bold text-[14px] text-gray-800">Conta</span>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="text-[14px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer">
-              <option value="">Selecione...</option>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <ChevronRight size={18} className="text-gray-300" />
+        {/* Conta com modal */}
+        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+          <Wallet size={22} className="text-gray-400 dark:text-gray-500" />
+          <button onClick={() => setShowAccModal(true)} className="flex-1 flex flex-col text-left">
+            <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Conta</span>
+            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedAcc ? selectedAcc.name : 'Selecione...'}</span>
+          </button>
+          <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
         </div>
 
         <div className="flex justify-center pt-2 pb-2">
-          <button onClick={() => setShowDetails(!showDetails)} className="text-[14px] font-bold text-teal-700 hover:text-teal-800 transition-colors">
+          <button onClick={() => setShowDetails(!showDetails)} className="text-[14px] font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
             {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           </button>
         </div>
 
         {showDetails && (
           <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-              <RefreshCw size={22} className="text-gray-400" />
+            <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+              <RefreshCw size={22} className="text-gray-400 dark:text-gray-500" />
               <div className="flex-1 flex flex-col gap-3">
-                <span className="font-bold text-[14px] text-gray-800">Repetição</span>
+                <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Repetição</span>
                 <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-                  <button className="px-4 py-1.5 rounded-full border border-teal-700 text-teal-700 bg-teal-50 text-[13px] font-medium whitespace-nowrap">Única</button>
-                  <button className="px-4 py-1.5 rounded-full bg-gray-50 text-gray-500 text-[13px] font-medium whitespace-nowrap">Parcelar</button>
-                  <button className="px-4 py-1.5 rounded-full bg-gray-50 text-gray-500 text-[13px] font-medium whitespace-nowrap">Recorrente</button>
+                  <button className="px-4 py-1.5 rounded-full border border-teal-700 dark:border-teal-500 text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 text-[13px] font-medium whitespace-nowrap">Única</button>
+                  <button className="px-4 py-1.5 rounded-full bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-[13px] font-medium whitespace-nowrap">Parcelar</button>
+                  <button className="px-4 py-1.5 rounded-full bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-[13px] font-medium whitespace-nowrap">Recorrente</button>
                 </div>
               </div>
             </div>
 
             {!isIncome && (
               <>
-                <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
                   <div className="flex items-center gap-4">
-                    <ArrowRightLeft size={22} className="text-gray-400" />
+                    <ArrowRightLeft size={22} className="text-gray-400 dark:text-gray-500" />
                     <div className="flex flex-col">
-                      <span className="font-bold text-[14px] text-gray-800">É uma devolução / estorno</span>
-                      <span className="text-[11px] text-gray-400">Abate o gasto da categoria no relatório</span>
+                      <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500">Abate o gasto da categoria no relatório</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
                   <div className="flex items-center gap-4">
-                    <Building size={22} className="text-gray-400" />
-                    <span className="font-bold text-[14px] text-gray-800">Financiamento</span>
+                    <Building size={22} className="text-gray-400 dark:text-gray-500" />
+                    <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Financiamento</span>
                   </div>
-                  <button onClick={() => setIsFinancing(!isFinancing)} className={`w-11 h-6 rounded-full relative transition-colors ${isFinancing ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                  <button onClick={() => setIsFinancing(!isFinancing)} className={`w-11 h-6 rounded-full relative transition-colors ${isFinancing ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isFinancing ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
                   <div className="flex items-center gap-4">
-                    <HandCoins size={22} className="text-gray-400" />
+                    <HandCoins size={22} className="text-gray-400 dark:text-gray-500" />
                     <div className="flex flex-col">
-                      <span className="font-bold text-[14px] text-gray-800">Empréstimo a alguém</span>
-                      <span className="text-[11px] text-gray-400">Vira saldo a receber em "Quem me deve"</span>
+                      <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Empréstimo a alguém</span>
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500">Vira saldo a receber em "Quem me deve"</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsLoan(!isLoan)} className={`w-11 h-6 rounded-full relative transition-colors ${isLoan ? 'bg-teal-700' : 'bg-gray-200'}`}>
+                  <button onClick={() => setIsLoan(!isLoan)} className={`w-11 h-6 rounded-full relative transition-colors ${isLoan ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isLoan ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
               </>
             )}
 
-            <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-              <Edit3 size={22} className="text-gray-400 opacity-50" />
+            <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
+              <Edit3 size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Observações"
-                className="flex-1 text-[14px] text-gray-800 outline-none bg-transparent placeholder:text-gray-300"
+                className="flex-1 text-[14px] text-gray-800 dark:text-gray-200 outline-none bg-transparent placeholder:text-gray-300 dark:placeholder-gray-500"
               />
             </div>
 
             <div className="flex items-center gap-4 pb-2">
-              <Tag size={22} className="text-gray-400 opacity-50" />
-              <div className="flex-1 flex flex-col">
-                <span className="font-bold text-[14px] text-gray-800">Tags</span>
-                <select value={tagId} onChange={(e) => setTagId(e.target.value)} className="text-[14px] text-gray-500 outline-none bg-transparent mt-0.5 appearance-none cursor-pointer">
-                  <option value="">Nenhuma tag</option>
-                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <ChevronRight size={18} className="text-gray-300" />
+              <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
+              <button onClick={() => setShowTagModal(true)} className="flex-1 flex flex-col text-left">
+                <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Tags</span>
+                <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedTag ? selectedTag.name : 'Nenhuma tag'}</span>
+              </button>
+              <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
             </div>
           </div>
         )}
       </div>
+
+      {/* Modais de seleção */}
+      {showCatModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => { setShowCatModal(false); router.push('/categories'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {categories.map(cat => {
+                const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const isActive = cat.id === categoryId
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
+                      <IconComp size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {categories.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma categoria encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => { setShowAccModal(false); router.push('/accounts'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {accounts.map(acc => {
+                const isActive = acc.id === accountId
+                return (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {accounts.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma conta encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTagModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => { setShowTagModal(false); router.push('/tags'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {tags.map(tag => {
+                const isActive = tag.id === tagId
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {tags.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma tag encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
         <button
