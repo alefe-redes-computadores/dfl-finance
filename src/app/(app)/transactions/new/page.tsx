@@ -17,6 +17,7 @@ import ReceiptModal from '@/components/ReceiptModal'
 import ComingSoonModal from '@/components/ComingSoonModal'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
+import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -96,6 +97,8 @@ function NewTransactionContent() {
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#22c55e')
   const [savingTag, setSavingTag] = useState(false)
+
+  const { isOnline, saveToQueue } = useOfflineQueue()
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
@@ -405,7 +408,7 @@ function NewTransactionContent() {
           installmentDate = format(addMonths(new Date(date), i), 'yyyy-MM-dd')
         }
 
-        const { error: insertError } = await supabase.from('transactions').insert({
+        const payload = {
           user_id: user.id,
           type,
           amount: installmentAmount,
@@ -420,7 +423,20 @@ function NewTransactionContent() {
           recurring_group_id: recurringGroupId,
           installment_index: totalParcels > 1 ? i + 1 : 1,
           total_installments: totalParcels > 1 ? totalParcels : 1
-        })
+        }
+
+        // Modo offline: salva na fila local
+        if (!isOnline) {
+          await saveToQueue(payload)
+          if (i === totalParcels - 1) {
+            alert('Transação salva localmente. Será enviada quando houver conexão.')
+            router.push('/transactions')
+          }
+          continue
+        }
+
+        // Modo online: salva no Supabase
+        const { error: insertError } = await supabase.from('transactions').insert(payload)
         if (insertError) throw insertError
 
         if (isPaid && accountId && i === 0) {
@@ -432,12 +448,13 @@ function NewTransactionContent() {
           }
         }
       }
-      router.refresh()
-      router.push('/transactions')
+      if (isOnline) {
+        router.refresh()
+        router.push('/transactions')
+      }
    } catch (e: any) {
       alert('ERRO DO BANCO:\n' + (e.message || JSON.stringify(e)))
     } finally {
-
       setSaving(false)
     }
   }
