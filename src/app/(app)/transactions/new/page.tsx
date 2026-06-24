@@ -12,7 +12,7 @@ import {
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
   QrCode, ChevronRight
 } from 'lucide-react'
-import { addMonths, addWeeks, format } from 'date-fns'
+import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
 import ComingSoonModal from '@/components/ComingSoonModal'
 import CameraCapture from '@/components/CameraCapture'
@@ -62,6 +62,8 @@ function NewTransactionContent() {
   const [tags, setTags] = useState<any[]>([])
   const [receipt, setReceipt] = useState<File | null>(null)
   const [installments, setInstallments] = useState(1)
+  const [budgets, setBudgets] = useState<any[]>([])
+  const [budgetAlert, setBudgetAlert] = useState<{ message: string; type: 'warning' | 'danger' } | null>(null)
 
   const [repetition, setRepetition] = useState<Repetition>('once')
   const [frequency, setFrequency] = useState<Frequency>('monthly')
@@ -100,6 +102,8 @@ function NewTransactionContent() {
 
   const { isOnline, saveToQueue } = useOfflineQueue()
 
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
     const selectedDate = new Date(newDateStr + 'T12:00:00')
@@ -129,10 +133,11 @@ function NewTransactionContent() {
     if (!user || !user.id) return
     const catType = type === 'income' ? 'income' : 'expense'
 
-    const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
+    const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }] = await Promise.all([
       supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context).eq('type', catType),
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
-      supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name')
+      supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name'),
+      supabase.from('budgets').select('*').match({ user_id: user.id, context: context })
     ])
 
     const allCats = Array.isArray(cats) ? cats : []
@@ -150,9 +155,55 @@ function NewTransactionContent() {
     setSubcategories(subsMap)
     setAccounts(Array.isArray(accs) ? accs : [])
     setTags(Array.isArray(tgs) ? tgs : [])
+    setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
   }, [user, context, type])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Alerta de orçamento
+  useEffect(() => {
+    if (!categoryId || amountNum <= 0 || type !== 'expense') {
+      setBudgetAlert(null)
+      return
+    }
+
+    const budget = budgets.find(b => b.category_id === categoryId)
+    if (!budget) {
+      setBudgetAlert(null)
+      return
+    }
+
+    const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
+    const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+
+    supabase
+      .from('transactions')
+      .select('amount')
+      .match({ user_id: user!.id, context: context, category_id: categoryId })
+      .eq('status', 'done')
+      .gte('date', start)
+      .lte('date', end)
+      .then(({ data }) => {
+        const spent = (data || []).reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+        const total = spent + amountNum
+        const limit = Number(budget.amount)
+        const percent = (total / limit) * 100
+
+        if (total > limit) {
+          setBudgetAlert({
+            message: `⚠️ Este valor ultrapassa o orçamento de "${budget.name}" (${formatCurrency(limit)}). Já foi gasto ${formatCurrency(spent)}.`,
+            type: 'danger'
+          })
+        } else if (percent >= 80) {
+          setBudgetAlert({
+            message: `⚠️ Atenção! Com este valor, "${budget.name}" atinge ${percent.toFixed(0)}% do orçamento (${formatCurrency(limit)}).`,
+            type: 'warning'
+          })
+        } else {
+          setBudgetAlert(null)
+        }
+      })
+  }, [categoryId, amountNum, type, budgets, user, context])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
@@ -359,6 +410,39 @@ function NewTransactionContent() {
     }
     setSaving(true)
 
+    // Verificação de orçamento antes de salvar
+    if (type === 'expense' && categoryId && budgets.length > 0) {
+      const budget = budgets.find(b => b.category_id === categoryId)
+      if (budget) {
+        const start = format(startOfMonth(new Date(date)), 'yyyy-MM-dd')
+        const end = format(endOfMonth(new Date(date)), 'yyyy-MM-dd')
+        const { data: existingTxs } = await supabase
+          .from('transactions')
+          .select('amount')
+          .match({ user_id: user.id, context: context, category_id: categoryId })
+          .eq('status', 'done')
+          .gte('date', start)
+          .lte('date', end)
+        
+        const spent = (existingTxs || []).reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+        const total = spent + rawAmount
+        const limit = Number(budget.amount)
+        
+        if (total > limit) {
+          const proceed = confirm(
+            `⚠️ Alerta de Orçamento!\n\n"${budget.name}" já tem ${formatCurrency(spent)} gasto(s).\n` +
+            `Com mais ${formatCurrency(rawAmount)}, o total será ${formatCurrency(total)}.\n` +
+            `O orçamento é de ${formatCurrency(limit)}.\n\n` +
+            `Deseja continuar mesmo assim?`
+          )
+          if (!proceed) {
+            setSaving(false)
+            return
+          }
+        }
+      }
+    }
+
     let receiptUrl: string | null = null
     if (receipt) {
       try {
@@ -425,7 +509,6 @@ function NewTransactionContent() {
           total_installments: totalParcels > 1 ? totalParcels : 1
         }
 
-        // Modo offline: salva na fila local
         if (!isOnline) {
           await saveToQueue(payload)
           if (i === totalParcels - 1) {
@@ -435,7 +518,6 @@ function NewTransactionContent() {
           continue
         }
 
-        // Modo online: salva no Supabase
         const { error: insertError } = await supabase.from('transactions').insert(payload)
         if (insertError) throw insertError
 
@@ -493,6 +575,17 @@ function NewTransactionContent() {
           <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
           <input type="text" inputMode="numeric" value={amount} onChange={handleAmount} className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`} />
         </div>
+
+        {/* Alerta de Orçamento */}
+        {type === 'expense' && budgetAlert && (
+          <div className={`mt-3 mx-6 p-3 rounded-xl text-xs font-bold ${
+            budgetAlert.type === 'danger' 
+              ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' 
+              : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800'
+          }`}>
+            {budgetAlert.message}
+          </div>
+        )}
       </div>
 
       {/* Card Principal */}
