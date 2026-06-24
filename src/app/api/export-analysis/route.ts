@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   // Busca transações com categorias
   const { data: transactions } = await supabase
     .from('transactions')
-    .select('amount, type, status, categories(name, color)')
+    .select('amount, type, status, category_id, categories!inner(name, color)')
     .eq('user_id', userId)
     .eq('context', context)
     .gte('date', start)
@@ -44,10 +44,10 @@ export async function GET(req: NextRequest) {
   let totalExpense = 0
 
   transactions.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
-    const key = t.categories?.name || 'Sem categoria'
-    if (!catMap[key]) catMap[key] = { total: 0, count: 0 }
-    catMap[key].total += Number(t.amount) || 0
-    catMap[key].count += 1
+    const catName = (t.categories as any)?.name || 'Sem categoria'
+    if (!catMap[catName]) catMap[catName] = { total: 0, count: 0 }
+    catMap[catName].total += Number(t.amount) || 0
+    catMap[catName].count += 1
     totalExpense += Number(t.amount) || 0
   })
 
