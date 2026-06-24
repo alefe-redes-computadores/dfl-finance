@@ -15,6 +15,8 @@ import {
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import { useOfflineQueue } from '@/hooks/useOfflineQueue'
+import NetworkStatus from '@/components/NetworkStatus'
 
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
@@ -50,6 +52,8 @@ function HomeContent() {
   const [cards, setCards] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
+
+  const { isOnline, pendingCount, syncQueue } = useOfflineQueue()
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
@@ -148,6 +152,9 @@ function HomeContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
+      
+      {/* Indicador de status offline */}
+      <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} />
       
       {/* Header Premium */}
       <div className="flex justify-between items-center mb-6">
