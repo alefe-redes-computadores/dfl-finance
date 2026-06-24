@@ -7,8 +7,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   Wallet, Tags, ChevronRight, LogOut, Camera, Check, Edit2, Bot, Lock,
-  CreditCard, Hash, PieChart, Target, TrendingUp, Users, BarChart2, X,
-  Sun, Moon, Download, ReceiptText
+  CreditCard, Hash, PieChart, Target, TrendingUp, Users, X,
+  Sun, Moon, Download, ReceiptText, PiggyBank
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -255,7 +255,12 @@ export default function MorePage() {
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Target className="text-teal-700 dark:text-teal-400" size={20}/> Orçamentos</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
-        {/* NOVO: Exportar Dados */}
+        {/* NOVO: Metas */}
+        <Link href="/goals" className="flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+          <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><PiggyBank className="text-teal-700 dark:text-teal-400" size={20}/> Metas</div>
+          <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
+        </Link>
+        {/* Exportar Dados */}
         <button onClick={() => setShowExportModal(true)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Download className="text-teal-700 dark:text-teal-400" size={20}/> Exportar Dados</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
@@ -265,7 +270,6 @@ export default function MorePage() {
       <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 px-1">No forno</h4>
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 opacity-70 overflow-hidden">
         {[ 
-          {icon: Target, title: 'Metas'}, 
           {icon: TrendingUp, title: 'Projeções'}, 
           {icon: Users, title: 'Assinaturas'}
         ].map((item, i) => (
