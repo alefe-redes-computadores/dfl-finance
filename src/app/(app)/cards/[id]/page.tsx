@@ -19,74 +19,34 @@ import {
   Clock,
   ArrowDown,
   ArrowUp,
+  X,
+  Check,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import InvoiceAlert from '@/components/InvoiceAlert'
 
-function InvoiceAlert({ dueDay, closingDay }: { dueDay: number; closingDay: number }) {
-  const today = new Date()
-  const currentDay = today.getDate()
-  const currentMonth = today.getMonth()
-  const currentYear = today.getFullYear()
+async function calculateCardLimit(cardId: string, userId: string) {
+  const { data: card } = await supabase
+    .from('credit_cards')
+    .select('limit_amount')
+    .eq('id', cardId)
+    .single()
 
-  // Definir a data de vencimento do mês atual
-  let dueDate = new Date(currentYear, currentMonth, dueDay)
-  if (currentDay > dueDay) {
-    dueDate = new Date(currentYear, currentMonth + 1, dueDay)
-  }
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('amount, type')
+    .eq('credit_card_id', cardId)
+    .eq('user_id', userId)
 
-  const diffTime = dueDate.getTime() - today.getTime()
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  const totalGastos = (txs || []).reduce((acc, t) => {
+    return t.type === 'income' ? acc - Number(t.amount) : acc + Number(t.amount)
+  }, 0)
 
-  if (diffDays === 0) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-3">
-        <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
-        <div>
-          <p className="font-bold text-red-700 dark:text-red-300 text-sm">Sua fatura vence hoje!</p>
-          <p className="text-xs text-red-600 dark:text-red-400">Dia {dueDay} • Fecha dia {closingDay}</p>
-        </div>
-      </div>
-    )
-  } else if (diffDays < 0) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-3">
-        <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
-        <div>
-          <p className="font-bold text-red-700 dark:text-red-300 text-sm">
-            Fatura vencida há {Math.abs(diffDays)} dias!
-          </p>
-          <p className="text-xs text-red-600 dark:text-red-400">Venceu dia {dueDay} • Fecha dia {closingDay}</p>
-        </div>
-      </div>
-    )
-  } else if (diffDays <= 5) {
-    return (
-      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-3 flex items-center gap-3">
-        <Clock size={20} className="text-orange-600 dark:text-orange-400" />
-        <div>
-          <p className="font-bold text-orange-700 dark:text-orange-300 text-sm">
-            Fatura vence em {diffDays} dias
-          </p>
-          <p className="text-xs text-orange-600 dark:text-orange-400">Dia {dueDay} • Fecha dia {closingDay}</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 flex items-center gap-3">
-      <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
-      <div>
-        <p className="font-bold text-emerald-700 dark:text-emerald-300 text-sm">
-          Fatura vence em {diffDays} dias
-        </p>
-        <p className="text-xs text-emerald-600 dark:text-emerald-400">Dia {dueDay} • Fecha dia {closingDay}</p>
-      </div>
-    </div>
-  )
+  const novoLimite = Number(card?.limit_amount || 0) - totalGastos
+  return Math.max(0, novoLimite)
 }
 
 function CardDetailContent() {
@@ -103,13 +63,18 @@ function CardDetailContent() {
   const [availableLimit, setAvailableLimit] = useState(0)
   const [estornosTotal, setEstornosTotal] = useState(0)
 
+  // Modal de ajuste (estorno)
+  const [showAdjustModal, setShowAdjustModal] = useState(false)
+  const [adjustAmount, setAdjustAmount] = useState('0,00')
+  const [adjustDescription, setAdjustDescription] = useState('')
+  const [adjustSaving, setAdjustSaving] = useState(false)
+
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadCardData = useCallback(async () => {
     if (!user?.id || !cardId) return
     setLoading(true)
 
-    // Dados do cartão
     const { data: cardData } = await supabase
       .from('credit_cards')
       .select('*')
@@ -122,7 +87,6 @@ function CardDetailContent() {
     }
     setCard(cardData)
 
-    // Transações do mês
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
@@ -136,7 +100,6 @@ function CardDetailContent() {
 
     const txs = Array.isArray(txsData) ? txsData : []
 
-    // Separar despesas e estornos
     const despesas = txs.filter(t => t.type !== 'income')
     const estornos = txs.filter(t => t.type === 'income')
     const totalDespesas = despesas.reduce((a, t) => a + Number(t.amount || 0), 0)
@@ -147,7 +110,7 @@ function CardDetailContent() {
     setTotalSpent(spent)
     setEstornosTotal(totalEstornos)
 
-    // Limite disponível
+    // Limite disponível recalculado
     const limit = Number(cardData.limit_amount) || 0
     setAvailableLimit(limit - spent)
 
@@ -171,16 +134,56 @@ function CardDetailContent() {
   }
 
   const handleAdjustTotal = () => {
-    // Abre modal de ajuste (estorno) - podemos implementar depois
-    alert('Funcionalidade de ajuste em desenvolvimento')
+    setAdjustAmount('0,00')
+    setAdjustDescription('')
+    setShowAdjustModal(true)
   }
 
-  const handleImportInvoice = () => {
-    alert('Funcionalidade de importação em desenvolvimento')
+  const handleSaveAdjust = async () => {
+    if (!user?.id || !cardId) return
+
+    const rawAmount = parseFloat(adjustAmount.replace(/\./g, '').replace(',', '.')) || 0
+    if (rawAmount <= 0) {
+      alert('Informe um valor válido para o estorno.')
+      return
+    }
+
+    setAdjustSaving(true)
+    const payload = {
+      user_id: user.id,
+      amount: rawAmount,
+      type: 'income', // Estorno é tratado como entrada no cartão
+      status: 'done',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      description: adjustDescription || 'Estorno / Ajuste',
+      credit_card_id: cardId,
+      context: context,
+      category_id: null,
+    }
+
+    const { error } = await supabase.from('transactions').insert([payload])
+    if (error) {
+      alert('Erro ao registrar estorno: ' + error.message)
+    } else {
+      setShowAdjustModal(false)
+      // Recalcular limite e recarregar dados
+      loadCardData()
+    }
+    setAdjustSaving(false)
   }
 
-  const handleAnalysis = () => {
-    router.push(`/analysis?cardId=${cardId}`)
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '')
+    if (!digits) {
+      setAdjustAmount('0,00')
+      return
+    }
+    const numValue = parseFloat(digits) / 100
+    const formatted = new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numValue)
+    setAdjustAmount(formatted)
   }
 
   if (loading) {
@@ -257,19 +260,11 @@ function CardDetailContent() {
 
       {/* Navegação de meses */}
       <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-full p-1.5 mb-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <button
-          onClick={() => navigateMonth('prev')}
-          className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-        >
+        <button onClick={() => navigateMonth('prev')} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300">
           <ChevronLeft size={18} />
         </button>
-        <span className="text-sm font-bold text-gray-800 dark:text-gray-200 capitalize">
-          {monthLabel}
-        </span>
-        <button
-          onClick={() => navigateMonth('next')}
-          className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-        >
+        <span className="text-sm font-bold text-gray-800 dark:text-gray-200 capitalize">{monthLabel}</span>
+        <button onClick={() => navigateMonth('next')} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300">
           <ChevronRight size={18} />
         </button>
       </div>
@@ -295,24 +290,15 @@ function CardDetailContent() {
 
       {/* Botões de ação */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <button
-          onClick={handleImportInvoice}
-          className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center gap-1 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
+        <button onClick={() => alert('Importação em breve')} className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center gap-1 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <Download size={20} className="text-gray-500 dark:text-gray-400" />
           <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">Importar</span>
         </button>
-        <button
-          onClick={handleAdjustTotal}
-          className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center gap-1 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
+        <button onClick={handleAdjustTotal} className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center gap-1 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <RefreshCw size={20} className="text-gray-500 dark:text-gray-400" />
           <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">Ajustar</span>
         </button>
-        <button
-          onClick={handleAnalysis}
-          className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center gap-1 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
+        <button onClick={() => router.push(`/analysis?cardId=${cardId}`)} className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center gap-1 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <PieChart size={20} className="text-gray-500 dark:text-gray-400" />
           <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">Análise</span>
         </button>
@@ -328,16 +314,9 @@ function CardDetailContent() {
             <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
               <CreditCard size={24} className="text-gray-400 dark:text-gray-500" />
             </div>
-            <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">
-              Sua fatura está vazia
-            </p>
-            <p className="text-gray-400 dark:text-gray-500 text-xs mb-4">
-              Importe o PDF ou lance manualmente
-            </p>
-            <button
-              onClick={() => router.push('/transactions/card-expense')}
-              className="bg-teal-700 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-teal-800 transition-colors"
-            >
+            <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">Sua fatura está vazia</p>
+            <p className="text-gray-400 dark:text-gray-500 text-xs mb-4">Importe o PDF ou lance manualmente</p>
+            <button onClick={() => router.push('/transactions/card-expense')} className="bg-teal-700 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-teal-800 transition-colors">
               Nova despesa no cartão
             </button>
           </div>
@@ -356,17 +335,11 @@ function CardDetailContent() {
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center"
                       style={{
-                        backgroundColor: isEstorno
-                          ? '#d1fae5'
-                          : `${tx.categories?.color || '#cbd5e1'}20`,
+                        backgroundColor: isEstorno ? '#d1fae5' : `${tx.categories?.color || '#cbd5e1'}20`,
                         color: isEstorno ? '#059669' : tx.categories?.color || '#64748b'
                       }}
                     >
-                      {isEstorno ? (
-                        <RefreshCw size={18} />
-                      ) : (
-                        <IconComp size={18} />
-                      )}
+                      {isEstorno ? <RefreshCw size={18} /> : <IconComp size={18} />}
                     </div>
                     <div>
                       <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
@@ -379,8 +352,7 @@ function CardDetailContent() {
                     </div>
                   </div>
                   <p className={`text-[14px] font-bold ${isEstorno ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {isEstorno ? '+ ' : '- '}
-                    {formatCurrency(Number(tx.amount) || 0)}
+                    {isEstorno ? '+ ' : '- '}{formatCurrency(Number(tx.amount) || 0)}
                   </p>
                 </div>
               )
@@ -388,6 +360,50 @@ function CardDetailContent() {
           </div>
         )}
       </div>
+
+      {/* Modal de Ajuste (Estorno) */}
+      {showAdjustModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowAdjustModal(false)}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Ajustar total (Estorno)</h3>
+              <button onClick={() => setShowAdjustModal(false)} className="text-gray-400 dark:text-gray-500 p-1"><X size={20} /></button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Registre um crédito na fatura (estorno).</p>
+            <div className="mb-4">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor do crédito</label>
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+                <span className="text-gray-400 dark:text-gray-500 font-bold mr-2">R$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={adjustAmount}
+                  onChange={handleAmountChange}
+                  className="bg-transparent w-full outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+            <div className="mb-6">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Descrição (opcional)</label>
+              <input
+                type="text"
+                value={adjustDescription}
+                onChange={e => setAdjustDescription(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 outline-none text-sm text-gray-800 dark:text-gray-200"
+                placeholder="Ex: Estorno da loja X"
+              />
+            </div>
+            <button
+              onClick={handleSaveAdjust}
+              disabled={adjustSaving}
+              className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50"
+            >
+              {adjustSaving ? 'Salvando...' : 'Registrar Estorno'}
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   )
