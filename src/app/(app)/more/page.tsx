@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import {
   Wallet, Tags, ChevronRight, LogOut, Camera, Check, Edit2, Bot, Lock,
   CreditCard, Hash, PieChart, Target, TrendingUp, Users, BarChart2, X,
-  Sun, Moon
+  Sun, Moon, Download, ReceiptText
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -17,6 +17,8 @@ export default function MorePage() {
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const [modalOpen, setModalOpen] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportRange, setExportRange] = useState('30')
   const [name, setName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -79,6 +81,13 @@ export default function MorePage() {
     setUploading(false)
   }
 
+  const handleExport = (type: string) => {
+    if (!user) return
+    const endpoint = type === 'transactions' ? 'export-transactions' : 'export-analysis'
+    window.open(`/api/${endpoint}?userId=${user.id}&context=dfl&range=${exportRange}`, '_blank')
+    setShowExportModal(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pb-24 px-5 pt-8 font-sans transition-colors duration-300">
       
@@ -94,6 +103,47 @@ export default function MorePage() {
               <button onClick={handleCropAndUpload} className="flex-1 py-3 bg-teal-700 text-white rounded-xl font-bold">Cortar e Salvar</button>
             </div>
             <canvas ref={canvasRef} className="hidden" />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Exportar */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-100">Exportar Dados</h3>
+            
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Período</p>
+            <div className="flex gap-2 mb-4">
+              {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Total' }].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setExportRange(opt.key)}
+                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${exportRange === opt.key ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <button onClick={() => handleExport('transactions')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">
+                <ReceiptText size={20} className="text-teal-700 dark:text-teal-400" />
+                <div className="text-left">
+                  <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Extrato de Transações</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500">Lista completa de transações (CSV)</p>
+                </div>
+              </button>
+              <button onClick={() => handleExport('analysis')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">
+                <PieChart size={20} className="text-teal-700 dark:text-teal-400" />
+                <div className="text-left">
+                  <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Resumo por Categoria</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500">Gastos agrupados por categoria (CSV)</p>
+                </div>
+              </button>
+            </div>
+
+            <button onClick={() => setShowExportModal(false)} className="w-full mt-4 py-3 text-gray-500 dark:text-gray-400 font-bold text-sm">Cancelar</button>
           </div>
         </div>
       )}
@@ -201,20 +251,23 @@ export default function MorePage() {
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Hash className="text-teal-700 dark:text-teal-400" size={20}/> Tags</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
-        {/* NOVO LINK: Orçamentos */}
-        <Link href="/budgets" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+        <Link href="/budgets" className="flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Target className="text-teal-700 dark:text-teal-400" size={20}/> Orçamentos</div>
           <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
         </Link>
+        {/* NOVO: Exportar Dados */}
+        <button onClick={() => setShowExportModal(true)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+          <div className="flex items-center gap-3 font-medium text-gray-700 dark:text-gray-200"><Download className="text-teal-700 dark:text-teal-400" size={20}/> Exportar Dados</div>
+          <ChevronRight size={18} className="text-gray-400 dark:text-gray-500"/>
+        </button>
       </div>
 
       <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 px-1">No forno</h4>
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 opacity-70 overflow-hidden">
         {[ 
-          {icon: PieChart, title: 'Metas'}, 
+          {icon: Target, title: 'Metas'}, 
           {icon: TrendingUp, title: 'Projeções'}, 
-          {icon: Users, title: 'Assinaturas'}, 
-          {icon: BarChart2, title: 'Relatórios'} 
+          {icon: Users, title: 'Assinaturas'}
         ].map((item, i) => (
           <button key={i} onClick={() => setModalOpen(true)} className="w-full flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
             <div className="flex items-center gap-3">
