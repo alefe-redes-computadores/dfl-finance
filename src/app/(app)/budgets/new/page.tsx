@@ -4,23 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import {
-  ChevronLeft, Check, Loader2, X, Tag,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
-} from 'lucide-react'
+import * as Icons from 'lucide-react'
+import { ChevronLeft, Check, Loader2, X, Tag } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
-const ICON_NAMES = Object.keys(ICON_MAP)
+import IconPicker from '@/components/IconPicker'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -40,7 +27,7 @@ function NewBudgetContent() {
   const [amountNum, setAmountNum] = useState(0)
   const [categoryId, setCategoryId] = useState('')
   const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('other')
+  const [icon, setIcon] = useState('Tag') // Usando um ícone padrão no formato PascalCase
   const [period, setPeriod] = useState<'monthly' | 'biweekly' | 'weekly'>('monthly')
   const [accumulate, setAccumulate] = useState(false)
 
@@ -68,9 +55,14 @@ function NewBudgetContent() {
       setAmount(Number(data.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setCategoryId(data.category_id || '')
       setColor(data.color)
-      setIcon(data.icon)
       setPeriod(data.period)
       setAccumulate(data.accumulate)
+      
+      // Ajuste para compatibilidade com ícones antigos em minúsculo
+      if (data.icon) {
+        const iconName = data.icon.charAt(0).toUpperCase() + data.icon.slice(1)
+        setIcon(iconName)
+      }
     }
     setLoading(false)
   }
@@ -132,7 +124,9 @@ function NewBudgetContent() {
   )
 
   const selectedCat = categories.find(c => c.id === categoryId)
-  const IconComp = ICON_MAP[icon] || ICON_MAP['other']
+  
+  // Renderização dinâmica do ícone selecionado
+  const IconComp = (Icons as any)[icon] || Icons.Tag
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -283,8 +277,11 @@ function NewBudgetContent() {
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
               {categories.map(cat => {
-                const CatIconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                // Ajuste para renderizar os ícones corretos das categorias listadas
+                const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
+                const CatIconComp = (Icons as any)[catIconName] || Icons.Tag
                 const isActive = cat.id === categoryId
+                
                 return (
                   <button
                     key={cat.id}
@@ -304,33 +301,13 @@ function NewBudgetContent() {
         </div>
       )}
 
-      {/* Modal Ícones */}
-      {showIconModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowIconModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Ícone</h3>
-              <button onClick={() => setShowIconModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {ICON_NAMES.map(iconName => {
-                const Ico = ICON_MAP[iconName]
-                const isSelected = icon === iconName
-                return (
-                  <button
-                    key={iconName}
-                    onClick={() => { setIcon(iconName); setShowIconModal(false) }}
-                    className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-                    style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
-                  >
-                    <Ico size={22} />
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Novo Componente de Seleção de Ícone */}
+      <IconPicker
+        isOpen={showIconModal}
+        onClose={() => setShowIconModal(false)}
+        selectedIcon={icon}
+        onSelect={setIcon}
+      />
 
     </div>
   )
