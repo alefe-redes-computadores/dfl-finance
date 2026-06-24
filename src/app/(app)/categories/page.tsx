@@ -5,14 +5,12 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { 
   ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight,
-  // Ícones premium
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-// Mapa de Ícones do Lucide
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
   graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
@@ -31,17 +29,14 @@ const DEFAULT_CATEGORIES = [
   { name:'Fornecedores', icon:'briefcase', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
   { name:'Marketing', icon:'trending', color:'#ec4899', type:'expense', context:'dfl', sort_order:4 },
   { name:'Manutenção', icon:'wrench', color:'#ca8a04', type:'expense', context:'dfl', sort_order:5 },
-
   { name:'Vendas', icon:'shopping', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
   { name:'Delivery', icon:'car', color:'#0891b2', type:'income', context:'dfl', sort_order:2 },
   { name:'Eventos', icon:'music', color:'#ec4899', type:'income', context:'dfl', sort_order:3 },
-
   { name:'Moradia', icon:'home', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
   { name:'Alimentação', icon:'utensils', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
   { name:'Transporte', icon:'car', color:'#0891b2', type:'expense', context:'personal', sort_order:3 },
   { name:'Saúde', icon:'heart', color:'#dc2626', type:'expense', context:'personal', sort_order:4 },
   { name:'Lazer', icon:'gamepad', color:'#7c3aed', type:'expense', context:'personal', sort_order:5 },
-
   { name:'Salário', icon:'briefcase', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
   { name:'Freelance', icon:'laptop', color:'#0891b2', type:'income', context:'personal', sort_order:2 },
   { name:'Investimentos', icon:'trending', color:'#ca8a04', type:'income', context:'personal', sort_order:3 },
@@ -57,13 +52,12 @@ export default function CategoriesPage() {
   const [tab, setTab] = useState<'expense'|'income'>('expense')
   const [context, setContext] = useState<'dfl'|'personal'>('dfl')
   
-  // Estados do Modal
   const [showForm, setShowForm] = useState(false)
   const [editingCategory, setEditingCategory] = useState<any | null>(null)
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('other')
   const [color, setColor] = useState('#16a34a')
-  const [parentId, setParentId] = useState<string | null>(null) // NOVO
+  const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -111,7 +105,6 @@ export default function CategoriesPage() {
   async function loadCategories() {
     if (!user) return
     
-    // Carrega categorias principais (parent_id IS NULL)
     const { data: mainCats } = await supabase
       .from('categories')
       .select('*')
@@ -120,7 +113,6 @@ export default function CategoriesPage() {
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
 
-    // Carrega TODAS as subcategorias deste contexto/tipo
     const { data: allSubs } = await supabase
       .from('categories')
       .select('*')
@@ -128,7 +120,6 @@ export default function CategoriesPage() {
       .not('parent_id', 'is', null)
       .order('name', { ascending: true })
 
-    // Organiza subcategorias por parent_id
     const subsMap: Record<string, any[]> = {}
     if (Array.isArray(allSubs)) {
       allSubs.forEach(sub => {
@@ -175,7 +166,7 @@ export default function CategoriesPage() {
       color,
       type: tab,
       context,
-      parent_id: parentId, // NOVO
+      parent_id: parentId,
       user_id: user!.id,
       is_default: false,
       sort_order: 999,
@@ -203,7 +194,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto px-4 pt-6 pb-10">
+    <div className="max-w-lg mx-auto px-4 pt-6 pb-10 bg-[#f8f9fa] dark:bg-slate-900 min-h-screen transition-colors duration-300">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()}>
@@ -220,13 +211,13 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 gap-1 mb-4 w-fit">
+      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4 w-fit">
         {(['dfl','personal'] as const).map(c => (
           <button
             key={c}
             onClick={() => setContext(c)}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              context===c ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500'
+              context===c ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
             }`}
           >
             {c==='dfl'?'DFL':'Pessoal'}
@@ -234,13 +225,13 @@ export default function CategoriesPage() {
         ))}
       </div>
 
-      <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 gap-1 mb-4">
+      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4">
         {([['expense','Despesas'],['income','Receitas']] as const).map(([k,l]) => (
           <button
             key={k}
             onClick={() => setTab(k as any)}
             className={`flex-1 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              tab===k ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500'
+              tab===k ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
             }`}
           >
             {l}
@@ -249,28 +240,27 @@ export default function CategoriesPage() {
       </div>
 
       {showForm && (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 space-y-4 relative border border-gray-100 dark:border-zinc-800">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm mb-4 space-y-4 relative border border-gray-100 dark:border-slate-700">
           <div className="flex justify-between items-center mb-2">
              <p className="text-sm font-semibold text-gray-800 dark:text-white">
               {editingCategory ? 'Editar categoria' : 'Nova categoria'}
             </p>
-            <button onClick={() => { setShowForm(false); setEditingCategory(null); }} className="text-gray-400"><X size={18}/></button>
+            <button onClick={() => { setShowForm(false); setEditingCategory(null); }} className="text-gray-400 dark:text-gray-500"><X size={18}/></button>
           </div>
 
           <input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Nome da categoria"
-            className="w-full bg-gray-100 dark:bg-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
+            className="w-full bg-gray-100 dark:bg-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
           />
 
-          {/* Campo de Categoria Pai (NOVO) */}
           <div>
-            <label className="text-xs text-gray-500 mb-2 block">Categoria pai (opcional)</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Categoria pai (opcional)</label>
             <select
               value={parentId || ''}
               onChange={(e) => setParentId(e.target.value || null)}
-              className="w-full bg-gray-100 dark:bg-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
+              className="w-full bg-gray-100 dark:bg-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
             >
               <option value="">Nenhuma (categoria principal)</option>
               {categories.map(cat => (
@@ -280,7 +270,7 @@ export default function CategoriesPage() {
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-2 block">Ícone</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Ícone</label>
             <div className="flex flex-wrap gap-2">
               {CATEGORY_ICON_NAMES.map(iconName => {
                 const IconComp = ICON_MAP[iconName]
@@ -289,7 +279,7 @@ export default function CategoriesPage() {
                   <button 
                     key={iconName} 
                     onClick={() => setIcon(iconName)}
-                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
+                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
                     style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: 'transparent', color: '#9ca3af' }}
                   >
                     <IconComp size={20} />
@@ -300,7 +290,7 @@ export default function CategoriesPage() {
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-2 block">Cor</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Cor</label>
             <div className="flex gap-2 flex-wrap">
               {COLORS.map(c => (
                 <button
@@ -326,7 +316,7 @@ export default function CategoriesPage() {
       )}
 
       {categories.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-gray-400">
+        <div className="flex flex-col items-center py-16 text-gray-400 dark:text-gray-500">
           <span className="text-4xl mb-3">🏷️</span>
           <p className="text-sm font-medium">Nenhuma categoria</p>
           <p className="text-xs mt-1">Clique no + para adicionar</p>
@@ -340,10 +330,9 @@ export default function CategoriesPage() {
             
             return (
               <div key={cat.id}>
-                {/* Categoria principal */}
                 <div
                   onClick={() => toggleExpand(cat.id)}
-                  className={`bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3 border border-transparent cursor-pointer hover:border-gray-200`}
+                  className={`bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3 border border-transparent cursor-pointer hover:border-gray-200 dark:hover:border-slate-600`}
                 >
                   <div className="flex items-center gap-3 flex-1">
                     <div
@@ -381,17 +370,16 @@ export default function CategoriesPage() {
                         </button>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); openEdit(cat); }} className="p-1">
-                        <ChevronRight size={18} className="text-gray-400" />
+                        <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
                       </button>
                       {isExpanded ? 
-                        <ChevronDown size={18} className="text-gray-400" /> : 
-                        <ChevronRight size={18} className="text-gray-400" />
+                        <ChevronDown size={18} className="text-gray-400 dark:text-gray-500" /> : 
+                        <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
                       }
                     </div>
                   </div>
                 </div>
 
-                {/* Subcategorias (expandidas) */}
                 {isExpanded && (
                   <div className="ml-6 mt-1 space-y-1">
                     {subcategories[cat.id]?.map((sub: any) => {
@@ -400,7 +388,7 @@ export default function CategoriesPage() {
                         <div
                           key={sub.id}
                           onClick={() => openEdit(sub)}
-                          className={`bg-white dark:bg-zinc-900 rounded-xl px-4 py-2.5 shadow-sm flex items-center gap-3 border border-transparent ${!sub.is_default ? 'cursor-pointer hover:border-gray-200' : ''}`}
+                          className={`bg-white dark:bg-slate-800 rounded-xl px-4 py-2.5 shadow-sm flex items-center gap-3 border border-transparent ${!sub.is_default ? 'cursor-pointer hover:border-gray-200 dark:hover:border-slate-600' : ''}`}
                         >
                           <div
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
@@ -421,7 +409,7 @@ export default function CategoriesPage() {
                     })}
                     <button
                       onClick={() => openNew(cat.id)}
-                      className="w-full bg-gray-50 dark:bg-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-3 text-gray-500 hover:text-teal-700 hover:bg-gray-100 transition-colors"
+                      className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl px-4 py-2.5 flex items-center gap-3 text-gray-500 dark:text-gray-400 hover:text-teal-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
                     >
                       <Plus size={16} />
                       <span className="text-xs font-medium">Adicionar subcategoria</span>
