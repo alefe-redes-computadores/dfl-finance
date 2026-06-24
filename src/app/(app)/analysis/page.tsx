@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, AreaChart, Area } from 'recharts'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -30,9 +30,14 @@ function AnalysisContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [byCategory, setByCategory] = useState<any[]>([])
+  const [monthlyFlow, setMonthlyFlow] = useState<any[]>([])
+  const [patrimony, setPatrimony] = useState<any[]>([])
+  const [patrimonyGrowth, setPatrimonyGrowth] = useState(0)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'month' | 'new'>('month')
-  const [showFilterModal, setShowFilterModal] = useState(false)
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false)
+  const [newGastos, setNewGastos] = useState<any[]>([])
+  const [newGastosSummary, setNewGastosSummary] = useState({ total: 0, count: 0, average: 0, maiorPeso: { name: '', percent: '0' } })
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
@@ -42,20 +47,23 @@ function AnalysisContent() {
 
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+    const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+    const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
 
-    const { data } = await supabase
+    // Busca transações do mês atual
+    const { data: currentTxs } = await supabase
       .from('transactions')
       .select('*, categories(name, icon, color)')
       .match({ user_id: user.id, context: context })
       .gte('date', start)
       .lte('date', end)
 
-    const txs = Array.isArray(data) ? data : []
+    const txs = Array.isArray(currentTxs) ? currentTxs : []
     const income = txs.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
     const expense = txs.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
     setSummary({ income, expense, balance: income - expense })
 
-    // Agrupa despesas por categoria usando reduce
+    // Agrupa despesas por categoria
     const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
     txs.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
       const key = t.category_id ?? 'sem'
@@ -76,14 +84,114 @@ function AnalysisContent() {
     })).sort((a, b) => b.total - a.total)
 
     setByCategory(categoriesArray)
+
+    // Fluxo mensal (últimos 6 meses)
+    const flowData: any[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(currentDate, i)
+      const s = format(startOfMonth(d), 'yyyy-MM-dd')
+      const e = format(endOfMonth(d), 'yyyy-MM-dd')
+
+      const { data: monthTxs } = await supabase
+        .from('transactions')
+        .select('type, amount, status')
+        .match({ user_id: user.id, context: context })
+        .gte('date', s)
+        .lte('date', e)
+
+      const arr = Array.isArray(monthTxs) ? monthTxs : []
+      const inc = arr.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const exp = arr.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+
+      flowData.push({
+        name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
+        Receitas: inc,
+        Despesas: exp
+      })
+    }
+    setMonthlyFlow(flowData)
+
+    // Patrimônio (últimos 12 meses)
+    const { data: allAccounts } = await supabase
+      .from('accounts')
+      .select('balance')
+      .match({ user_id: user.id, context: context })
+
+    const currentBalance = Array.isArray(allAccounts) ? allAccounts.reduce((a, c) => a + (Number(c.balance) || 0), 0) : 0
+
+    const patrimData: any[] = []
+    for (let i = 11; i >= 0; i--) {
+      const d = subMonths(currentDate, i)
+      const s = format(startOfMonth(d), 'yyyy-MM-dd')
+      const e = format(endOfMonth(d), 'yyyy-MM-dd')
+
+      const { data: monthTxs } = await supabase
+        .from('transactions')
+        .select('type, amount, status')
+        .match({ user_id: user.id, context: context })
+        .gte('date', s)
+        .lte('date', e)
+
+      const arr = Array.isArray(monthTxs) ? monthTxs : []
+      const inc = arr.filter(t => t.type === 'income' && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+      const exp = arr.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + Number(t.amount || 0), 0)
+
+      patrimData.push({
+        name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
+        Patrimônio: currentBalance + patrimData.reduce((a, c) => a + (c.Receitas || 0) - (c.Despesas || 0), 0) + inc - exp
+      })
+    }
+
+    setPatrimony(patrimData)
+    const first = patrimData[0]?.Patrimônio || 0
+    const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
+    setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
+
+    // Novos gastos (categorias que não existiam no mês anterior)
+    const { data: prevTxs } = await supabase
+      .from('transactions')
+      .select('category_id, categories(name, icon, color), amount')
+      .match({ user_id: user.id, context: context })
+      .gte('date', prevStart)
+      .lte('date', prevEnd)
+
+    const prevCategories = new Set(Array.isArray(prevTxs) ? prevTxs.map(t => t.category_id).filter(Boolean) : [])
+    const newOnes = txs.filter(t => t.category_id && !prevCategories.has(t.category_id))
+
+    const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
+    newOnes.forEach(t => {
+      const key = t.category_id ?? 'sem'
+      if (!newCatMap[key]) {
+        newCatMap[key] = {
+          name: t.categories?.name ?? 'Sem categoria',
+          color: t.categories?.color ?? '#64748b',
+          icon: t.categories?.icon ?? 'other',
+          total: 0
+        }
+      }
+      newCatMap[key].total += Number(t.amount || 0)
+    })
+
+    const newCatArray = Object.values(newCatMap).map(cat => ({
+      ...cat,
+      percent: expense > 0 ? (cat.total / expense) * 100 : 0
+    })).sort((a, b) => b.total - a.total)
+
+    setNewGastos(newCatArray)
+
+    const newTotal = newCatArray.reduce((a, c) => a + c.total, 0)
+    const newCount = newCatArray.length
+    const newAverage = newCount > 0 ? newTotal / newCount : 0
+    const maiorPesoName = newCatArray.length > 0 ? newCatArray[0].name : '-'
+    const maiorPesoPercent = newCatArray.length > 0 && newTotal > 0 ? ((newCatArray[0].total / newTotal) * 100).toFixed(0) : '0'
+    setNewGastosSummary({ total: newTotal, count: newCount, average: newAverage, maiorPeso: { name: maiorPesoName, percent: maiorPesoPercent } })
+
     setLoading(false)
   }, [user, context, currentDate])
 
   useEffect(() => { loadData() }, [loadData])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  const totalExpense = summary.expense
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -98,7 +206,7 @@ function AnalysisContent() {
             <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"><ChevronRight size={18} /></button>
           </div>
           <button 
-            onClick={() => setShowFilterModal(true)}
+            onClick={() => setShowFilterDrawer(true)}
             className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
           >
             <SlidersHorizontal size={18} className="text-gray-700 dark:text-gray-300" />
@@ -127,19 +235,105 @@ function AnalysisContent() {
       {loading ? (
         <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
       ) : activeTab === 'new' ? (
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-8 shadow-sm border border-gray-50 dark:border-slate-700 text-center flex flex-col items-center justify-center mt-4">
-          <div className="w-16 h-16 bg-teal-50 dark:bg-teal-900/30 rounded-full flex items-center justify-center mb-4">
-            <Sparkles size={28} className="text-teal-700 dark:text-teal-400" />
+        /* ===== ABA NOVOS GASTOS ===== */
+        <div className="space-y-6">
+          {/* Card de resumo */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+            <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-50 dark:border-slate-700">
+              <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                <Sparkles size={20} className="text-teal-700 dark:text-teal-400" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">Novos gastos do mês</p>
+                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{formatCurrency(newGastosSummary.total)}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-end">
+              <div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Categorias</p>
+                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{newGastosSummary.count}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Média</p>
+                <p className="text-[14px] font-bold text-red-400">{formatCurrency(newGastosSummary.average)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Maior peso</p>
+                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate max-w-[100px]">{newGastosSummary.maiorPeso.name}</p>
+                <span className="text-[11px] text-red-400 font-bold">{newGastosSummary.maiorPeso.percent}%</span>
+              </div>
+            </div>
           </div>
-          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-lg mb-2">Em breve!</h3>
-          <p className="text-[13px] text-gray-500 dark:text-gray-400 leading-relaxed">
-            Para separar os gastos recorrentes dos "Novos Gastos", estamos preparando o motor de despesas fixas. Fique de olho!
-          </p>
+
+          {/* Gráfico Donut e lista */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+            {newGastos.length === 0 ? (
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Nenhum novo gasto neste mês.</p>
+            ) : (
+              <>
+                <div className="h-48 relative flex items-center justify-center mb-6">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total</p>
+                    <p className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{formatCurrency(newGastosSummary.total)}</p>
+                  </div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={newGastos}
+                        dataKey="total"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        {newGastos.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="space-y-4">
+                  {newGastos.map(c => {
+                    const IconComp = ICON_MAP[c.icon] || ICON_MAP['other']
+                    return (
+                      <div key={c.name}>
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${c.color}20`, color: c.color }}>
+                              <IconComp size={18} />
+                            </div>
+                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{c.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{formatCurrency(c.total)}</span>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">{c.percent.toFixed(1)}%</p>
+                          </div>
+                        </div>
+                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-1000 ease-out"
+                            style={{ width: `${c.percent}%`, backgroundColor: c.color }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       ) : (
-        <>
+        /* ===== ABA NO MÊS ===== */
+        <div className="space-y-6">
           {/* Cards de Resumo */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-3">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
                 <ArrowUp size={16} className="text-emerald-600" />
@@ -166,7 +360,7 @@ function AnalysisContent() {
           </div>
 
           {/* Gráfico Donut */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Distribuição de Gastos</h3>
             {byCategory.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Nenhuma despesa neste mês.</p>
@@ -174,7 +368,7 @@ function AnalysisContent() {
               <div className="h-56 relative flex items-center justify-center">
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
                   <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total Gasto</p>
-                  <p className="text-[20px] font-bold text-gray-800 dark:text-gray-100">{formatCurrency(totalExpense)}</p>
+                  <p className="text-[20px] font-bold text-gray-800 dark:text-gray-100">{formatCurrency(summary.expense)}</p>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -234,16 +428,64 @@ function AnalysisContent() {
               </div>
             )}
           </div>
-        </>
+
+          {/* Fluxo Mensal - Gráfico de Barras */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Fluxo Mensal</h3>
+            {monthlyFlow.length === 0 ? (
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Sem dados para exibir.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={monthlyFlow}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                  <ReTooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Patrimônio - Gráfico de Área */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Patrimônio</h3>
+              <span className={`text-[14px] font-bold ${patrimonyGrowth >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {patrimonyGrowth >= 0 ? '+' : ''}{patrimonyGrowth.toFixed(1)}%
+              </span>
+            </div>
+            {patrimony.length === 0 ? (
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Sem dados para exibir.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={patrimony}>
+                  <defs>
+                    <linearGradient id="colorPat" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                  <ReTooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Area type="monotone" dataKey="Patrimônio" stroke="#14b8a6" fill="url(#colorPat)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Modal de Filtros */}
-      {showFilterModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowFilterModal(false)}>
+      {/* Filter Drawer */}
+      {showFilterDrawer && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowFilterDrawer(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Filtros</h3>
-              <button onClick={() => setShowFilterModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
+              <button onClick={() => setShowFilterDrawer(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-6">
               <div>
