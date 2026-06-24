@@ -24,6 +24,7 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import NetworkStatus from '@/components/NetworkStatus'
+import InvoiceAlert from '@/components/InvoiceAlert'
 
 function BankInitials({ color, name }: { color: string; name: string }) {
   const initials = name ? name.substring(0, 2).toUpperCase() : '??'
@@ -225,6 +226,20 @@ function HomeContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
       <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} />
+
+      {/* Alertas de vencimento de cartões */}
+      {cards.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {cards.map(card => (
+            <InvoiceAlert
+              key={card.id}
+              dueDay={card.due_day}
+              closingDay={card.closing_day}
+              cardName={card.name}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
@@ -551,7 +566,7 @@ function HomeContent() {
             cards.map((card) => (
               <div
                 key={card.id}
-                onClick={() => router.push(`/cards`)}
+                onClick={() => router.push(`/cards/${card.id}`)}
                 className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
               >
                 <div className="flex items-center gap-3">
