@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
   const start = startDate.toISOString().split('T')[0]
   const end = new Date().toISOString().split('T')[0]
 
-  // Busca transações com categorias
   const { data: transactions } = await supabase
     .from('transactions')
     .select('amount, type, status, category_id, categories!inner(name, color)')
@@ -35,11 +34,17 @@ export async function GET(req: NextRequest) {
     .gte('date', start)
     .lte('date', end)
 
-  if (!transactions) {
-    return NextResponse.json({ error: 'Nenhuma transação encontrada' }, { status: 404 })
+  const header = 'Categoria,Total Gasto,Porcentagem,Quantidade\n'
+
+  if (!transactions || transactions.length === 0) {
+    return new NextResponse(header, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename=analise-${start}-a-${end}.csv`
+      }
+    })
   }
 
-  // Agrupa por categoria
   const catMap: Record<string, { total: number; count: number }> = {}
   let totalExpense = 0
 
@@ -56,8 +61,6 @@ export async function GET(req: NextRequest) {
   const expense = transactions.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
     .reduce((a, t) => a + (Number(t.amount) || 0), 0)
 
-  // Monta CSV
-  const header = 'Categoria,Total Gasto,Porcentagem,Quantidade\n'
   const rows = Object.entries(catMap)
     .sort((a, b) => b[1].total - a[1].total)
     .map(([name, data]) => {
