@@ -5,11 +5,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
+import * as Icons from 'lucide-react'
 import { 
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
   ArrowLeftRight, Download
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
@@ -19,13 +17,11 @@ type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
 type Context = 'dfl' | 'personal'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+// Helper para renderizar os ícones dinamicamente
+const getDynamicIcon = (iconName: string) => {
+  if (!iconName) return Icons.Tag
+  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
+  return (Icons as any)[formattedName] || Icons.Tag
 }
 
 const safeNum = (val: any) => {
@@ -232,7 +228,8 @@ export default function TransactionsPage() {
                     const isIncomeVisual = t.type === 'income' || isTransferIn;
                     const isPending = t.status === 'pending';
                     
-                    const IconComp = t.type === 'transfer' ? ArrowLeftRight : (ICON_MAP[t.categories?.icon] || ICON_MAP['other'])
+                    // A MÁGICA ACONTECE AQUI:
+                    const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
                     
                     return (
                       <div 
