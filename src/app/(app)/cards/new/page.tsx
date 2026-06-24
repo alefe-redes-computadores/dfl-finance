@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { 
   ChevronLeft, ChevronRight, Tag, Landmark, 
   CreditCard, Calendar, PiggyBank, Palette, DollarSign, 
-  Check, Loader2 
+  Check, Loader2, X, Plus, Wallet
 } from 'lucide-react'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
@@ -33,12 +33,14 @@ export default function NewCardPage() {
   const [limitAmount, setLimitAmount] = useState('0,00')
   const [saving, setSaving] = useState(false)
 
+  const [showAccountModal, setShowAccountModal] = useState(false)
+
   useEffect(() => {
     async function loadAccounts() {
       if (!user?.id) return
       const { data } = await supabase
         .from('accounts')
-        .select('id, name')
+        .select('id, name, color')
         .match({ user_id: user.id, context: 'dfl' })
       setAccounts(Array.isArray(data) ? data : [])
     }
@@ -92,6 +94,24 @@ export default function NewCardPage() {
     }
   }
 
+  // Renderiza a logo da bandeira em miniatura para os botões de seleção
+  const renderFlagIcon = (cardFlag: string) => {
+    switch (cardFlag) {
+      case 'Visa': return <span className="text-[10px] font-bold italic text-blue-800">VISA</span>
+      case 'Mastercard': return (
+        <div className="flex items-center gap-0.5">
+          <div className="w-3 h-3 bg-red-500 rounded-full" />
+          <div className="w-3 h-3 bg-yellow-500 rounded-full -ml-1.5" />
+        </div>
+      )
+      case 'Elo': return <span className="text-[10px] font-bold text-blue-600">elo</span>
+      case 'Amex': return <span className="text-[9px] font-bold text-blue-500">AMEX</span>
+      case 'Hipercard': return <span className="text-[9px] font-bold text-red-400">HIPER</span>
+      default: return <CreditCard size={14} />
+    }
+  }
+
+  // Logo grande no header
   const renderCardLogo = (cardFlag: string) => {
     switch (cardFlag) {
       case 'Visa': return <span className="text-xl font-bold italic tracking-tighter text-white">VISA</span>
@@ -107,6 +127,8 @@ export default function NewCardPage() {
       default: return <CreditCard size={20} className="text-white" />
     }
   }
+
+  const selectedAccount = accounts.find(a => a.id === paymentAccountId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-slate-900 flex flex-col font-sans pb-24 relative transition-colors duration-300">
@@ -136,6 +158,7 @@ export default function NewCardPage() {
 
       <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
         
+        {/* Bandeira com ícones visuais */}
         <div className="p-4 border-b border-gray-50 dark:border-slate-700 flex flex-col gap-3">
           <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <Tag size={18} /> <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Bandeira</span>
@@ -145,10 +168,11 @@ export default function NewCardPage() {
               <button 
                 key={f} 
                 onClick={() => setFlag(f)}
-                className={`px-4 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-all border ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-all border ${
                   flag === f ? 'border-gray-800 dark:border-gray-200 text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-slate-700' : 'border-gray-100 dark:border-slate-600 text-gray-500 dark:text-gray-400 bg-white dark:bg-slate-800'
                 }`}
               >
+                {renderFlagIcon(f)}
                 {f}
               </button>
             ))}
@@ -188,23 +212,19 @@ export default function NewCardPage() {
           </div>
         </div>
 
+        {/* Conta para pagamento - agora com modal estilizado */}
         <div className="p-4 border-b border-gray-50 dark:border-slate-700">
           <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <PiggyBank size={18} /> 
-            <div className="flex-1">
-              <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 block mb-1">Conta para pagamento</span>
-              <select 
-                value={paymentAccountId} 
-                onChange={e => setPaymentAccountId(e.target.value)}
-                className="text-[12px] font-medium w-full outline-none text-gray-800 dark:text-gray-200 bg-transparent appearance-none"
-              >
-                <option value="">Selecionar conta (opcional)</option>
-                {accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.name}</option>
-                ))}
-              </select>
-            </div>
-            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500" />
+            <button onClick={() => setShowAccountModal(true)} className="flex-1 flex items-center justify-between">
+              <div className="text-left">
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 block mb-1">Conta para pagamento</span>
+                <span className={`text-[12px] font-medium ${selectedAccount ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {selectedAccount ? selectedAccount.name : 'Selecionar conta (opcional)'}
+                </span>
+              </div>
+              <ChevronRight size={18} className="text-gray-300 dark:text-gray-500" />
+            </button>
           </div>
         </div>
 
@@ -257,6 +277,45 @@ export default function NewCardPage() {
       >
         {saving ? <Loader2 className="animate-spin" size={28} /> : <Check size={28} />}
       </button>
+
+      {/* Modal de seleção de conta */}
+      {showAccountModal && (
+        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowAccountModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Conta para pagamento</h3>
+              <button onClick={() => setShowAccountModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => { setPaymentAccountId(''); setShowAccountModal(false) }}
+                className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!paymentAccountId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500">
+                  <Wallet size={20} />
+                </div>
+                <span className={`flex-1 text-left font-medium ${!paymentAccountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Nenhuma conta</span>
+                {!paymentAccountId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+              </button>
+              {accounts.map(acc => {
+                const isActive = acc.id === paymentAccountId
+                return (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setPaymentAccountId(acc.id); setShowAccountModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color || '#14b8a6' }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {accounts.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma conta encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showColorPicker && (
         <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowColorPicker(false)}>
