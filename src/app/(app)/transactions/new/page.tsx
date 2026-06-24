@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
-  // Novos ícones importados
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
@@ -36,7 +35,7 @@ const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v7.0 - OCR Mantido + Ícones Premium")
+  console.log("DFL – Nova Transação v8.0 - Recorrência Personalizada & Bug Fix")
 
   const { user } = useAuth()
   const router = useRouter()
@@ -65,6 +64,11 @@ function NewTransactionContent() {
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const [isRefund, setIsRefund] = useState(false)
 
+  // ESTADOS DA MISSÃO 2 - RECORRÊNCIA PERSONALIZADA
+  const [showCustomRecurrenceModal, setShowCustomRecurrenceModal] = useState(false)
+  const [customParcels, setCustomParcels] = useState(12)
+  const [customInterval, setCustomInterval] = useState(1) // Em meses
+
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
@@ -74,7 +78,7 @@ function NewTransactionContent() {
 
   const [showCreateCatModal, setShowCreateCatModal] = useState(false)
   const [newCatName, setNewCatName] = useState('')
-  const [newCatIcon, setNewCatIcon] = useState('utensils') // Mudado do hambúrguer para o ícone
+  const [newCatIcon, setNewCatIcon] = useState('utensils')
   const [newCatColor, setNewCatColor] = useState('#22c55e')
   const [savingCategory, setSavingCategory] = useState(false)
 
@@ -116,20 +120,10 @@ function NewTransactionContent() {
     if (!user || !user.id) return
     const catType = type === 'income' ? 'income' : 'expense'
 
-    // Deixei sua consulta exatamente igual, com a trava do tipo
     const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
-      supabase.from('categories').select('*')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .eq('type', catType),
-      supabase.from('accounts').select('*')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .order('name'),
-      supabase.from('tags').select('*')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .order('name')
+      supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context).eq('type', catType),
+      supabase.from('accounts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
+      supabase.from('tags').select('*').eq('user_id', user.id).eq('context', context).order('name')
     ])
 
     setCategories(Array.isArray(cats) ? cats : [])
@@ -231,7 +225,7 @@ function NewTransactionContent() {
         icon: newCatIcon,
         color: newCatColor,
         context: context,
-        type: type === 'income' ? 'income' : 'expense' // Garantindo que salva com o type correto
+        type: type === 'income' ? 'income' : 'expense'
       }).select().single()
 
       if (error) throw error
@@ -337,12 +331,13 @@ function NewTransactionContent() {
         case 'biweekly': totalParcels = 24; break
         case 'monthly': totalParcels = 12; break
         case 'bimonthly': totalParcels = 6; break
-        case 'custom': totalParcels = 12; break
+        case 'custom': totalParcels = customParcels; break // USA O ESTADO DO MODAL
         default: totalParcels = 12
       }
     }
 
-    const installmentAmount = totalParcels > 1 ? rawAmount / totalParcels : rawAmount
+    // BUG CORRIGIDO AQUI: Só divide o valor se for 'installments'. Se for 'recurring', mantém o valor integral por mês.
+    const installmentAmount = totalParcels > 1 && repetition === 'installments' ? rawAmount / totalParcels : rawAmount
 
     try {
       for (let i = 0; i < totalParcels; i++) {
@@ -353,6 +348,7 @@ function NewTransactionContent() {
           else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
           else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
           else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
+          else if (frequency === 'custom') installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd') // USA O INTERVALO DO MODAL
           else installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         } else {
           installmentDate = format(addMonths(new Date(date), i), 'yyyy-MM-dd')
@@ -434,7 +430,7 @@ function NewTransactionContent() {
           </button>
         </div>
 
-        {/* --- SELETOR DE CATEGORIA COM NOVO ÍCONE --- */}
+        {/* --- SELETOR DE CATEGORIA --- */}
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 hover:bg-gray-50 transition-colors">
           <div className="flex items-center gap-4">
             <Tag size={20} className="text-gray-400" />
@@ -512,16 +508,31 @@ function NewTransactionContent() {
               )}
 
               {repetition === 'recurring' && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {[
-                    { key: 'weekly', label: 'Semanal' }, { key: 'biweekly', label: 'Quinzenal' },
-                    { key: 'monthly', label: 'Mensal' }, { key: 'bimonthly', label: 'Bimestral' },
-                    { key: 'custom', label: 'Personalizar' }
-                  ].map(f => (
-                    <button key={f.key} onClick={() => f.key === 'custom' ? setShowComingSoon(true) : setFrequency(f.key as Frequency)} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}>
-                      {f.label}
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: 'weekly', label: 'Semanal' }, { key: 'biweekly', label: 'Quinzenal' },
+                      { key: 'monthly', label: 'Mensal' }, { key: 'bimonthly', label: 'Bimestral' },
+                      { key: 'custom', label: 'Personalizar' }
+                    ].map(f => (
+                      <button 
+                        key={f.key} 
+                        onClick={() => {
+                          setFrequency(f.key as Frequency)
+                          if (f.key === 'custom') setShowCustomRecurrenceModal(true)
+                        }} 
+                        className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 border border-teal-700 text-teal-800' : 'bg-gray-50 text-gray-600'}`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Resumo da recorrência personalizada */}
+                  {frequency === 'custom' && (
+                    <p className="text-xs text-teal-700 font-medium ml-1 mt-1">
+                      Serão geradas {customParcels} parcelas, a cada {customInterval} mês(es).
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -564,7 +575,49 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modal Lista de Categorias (COM ÍCONES NOVOS) */}
+      {/* MODAL: RECORRÊNCIA PERSONALIZADA */}
+      {showCustomRecurrenceModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl p-6 h-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800">Recorrência Personalizada</h3>
+              <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500 mb-2 block">Número de parcelas</label>
+                <input 
+                  type="number" 
+                  value={customParcels} 
+                  onChange={e => setCustomParcels(Number(e.target.value))} 
+                  className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors" 
+                  min={1} 
+                  max={120} 
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500 mb-2 block">Intervalo (em meses)</label>
+                <input 
+                  type="number" 
+                  value={customInterval} 
+                  onChange={e => setCustomInterval(Number(e.target.value))} 
+                  className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-medium text-gray-800 focus:border-teal-500 transition-colors" 
+                  min={1} 
+                  max={24} 
+                />
+              </div>
+              <button 
+                onClick={() => setShowCustomRecurrenceModal(false)} 
+                className="w-full bg-[#82a99c] hover:bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Lista de Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
