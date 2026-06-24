@@ -9,7 +9,8 @@ import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp, Settings2, Loader2, Plus, Clock, Check,
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
+  CreditCard
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -260,6 +261,46 @@ function HomeContent() {
                 </p>
               </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* CARTÕES - RESTAURADO */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/cards')}>
+          <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Cartões</h3>
+          <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+          {cards.length === 0 ? (
+            <button onClick={() => router.push('/cards/new')} className="w-full p-4 flex items-center justify-center gap-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors text-sm font-medium">
+              <Plus size={18} />
+              Adicionar cartão
+            </button>
+          ) : (
+            cards.map((card) => (
+              <div 
+                key={card.id} 
+                onClick={() => router.push(`/cards`)} 
+                className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}>
+                    <CreditCard size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{card.name}</p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">Fatura atual</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-[14px] font-bold ${(card.faturaAtual || 0) > 0 ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {hideBalance ? '••••' : formatCurrency(card.faturaAtual || 0)}
+                  </p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">Vence dia {card.due_day}</p>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
