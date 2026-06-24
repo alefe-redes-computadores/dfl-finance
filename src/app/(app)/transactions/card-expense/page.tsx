@@ -6,21 +6,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Calendar, Edit3, Tag, CreditCard, RefreshCw, Check, Loader2, ChevronRight, Hash,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
   X, Plus
 } from 'lucide-react'
 import { format } from 'date-fns'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
+import { getDynamicIcon } from '@/lib/iconUtils'
 
 export default function CardExpensePage() {
   const router = useRouter()
@@ -213,7 +202,7 @@ export default function CardExpensePage() {
           <div className="flex-1 flex flex-col text-left">
             <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Categoria</span>
             <span className="text-[14px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">
-              {selectedCat ? `${selectedCat.icon || ''} ${selectedCat.name}` : 'Selecione...'}
+              {selectedCat ? selectedCat.name : 'Selecione...'}
             </span>
           </div>
           <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
@@ -315,7 +304,7 @@ export default function CardExpensePage() {
             </div>
             <div className="space-y-2">
               {categories.map(cat => {
-                const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const IconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
                   <button
@@ -365,7 +354,6 @@ export default function CardExpensePage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
