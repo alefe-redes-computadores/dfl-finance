@@ -3,32 +3,49 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, Trash2, X } from 'lucide-react'
+import { 
+  ChevronLeft, Plus, Trash2, X,
+  // Ícones premium
+  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
+  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
+  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-const ICONS = ['🛒','🏍️','💸','🔧','📦','💰','🛵','🍔','🚗','❤️','🎮','🏠','💼','💻','📋','🎯','⚡','🎵']
+// Mapa de Ícones do Lucide
+const ICON_MAP: Record<string, React.ElementType> = {
+  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
+  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
+  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
+  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
+  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
+  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+}
+const CATEGORY_ICON_NAMES = Object.keys(ICON_MAP)
+
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
+// Atualizado para usar as chaves dos ícones novos por padrão
 const DEFAULT_CATEGORIES = [
-  { name:'Insumos', icon:'📦', color:'#16a34a', type:'expense', context:'dfl', sort_order:1 },
-  { name:'Embalagens', icon:'🥤', color:'#0891b2', type:'expense', context:'dfl', sort_order:2 },
-  { name:'Fornecedores', icon:'🚚', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
-  { name:'Marketing', icon:'🎯', color:'#ec4899', type:'expense', context:'dfl', sort_order:4 },
-  { name:'Manutenção', icon:'🔧', color:'#ca8a04', type:'expense', context:'dfl', sort_order:5 },
+  { name:'Insumos', icon:'shopping', color:'#16a34a', type:'expense', context:'dfl', sort_order:1 },
+  { name:'Embalagens', icon:'gift', color:'#0891b2', type:'expense', context:'dfl', sort_order:2 },
+  { name:'Fornecedores', icon:'briefcase', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
+  { name:'Marketing', icon:'trending', color:'#ec4899', type:'expense', context:'dfl', sort_order:4 },
+  { name:'Manutenção', icon:'wrench', color:'#ca8a04', type:'expense', context:'dfl', sort_order:5 },
 
-  { name:'Vendas', icon:'🍔', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
-  { name:'Delivery', icon:'🛵', color:'#0891b2', type:'income', context:'dfl', sort_order:2 },
-  { name:'Eventos', icon:'🎵', color:'#ec4899', type:'income', context:'dfl', sort_order:3 },
+  { name:'Vendas', icon:'shopping', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
+  { name:'Delivery', icon:'car', color:'#0891b2', type:'income', context:'dfl', sort_order:2 },
+  { name:'Eventos', icon:'music', color:'#ec4899', type:'income', context:'dfl', sort_order:3 },
 
-  { name:'Moradia', icon:'🏠', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
-  { name:'Alimentação', icon:'🛒', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
-  { name:'Transporte', icon:'🚗', color:'#0891b2', type:'expense', context:'personal', sort_order:3 },
-  { name:'Saúde', icon:'❤️', color:'#dc2626', type:'expense', context:'personal', sort_order:4 },
-  { name:'Lazer', icon:'🎮', color:'#7c3aed', type:'expense', context:'personal', sort_order:5 },
+  { name:'Moradia', icon:'home', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
+  { name:'Alimentação', icon:'utensils', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
+  { name:'Transporte', icon:'car', color:'#0891b2', type:'expense', context:'personal', sort_order:3 },
+  { name:'Saúde', icon:'heart', color:'#dc2626', type:'expense', context:'personal', sort_order:4 },
+  { name:'Lazer', icon:'gamepad', color:'#7c3aed', type:'expense', context:'personal', sort_order:5 },
 
-  { name:'Salário', icon:'💼', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
-  { name:'Freelance', icon:'💻', color:'#0891b2', type:'income', context:'personal', sort_order:2 },
-  { name:'Investimentos', icon:'💰', color:'#ca8a04', type:'income', context:'personal', sort_order:3 },
+  { name:'Salário', icon:'briefcase', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
+  { name:'Freelance', icon:'laptop', color:'#0891b2', type:'income', context:'personal', sort_order:2 },
+  { name:'Investimentos', icon:'trending', color:'#ca8a04', type:'income', context:'personal', sort_order:3 },
 ]
 
 export default function CategoriesPage() {
@@ -41,9 +58,9 @@ export default function CategoriesPage() {
   
   // Estados do Modal
   const [showForm, setShowForm] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<any | null>(null) // NOVO
+  const [editingCategory, setEditingCategory] = useState<any | null>(null)
   const [name, setName] = useState('')
-  const [icon, setIcon] = useState('📋')
+  const [icon, setIcon] = useState('other') // Começa com o ícone padrão ao invés de emoji
   const [color, setColor] = useState('#16a34a')
   const [saving, setSaving] = useState(false)
 
@@ -101,7 +118,6 @@ export default function CategoriesPage() {
     setCategories(Array.isArray(data) ? data : [])
   }
 
-  // NOVO: Função para abrir modal de edição
   function openEdit(cat: any) {
     if (cat.is_default) return; 
     setEditingCategory(cat)
@@ -115,7 +131,6 @@ export default function CategoriesPage() {
     if (!name) return
     setSaving(true)
 
-    // NOVO: Logica de Update vs Insert
     if (editingCategory) {
       await supabase.from('categories').update({
         name, icon, color
@@ -141,7 +156,7 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(id: string, e: React.MouseEvent) {
-    e.stopPropagation() // NOVO: Evita clicar no delete e abrir a edição junto
+    e.stopPropagation() 
     await supabase.from('categories').delete().eq('id', id)
     loadCategories()
   }
@@ -193,7 +208,7 @@ export default function CategoriesPage() {
       </div>
 
       {showForm && (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 space-y-3 relative border border-gray-100 dark:border-zinc-800">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 space-y-4 relative border border-gray-100 dark:border-zinc-800">
           <div className="flex justify-between items-center mb-2">
              <p className="text-sm font-semibold text-gray-800 dark:text-white">
               {editingCategory ? 'Editar categoria' : 'Nova categoria'}
@@ -208,20 +223,24 @@ export default function CategoriesPage() {
             className="w-full bg-gray-100 dark:bg-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
           />
 
+          {/* Grade de Ícones Atualizada */}
           <div>
             <label className="text-xs text-gray-500 mb-2 block">Ícone</label>
             <div className="flex flex-wrap gap-2">
-              {ICONS.map(i => (
-                <button
-                  key={i}
-                  onClick={() => setIcon(i)}
-                  className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center ${
-                    icon===i ? 'bg-brand-teal' : 'bg-gray-100 dark:bg-zinc-800'
-                  }`}
-                >
-                  {i}
-             </button>
-              ))}
+              {CATEGORY_ICON_NAMES.map(iconName => {
+                const IconComp = ICON_MAP[iconName]
+                const isSelected = icon === iconName
+                return (
+                  <button 
+                    key={iconName} 
+                    onClick={() => setIcon(iconName)}
+                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
+                    style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: 'transparent', color: '#9ca3af' }}
+                  >
+                    <IconComp size={20} />
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -232,8 +251,8 @@ export default function CategoriesPage() {
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full border-2 ${
-                    color===c ? 'border-gray-800 dark:border-white' : 'border-transparent'
+                  className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                    color===c ? 'border-gray-800 dark:border-white scale-110' : 'border-transparent hover:scale-110'
                   }`}
                   style={{ backgroundColor: c }}
                 />
@@ -244,7 +263,7 @@ export default function CategoriesPage() {
           <button
             onClick={handleSave}
             disabled={saving || !name}
-            className="w-full bg-brand-teal text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
+            className="w-full bg-brand-teal text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50 mt-2"
           >
             {saving ? 'Salvando...' : 'Salvar categoria'}
           </button>
@@ -259,40 +278,45 @@ export default function CategoriesPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {categories.map(cat => (
-            <div
-              key={cat.id}
-              onClick={() => openEdit(cat)} // NOVO: Clique no card para editar
-              className={`bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3 border border-transparent ${!cat.is_default ? 'cursor-pointer hover:border-gray-200' : ''}`}
-            >
+          {categories.map(cat => {
+            // Renderização segura do ícone na listagem
+            const IconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+            
+            return (
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                style={{ backgroundColor: `${cat.color}20` }}
+                key={cat.id}
+                onClick={() => openEdit(cat)}
+                className={`bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3 border border-transparent ${!cat.is_default ? 'cursor-pointer hover:border-gray-200' : ''}`}
               >
-                {cat.icon}
-              </div>
-
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800 dark:text-white">
-                  {cat.name}
-                </p>
-
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    cat.is_default ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                  }`}
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+                  style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
                 >
-                  {cat.is_default ? 'Padrão' : 'Personalizada'}
-                </span>
-              </div>
+                  <IconComp size={20} />
+                </div>
 
-              {!cat.is_default && (
-                <button onClick={(e) => handleDelete(cat.id, e)}>
-                  <Trash2 size={16} className="text-red-400" />
-                </button>
-              )}
-            </div>
-          ))}
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800 dark:text-white">
+                    {cat.name}
+                  </p>
+
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full ${
+                      cat.is_default ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    }`}
+                  >
+                    {cat.is_default ? 'Padrão' : 'Personalizada'}
+                  </span>
+                </div>
+
+                {!cat.is_default && (
+                  <button onClick={(e) => handleDelete(cat.id, e)}>
+                    <Trash2 size={16} className="text-red-400 hover:text-red-600 transition-colors" />
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
