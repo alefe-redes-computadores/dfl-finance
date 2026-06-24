@@ -412,7 +412,7 @@ function NewTransactionContent() {
           description: desc || null,
           category_id: categoryId || null,
           account_id: accountId || null,
-          tag_id: selectedTags.length > 0 ? selectedTags[0] : null,
+          tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
           status: isPaid ? 'done' : 'pending',
           context,
