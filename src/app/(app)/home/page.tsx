@@ -10,7 +10,7 @@ import {
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  CreditCard
+  CreditCard, Target
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -51,6 +51,7 @@ function HomeContent() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
+  const [budgets, setBudgets] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
 
   const { isOnline, pendingCount, syncQueue } = useOfflineQueue()
@@ -120,7 +121,26 @@ function HomeContent() {
       const totalFaturas = cardsWithInvoice.reduce((acc, c) => acc + c.faturaAtual, 0);
       
       setCards(cardsWithInvoice)
-      setPendings({ toPay, toReceive, faturas: totalFaturas }) 
+      setPendings({ toPay, toReceive, faturas: totalFaturas })
+
+      // NOVO: Busca orçamentos e calcula progresso
+      const { data: budgetsData } = await supabase
+        .from('budgets')
+        .select('*, categories(name, icon, color)')
+        .match({ user_id: user.id, context: context })
+        .order('created_at', { ascending: false })
+
+      const budgetsWithSpent = (budgetsData || []).map(budget => {
+        const spent = txs
+          .filter(t => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+          .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        const remaining = Number(budget.amount) - spent
+        const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
+        return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
+      })
+
+      // Ordena por percentual (mais críticos primeiro) e pega os 3 primeiros
+      setBudgets(budgetsWithSpent.sort((a, b) => b.percent - a.percent).slice(0, 3))
       
     } catch (err) {
       console.error("Erro na Home:", err)
@@ -219,6 +239,57 @@ function HomeContent() {
           </div>
         </div>
       </div>
+
+      {/* NOVO: Orçamentos */}
+      {budgets.length > 0 && (
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/budgets')}>
+            <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Orçamentos</h3>
+            <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+            {budgets.map((budget) => {
+              const IconComp = ICON_MAP[budget.icon] || ICON_MAP['other']
+              const isOverBudget = budget.remaining < 0
+              const isWarning = budget.percent >= 75 && budget.percent < 100
+
+              return (
+                <div 
+                  key={budget.id} 
+                  onClick={() => router.push(`/budgets/${budget.id}`)}
+                  className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${budget.color}20`, color: budget.color }}>
+                    <IconComp size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">{budget.name}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isOverBudget ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        isWarning ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      }`}>
+                        {isOverBudget ? 'Estourado' : isWarning ? 'Atenção' : 'OK'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ease-out ${isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'}`}
+                        style={{ width: `${Math.min(budget.percent, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500">
+                      <span>Gasto {formatCurrency(budget.spent)}</span>
+                      <span>de {formatCurrency(Number(budget.amount))}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3 px-1 cursor-pointer" onClick={() => router.push('/accounts')}>
