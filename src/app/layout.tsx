@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -25,8 +26,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
-      <body className="overscroll-none">{children}</body>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="overscroll-none">
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }
