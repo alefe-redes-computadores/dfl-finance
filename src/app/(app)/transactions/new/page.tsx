@@ -98,29 +98,30 @@ function NewTransactionContent() {
     })
   }
 
- const loadData = useCallback(async () => {
-  if (!user || !user.id) return
-  const catType = type === 'income' ? 'income' : 'expense'
+  const loadData = useCallback(async () => {
+    if (!user || !user.id) return
+    const catType = type === 'income' ? 'income' : 'expense'
 
-  const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
-    supabase.from('categories').select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .eq('type', catType),
-    supabase.from('accounts').select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('name'),
-    supabase.from('tags').select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('name')
-  ])
+    const [{ data: cats }, { data: accs }, { data: tgs }] = await Promise.all([
+      supabase.from('categories').select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .eq('type', catType),
+      supabase.from('accounts').select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('name'),
+      supabase.from('tags').select('*')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('name')
+    ])
 
-  setCategories(Array.isArray(cats) ? cats : [])
-  setAccounts(Array.isArray(accs) ? accs : [])
-  setTags(Array.isArray(tgs) ? tgs : [])
-}, [user, context, type])
+    setCategories(Array.isArray(cats) ? cats : [])
+    setAccounts(Array.isArray(accs) ? accs : [])
+    setTags(Array.isArray(tgs) ? tgs : [])
+  }, [user, context, type])
+
   useEffect(() => { loadData() }, [loadData])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,6 +130,47 @@ function NewTransactionContent() {
     const rawValue = val.replace(/\./g, '').replace(',', '.')
     const num = parseFloat(rawValue)
     setAmountNum(isNaN(num) ? 0 : num)
+  }
+
+  // Formata valor extraído para exibição
+  const formatAmount = (value: string) => {
+    const num = parseFloat(value.replace(/\./g, '').replace(',', '.'))
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  // Processa o comprovante e preenche campos automaticamente
+  const processReceipt = async (file: File) => {
+    setReceipt(file)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/ocr', {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        const { amount: extractedAmount, date: extractedDate, description: extractedDesc } = result.data
+
+        if (extractedAmount) {
+          setAmount(formatAmount(extractedAmount))
+          setAmountNum(parseFloat(extractedAmount.replace(/\./g, '').replace(',', '.')))
+        }
+        if (extractedDate) {
+          const [day, month, year] = extractedDate.split('/')
+          setDate(`${year}-${month}-${day}`)
+        }
+        if (extractedDesc) {
+          setDesc(extractedDesc)
+        }
+      }
+    } catch (error) {
+      console.log('Leitura automática indisponível, comprovante anexado normalmente')
+    }
   }
 
   const handleReceiptOption = (option: string) => {
@@ -143,14 +185,14 @@ function NewTransactionContent() {
       input.accept = option === 'pdf' ? 'application/pdf' : 'image/*'
       input.onchange = (e: any) => {
         const file = e.target?.files?.[0]
-        if (file) setReceipt(file)
+        if (file) processReceipt(file)
       }
       input.click()
     }
   }
 
   const handleCameraCapture = (file: File) => {
-    setReceipt(file)
+    processReceipt(file)
     setShowCamera(false)
   }
 
