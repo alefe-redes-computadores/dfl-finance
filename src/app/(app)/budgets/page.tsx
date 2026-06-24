@@ -4,24 +4,19 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import {
-  ChevronLeft, ChevronRight, Plus, Loader2, TrendingUp, PieChart, Calendar,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp as TrendingUpIcon, ShoppingCart, ReceiptIcon, Zap, Music,
-  X, Clock, Check
+import * as Icons from 'lucide-react'
+import { 
+  ChevronLeft, ChevronRight, Plus, Loader2, TrendingUp, PieChart, Calendar, X
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUpIcon, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+// Helper para renderizar os ícones dinamicamente
+const getDynamicIcon = (iconName: string) => {
+  if (!iconName) return Icons.Tag
+  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
+  return (Icons as any)[formattedName] || Icons.Tag
 }
 
 function BudgetsContent() {
@@ -182,10 +177,9 @@ function BudgetsContent() {
           {/* Lista de Orçamentos */}
           <div className="space-y-3">
             {budgets.map(budget => {
-              const IconComp = ICON_MAP[budget.icon] || ICON_MAP['other']
+              const IconComp = getDynamicIcon(budget.categories?.icon)
               const isOverBudget = budget.remaining < 0
               const isWarning = budget.percent >= 75 && budget.percent < 100
-              const isOk = budget.percent < 75
 
               return (
                 <div
@@ -249,7 +243,7 @@ function BudgetsContent() {
                     <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 mb-2 px-1">{dateLabel(date)}</p>
                     <div className="space-y-2">
                       {groupedByDate[date].map((tx: any) => {
-                        const IconComp = ICON_MAP[tx.categories?.icon] || ICON_MAP['other']
+                        const IconComp = getDynamicIcon(tx.categories?.icon)
                         return (
                           <div key={tx.id} className="bg-gray-50 dark:bg-slate-700 rounded-xl p-3 flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${tx.categories?.color || '#64748b'}20`, color: tx.categories?.color || '#64748b' }}>
@@ -274,7 +268,6 @@ function BudgetsContent() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
