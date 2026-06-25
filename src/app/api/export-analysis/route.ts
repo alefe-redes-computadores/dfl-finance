@@ -48,29 +48,37 @@ export async function GET(req: NextRequest) {
   const catMap: Record<string, { total: number; count: number }> = {}
   let totalExpense = 0
 
-  transactions.filter(t => t.type === 'expense' || t.type === 'sangria').forEach(t => {
-    const catName = (t.categories as any)?.name || 'Sem categoria'
-    if (!catMap[catName]) catMap[catName] = { total: 0, count: 0 }
-    catMap[catName].total += Number(t.amount) || 0
-    catMap[catName].count += 1
-    totalExpense += Number(t.amount) || 0
-  })
+  // Correção: proteção contra categories nulo e tipagem fraca
+  transactions
+    .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+    .forEach((t: any) => {
+      const cat = t.categories as any
+      const catName = cat?.name || 'Sem categoria'
+      if (!catMap[catName]) catMap[catName] = { total: 0, count: 0 }
+      catMap[catName].total += Number(t.amount) || 0
+      catMap[catName].count += 1
+      totalExpense += Number(t.amount) || 0
+    })
 
-  const income = transactions.filter(t => t.type === 'income' && t.status === 'done')
-    .reduce((a, t) => a + (Number(t.amount) || 0), 0)
-  const expense = transactions.filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-    .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+  const income = transactions
+    .filter((t: any) => t.type === 'income' && t.status === 'done')
+    .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+  const expense = transactions
+    .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+    .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
 
   const rows = Object.entries(catMap)
     .sort((a, b) => b[1].total - a[1].total)
     .map(([name, data]) => {
       const percent = totalExpense > 0 ? ((data.total / totalExpense) * 100).toFixed(1) : '0'
       return `"${name}",${data.total.toFixed(2).replace('.', ',')},${percent}%,${data.count}`
-    }).join('\n')
+    })
+    .join('\n')
 
-  const totals = `\n\n"TOTAL RECEITAS",,,,"${income.toFixed(2).replace('.', ',')}"`
-    + `\n"TOTAL DESPESAS",,,,"${expense.toFixed(2).replace('.', ',')}"`
-    + `\n"TOTAL GERAL",,,,"${totalExpense.toFixed(2).replace('.', ',')}"`
+  const totals =
+    `\n\n"TOTAL RECEITAS",,,,"${income.toFixed(2).replace('.', ',')}"` +
+    `\n"TOTAL DESPESAS",,,,"${expense.toFixed(2).replace('.', ',')}"` +
+    `\n"TOTAL GERAL",,,,"${totalExpense.toFixed(2).replace('.', ',')}"`
 
   const csv = header + rows + totals
 
