@@ -8,6 +8,7 @@ import * as Icons from 'lucide-react'
 import { ChevronLeft, Check, Loader2, X, Tag } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
+import MoneyInput from '@/components/MoneyInput'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -23,11 +24,11 @@ function NewBudgetContent() {
   const [categories, setCategories] = useState<any[]>([])
 
   const [name, setName] = useState('')
-  const [amount, setAmount] = useState('0,00')
   const [amountNum, setAmountNum] = useState(0)
+  const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [categoryId, setCategoryId] = useState('')
   const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('Tag') // Usando um ícone padrão no formato PascalCase
+  const [icon, setIcon] = useState('Tag')
   const [period, setPeriod] = useState<'monthly' | 'biweekly' | 'weekly'>('monthly')
   const [accumulate, setAccumulate] = useState(false)
 
@@ -51,14 +52,14 @@ function NewBudgetContent() {
     const { data } = await supabase.from('budgets').select('*').match({ id: editId, user_id: user.id }).single()
     if (data) {
       setName(data.name)
-      setAmountNum(Number(data.amount))
-      setAmount(Number(data.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+      const numValue = Number(data.amount) || 0
+      setAmountNum(numValue)
+      setAmountFormatted(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setCategoryId(data.category_id || '')
       setColor(data.color)
       setPeriod(data.period)
       setAccumulate(data.accumulate)
       
-      // Ajuste para compatibilidade com ícones antigos em minúsculo
       if (data.icon) {
         const iconName = data.icon.charAt(0).toUpperCase() + data.icon.slice(1)
         setIcon(iconName)
@@ -71,18 +72,6 @@ function NewBudgetContent() {
     loadCategories()
     if (editId) loadBudget()
   }, [user, context, editId])
-
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    if (!digits) {
-      setAmount('0,00')
-      setAmountNum(0)
-      return
-    }
-    const num = parseFloat(digits) / 100
-    setAmountNum(num)
-    setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-  }
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || amountNum <= 0) {
@@ -124,14 +113,11 @@ function NewBudgetContent() {
   )
 
   const selectedCat = categories.find(c => c.id === categoryId)
-  
-  // Renderização dinâmica do ícone selecionado
   const IconComp = (Icons as any)[icon] || Icons.Tag
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -148,12 +134,12 @@ function NewBudgetContent() {
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor do orçamento</label>
           <div className="flex items-center gap-2">
             <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={amount}
-              onChange={handleAmountChange}
-              placeholder="0,00"
+            <MoneyInput
+              value={amountNum}
+              onChange={(num, formatted) => {
+                setAmountNum(num)
+                setAmountFormatted(formatted)
+              }}
               className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
             />
           </div>
@@ -277,7 +263,6 @@ function NewBudgetContent() {
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
               {categories.map(cat => {
-                // Ajuste para renderizar os ícones corretos das categorias listadas
                 const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
                 const CatIconComp = (Icons as any)[catIconName] || Icons.Tag
                 const isActive = cat.id === categoryId
@@ -301,7 +286,6 @@ function NewBudgetContent() {
         </div>
       )}
 
-      {/* Novo Componente de Seleção de Ícone */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
