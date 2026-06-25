@@ -487,4 +487,4 @@ export default function FinancingDetailPage() {
 
     </div>
   )
-                  }
+}
