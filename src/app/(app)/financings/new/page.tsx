@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Check, Loader2, X, Wallet, Calendar, Tag, Building, FileText } from 'lucide-react'
+import { ChevronLeft, Check, Loader2, X, Wallet, Calendar, Tag, Building } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -28,7 +28,6 @@ function NewFinancingContent() {
   const [installmentValue, setInstallmentValue] = useState('0,00')
   const [installmentValueNum, setInstallmentValueNum] = useState(0)
   const [totalInstallments, setTotalInstallments] = useState('1')
-  const [currentInstallment, setCurrentInstallment] = useState('1')
   const [nextDueDate, setNextDueDate] = useState('')
   const [outstandingBalance, setOutstandingBalance] = useState('0,00')
   const [outstandingBalanceNum, setOutstandingBalanceNum] = useState(0)
@@ -62,7 +61,6 @@ function NewFinancingContent() {
       setInstallmentValueNum(Number(data.installment_value))
       setInstallmentValue(Number(data.installment_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setTotalInstallments(String(data.total_installments))
-      setCurrentInstallment(String(data.current_installment))
       setNextDueDate(data.next_due_date || '')
       setOutstandingBalanceNum(Number(data.outstanding_balance))
       setOutstandingBalance(Number(data.outstanding_balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
@@ -106,7 +104,7 @@ function NewFinancingContent() {
       institution: institution || null,
       installment_value: installmentValueNum,
       total_installments: parseInt(totalInstallments),
-      current_installment: parseInt(currentInstallment),
+      current_installment: 1, // Sempre começa em 1
       next_due_date: nextDueDate || null,
       outstanding_balance: outstandingBalanceNum,
       account_id: accountId || null,
@@ -140,133 +138,146 @@ function NewFinancingContent() {
   const IconComp = getDynamicIcon(icon)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-slate-900 flex flex-col font-sans pb-24 relative transition-colors duration-300">
       
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-          <ChevronLeft size={24} />
-        </button>
-        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? 'Editar Financiamento' : 'Novo Financiamento'}</h2>
-        <button onClick={handleSave} disabled={saving} className="w-10 h-10 bg-teal-700 rounded-full flex items-center justify-center">
-          {saving ? <Loader2 size={20} className="text-white animate-spin" /> : <Check size={22} className="text-white" />}
-        </button>
+      {/* Header com preview (estilo cartão de crédito) */}
+      <div className="pt-6 pb-8 px-4 shadow-sm relative transition-colors duration-300" style={{ backgroundColor: color }}>
+        <div className="flex items-center justify-between mb-6 text-white">
+          <button onClick={() => router.back()} className="p-2 -ml-2">
+            <ChevronLeft size={24} />
+          </button>
+        </div>
+        <div>
+          <p className="text-white/80 text-[11px] font-medium uppercase tracking-wider mb-2">Nome do financiamento</p>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-8 rounded-md flex items-center justify-center border border-white/20 bg-black/10 shadow-sm">
+              <IconComp size={18} className="text-white" />
+            </div>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex: Financiamento Imóvel"
+              className="bg-transparent text-white text-2xl font-light outline-none w-full placeholder:text-white/50"
+              autoFocus
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-5">
-        {/* Contexto */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Contexto</label>
-          <div className="flex gap-2">
-            {(['dfl', 'personal'] as const).map(c => (
-              <button key={c} onClick={() => setFinContext(c)} className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${finContext === c ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
-                {c === 'dfl' ? 'DFL' : 'Pessoal'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Nome */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome</label>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Financiamento Imóvel" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500" />
-        </div>
-
-        {/* Instituição */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Instituição financeira</label>
-          <div className="flex items-center gap-3">
-            <Building size={18} className="text-gray-400 dark:text-gray-500" />
-            <input type="text" value={institution} onChange={e => setInstitution(e.target.value)} placeholder="Ex: Itaú, Caixa" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500" />
-          </div>
-        </div>
-
-        {/* Valor da parcela */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da parcela</label>
-          <div className="flex items-center gap-2">
-            <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-            <input type="text" inputMode="numeric" value={installmentValue} onChange={e => handleAmountChange(e.target.value, setInstallmentValueNum, setInstallmentValue)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" />
-          </div>
-        </div>
-
-        {/* Total de parcelas */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Total de parcelas</label>
-          <input type="number" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} min={1} max={360} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
-        </div>
-
-        {/* Parcela atual */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Parcela atual (nº)</label>
-          <input type="number" value={currentInstallment} onChange={e => setCurrentInstallment(e.target.value)} min={1} max={360} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
-        </div>
-
-        {/* Próximo vencimento */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Próximo vencimento</label>
-          <div className="flex items-center gap-3">
-            <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
-            <input type="date" value={nextDueDate} onChange={e => setNextDueDate(e.target.value)} className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
-          </div>
-        </div>
-
-        {/* Saldo devedor */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Saldo devedor</label>
-          <div className="flex items-center gap-2">
-            <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-            <input type="text" inputMode="numeric" value={outstandingBalance} onChange={e => handleAmountChange(e.target.value, setOutstandingBalanceNum, setOutstandingBalance)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" />
-          </div>
-        </div>
-
-        {/* Conta */}
-        <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Wallet size={18} className="text-gray-400 dark:text-gray-500" />
-            <div className="text-left">
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Conta para débito</span>
-              <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedAcc ? selectedAcc.name : 'Nenhuma conta'}</span>
+      <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
+        <div className="space-y-5 p-4">
+          {/* Contexto */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Contexto</label>
+            <div className="flex gap-2">
+              {(['dfl', 'personal'] as const).map(c => (
+                <button key={c} onClick={() => setFinContext(c)} className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${finContext === c ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                  {c === 'dfl' ? 'DFL' : 'Pessoal'}
+                </button>
+              ))}
             </div>
           </div>
-          <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-        </button>
 
-        {/* Categoria */}
-        <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Tag size={18} className="text-gray-400 dark:text-gray-500" />
-            <div className="text-left">
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span>
-              <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span>
+          {/* Instituição */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Instituição financeira</label>
+            <div className="flex items-center gap-3">
+              <Building size={18} className="text-gray-400 dark:text-gray-500" />
+              <input type="text" value={institution} onChange={e => setInstitution(e.target.value)} placeholder="Ex: Itaú, Caixa" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500" />
             </div>
           </div>
-          <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-        </button>
 
-        {/* Cor */}
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
-          <div className="flex flex-wrap gap-3">
-            {COLORS.map(c => (
-              <button key={c} onClick={() => setColor(c)} className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />
-            ))}
+          {/* Valor da parcela */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da parcela</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
+              <input type="text" inputMode="numeric" value={installmentValue} onChange={e => handleAmountChange(e.target.value, setInstallmentValueNum, setInstallmentValue)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" />
+            </div>
           </div>
+
+          {/* Total de parcelas */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Total de parcelas</label>
+            <input type="number" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} min={1} max={360} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
+          </div>
+
+          {/* Próximo vencimento */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Próximo vencimento</label>
+            <div className="flex items-center gap-3">
+              <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
+              <input type="date" value={nextDueDate} onChange={e => setNextDueDate(e.target.value)} className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
+            </div>
+          </div>
+
+          {/* Saldo devedor */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Saldo devedor</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
+              <input type="text" inputMode="numeric" value={outstandingBalance} onChange={e => handleAmountChange(e.target.value, setOutstandingBalanceNum, setOutstandingBalance)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" />
+            </div>
+          </div>
+
+          {/* Conta */}
+          <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Wallet size={18} className="text-gray-400 dark:text-gray-500" />
+              <div className="text-left">
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Conta para débito</span>
+                <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedAcc ? selectedAcc.name : 'Nenhuma conta'}</span>
+              </div>
+            </div>
+            <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
+          </button>
+
+          {/* Categoria */}
+          <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Tag size={18} className="text-gray-400 dark:text-gray-500" />
+              <div className="text-left">
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span>
+                <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span>
+              </div>
+            </div>
+            <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
+          </button>
+
+          {/* Cor */}
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
+            <div className="flex flex-wrap gap-3">
+              {COLORS.map(c => (
+                <button key={c} onClick={() => setColor(c)} className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />
+              ))}
+            </div>
+          </div>
+
+          {/* Ícone */}
+          <button onClick={() => setShowIconModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}20`, color: color }}>
+                <IconComp size={18} />
+              </div>
+              <div className="text-left">
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Ícone</span>
+                <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{icon}</span>
+              </div>
+            </div>
+            <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
+          </button>
         </div>
-
-        {/* Ícone */}
-        <button onClick={() => setShowIconModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}20`, color: color }}>
-              <IconComp size={18} />
-            </div>
-            <div className="text-left">
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Ícone</span>
-              <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{icon}</span>
-            </div>
-          </div>
-          <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-        </button>
       </div>
+
+      {/* Botão Salvar (flutuante) */}
+      <button 
+        onClick={handleSave} 
+        disabled={saving}
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-teal-800 transition-colors disabled:opacity-50 z-50"
+      >
+        {saving ? <Loader2 className="animate-spin" size={28} /> : <Check size={28} />}
+      </button>
 
       {/* Modal Categorias */}
       {showCatModal && (
