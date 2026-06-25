@@ -29,14 +29,13 @@ const PROVIDERS = [
     id: 'openai',
     name: 'OpenAI (ChatGPT)',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
-    getApiUrl: () => 'https://api.openai.com/v1/chat/completions',
+    getApiUrl: (_key?: string) => 'https://api.openai.com/v1/chat/completions',
     testPayload: {
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: 'Olá' }],
     },
   },
 ]
-
 export default function AssistantSettingsPage() {
   const router = useRouter()
   const [provider, setProvider] = useState('gemini')
@@ -67,7 +66,7 @@ export default function AssistantSettingsPage() {
 
     try {
       const prov = PROVIDERS.find(p => p.id === provider)!
-      const url = prov.id === 'openai' ? prov.getApiUrl() : prov.getApiUrl(apiKey)
+      const url = prov.getApiUrl(apiKey)
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (prov.id === 'openai') {
         headers['Authorization'] = `Bearer ${apiKey}`
