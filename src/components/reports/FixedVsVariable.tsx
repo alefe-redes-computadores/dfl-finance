@@ -7,7 +7,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import { FilterState } from '@/components/reports/ReportFilters'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
-import { Loader2, Download } from 'lucide-react'
+import { Loader2, Download, FileText } from 'lucide-react'
 
 interface Props {
   filters: FilterState
@@ -46,7 +46,6 @@ export default function FixedVsVariable({ filters, onClose }: Props) {
     txArray
       .filter((tx: any) => (tx.type === 'expense' || tx.type === 'sangria') && tx.status === 'done')
       .forEach((tx: any) => {
-        // Se tiver recurring_group_id ou total_installments > 1, é fixa
         if (tx.recurring_group_id || tx.total_installments > 1) {
           fixedTotal += Number(tx.amount || 0)
         } else {
@@ -62,6 +61,48 @@ export default function FixedVsVariable({ filters, onClose }: Props) {
   }, [user, context, filters])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const total = data.reduce((a, d) => a + d.value, 0)
+    const tableRows = data.map(d => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${d.color};margin-right:8px;"></span>
+          ${d.name}
+        </td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">${formatCurrency(d.value)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">${total > 0 ? ((d.value / total) * 100).toFixed(0) : 0}%</td>
+      </tr>
+    `).join('')
+
+    const html = `
+      <html>
+        <head>
+          <title>Fixas x Variáveis - DFL Finance</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
+            h2 { color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th { padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px; text-transform: uppercase; color: #64748b; background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Fixas x Variáveis</h2>
+          <table>
+            <thead><tr><th>Tipo</th><th style="text-align:right">Valor</th><th style="text-align:right">%</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+          <p style="margin-top:20px;font-size:11px;color:#94a3b8;">DFL Finance • ${new Date().toLocaleDateString('pt-BR')}</p>
+        </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.print()
+  }
 
   const handleExportCSV = () => {
     const header = 'Tipo,Valor\n'
@@ -119,9 +160,14 @@ export default function FixedVsVariable({ filters, onClose }: Props) {
         </div>
       </div>
 
-      <button onClick={handleExportCSV} className="w-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-        <Download size={18} /> Exportar CSV
-      </button>
+      <div className="flex gap-3">
+        <button onClick={handleExportPDF} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
+          <FileText size={18} /> Exportar PDF
+        </button>
+        <button onClick={handleExportCSV} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
+          <Download size={18} /> Exportar CSV
+        </button>
+      </div>
     </div>
   )
 }
