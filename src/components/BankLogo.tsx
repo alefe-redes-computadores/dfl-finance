@@ -1,4 +1,4 @@
-import { getBankLogoUrl } from '@/lib/bankIcons';
+import { getBankIcon } from '@/lib/bankIcons'
 
 interface BankLogoProps {
   color: string;
