@@ -24,24 +24,46 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-// Placeholder para o serviço de OCR
+// Função real de OCR usando a API do Google Vision
 async function processOCR(file: File): Promise<{
   amount: string
   date: string
   description: string
   establishment: string
 }> {
-  // TODO: Conectar ao seu serviço real de OCR
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        amount: '45,90',
-        date: format(new Date(), 'yyyy-MM-dd'),
-        description: 'Compra automática',
-        establishment: 'Estabelecimento OCR',
-      })
-    }, 1500)
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch('/api/ocr', {
+    method: 'POST',
+    body: formData,
   })
+
+  if (!response.ok) {
+    throw new Error('Falha no OCR')
+  }
+
+  const result = await response.json()
+  const { amount, date, description, rawText } = result.data
+
+  // Formatar data de dd/mm/yyyy para yyyy-MM-dd
+  let formattedDate = format(new Date(), 'yyyy-MM-dd')
+  if (date) {
+    const parts = date.split('/')
+    if (parts.length === 3) {
+      formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`
+    }
+  }
+
+  // Formatar valor (já vem como string com vírgula)
+  const formattedAmount = amount || '0,00'
+
+  return {
+    amount: formattedAmount,
+    date: formattedDate,
+    description: description || 'Compra via OCR',
+    establishment: rawText?.split('\n')[0] || '',
+  }
 }
 
 function ImportContent() {
@@ -73,12 +95,12 @@ function ImportContent() {
       const result = await processOCR(selectedFile)
       setOcrResult(result)
       setFormData({
-        amount: result.amount.replace(',', '.'),
-        date: result.date || format(new Date(), 'yyyy-MM-dd'),
-        description: result.description || '',
+        amount: result.amount,
+        date: result.date,
+        description: result.description,
         category_id: '',
         credit_card_id: '',
-        notes: result.establishment || '',
+        notes: result.establishment,
       })
     } catch (err) {
       alert('Erro ao processar imagem. Preencha manualmente.')
@@ -216,7 +238,7 @@ function ImportContent() {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })
-                    setFormData({ ...formData, amount: formatted.replace('.', ',') })
+                    setFormData({ ...formData, amount: formatted })
                   }}
                   className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200 font-bold"
                   placeholder="0,00"
