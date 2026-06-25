@@ -10,7 +10,7 @@ import {
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight
 } from 'lucide-react'
-import { addMonths, addWeeks, format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
+import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
 import ComingSoonModal from '@/components/ComingSoonModal'
 import CameraCapture from '@/components/CameraCapture'
@@ -32,9 +32,7 @@ const getDynamicIcon = (iconName: string) => {
   return (Icons as any)[formattedName] || Icons.Tag
 }
 
-// Helper para criar data local sem influência do UTC
 function createLocalDate(dateString: string): Date {
-  // Adiciona T12:00:00 para garantir que a data não desloque para o dia anterior
   return new Date(dateString + 'T12:00:00')
 }
 
@@ -48,7 +46,6 @@ function NewTransactionContent() {
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
-  // Data local sem fuso: yyyy-MM-dd baseada no calendário do usuário
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [desc, setDesc] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -110,7 +107,7 @@ function NewTransactionContent() {
     setDate(newDateStr)
     const selectedDate = createLocalDate(newDateStr)
     const today = new Date()
-    today.setHours(12, 0, 0, 0) // meio-dia local
+    today.setHours(12, 0, 0, 0)
     selectedDate.setHours(12, 0, 0, 0)
     setIsPaid(selectedDate <= today)
   }
@@ -461,7 +458,9 @@ function NewTransactionContent() {
           const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
           receiptUrl = urlData.publicUrl
         }
-      } catch (err) {}
+      } catch (err) {
+        console.log('Falha no upload do comprovante, continuando sem anexo.')
+      }
     }
 
     let totalParcels = 1
@@ -482,12 +481,61 @@ function NewTransactionContent() {
       }
     }
 
-    const installmentAmount = totalParcels > 1 && repetition === 'installments' ? rawAmount / totalParcels : rawAmount
+    const installmentAmount = totalParcels > 1 && repetition === 'installments' 
+      ? rawAmount / totalParcels 
+      : rawAmount
 
     try {
-      // Usar a data base local para gerar parcelas consistentes
       const baseDate = createLocalDate(date)
 
+      // 🔥 ATUALIZA O SALDO UMA ÚNICA VEZ (FORA DO LOOP)
+      if (isPaid && accountId && type !== 'transfer') {
+        const { data: acc } = await supabase
+          .from('accounts')
+          .select('balance, allow_negative')
+          .eq('id', accountId)
+          .single()
+        
+        if (acc) {
+          const currentBalance = Number(acc.balance) || 0
+          const allowNegative = acc.allow_negative || false
+          
+          let newBalance: number
+          if (type === 'income') {
+            newBalance = currentBalance + installmentAmount
+          } else {
+            newBalance = currentBalance - installmentAmount
+          }
+          
+          if (type === 'expense' && newBalance < 0 && !allowNegative) {
+            const proceed = confirm(
+              `⚠️ Saldo Insuficiente!\n\n` +
+              `Saldo atual: ${formatCurrency(currentBalance)}\n` +
+              `Valor da despesa: ${formatCurrency(installmentAmount)}\n` +
+              `Saldo resultante: ${formatCurrency(newBalance)}\n\n` +
+              `Deseja continuar mesmo assim? (Saldo ficará negativo)`
+            )
+            if (!proceed) {
+              setIsSubmitting(false)
+              return
+            }
+          }
+          
+          const { error: updateError } = await supabase
+            .from('accounts')
+            .update({ balance: newBalance })
+            .eq('id', accountId)
+          
+          if (updateError) {
+            console.error('Erro ao atualizar saldo:', updateError)
+            alert('Erro ao atualizar saldo da conta. Tente novamente.')
+            setIsSubmitting(false)
+            return
+          }
+        }
+      }
+
+      // INSERE AS TRANSAÇÕES (sem mexer no saldo novamente)
       for (let i = 0; i < totalParcels; i++) {
         let installmentDate: string
         if (repetition === 'recurring') {
@@ -531,22 +579,18 @@ function NewTransactionContent() {
         }
 
         const { error: insertError } = await supabase.from('transactions').insert(payload)
-        if (insertError) throw insertError
-
-        if (isPaid && accountId && i === 0) {
-          const { data: acc } = await supabase.from('accounts').select('balance').eq('id', accountId).single()
-          if (acc) {
-            const currentBalance = Number(acc.balance) || 0
-            const newBalance = type === 'income' ? currentBalance + installmentAmount : currentBalance - installmentAmount
-            await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
-          }
+        if (insertError) {
+          console.error('Erro ao inserir transação:', insertError)
+          throw insertError
         }
       }
+
       if (isOnline) {
         router.refresh()
         router.push('/transactions')
       }
     } catch (e: any) {
+      console.error('Erro completo:', e)
       alert('ERRO DO BANCO:\n' + (e.message || JSON.stringify(e)))
     } finally {
       setIsSubmitting(false)
@@ -555,7 +599,6 @@ function NewTransactionContent() {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
         <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
           <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
@@ -606,7 +649,6 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Card Principal */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">{isIncome ? 'Recebido' : 'Pago'}</span>
@@ -655,7 +697,6 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Detalhes */}
       <div className="mx-4 mt-4">
         <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
@@ -757,7 +798,6 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* MODAL: RECORRência PERSONALIZADA */}
       {showCustomRecurrenceModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-auto" onClick={e => e.stopPropagation()}>
@@ -799,7 +839,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Lista de Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -844,7 +883,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal de Subcategorias */}
       {showSubCatModal && selectedParentCat && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -886,7 +924,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Lista de Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -911,7 +948,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Lista de Tags */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -936,7 +972,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Criar Categoria */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -996,7 +1031,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Criar Conta */}
       {showCreateAccModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -1037,7 +1071,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Criar Tag */}
       {showCreateTagModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
