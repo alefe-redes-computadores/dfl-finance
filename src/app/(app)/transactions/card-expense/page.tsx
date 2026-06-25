@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import MoneyInput from '@/components/MoneyInput'
 
 export default function CardExpensePage() {
   const router = useRouter()
@@ -22,7 +23,8 @@ export default function CardExpensePage() {
   const [categories, setCategories] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
 
-  const [amountInput, setAmountInput] = useState('')
+  const [amountNum, setAmountNum] = useState(0)
+  const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -59,24 +61,6 @@ export default function CardExpensePage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    
-    if (!digits) {
-      setAmountInput('0,00')
-      return
-    }
-
-    const numValue = parseFloat(digits) / 100
-
-    const formatted = new Intl.NumberFormat('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(numValue)
-
-    setAmountInput(formatted)
-  }
-
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) {
@@ -89,11 +73,11 @@ export default function CardExpensePage() {
     }
 
     setIsSubmitting(true)
-    const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0;
+    const rawAmount = amountNum
     const idempotencyKey = crypto.randomUUID()
     
-    const parcelasTexto = installments > 1 ? `[Parcelado em ${installments}x] ` : '';
-    const finalNotes = `${parcelasTexto}${notes}`.trim();
+    const parcelasTexto = installments > 1 ? `[Parcelado em ${installments}x] ` : ''
+    const finalNotes = `${parcelasTexto}${notes}`.trim()
     
     const payload = {
       user_id: user.id,
@@ -163,13 +147,13 @@ export default function CardExpensePage() {
         <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mb-2">Valor da compra</p>
         <div className="flex items-center gap-2">
           <span className="text-3xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-          <input 
-            type="text" 
-            inputMode="numeric"
-            value={amountInput}
-            onChange={handleAmountChange}
+          <MoneyInput
+            value={amountNum}
+            onChange={(num, formatted) => {
+              setAmountNum(num)
+              setAmountFormatted(formatted)
+            }}
             className="text-4xl font-light bg-transparent outline-none w-full text-orange-500 dark:text-orange-400"
-            placeholder="0,00"
           />
         </div>
       </div>
