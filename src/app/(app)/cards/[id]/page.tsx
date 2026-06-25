@@ -70,6 +70,11 @@ function CardDetailContent() {
   const [adjustDescription, setAdjustDescription] = useState('')
   const [adjustSaving, setAdjustSaving] = useState(false)
 
+  // Modal de ajuste rápido de limite
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [newLimit, setNewLimit] = useState('')
+  const [limitSaving, setLimitSaving] = useState(false)
+
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadCardData = useCallback(async () => {
@@ -186,6 +191,43 @@ function CardDetailContent() {
     setAdjustAmount(formatted)
   }
 
+  const handleSaveLimit = async () => {
+    if (!user?.id || !cardId) return
+    const rawLimit = parseFloat(newLimit.replace(/\./g, '').replace(',', '.')) || 0
+    if (rawLimit <= 0) {
+      alert('Informe um valor válido para o limite.')
+      return
+    }
+    setLimitSaving(true)
+    const { error } = await supabase
+      .from('credit_cards')
+      .update({ limit_amount: rawLimit })
+      .eq('id', cardId)
+      .eq('user_id', user.id)
+    if (error) {
+      alert('Erro ao salvar limite: ' + error.message)
+    } else {
+      setShowLimitModal(false)
+      loadCardData()
+    }
+    setLimitSaving(false)
+  }
+
+  const handleLimitInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '')
+    if (!digits) {
+      setNewLimit('0,00')
+      return
+    }
+    const numValue = parseFloat(digits) / 100
+    setNewLimit(
+      numValue.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
@@ -246,6 +288,21 @@ function CardDetailContent() {
           <div>
             <p className="text-white/70 text-[10px] font-bold uppercase">Limite Total</p>
             <p className="font-bold">{formatCurrency(card.limit_amount || 0)}</p>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setNewLimit(
+                  (Number(card.limit_amount) || 0).toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                )
+                setShowLimitModal(true)
+              }}
+              className="text-white/60 text-[10px] underline hover:text-white mt-1"
+            >
+              Ajustar limite
+            </button>
           </div>
           <div>
             <p className="text-white/70 text-[10px] font-bold uppercase">Disponível</p>
@@ -409,6 +466,39 @@ function CardDetailContent() {
               className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50"
             >
               {adjustSaving ? 'Salvando...' : 'Registrar Estorno'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Ajuste de Limite */}
+      {showLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowLimitModal(false)}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Ajustar Limite</h3>
+              <button onClick={() => setShowLimitModal(false)} className="text-gray-400 dark:text-gray-500 p-1"><X size={20} /></button>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-2">Novo limite (R$)</label>
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+                <span className="text-gray-400 dark:text-gray-500 font-bold mr-2">R$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={newLimit}
+                  onChange={handleLimitInputChange}
+                  className="bg-transparent w-full outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleSaveLimit}
+              disabled={limitSaving}
+              className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50"
+            >
+              {limitSaving ? <Loader2 size={20} className="animate-spin" /> : 'Salvar'}
             </button>
           </div>
         </div>
