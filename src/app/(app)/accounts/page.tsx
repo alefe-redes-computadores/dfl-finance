@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff } from 'lucide-react'
+import BankLogo from '@/components/BankLogo'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -143,9 +144,7 @@ export default function AccountsPage() {
                 >
                   <div className="flex items-center gap-4">
                     <GripVertical className="text-gray-300 dark:text-gray-600 cursor-grab hover:text-gray-500 dark:hover:text-gray-400 transition-colors" size={18} />
-                    <div className="w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{ backgroundColor: acc.color }}>
-                      {acc.name.substring(0, 2).toUpperCase()}
-                    </div>
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
                     <div>
                       <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{acc.name}</p>
                       <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">Conta Corrente</p>
