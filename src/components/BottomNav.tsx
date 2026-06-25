@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState } from 'react'
@@ -92,9 +91,16 @@ export default function BottomNav() {
             if (i === 1) {
               return (
                 <React.Fragment key="fab-group">
-                  <button onClick={() => router.push(tab.href)} className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group">
+                  <button
+                    onClick={() => router.push(tab.href)}
+                    title={tab.label}
+                    className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative"
+                  >
                     <Icon size={22} className={`transition-colors ${active ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`} />
                     <span className={`text-[10px] ${active ? 'text-gray-800 dark:text-gray-200 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>{tab.label}</span>
+                    <span className="absolute -top-8 bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900 text-xs rounded-lg px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                      {tab.label}
+                    </span>
                   </button>
                   <div className="w-[72px]" />
                 </React.Fragment>
@@ -102,9 +108,17 @@ export default function BottomNav() {
             }
 
             return (
-              <button key={tab.href} onClick={() => router.push(tab.href)} className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group">
+              <button
+                key={tab.href}
+                onClick={() => router.push(tab.href)}
+                title={tab.label}
+                className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative"
+              >
                 <Icon size={22} className={`transition-colors ${active ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`} />
                 <span className={`text-[10px] ${active ? 'text-gray-800 dark:text-gray-200 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>{tab.label}</span>
+                <span className="absolute -top-8 bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900 text-xs rounded-lg px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                  {tab.label}
+                </span>
               </button>
             )
           })}
