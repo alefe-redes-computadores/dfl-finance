@@ -18,6 +18,10 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import CategoryResult from '@/components/reports/CategoryResult'
 import CashFlow from '@/components/reports/CashFlow'
 import BudgetVsReal from '@/components/reports/BudgetVsReal'
+import ComparePeriods from '@/components/reports/ComparePeriods'
+import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
+import FixedVsVariable from '@/components/reports/FixedVsVariable'
+import ExportData from '@/components/reports/ExportData'
 import ReportFilters, { FilterState } from '@/components/reports/ReportFilters'
 
 const reportItems = [
@@ -92,15 +96,18 @@ function ReportsContent() {
     switch (activeReport) {
       case 'category':
         return <CategoryResult filters={filters} onClose={() => setActiveReport(null)} />
+      case 'compare':
+        return <ComparePeriods filters={filters} onClose={() => setActiveReport(null)} />
+      case 'weekday':
+        return <WeekdayExpenses filters={filters} onClose={() => setActiveReport(null)} />
+      case 'fixed-variable':
+        return <FixedVsVariable filters={filters} onClose={() => setActiveReport(null)} />
       case 'cashflow':
         return <CashFlow filters={filters} onClose={() => setActiveReport(null)} />
       case 'budget-real':
         return <BudgetVsReal filters={filters} onClose={() => setActiveReport(null)} />
-      case 'compare':
-      case 'weekday':
-      case 'fixed-variable':
       case 'export':
-        return <p className="text-center py-20 text-gray-400 dark:text-gray-500">Em breve</p>
+        return <ExportData filters={filters} onClose={() => setActiveReport(null)} />
       default:
         return null
     }
