@@ -6,22 +6,18 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Check, Loader2, X, Tag, Wallet,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
   Calendar
 } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import { getDynamicIcon } from '@/lib/iconUtils'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
-const ICON_NAMES = Object.keys(ICON_MAP)
+// Lista de ícones disponíveis (nomes iguais aos do lucide-react)
+const ICON_NAMES = [
+  'home', 'utensils', 'car', 'heart', 'graduation-cap', 'gamepad-2', 'shirt',
+  'smile', 'repeat', 'wrench', 'dog', 'file-text', 'shield', 'gift', 'briefcase',
+  'laptop', 'trending-up', 'shopping-cart', 'receipt', 'zap', 'music', 'more-horizontal',
+  'target', 'piggy-bank'
+]
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -135,7 +131,6 @@ function NewSubscriptionContent() {
   const selectedCat = categories.find(c => c.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
 
-  // Gera dias 1 a 31 para o dropdown
   const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
   return (
@@ -244,12 +239,12 @@ function NewSubscriptionContent() {
           </div>
         </div>
 
-        {/* Grade de Ícones (AGORA INLINE) */}
+        {/* Grade de Ícones (dinâmica) */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3">Ícone</p>
           <div className="flex flex-wrap gap-3">
             {ICON_NAMES.map(iconName => {
-              const Ico = ICON_MAP[iconName]
+              const Ico = getDynamicIcon(iconName)
               const isSelected = icon === iconName
               return (
                 <button
@@ -284,7 +279,7 @@ function NewSubscriptionContent() {
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
               {categories.map(cat => {
-                const CatIconComp = ICON_MAP[cat.icon] || ICON_MAP['other']
+                const CatIconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
                   <button
