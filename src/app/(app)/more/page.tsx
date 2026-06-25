@@ -7,7 +7,9 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
-  Download, ReceiptText, PieChart, Sparkles
+  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff,
+  Shield, Zap, TrendingUp, Target, PiggyBank, CreditCard, Wallet,
+  Tags, Hash, Repeat, FileText, Users, BarChart3, Image, FileSpreadsheet
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -110,6 +112,90 @@ function MenuItem({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Modal de Configurações Rápidas                                     */
+/* ------------------------------------------------------------------ */
+
+function QuickSettingsModal({
+  isOpen,
+  onClose,
+  theme,
+  toggleTheme,
+  notificationsEnabled,
+  toggleNotifications,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  theme: string
+  toggleTheme: () => void
+  notificationsEnabled: boolean
+  toggleNotifications: () => void
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+              <Settings size={20} className="text-teal-700 dark:text-teal-400" />
+            </div>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Configurações</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Modo Escuro */}
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              {theme === 'dark' ? (
+                <Moon size={20} className="text-teal-700 dark:text-teal-400" />
+              ) : (
+                <Sun size={20} className="text-teal-700 dark:text-teal-400" />
+              )}
+              <div>
+                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Modo escuro</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">{theme === 'dark' ? 'Ativado' : 'Desativado'}</p>
+              </div>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className={`w-12 h-7 rounded-full relative transition-colors ${theme === 'dark' ? 'bg-teal-700' : 'bg-gray-300'}`}
+            >
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
+            </button>
+          </div>
+
+          {/* Notificações */}
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              {notificationsEnabled ? (
+                <Bell size={20} className="text-teal-700 dark:text-teal-400" />
+              ) : (
+                <BellOff size={20} className="text-gray-400 dark:text-gray-500" />
+              )}
+              <div>
+                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Notificações</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500">{notificationsEnabled ? 'Ativadas' : 'Desativadas'}</p>
+              </div>
+            </div>
+            <button
+              onClick={toggleNotifications}
+              className={`w-12 h-7 rounded-full relative transition-colors ${notificationsEnabled ? 'bg-teal-700' : 'bg-gray-300'}`}
+            >
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*  Página principal "Mais"                                            */
 /* ------------------------------------------------------------------ */
 
@@ -120,6 +206,7 @@ export default function MorePage() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [exportRange, setExportRange] = useState('30')
   const [exportContext, setExportContext] = useState<'dfl' | 'personal'>('dfl')
   const [name, setName] = useState('')
@@ -129,6 +216,20 @@ export default function MorePage() {
   const [showCropModal, setShowCropModal] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Preferência de notificações
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('dfl_notifications_enabled')
+    setNotificationsEnabled(saved !== 'false') // padrão: true
+  }, [])
+
+  const toggleNotifications = () => {
+    const newValue = !notificationsEnabled
+    setNotificationsEnabled(newValue)
+    localStorage.setItem('dfl_notifications_enabled', String(newValue))
+  }
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
@@ -382,16 +483,40 @@ export default function MorePage() {
         </div>
       )}
 
-      {/* Cabeçalho e Banner */}
-      <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-        Mais
-      </h1>
+      {/* Modal de Configurações Rápidas */}
+      <QuickSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        notificationsEnabled={notificationsEnabled}
+        toggleNotifications={toggleNotifications}
+      />
 
-      <div className="bg-gradient-to-r from-teal-700 to-orange-500 rounded-2xl p-4 mb-8 text-white shadow-lg">
-        <h3 className="font-bold">DFL Finance</h3>
-        <p className="text-xs text-teal-50">
-          Gestão financeira completa
-        </p>
+      {/* Cabeçalho com botão de configurações */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Mais
+        </h1>
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          className="p-2 text-gray-500 dark:text-gray-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+        >
+          <Settings size={22} />
+        </button>
+      </div>
+
+      {/* Banner 100% Gratuito */}
+      <div className="bg-gradient-to-r from-teal-600 to-emerald-500 rounded-2xl p-5 mb-8 text-white shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+            <Sparkles size={24} className="text-white" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">DFL Finance</h3>
+            <p className="text-xs text-teal-50">100% Gratuito • Gestão financeira completa</p>
+          </div>
+        </div>
       </div>
 
       {/* Perfil */}
@@ -457,36 +582,6 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* Preferências - Modo Escuro */}
-      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 p-4 mb-6">
-        <button
-          onClick={toggleTheme}
-          className="flex items-center justify-between w-full"
-        >
-          <div className="flex items-center gap-3">
-            {theme === 'dark' ? (
-              <Moon size={20} className="text-teal-700 dark:text-teal-400" />
-            ) : (
-              <Sun size={20} className="text-teal-700 dark:text-teal-400" />
-            )}
-            <span className="font-medium text-gray-700 dark:text-gray-200">
-              Modo escuro
-            </span>
-          </div>
-          <div
-            className={`w-10 h-6 rounded-full relative transition-colors ${
-              theme === 'dark' ? 'bg-teal-700' : 'bg-gray-300'
-            }`}
-          >
-            <div
-              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                theme === 'dark' ? 'right-1' : 'left-1'
-              }`}
-            />
-          </div>
-        </button>
-      </div>
-
       {/* Seções */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
         <SectionTitle>Organizar</SectionTitle>
@@ -512,16 +607,8 @@ export default function MorePage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
         <SectionTitle>Analisar</SectionTitle>
-        <MenuItem
-          iconName="bar-chart"
-          label="Relatório personalizado"
-          href="/analysis"
-        />
-        <MenuItem
-           iconName="pie-chart"
-           label="Relatórios avançados"
-           href="/reports"
-      />
+        <MenuItem iconName="bar-chart" label="Relatório personalizado" href="/analysis" />
+        <MenuItem iconName="pie-chart" label="Relatórios avançados" href="/reports" />
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
