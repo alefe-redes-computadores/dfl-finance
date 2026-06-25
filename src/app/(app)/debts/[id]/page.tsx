@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User
+  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -20,9 +20,14 @@ export default function DebtDetailPage() {
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
   const [accounts, setAccounts] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // WhatsApp
+  const [whatsAppNumber, setWhatsAppNumber] = useState('')
+  const [whatsAppMessage, setWhatsAppMessage] = useState('')
 
   // Pagamento
   const [payAmount, setPayAmount] = useState('0,00')
@@ -43,7 +48,10 @@ export default function DebtDetailPage() {
       .match({ id: id, user_id: user.id })
       .single()
 
-    if (debtData) setDebt(debtData)
+    if (debtData) {
+      setDebt(debtData)
+      setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de R$ ${Number(debtData.total_amount).toFixed(2).replace('.', ',')}. Você pode verificar?`)
+    }
 
     const { data: payData } = await supabase
       .from('transactions')
@@ -70,6 +78,37 @@ export default function DebtDetailPage() {
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
     await supabase.from('debts').delete().eq('id', id)
     router.push('/debts')
+  }
+
+  const handleDeletePayment = async (paymentId: string, amount: number) => {
+    if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
+
+    // Excluir a transação
+    await supabase.from('transactions').delete().eq('id', paymentId)
+
+    // Recalcular total pago
+    const updatedPayments = payments.filter(p => p.id !== paymentId)
+    const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
+    const newStatus = totalPaid >= Number(debt.total_amount) ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
+    await supabase.from('debts').update({ status: newStatus }).eq('id', id)
+
+    // Se havia conta vinculada, reverter saldo (subtrair o valor)
+    const deletedPayment = payments.find(p => p.id === paymentId)
+    if (deletedPayment?.account_id) {
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('balance')
+        .eq('id', deletedPayment.account_id)
+        .single()
+      if (acc) {
+        await supabase
+          .from('accounts')
+          .update({ balance: Number(acc.balance) - amount })
+          .eq('id', deletedPayment.account_id)
+      }
+    }
+
+    loadData()
   }
 
   const handlePayAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +141,6 @@ export default function DebtDetailPage() {
     try {
       const idempotencyKey = crypto.randomUUID()
 
-      // Criar transação de entrada (pagamento recebido)
       const { error: txError } = await supabase.from('transactions').insert({
         user_id: user.id,
         type: 'income',
@@ -118,7 +156,6 @@ export default function DebtDetailPage() {
 
       if (txError) throw txError
 
-      // Atualizar saldo da conta se selecionada
       const targetAccountId = payAccountId || debt.account_id
       if (targetAccountId) {
         const { data: acc } = await supabase
@@ -135,7 +172,6 @@ export default function DebtDetailPage() {
         }
       }
 
-      // Verificar se a dívida foi quitada
       const newTotalPaid = totalPaid + payAmountNum
       const newStatus = newTotalPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
       await supabase.from('debts').update({ status: newStatus }).eq('id', id)
@@ -152,6 +188,17 @@ export default function DebtDetailPage() {
       setSaving(false)
       setIsSubmitting(false)
     }
+  }
+
+  const handleSendWhatsApp = () => {
+    const number = whatsAppNumber.replace(/\D/g, '')
+    if (!number) {
+      alert('Informe o número do WhatsApp.')
+      return
+    }
+    const url = `https://wa.me/55${number}?text=${encodeURIComponent(whatsAppMessage)}`
+    window.open(url, '_blank')
+    setShowWhatsAppModal(false)
   }
 
   if (loading) return (
@@ -186,6 +233,9 @@ export default function DebtDetailPage() {
         </button>
         <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{debt.person_name}</h2>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowWhatsAppModal(true)} className="p-2 text-emerald-600 dark:text-emerald-400" title="Cobrar via WhatsApp">
+            <MessageCircle size={20} />
+          </button>
           <button onClick={() => router.push(`/debts/new?edit=${debt.id}`)} className="p-2 text-teal-700 dark:text-teal-400">
             <Edit2 size={20} />
           </button>
@@ -237,15 +287,23 @@ export default function DebtDetailPage() {
         </div>
       </div>
 
-      {/* Botão Registrar Pagamento */}
-      {!isPaid && (
+      {/* Botões de ação */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {!isPaid && (
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="bg-teal-700 text-white py-3 rounded-full font-bold text-sm"
+          >
+            Registrar Pagamento
+          </button>
+        )}
         <button
-          onClick={() => setShowPaymentModal(true)}
-          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm mb-6"
+          onClick={() => setShowWhatsAppModal(true)}
+          className={`${isPaid ? 'col-span-2' : ''} bg-emerald-600 text-white py-3 rounded-full font-bold text-sm flex items-center justify-center gap-2`}
         >
-          Registrar Pagamento
+          <MessageCircle size={18} /> Cobrar via WhatsApp
         </button>
-      )}
+      </div>
 
       {/* Histórico de Pagamentos */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
@@ -255,7 +313,7 @@ export default function DebtDetailPage() {
         ) : (
           <div className="space-y-2">
             {payments.map(pay => (
-              <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
+              <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl group">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-sm text-emerald-600">+ {formatCurrency(Number(pay.amount) || 0)}</p>
@@ -265,6 +323,13 @@ export default function DebtDetailPage() {
                     {format(new Date(pay.date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
                   </p>
                 </div>
+                <button
+                  onClick={() => handleDeletePayment(pay.id, Number(pay.amount))}
+                  className="p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Excluir pagamento"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             ))}
           </div>
@@ -340,6 +405,49 @@ export default function DebtDetailPage() {
                 className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50"
               >
                 {isSubmitting ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Confirmar Pagamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal WhatsApp */}
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowWhatsAppModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cobrar via WhatsApp</h3>
+              <button onClick={() => setShowWhatsAppModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Número (DDD + número)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={whatsAppNumber}
+                  onChange={e => setWhatsAppNumber(e.target.value.replace(/\D/g, ''))}
+                  placeholder="11999999999"
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Mensagem</label>
+                <textarea
+                  value={whatsAppMessage}
+                  onChange={e => setWhatsAppMessage(e.target.value)}
+                  rows={3}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200 resize-none"
+                />
+              </div>
+
+              <button
+                onClick={handleSendWhatsApp}
+                className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2"
+              >
+                <MessageCircle size={20} /> Enviar Mensagem
               </button>
             </div>
           </div>
