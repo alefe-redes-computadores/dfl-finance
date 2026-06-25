@@ -75,6 +75,46 @@ export default function CashFlow({ filters, onClose }: Props) {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const tableRows = data.map(d => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#059669;">${formatCurrency(d.Receitas)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626;">${formatCurrency(d.Despesas)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d.Saldo >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d.Saldo)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d['Saldo Acumulado'] >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d['Saldo Acumulado'])}</td>
+      </tr>
+    `).join('')
+
+    const html = `
+      <html>
+        <head>
+          <title>Fluxo de Caixa - DFL Finance</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
+            h2 { color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th { padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px; text-transform: uppercase; color: #64748b; background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Fluxo de Caixa</h2>
+          <table>
+            <thead><tr><th>Mês</th><th style="text-align:right">Receitas</th><th style="text-align:right">Despesas</th><th style="text-align:right">Saldo</th><th style="text-align:right">Acumulado</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+          <p style="margin-top:20px;font-size:11px;color:#94a3b8;">DFL Finance • ${new Date().toLocaleDateString('pt-BR')}</p>
+        </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.print()
+  }
+
   const handleExportCSV = () => {
     const header = 'Mês,Receitas,Despesas,Saldo,Acumulado\n'
     const rows = data.map(d => `"${d.name}",${d.Receitas.toFixed(2)},${d.Despesas.toFixed(2)},${d.Saldo.toFixed(2)},${d['Saldo Acumulado'].toFixed(2)}`).join('\n')
@@ -147,9 +187,14 @@ export default function CashFlow({ filters, onClose }: Props) {
         </div>
       </div>
 
-      <button onClick={handleExportCSV} className="w-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-        <Download size={18} /> Exportar CSV
-      </button>
+      <div className="flex gap-3">
+        <button onClick={handleExportPDF} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
+          <FileText size={18} /> Exportar PDF
+        </button>
+        <button onClick={handleExportCSV} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
+          <Download size={18} /> Exportar CSV
+        </button>
+      </div>
     </div>
   )
 }
