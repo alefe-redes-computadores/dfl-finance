@@ -6,11 +6,153 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Edit2, Loader2, Check, Trash2, X, Wallet, Calendar,
-  MoreHorizontal, Clock, ChevronDown
+  MoreHorizontal, Clock, ChevronDown, AlertTriangle, Eye
 } from 'lucide-react'
 import { format, addMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDynamicIcon } from '@/lib/iconUtils'
+
+/* ---------- Modal de Confirmação ---------- */
+function ConfirmModal({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel,
+  loading,
+}: {
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void
+  title: string
+  message: string
+  confirmLabel: string
+  loading?: boolean
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-[24px] p-6 w-full max-w-sm shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <AlertTriangle size={20} className="text-red-600 dark:text-red-400" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{title}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{message}</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-3 rounded-xl font-bold text-white bg-rose-500 hover:bg-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Modal de Detalhes do Abatimento ---------- */
+function AbatementDetailModal({
+  open,
+  onClose,
+  abatement,
+  onDelete,
+  deleting,
+}: {
+  open: boolean
+  onClose: () => void
+  abatement: any | null
+  onDelete: () => void
+  deleting?: boolean
+}) {
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  if (!open || !abatement) return null
+
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50" onClick={onClose}>
+        <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Detalhes do Abatimento</h3>
+            <button onClick={onClose} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Valor</span>
+                <span className="text-sm font-bold text-red-500">{formatCurrency(Number(abatement.amount) || 0)}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Data</span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                  {format(new Date(abatement.date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
+                </span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Tipo</span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                  {abatement.abatement_type === 'reduce_term' ? 'Reduzir prazo' : 'Reduzir parcela'}
+                </span>
+              </div>
+              {abatement.observation && (
+                <div className="flex justify-between mb-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Observação</span>
+                  <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{abatement.observation}</span>
+                </div>
+              )}
+              {abatement.accounts?.name && (
+                <div className="flex justify-between">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Conta</span>
+                  <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{abatement.accounts.name}</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="w-full bg-rose-500 text-white py-3 rounded-xl font-bold hover:bg-rose-600 transition-colors"
+            >
+              Excluir Abatimento
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ConfirmModal
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={() => { setShowConfirm(false); onDelete() }}
+        title="Excluir abatimento"
+        message="O valor será devolvido ao saldo devedor e as parcelas recalculadas. A transação correspondente também será removida."
+        confirmLabel="Sim, excluir"
+        loading={deleting}
+      />
+    </>
+  )
+}
+
+/* ================================================================ */
+/* PÁGINA PRINCIPAL                                                 */
+/* ================================================================ */
 
 export default function FinancingDetailPage() {
   const { id } = useParams()
@@ -26,6 +168,15 @@ export default function FinancingDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Modal de confirmação (excluir contrato)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  // Modal de detalhes do abatimento
+  const [selectedAbatement, setSelectedAbatement] = useState<any>(null)
+  const [deletingAbatement, setDeletingAbatement] = useState(false)
+
   // Abatimento
   const [abAmount, setAbAmount] = useState('0,00')
   const [abAmountNum, setAbAmountNum] = useState(0)
@@ -38,12 +189,8 @@ export default function FinancingDetailPage() {
   const previewBalance = Math.max(0, (financing?.outstanding_balance || 0) - abAmountNum)
 
   const loadData = useCallback(async () => {
-    if (!id || !user?.id) {
-      console.log('loadData abortado:', { id, userId: user?.id })
-      return
-    }
+    if (!id || !user?.id) return
     setLoading(true)
-    console.log('Buscando financiamento:', { id, userId: user.id })
 
     const { data: finData, error: finError } = await supabase
       .from('financings')
@@ -51,21 +198,15 @@ export default function FinancingDetailPage() {
       .match({ id: id, user_id: user.id })
       .single()
 
-    if (finError) {
+    if (finError || !finData) {
       console.error('Erro ao buscar financiamento:', finError)
+      setFinancing(null)
       setLoading(false)
       return
     }
 
-    if (finData) {
-      console.log('Financiamento encontrado:', finData)
-      setFinancing(finData)
-      setAbAccountId(finData.account_id || '')
-    } else {
-      console.log('Nenhum financiamento retornado para id:', id)
-      setLoading(false)
-      return
-    }
+    setFinancing(finData)
+    setAbAccountId(finData.account_id || '')
 
     const { data: abData } = await supabase
       .from('financing_abatements')
@@ -86,20 +227,83 @@ export default function FinancingDetailPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const handleArchive = async () => {
-    if (!confirm('Arquivar este financiamento?')) return
-    await supabase.from('financings').update({ status: 'archived' }).eq('id', id)
-    router.push('/financings')
-  }
-
+  // Excluir contrato
   const handleDelete = async () => {
-    if (!confirm('Excluir este financiamento?')) return
+    setDeleting(true)
     await supabase.from('financings').delete().eq('id', id)
+    setShowDeleteConfirm(false)
+    setDeleting(false)
     router.push('/financings')
   }
 
+  // Arquivar contrato
+  const handleArchive = async () => {
+    await supabase.from('financings').update({ status: 'archived' }).eq('id', id)
+    setShowArchiveConfirm(false)
+    router.push('/financings')
+  }
+
+  // Excluir abatimento
+  const handleDeleteAbatement = async () => {
+    if (!selectedAbatement) return
+    setDeletingAbatement(true)
+
+    try {
+      const ab = selectedAbatement
+
+      // 1. Deletar a transação vinculada
+      const { data: txData } = await supabase
+        .from('transactions')
+        .select('id, account_id')
+        .eq('financing_id', id)
+        .eq('amount', ab.amount)
+        .eq('date', ab.date)
+        .limit(1)
+        .maybeSingle()
+
+      if (txData) {
+        // Reverter saldo da conta
+        if (txData.account_id) {
+          const { data: acc } = await supabase
+            .from('accounts')
+            .select('balance')
+            .eq('id', txData.account_id)
+            .single()
+          if (acc) {
+            await supabase
+              .from('accounts')
+              .update({ balance: Number(acc.balance) + Number(ab.amount) })
+              .eq('id', txData.account_id)
+          }
+        }
+        await supabase.from('transactions').delete().eq('id', txData.id)
+      }
+
+      // 2. Deletar o abatimento
+      await supabase.from('financing_abatements').delete().eq('id', ab.id)
+
+      // 3. Recalcular o financiamento (devolver valor ao saldo)
+      const newBalance = Number(financing.outstanding_balance) + Number(ab.amount)
+      const newTotalInstallments = Math.max(1, Math.floor(newBalance / Number(financing.installment_value)))
+
+      await supabase.from('financings').update({
+        outstanding_balance: newBalance,
+        total_installments: newTotalInstallments
+      }).eq('id', id)
+
+      setSelectedAbatement(null)
+      loadData()
+    } catch (err: any) {
+      alert('Erro ao excluir abatimento: ' + err.message)
+    } finally {
+      setDeletingAbatement(false)
+    }
+  }
+
+  // Registrar abatimento
   const handleAbAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
@@ -116,7 +320,6 @@ export default function FinancingDetailPage() {
     if (isSubmitting) return
     if (!user?.id || abAmountNum <= 0) return
 
-    // Validação para evitar saldo negativo
     if (abAmountNum > (financing.outstanding_balance || 0)) {
       alert('O valor do abatimento não pode ser maior que o saldo devedor.')
       return
@@ -128,7 +331,6 @@ export default function FinancingDetailPage() {
     try {
       const idempotencyKey = crypto.randomUUID()
 
-      // Inserir abatimento
       const { error: abError } = await supabase.from('financing_abatements').insert({
         financing_id: id,
         amount: abAmountNum,
@@ -140,18 +342,15 @@ export default function FinancingDetailPage() {
 
       if (abError) throw abError
 
-      // Recalcular saldo devedor e parcelas (garantindo que não fique negativo)
       const newBalance = Math.max(0, Number(financing.outstanding_balance) - abAmountNum)
 
       if (abType === 'reduce_term') {
-        // Reduzir prazo: recalcular total de parcelas
         const newTotalInstallments = Math.max(1, Math.floor(newBalance / Number(financing.installment_value)))
         await supabase.from('financings').update({
           outstanding_balance: newBalance,
           total_installments: newTotalInstallments
         }).eq('id', id)
       } else {
-        // Reduzir parcela: recalcular valor da parcela
         const remainingInstallments = Math.max(1, financing.total_installments - financing.current_installment + 1)
         const newInstallmentValue = remainingInstallments > 0 ? newBalance / remainingInstallments : 0
         await supabase.from('financings').update({
@@ -160,9 +359,7 @@ export default function FinancingDetailPage() {
         }).eq('id', id)
       }
 
-      // Criar transação (expense) para o abatimento
-      // Garantindo que o payload está limpo e sem credit_card_id
-      const { error: txError } = await supabase.from('transactions').insert({
+      await supabase.from('transactions').insert({
         user_id: user.id,
         type: 'expense',
         amount: abAmountNum,
@@ -175,9 +372,6 @@ export default function FinancingDetailPage() {
         idempotency_key: idempotencyKey,
       })
 
-      if (txError) throw txError
-
-      // Atualizar saldo da conta
       const targetAccountId = abAccountId || financing.account_id
       if (targetAccountId) {
         const { data: acc } = await supabase
@@ -225,19 +419,15 @@ export default function FinancingDetailPage() {
   const paidSoFar = (Number(financing.installment_value) * (financing.current_installment - 1)) + abatements.reduce((a, ab) => a + Number(ab.amount), 0)
   const totalToPay = Math.max(0, Number(financing.installment_value) * remainingInstallments)
   const isOverdue = financing.next_due_date && differenceInDays(new Date(financing.next_due_date), new Date()) < 0
+  const isPaid = remainingInstallments === 0
 
-  // Gerar parcelas dinâmicas (apenas as futuras/atuais)
   const installmentsList = []
   if (remainingInstallments > 0) {
     for (let i = financing.current_installment; i <= financing.total_installments; i++) {
       const dueDate = financing.next_due_date
         ? format(addMonths(new Date(financing.next_due_date), i - financing.current_installment), 'yyyy-MM-dd')
         : null
-      installmentsList.push({
-        number: i,
-        dueDate,
-        value: Number(financing.installment_value)
-      })
+      installmentsList.push({ number: i, dueDate, value: Number(financing.installment_value) })
     }
   }
 
@@ -263,10 +453,10 @@ export default function FinancingDetailPage() {
                 <button onClick={() => { setShowMenu(false); router.push(`/financings/new?edit=${financing.id}`) }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
                   <Edit2 size={16} /> Editar contrato
                 </button>
-                <button onClick={() => { setShowMenu(false); handleArchive() }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
+                <button onClick={() => { setShowMenu(false); setShowArchiveConfirm(true) }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
                   <ChevronDown size={16} /> Arquivar/Quitar
                 </button>
-                <button onClick={() => { setShowMenu(false); handleDelete() }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                <button onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
                   <Trash2 size={16} /> Excluir
                 </button>
               </div>
@@ -339,7 +529,7 @@ export default function FinancingDetailPage() {
         </button>
       )}
 
-      {/* Lista de Parcelas (dinâmica) */}
+      {/* Lista de Parcelas */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Lançamentos</h3>
         {installmentsList.length === 0 ? (
@@ -372,7 +562,7 @@ export default function FinancingDetailPage() {
         )}
       </div>
 
-      {/* Histórico de Abatimentos */}
+      {/* Histórico de Abatimentos (agora interativo) */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de abatimentos</h3>
         {abatements.length === 0 ? (
@@ -380,7 +570,11 @@ export default function FinancingDetailPage() {
         ) : (
           <div className="space-y-2">
             {abatements.map(ab => (
-              <div key={ab.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
+              <button
+                key={ab.id}
+                onClick={() => setSelectedAbatement(ab)}
+                className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+              >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-sm text-red-500">- {formatCurrency(Number(ab.amount) || 0)}</p>
@@ -392,7 +586,8 @@ export default function FinancingDetailPage() {
                     {ab.accounts?.name ? ` • ${ab.accounts.name}` : ''}
                   </p>
                 </div>
-              </div>
+                <Eye size={16} className="text-gray-400 dark:text-gray-500 ml-2" />
+              </button>
             ))}
           </div>
         )}
@@ -499,6 +694,35 @@ export default function FinancingDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Modais de Confirmação */}
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Excluir financiamento"
+        message="Tem certeza que deseja excluir este contrato? Todos os abatimentos e transações vinculadas também serão removidos."
+        confirmLabel="Sim, excluir"
+        loading={deleting}
+      />
+
+      <ConfirmModal
+        open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        onConfirm={handleArchive}
+        title="Arquivar financiamento"
+        message="Este contrato será movido para o arquivo. Você ainda poderá visualizá-lo depois."
+        confirmLabel="Arquivar"
+      />
+
+      {/* Modal de Detalhes do Abatimento */}
+      <AbatementDetailModal
+        open={!!selectedAbatement}
+        onClose={() => setSelectedAbatement(null)}
+        abatement={selectedAbatement}
+        onDelete={handleDeleteAbatement}
+        deleting={deletingAbatement}
+      />
 
     </div>
   )
