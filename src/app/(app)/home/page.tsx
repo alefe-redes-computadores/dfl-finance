@@ -1,4 +1,4 @@
- 'use client'
+'use client'
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -64,7 +64,14 @@ function HomeContent() {
     return 'text-gray-800 dark:text-gray-200 font-bold'
   }
 
-  // Carregar preferência de notificações
+  // Garantir que a data local não sofra deslocamento UTC
+  const getLocalDateString = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   useEffect(() => {
     const saved = localStorage.getItem('dfl_notifications_enabled')
     setNotificationsEnabled(saved !== 'false')
@@ -75,8 +82,8 @@ function HomeContent() {
     setDataLoading(true)
 
     try {
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+      const start = getLocalDateString(startOfMonth(currentDate))
+      const end = getLocalDateString(endOfMonth(currentDate))
 
       const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }] = await Promise.all([
         supabase
@@ -321,7 +328,6 @@ function HomeContent() {
     }
   })
 
-  // Financiamentos
   financings.forEach(fin => {
     if (!fin.next_due_date) return
     const daysUntilDue = differenceInDays(new Date(fin.next_due_date), today)
@@ -445,7 +451,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Alertas de dívidas vencidas */}
       {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
         <div className="mb-4 space-y-2">
           {debts
@@ -549,7 +554,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* NOVO: Card "Próxima Fatura" */}
       {nextCard && (
         <div
           onClick={() => router.push(`/cards/${nextCard.id}`)}
@@ -630,7 +634,6 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* NOVO: Card "A Receber" (Quem me deve) */}
       {debts.length > 0 && (
         <div className="mb-8">
           <div
@@ -688,7 +691,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* NOVO: Card "Financiamentos" */}
       {financings.length > 0 && (
         <div className="mb-8">
           <div
