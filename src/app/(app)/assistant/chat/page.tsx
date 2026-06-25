@@ -26,16 +26,11 @@ function ChatContent() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      content: 'Olá! Sou o assistente financeiro do DFL Finance. Posso analisar seus gastos, sugerir economias e tirar dúvidas. Como posso ajudar?',
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -91,8 +86,42 @@ TOP 5 CATEGORIAS DE GASTO:
 ${topCategories || 'Nenhum gasto registrado.'}`
   }, [user, context])
 
+  // Carregar histórico do banco
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!user?.id) return
+
+      const { data: history } = await supabase
+        .from('chat_history')
+        .select('id, role, content')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('created_at', { ascending: true })
+        .limit(20)
+
+      if (history && history.length > 0) {
+        setMessages(history.map((m: any) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+        })))
+      } else {
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'model',
+            content: 'Olá! Sou o assistente financeiro do DFL Finance. Posso analisar seus gastos, sugerir economias e tirar dúvidas. Como posso ajudar?',
+          },
+        ])
+      }
+      setHistoryLoaded(true)
+    }
+    loadHistory()
+  }, [user, context])
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
+    if (!user?.id) return
 
     const apiKey = localStorage.getItem('dfl_ai_key') || ''
     const provider = localStorage.getItem('dfl_ai_provider') || 'gemini'
@@ -115,52 +144,40 @@ ${topCategories || 'Nenhum gasto registrado.'}`
     try {
       const financialContext = await getFinancialContext()
 
-      let responseContent = ''
-      if (provider === 'openai') {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: `Você é o assistente financeiro do DFL Finance. Dados do mês atual:\n${financialContext}\n\nResponda de forma curta, objetiva e amigável.` },
-              { role: 'user', content: userMessage.content },
-            ],
-          }),
-        })
-        const data = await res.json()
-        responseContent = data.choices?.[0]?.message?.content || 'Erro ao obter resposta.'
-      } else {
-        // Google Gemini
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: 'user',
-                  parts: [{ text: `Contexto financeiro:\n${financialContext}\n\nPergunta: ${userMessage.content}` }],
-                },
-              ],
-            }),
-          }
-        )
-        const data = await res.json()
-        responseContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Erro ao obter resposta.'
-      }
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'x-provider': provider,
+          'x-model': model,
+        },
+        body: JSON.stringify({
+          message: userMessage.content,
+          context: financialContext,
+          userId: user.id,
+          chatContext: context,
+        }),
+      })
+
+      const data = await response.json()
 
       setMessages(prev =>
         prev
           .filter(m => m.id !== loadingMessage.id)
-          .concat({ id: crypto.randomUUID(), role: 'model', content: responseContent })
+          .concat({
+            id: crypto.randomUUID(),
+            role: 'model',
+            content: data.error ? `Erro: ${data.error}` : data.message || 'Sem resposta.',
+          })
       )
+
+      if (data.error) setError(data.error)
     } catch (err: any) {
       setMessages(prev =>
         prev
           .filter(m => m.id !== loadingMessage.id)
-          .concat({ id: crypto.randomUUID(), role: 'model', content: 'Erro de conexão. Verifique sua chave e internet.' })
+          .concat({ id: crypto.randomUUID(), role: 'model', content: 'Erro de conexão.' })
       )
       setError('Erro de conexão.')
     } finally {
@@ -188,39 +205,47 @@ ${topCategories || 'Nenhum gasto registrado.'}`
 
       {/* Mensagens */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'model' && (
-              <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mr-2 mt-1 flex-shrink-0">
-                <Bot size={16} className="text-teal-700 dark:text-teal-400" />
-              </div>
-            )}
-            <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl text-[14px] leading-relaxed whitespace-pre-wrap ${
-                msg.role === 'user'
-                  ? 'bg-teal-600 text-white rounded-br-md'
-                  : msg.content === '...'
-                  ? 'bg-slate-100 dark:bg-slate-800 text-gray-800 dark:text-gray-200 rounded-bl-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-gray-800 dark:text-gray-200 rounded-bl-md'
-              }`}
-            >
-              {msg.content === '...' ? (
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        {!historyLoaded ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="animate-spin text-teal-700" size={32} />
+          </div>
+        ) : messages.length === 0 ? (
+          <p className="text-center text-gray-400 py-20">Nenhuma mensagem.</p>
+        ) : (
+          messages.map(msg => (
+            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {msg.role === 'model' && (
+                <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mr-2 mt-1 flex-shrink-0">
+                  <Bot size={16} className="text-teal-700 dark:text-teal-400" />
                 </div>
-              ) : (
-                msg.content
+              )}
+              <div
+                className={`max-w-[80%] px-4 py-3 rounded-2xl text-[14px] leading-relaxed whitespace-pre-wrap ${
+                  msg.role === 'user'
+                    ? 'bg-teal-600 text-white rounded-br-md'
+                    : msg.content === '...'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-gray-800 dark:text-gray-200 rounded-bl-md'
+                    : 'bg-slate-100 dark:bg-slate-800 text-gray-800 dark:text-gray-200 rounded-bl-md'
+                }`}
+              >
+                {msg.content === '...' ? (
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                ) : (
+                  msg.content
+                )}
+              </div>
+              {msg.role === 'user' && (
+                <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center ml-2 mt-1 flex-shrink-0">
+                  <User size={16} className="text-white" />
+                </div>
               )}
             </div>
-            {msg.role === 'user' && (
-              <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center ml-2 mt-1 flex-shrink-0">
-                <User size={16} className="text-white" />
-              </div>
-            )}
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Erro */}
