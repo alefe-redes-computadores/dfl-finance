@@ -17,9 +17,11 @@ import {
   Plus,
   Clock,
   Check,
-  CreditCard
+  CreditCard,
+  Users,
+  Wallet
 } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
@@ -55,6 +57,8 @@ function HomeContent() {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
   const [budgets, setBudgets] = useState<any[]>([])
   const [subscriptions, setSubscriptions] = useState<any[]>([])
+  const [debts, setDebts] = useState<any[]>([])
+  const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
 
@@ -76,7 +80,7 @@ function HomeContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      const [{ data: transactions }, { data: subsData }] = await Promise.all([
+      const [{ data: transactions }, { data: subsData }, { data: debtsData }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -88,11 +92,34 @@ function HomeContent() {
           .from('subscriptions')
           .select('*, categories(name, icon, color), accounts(name)')
           .match({ user_id: user.id, context: context, status: 'active' })
-          .order('due_day', { ascending: true })
+          .order('due_day', { ascending: true }),
+        supabase
+          .from('debts')
+          .select('*')
+          .match({ user_id: user.id, context: context })
+          .in('status', ['pending', 'partial'])
+          .order('due_date', { ascending: true })
       ])
 
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
+
+      // Calcular pagamentos das dívidas
+      const debtsArray = Array.isArray(debtsData) ? debtsData : []
+      const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
+        const { data: payments } = await supabase
+          .from('transactions')
+          .select('amount')
+          .eq('debt_id', debt.id)
+          .eq('type', 'income')
+
+        const paidAmount = (payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+        const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
+        return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
+      }))
+
+      setDebts(debtsWithProgress)
+      setTotalToReceive(debtsWithProgress.reduce((a, d) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
 
       const income = txs
         .filter((t) => t.type === 'income' && t.status === 'done')
@@ -216,7 +243,6 @@ function HomeContent() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [loadData])
 
-  // Listener para recarregar dados após sincronização da fila offline
   useEffect(() => {
     const handleQueueSynced = () => loadData()
     window.addEventListener('queue-synced', handleQueueSynced)
@@ -246,6 +272,7 @@ function HomeContent() {
   // === GERAR NOTIFICAÇÕES ===
   const notifications: any[] = []
 
+  // Cartões
   cards.forEach(card => {
     const days = card.due_day - todayDay
     if (days < 0) {
@@ -269,6 +296,7 @@ function HomeContent() {
     }
   })
 
+  // Assinaturas
   subscriptions.forEach(sub => {
     const days = sub.due_day - todayDay
     if (days < 0) {
@@ -292,6 +320,34 @@ function HomeContent() {
     }
   })
 
+  // Dívidas (Quem me deve)
+  debts.forEach(debt => {
+    if (!debt.due_date) return
+    const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
+    const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
+
+    if (daysUntilDue < 0) {
+      notifications.push({
+        id: `debt-overdue-${debt.id}`,
+        type: 'debt_overdue',
+        title: `Dívida vencida: ${debt.person_name}`,
+        subtitle: `Venceu ${format(new Date(debt.due_date), "dd/MM")} — ${formatCurrency(remaining)}`,
+        debtId: debt.id,
+        severity: 'critical'
+      })
+    } else if (daysUntilDue <= 3) {
+      notifications.push({
+        id: `debt-soon-${debt.id}`,
+        type: 'debt_soon',
+        title: `Dívida próxima: ${debt.person_name}`,
+        subtitle: `Vence em ${daysUntilDue} dia(s) — ${formatCurrency(remaining)}`,
+        debtId: debt.id,
+        severity: 'warning'
+      })
+    }
+  })
+
+  // Orçamentos
   budgets.forEach(budget => {
     if (budget.remaining < 0) {
       notifications.push({
@@ -314,6 +370,7 @@ function HomeContent() {
     }
   })
 
+  // Pendências
   const pendingExpenses = recentTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
   if (pendingExpenses.length > 0) {
     notifications.push({
@@ -529,6 +586,64 @@ function HomeContent() {
           </div>
         </div>
       </div>
+
+      {/* NOVO: Card "A Receber" (Quem me deve) */}
+      {debts.length > 0 && (
+        <div className="mb-8">
+          <div
+            className="flex justify-between items-center mb-3 px-1 cursor-pointer"
+            onClick={() => router.push('/debts')}
+          >
+            <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">
+              A Receber
+            </h3>
+            <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+            {debts.slice(0, 3).map(debt => {
+              const IconComp = getDynamicIcon(debt.icon || 'user')
+              const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
+              const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), today) : null
+              const isOverdue = daysUntilDue !== null && daysUntilDue < 0
+
+              return (
+                <div
+                  key={debt.id}
+                  onClick={() => router.push(`/debts/${debt.id}`)}
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}>
+                      <IconComp size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{debt.person_name}</p>
+                      <p className={`text-[10px] font-bold ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)` : debt.due_date ? `Vence ${format(new Date(debt.due_date), "dd/MM")}` : 'Sem prazo'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[13px] font-bold text-orange-500">
+                      {formatCurrency(remaining)}
+                    </p>
+                    <div className="w-16 bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mt-1">
+                      <div className="h-full rounded-full bg-teal-500" style={{ width: `${Math.min(debt.percent, 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {debts.length > 3 && (
+              <div className="p-2 text-center">
+                <span className="text-[11px] text-teal-700 dark:text-teal-400 font-bold">
+                  + {debts.length - 3} pessoa(s)
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {budgets.length > 0 && (
         <div className="mb-8">
