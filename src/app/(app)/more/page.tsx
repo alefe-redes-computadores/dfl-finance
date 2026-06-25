@@ -620,12 +620,7 @@ export default function MorePage() {
         <SectionTitle>Ferramentas</SectionTitle>
         <MenuItem iconName="bot" label="Assistente IA" href="/assistant" />
         <MenuItem iconName="image" label="Importar comprovante" href="/import" />
-        <MenuItem
-          iconName="file-spreadsheet"
-          label="Importar extrato CSV"
-          disabled
-          onClick={() => setModalOpen(true)}
-        />
+        <MenuItem iconName="file-spreadsheet" label="Importar extrato CSV" href="/import-csv" />
         <MenuItem
           iconName="download"
           label="Exportar Dados"
