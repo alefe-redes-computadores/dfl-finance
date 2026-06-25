@@ -25,7 +25,6 @@ type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
 const CATEGORY_COLORS = ['#22c55e', '#ef4444', '#f97316', '#06b6d4', '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6']
 
-// Helper para renderizar os ícones dinamicamente (aceitando lowercase do banco antigo e PascalCase do novo)
 const getDynamicIcon = (iconName: string) => {
   if (!iconName) return Icons.Tag
   const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
@@ -33,8 +32,6 @@ const getDynamicIcon = (iconName: string) => {
 }
 
 function NewTransactionContent() {
-  console.log("DFL – Nova Transação v9.1 - Subcategorias e IconPicker")
-
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -81,9 +78,9 @@ function NewTransactionContent() {
   const [showCamera, setShowCamera] = useState(false)
 
   const [showCreateCatModal, setShowCreateCatModal] = useState(false)
-  const [showIconPicker, setShowIconPicker] = useState(false) // Novo estado para o IconPicker
+  const [showIconPicker, setShowIconPicker] = useState(false)
   const [newCatName, setNewCatName] = useState('')
-  const [newCatIcon, setNewCatIcon] = useState('Utensils') // Inicializado com PascalCase
+  const [newCatIcon, setNewCatIcon] = useState('Utensils')
   const [newCatColor, setNewCatColor] = useState('#22c55e')
   const [savingCategory, setSavingCategory] = useState(false)
 
@@ -157,7 +154,6 @@ function NewTransactionContent() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Alerta de orçamento
   useEffect(() => {
     if (!categoryId || amountNum <= 0 || type !== 'expense') {
       setBudgetAlert(null)
@@ -170,13 +166,15 @@ function NewTransactionContent() {
       return
     }
 
+    if (!user || !user.id) return
+
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
     supabase
       .from('transactions')
       .select('amount')
-      .match({ user_id: user!.id, context: context, category_id: categoryId })
+      .match({ user_id: user.id, context: context, category_id: categoryId })
       .eq('status', 'done')
       .gte('date', start)
       .lte('date', end)
@@ -319,17 +317,23 @@ function NewTransactionContent() {
   }
 
   const handleSaveCategory = async () => {
-    if (!user?.id || !newCatName.trim()) return
+    if (!user || !user.id) {
+      alert('Sessão expirada. Faça login novamente.')
+      return
+    }
+    if (!newCatName.trim()) return
     setSavingCategory(true)
     try {
-      const { data, error } = await supabase.from('categories').insert({
+      const payload = {
         user_id: user.id,
         name: newCatName.trim(),
         icon: newCatIcon,
         color: newCatColor,
         context: context,
         type: type === 'income' ? 'income' : 'expense'
-      }).select().single()
+      }
+      console.log('Inserindo categoria:', payload)
+      const { data, error } = await supabase.from('categories').insert(payload).select().single()
 
       if (error) throw error
       if (data) {
@@ -347,15 +351,21 @@ function NewTransactionContent() {
   }
 
   const handleSaveAccount = async () => {
-    if (!user?.id || !newAccName.trim()) return
+    if (!user || !user.id) {
+      alert('Sessão expirada. Faça login novamente.')
+      return
+    }
+    if (!newAccName.trim()) return
     setSavingAccount(true)
     try {
-      const { data, error } = await supabase.from('accounts').insert({
+      const payload = {
         user_id: user.id,
         name: newAccName.trim(),
         color: newAccColor,
         context: context
-      }).select().single()
+      }
+      console.log('Inserindo conta:', payload)
+      const { data, error } = await supabase.from('accounts').insert(payload).select().single()
 
       if (error) throw error
       if (data) {
@@ -373,15 +383,21 @@ function NewTransactionContent() {
   }
 
   const handleSaveTag = async () => {
-    if (!user?.id || !newTagName.trim()) return
+    if (!user || !user.id) {
+      alert('Sessão expirada. Faça login novamente.')
+      return
+    }
+    if (!newTagName.trim()) return
     setSavingTag(true)
     try {
-      const { data, error } = await supabase.from('tags').insert({
+      const payload = {
         user_id: user.id,
         name: newTagName.trim(),
         color: newTagColor,
         context: context
-      }).select().single()
+      }
+      console.log('Inserindo tag:', payload)
+      const { data, error } = await supabase.from('tags').insert(payload).select().single()
 
       if (error) throw error
       if (data) {
@@ -399,7 +415,10 @@ function NewTransactionContent() {
   }
 
   const handleSave = async () => {
-    if (!user?.id) return
+    if (!user || !user.id) {
+      alert('Sessão expirada. Faça login novamente.')
+      return
+    }
     const rawAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0
     if (rawAmount <= 0) {
       alert('Erro: O valor da transação deve ser maior que R$ 0,00.')
@@ -506,6 +525,8 @@ function NewTransactionContent() {
           total_installments: totalParcels > 1 ? totalParcels : 1
         }
 
+        console.log('Inserindo transação:', payload)
+
         if (!isOnline) {
           await saveToQueue(payload)
           if (i === totalParcels - 1) {
@@ -531,7 +552,7 @@ function NewTransactionContent() {
         router.refresh()
         router.push('/transactions')
       }
-   } catch (e: any) {
+    } catch (e: any) {
       alert('ERRO DO BANCO:\n' + (e.message || JSON.stringify(e)))
     } finally {
       setSaving(false)
@@ -1068,7 +1089,6 @@ function NewTransactionContent() {
         />
       )}
 
-      {/* O NOSSO ÍCONE PICKER */}
       <IconPicker
         isOpen={showIconPicker}
         onClose={() => setShowIconPicker(false)}
