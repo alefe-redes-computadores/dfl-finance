@@ -5,25 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, ChevronRight, Plus, Loader2,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  Target, PiggyBank, Calendar, Pause, Play, X
+  ChevronLeft, Plus, Loader2,
+  Repeat, Calendar, Pause, Play
 } from 'lucide-react'
-import { format, addMonths, subMonths } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal,
-  target: Target, piggybank: PiggyBank
-}
+import { getDynamicIcon } from '@/lib/iconUtils'
 
 function SubscriptionsContent() {
   const { user } = useAuth()
@@ -33,8 +21,6 @@ function SubscriptionsContent() {
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [totalMonthly, setTotalMonthly] = useState(0)
-
-  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadSubscriptions = useCallback(async () => {
     if (!user?.id) return
@@ -77,7 +63,6 @@ function SubscriptionsContent() {
   const handleGenerate = async (sub: any) => {
     if (!user?.id) return
 
-    // Verifica se já foi gerada este mês
     const today = new Date()
     const dueDate = new Date(today.getFullYear(), today.getMonth(), sub.due_day)
     
@@ -89,7 +74,6 @@ function SubscriptionsContent() {
       }
     }
 
-    // Cria a transação
     const dateStr = format(dueDate, 'yyyy-MM-dd')
     await supabase.from('transactions').insert({
       user_id: user.id,
@@ -103,14 +87,12 @@ function SubscriptionsContent() {
       context: sub.context
     })
 
-    // Atualiza last_generated
     await supabase.from('subscriptions').update({ last_generated: format(today, 'yyyy-MM-dd') }).eq('id', sub.id)
 
     loadSubscriptions()
     alert(`Transação gerada para "${sub.name}"!`)
   }
 
-  // Dias até o vencimento
   const daysUntil = (dueDay: number) => {
     const today = new Date()
     const dueDate = new Date(today.getFullYear(), today.getMonth(), dueDay)
@@ -175,7 +157,7 @@ function SubscriptionsContent() {
           {/* Lista de Assinaturas */}
           <div className="space-y-3">
             {subscriptions.map(sub => {
-              const IconComp = ICON_MAP[sub.icon] || ICON_MAP['repeat']
+              const IconComp = getDynamicIcon(sub.icon || 'repeat')
               const isPaused = sub.status === 'paused'
               const isCancelled = sub.status === 'cancelled'
               const days = daysUntil(sub.due_day)
