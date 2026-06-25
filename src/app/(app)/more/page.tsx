@@ -507,12 +507,7 @@ export default function MorePage() {
         <SectionTitle>Planejar</SectionTitle>
         <MenuItem iconName="pie-chart" label="Orçamento" href="/budgets" />
         <MenuItem iconName="target" label="Metas" href="/goals" />
-        <MenuItem
-          iconName="trending-up"
-          label="Projeções"
-          disabled
-          onClick={() => setModalOpen(true)}
-        />
+        <MenuItem iconName="trending-up" label="Projeções" href="/projections" />
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
@@ -562,12 +557,7 @@ export default function MorePage() {
           disabled
           onClick={() => setModalOpen(true)}
         />
-        <MenuItem
-          iconName="image"
-          label="Importar comprovante"
-          disabled
-          onClick={() => setModalOpen(true)}
-        />
+        <MenuItem iconName="image" label="Importar comprovante" href="/import" />
         <MenuItem
           iconName="file-spreadsheet"
           label="Importar extrato CSV"
