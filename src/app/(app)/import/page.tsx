@@ -23,6 +23,7 @@ import {
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import MoneyInput from '@/components/MoneyInput'
 
 async function processOCR(file: File): Promise<{
   amount: string
@@ -70,8 +71,9 @@ function ImportContent() {
   const [step, setStep] = useState<'upload' | 'review' | 'saving'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [ocrResult, setOcrResult] = useState<any>(null)
+  const [amountNum, setAmountNum] = useState(0)
+  const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [formData, setFormData] = useState({
-    amount: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     description: '',
     category_id: '',
@@ -92,8 +94,10 @@ function ImportContent() {
     try {
       const result = await processOCR(selectedFile)
       setOcrResult(result)
+      const numValue = parseFloat(result.amount.replace(/\./g, '').replace(',', '.')) || 0
+      setAmountNum(numValue)
+      setAmountFormatted(result.amount)
       setFormData({
-        amount: result.amount,
         date: result.date,
         description: result.description,
         category_id: '',
@@ -113,8 +117,7 @@ function ImportContent() {
     if (!user?.id) return
 
     const newErrors: Record<string, string> = {}
-    const rawAmount = parseFloat(formData.amount.replace(',', '.')) || 0
-    if (rawAmount <= 0) newErrors.amount = 'Valor inválido'
+    if (amountNum <= 0) newErrors.amount = 'Valor inválido'
     if (!formData.date) newErrors.date = 'Data obrigatória'
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -127,7 +130,7 @@ function ImportContent() {
     const idempotencyKey = crypto.randomUUID()
     const payload = {
       user_id: user.id,
-      amount: rawAmount,
+      amount: amountNum,
       type: 'expense',
       status: 'pending',
       date: formData.date,
@@ -152,8 +155,9 @@ function ImportContent() {
   const handleReset = () => {
     setFile(null)
     setOcrResult(null)
+    setAmountNum(0)
+    setAmountFormatted('0,00')
     setFormData({
-      amount: '',
       date: format(new Date(), 'yyyy-MM-dd'),
       description: '',
       category_id: '',
@@ -222,24 +226,13 @@ function ImportContent() {
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor</label>
               <div className={`flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 ${errors.amount ? 'border border-red-400' : ''}`}>
                 <DollarSign size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.amount}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, '')
-                    if (!digits) {
-                      setFormData({ ...formData, amount: '' })
-                      return
-                    }
-                    const formatted = (Number(digits) / 100).toLocaleString('pt-BR', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })
-                    setFormData({ ...formData, amount: formatted })
+                <MoneyInput
+                  value={amountNum}
+                  onChange={(num, formatted) => {
+                    setAmountNum(num)
+                    setAmountFormatted(formatted)
                   }}
                   className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200 font-bold"
-                  placeholder="0,00"
                 />
               </div>
               {errors.amount && <p className="text-red-500 text-[10px] mt-1">{errors.amount}</p>}
