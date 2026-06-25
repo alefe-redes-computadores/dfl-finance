@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff } from 'lucide-react'
+import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
+import { BANK_LIST } from '@/lib/bankIcons'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -30,7 +31,12 @@ export default function AccountsPage() {
   const [color, setColor] = useState(DEFAULT_COLORS[0])
   const [displayBalance, setDisplayBalance] = useState('')
   const [balanceNum, setBalanceNum] = useState(0)
-  const [allowNegative, setAllowNegative] = useState(false) 
+  const [allowNegative, setAllowNegative] = useState(false)
+
+  // Estados do seletor de banco
+  const [bankSearch, setBankSearch] = useState('')
+  const [filteredBanks, setFilteredBanks] = useState<typeof BANK_LIST>([])
+  const [showBankDropdown, setShowBankDropdown] = useState(false)
 
   const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -54,6 +60,30 @@ export default function AccountsPage() {
 
   useEffect(() => { loadAccounts() }, [loadAccounts])
 
+  // Handler de busca de banco
+  const handleBankSearch = (value: string) => {
+    setBankSearch(value)
+    if (value.trim().length === 0) {
+      setFilteredBanks([])
+      setShowBankDropdown(false)
+      return
+    }
+    const filtered = BANK_LIST.filter(b =>
+      b.name.toLowerCase().includes(value.toLowerCase())
+    )
+    setFilteredBanks(filtered)
+    setShowBankDropdown(filtered.length > 0)
+  }
+
+  // Selecionar banco da lista
+  const selectBank = (bank: typeof BANK_LIST[0]) => {
+    setName(bank.name)
+    setColor(bank.color)
+    setBankSearch('')
+    setFilteredBanks([])
+    setShowBankDropdown(false)
+  }
+
   const handleSave = async () => {
     if (!user) return;
     if (!name.trim()) return
@@ -72,7 +102,10 @@ export default function AccountsPage() {
     setDisplayBalance('')
     setBalanceNum(0)
     setColor(DEFAULT_COLORS[0])
-    setAllowNegative(false) 
+    setAllowNegative(false)
+    setBankSearch('')
+    setFilteredBanks([])
+    setShowBankDropdown(false)
     loadAccounts()
   }
 
@@ -162,22 +195,80 @@ export default function AccountsPage() {
         )}
       </div>
 
-      {/* MODAL COMPLETO DE CRIAÇÃO (Blindado e com Cheque Especial) */}
+      {/* MODAL COMPLETO DE CRIAÇÃO (com Seletor de Banco Inteligente + Cheque Especial) */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => {
+          setShowForm(false)
+          setShowBankDropdown(false)
+          setBankSearch('')
+        }}>
+          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
             
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
               <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Nova Conta</h2>
-              <button onClick={() => setShowForm(false)} className="p-2 -mr-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><X size={20}/></button>
+              <button onClick={() => {
+                setShowForm(false)
+                setShowBankDropdown(false)
+                setBankSearch('')
+              }} className="p-2 -mr-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><X size={20}/></button>
+            </div>
+
+            {/* NOVO: Seletor Inteligente de Banco */}
+            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+              Buscar Banco (opcional)
+            </label>
+            <div className="relative mb-4">
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-100 dark:border-slate-600 overflow-hidden">
+                <Search size={16} className="ml-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                <input
+                  value={bankSearch}
+                  onChange={e => handleBankSearch(e.target.value)}
+                  onFocus={() => {
+                    if (filteredBanks.length > 0) setShowBankDropdown(true)
+                  }}
+                  placeholder="Ex: Nubank, Itaú, Bradesco..."
+                  className="w-full bg-transparent py-3 px-3 text-sm outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                />
+                {bankSearch && (
+                  <button
+                    onClick={() => {
+                      setBankSearch('')
+                      setFilteredBanks([])
+                      setShowBankDropdown(false)
+                    }}
+                    className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {showBankDropdown && filteredBanks.length > 0 && (
+                <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl mt-1 shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {filteredBanks.map(bank => (
+                    <button
+                      key={bank.key}
+                      onClick={() => selectBank(bank)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0"
+                    >
+                      <BankLogo color={bank.color} name={bank.name} size="sm" />
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{bank.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Nome da Instituição</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Nubank, Inter" className="w-full bg-transparent border-b-2 border-gray-100 dark:border-slate-600 py-3 mb-8 text-[16px] outline-none focus:border-teal-600 font-bold text-gray-800 dark:text-gray-200 transition-colors" />
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex: Nubank, Inter"
+              className="w-full bg-transparent border-b-2 border-gray-100 dark:border-slate-600 py-3 mb-6 text-[16px] outline-none focus:border-teal-600 font-bold text-gray-800 dark:text-gray-200 transition-colors"
+            />
             
-            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 block">Cor da Conta</label>
-            <div className="flex flex-wrap gap-4 mb-8 items-center justify-center">
-                {DEFAULT_COLORS.map(c => (
+            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Cor da Conta</label>
+            <div className="flex flex-wrap gap-4 mb-6 items-center justify-center">
+              {DEFAULT_COLORS.map(c => (
                 <button 
                   key={c} 
                   onClick={() => setColor(c)} 
@@ -192,7 +283,7 @@ export default function AccountsPage() {
             </div>
 
             <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Saldo Inicial (R$)</label>
-            <div className="bg-gray-50 dark:bg-slate-700 rounded-2xl p-4 flex items-center gap-2 mb-8 border border-gray-100 dark:border-slate-600">
+            <div className="bg-gray-50 dark:bg-slate-700 rounded-2xl p-4 flex items-center gap-2 mb-6 border border-gray-100 dark:border-slate-600">
                <span className="text-gray-400 dark:text-gray-500 font-bold text-lg">R$</span>
                <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="0,00" className="w-full bg-transparent text-2xl font-light text-gray-800 dark:text-gray-200 outline-none" />
             </div>
