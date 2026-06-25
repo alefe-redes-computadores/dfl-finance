@@ -527,12 +527,7 @@ export default function MorePage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
         <SectionTitle>Ferramentas</SectionTitle>
-        <MenuItem
-          iconName="bot"
-          label="Assistente IA"
-          disabled
-          onClick={() => setModalOpen(true)}
-        />
+        <MenuItem iconName="bot" label="Assistente IA" href="/assistant" />
         <MenuItem iconName="image" label="Importar comprovante" href="/import" />
         <MenuItem
           iconName="file-spreadsheet"
