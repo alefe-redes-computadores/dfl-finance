@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, CreditCard, Loader2 } from 'lucide-react'
 import InvoiceAlert from '@/components/InvoiceAlert'
+import { getDynamicIcon } from '@/lib/iconUtils'
 
 const formatCurrency = (val: number) =>
   `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -30,7 +31,6 @@ export default function CardsListPage() {
         .match({ user_id: user.id, context: context, is_archived: false })
         .order('created_at', { ascending: false })
 
-      // Buscar transações do MÊS ATUAL para calcular fatura (não apenas pendentes)
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
         .toISOString()
@@ -70,41 +70,15 @@ export default function CardsListPage() {
   }, [user?.id, context])
 
   const renderCardLogo = (cardFlag: string) => {
-    switch (cardFlag) {
-      case 'Visa':
-        return (
-          <span className="text-xl font-bold italic tracking-tighter text-white">
-            VISA
-          </span>
-        )
-      case 'Mastercard':
-        return (
-          <div className="flex">
-            <div className="w-5 h-5 bg-red-500 rounded-full mix-blend-multiply opacity-90" />
-            <div className="w-5 h-5 bg-yellow-500 rounded-full mix-blend-multiply -ml-2 opacity-90" />
-          </div>
-        )
-      case 'Elo':
-        return (
-          <span className="text-sm font-bold tracking-tight text-white">
-            elo
-          </span>
-        )
-      case 'Amex':
-        return (
-          <span className="text-[10px] font-bold text-white bg-blue-500 px-1 py-0.5 rounded">
-            AMEX
-          </span>
-        )
-      case 'Hipercard':
-        return (
-          <span className="text-xs font-bold text-red-100 italic">
-            HIPER
-          </span>
-        )
-      default:
-        return <CreditCard size={20} className="text-white" />
-    }
+    const iconName =
+      cardFlag === 'Visa' ? 'credit-card' :
+      cardFlag === 'Mastercard' ? 'credit-card' :
+      cardFlag === 'Elo' ? 'credit-card' :
+      cardFlag === 'Amex' ? 'credit-card' :
+      cardFlag === 'Hipercard' ? 'credit-card' :
+      'credit-card'
+    const IconComp = getDynamicIcon(iconName)
+    return <IconComp size={20} className="text-white" />
   }
 
   return (
@@ -145,7 +119,6 @@ export default function CardsListPage() {
         </div>
       </div>
 
-      {/* Alertas de vencimento dos cartões */}
       {cards.length > 0 && (
         <div className="px-4 mb-6 space-y-2">
           {cards.map((card) => (
