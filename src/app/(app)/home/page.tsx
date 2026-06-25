@@ -213,7 +213,16 @@ function HomeContent() {
     (acc, curr) => acc + (curr.previsto || 0),
     0
   )
-  const somaFaturasGeral = pendings.faturas
+
+  // Encontrar o cartão com vencimento mais próximo (não vencido)
+  const today = new Date()
+  const todayDay = today.getDate()
+  const sortedByDue = [...cards].sort((a, b) => {
+    const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day
+    const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day
+    return aDue - bDue
+  })
+  const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
 
   if (authLoading || dataLoading) {
     return (
@@ -227,7 +236,6 @@ function HomeContent() {
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
       <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} />
 
-      {/* Alertas de vencimento de cartões */}
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
           {cards.map(card => (
@@ -313,6 +321,37 @@ function HomeContent() {
           </p>
         </div>
       </div>
+
+      {/* NOVO: Card "Próxima Fatura" */}
+      {nextCard && (
+        <div
+          onClick={() => router.push(`/cards/${nextCard.id}`)}
+          className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 mb-8 cursor-pointer hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <CreditCard size={16} className="text-teal-600 dark:text-teal-400" />
+              <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase">
+                Próxima Fatura
+              </span>
+            </div>
+            <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
+                {nextCard.name}
+              </p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                Vence dia {nextCard.due_day}
+              </p>
+            </div>
+            <p className={`text-[15px] font-bold ${(nextCard.faturaAtual || 0) > 0 ? 'text-orange-500' : 'text-gray-800 dark:text-gray-200'}`}>
+              {hideBalance ? '••••' : formatCurrency(nextCard.faturaAtual || 0)}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mb-8">
         <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-3 px-1">
