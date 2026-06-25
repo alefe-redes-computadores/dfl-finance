@@ -12,7 +12,9 @@ import {
   EyeOff,
   Zap,
   ExternalLink,
+  HelpCircle,
 } from 'lucide-react'
+import ApiKeyGuideModal from '@/components/ApiKeyGuideModal'
 
 const PROVIDERS = [
   {
@@ -44,6 +46,7 @@ export default function AssistantSettingsPage() {
   const [testResult, setTestResult] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [model, setModel] = useState('')
+  const [showGuide, setShowGuide] = useState(false)
 
   useEffect(() => {
     const savedProvider = localStorage.getItem('dfl_ai_provider') || 'gemini'
@@ -204,6 +207,15 @@ export default function AssistantSettingsPage() {
         </div>
       </div>
 
+      {/* Botão Guia Rápido */}
+      <button
+        onClick={() => setShowGuide(true)}
+        className="w-full bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 py-3 rounded-xl font-bold text-sm hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors mb-4 flex items-center justify-center gap-2"
+      >
+        <HelpCircle size={18} />
+        Como conseguir minha chave? (Guia rápido)
+      </button>
+
       {/* Botões de ação */}
       <div className="space-y-3 mb-6">
         <button
@@ -233,10 +245,10 @@ export default function AssistantSettingsPage() {
         </div>
       )}
 
-      {/* Link para obter chave */}
+      {/* Link para obter chave (direto, como fallback) */}
       <div className="mt-6 text-center">
         <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-          Não tem uma chave?
+          Ou acesse diretamente:
         </p>
         <a
           href={provider === 'openai' ? 'https://platform.openai.com/account/api-keys' : 'https://aistudio.google.com/app/apikey'}
@@ -244,9 +256,12 @@ export default function AssistantSettingsPage() {
           rel="noopener noreferrer"
           className="text-teal-700 dark:text-teal-400 text-xs font-bold inline-flex items-center gap-1"
         >
-          Obter chave do {selectedProvider?.name} <ExternalLink size={12} />
+          Site do {selectedProvider?.name} <ExternalLink size={12} />
         </a>
       </div>
+
+      {/* Modal do Guia Rápido */}
+      <ApiKeyGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </div>
   )
 }
