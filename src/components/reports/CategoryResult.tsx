@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { FilterState } from './ReportFilters'
+import { FilterState } from '@/components/reports/ReportFilters'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
