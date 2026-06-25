@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Plus, Loader2, Home, ChevronRight } from 'lucide-react'
+import { Plus, Loader2, Home, ChevronRight, Building, Calendar } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -34,6 +34,11 @@ function FinancingsContent() {
   useEffect(() => { loadFinancings() }, [loadFinancings])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  // Resumo
+  const totalFinanced = financings.reduce((a, f) => a + (Number(f.outstanding_balance) || 0), 0)
+  const totalInstallments = financings.reduce((a, f) => a + f.total_installments, 0)
+  const activeCount = financings.length
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -69,44 +74,73 @@ function FinancingsContent() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {financings.map(fin => {
-            const IconComp = getDynamicIcon(fin.icon || 'home')
-            const remaining = fin.total_installments - fin.current_installment + 1
-            const progress = (fin.current_installment / fin.total_installments) * 100
-            const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), new Date()) < 0
+        <>
+          {/* Cards de Resumo */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+              <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
+                <Building size={16} className="text-orange-600 dark:text-orange-400" />
+              </div>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Saldo total</p>
+              <p className="text-[15px] font-bold text-orange-600">{formatCurrency(totalFinanced)}</p>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+              <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
+                <Calendar size={16} className="text-teal-700 dark:text-teal-400" />
+              </div>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Ativos</p>
+              <p className="text-[15px] font-bold text-teal-700 dark:text-teal-400">{activeCount}</p>
+            </div>
+          </div>
 
-            return (
-              <div
-                key={fin.id}
-                onClick={() => router.push(`/financings/${fin.id}`)}
-                className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${fin.color}20`, color: fin.color }}>
-                      <IconComp size={18} />
+          {/* Lista de Financiamentos */}
+          <div className="space-y-3">
+            {financings.map(fin => {
+              const IconComp = getDynamicIcon(fin.icon || 'home')
+              const remaining = fin.total_installments - fin.current_installment + 1
+              const progress = (fin.current_installment / fin.total_installments) * 100
+              const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), new Date()) < 0
+
+              return (
+                <div
+                  key={fin.id}
+                  onClick={() => router.push(`/financings/${fin.id}`)}
+                  className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${fin.color}20`, color: fin.color }}>
+                        <IconComp size={18} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{fin.name}</p>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{fin.institution || 'Financiamento'}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{fin.name}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{fin.institution || 'Financiamento'}</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      }`}>
+                        {isOverdue ? 'Atrasado' : 'Em dia'}
+                      </span>
+                      <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
                     </div>
                   </div>
-                  <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
-                </div>
 
-                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-                  <div className={`h-full rounded-full ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
-                </div>
+                  <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
+                    <div className={`h-full rounded-full transition-all duration-700 ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
+                  </div>
 
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-gray-400 dark:text-gray-500 font-medium">{formatCurrency(Number(fin.installment_value))}/mês</span>
-                  <span className="text-gray-400 dark:text-gray-500 font-medium">{remaining} parcela(s) restantes</span>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">{formatCurrency(Number(fin.installment_value))}/mês</span>
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">{remaining} parcela(s) restantes</span>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )
