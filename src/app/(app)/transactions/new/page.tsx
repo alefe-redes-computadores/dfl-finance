@@ -10,7 +10,7 @@ import {
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight
 } from 'lucide-react'
-import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
+import { addMonths, addWeeks, format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
 import ComingSoonModal from '@/components/ComingSoonModal'
 import CameraCapture from '@/components/CameraCapture'
@@ -32,6 +32,12 @@ const getDynamicIcon = (iconName: string) => {
   return (Icons as any)[formattedName] || Icons.Tag
 }
 
+// Helper para criar data local sem influência do UTC
+function createLocalDate(dateString: string): Date {
+  // Adiciona T12:00:00 para garantir que a data não desloque para o dia anterior
+  return new Date(dateString + 'T12:00:00')
+}
+
 function NewTransactionContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -42,7 +48,8 @@ function NewTransactionContent() {
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  // Data local sem fuso: yyyy-MM-dd baseada no calendário do usuário
+  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [desc, setDesc] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
@@ -101,10 +108,10 @@ function NewTransactionContent() {
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
-    const selectedDate = new Date(newDateStr + 'T12:00:00')
+    const selectedDate = createLocalDate(newDateStr)
     const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    selectedDate.setHours(0, 0, 0, 0)
+    today.setHours(12, 0, 0, 0) // meio-dia local
+    selectedDate.setHours(12, 0, 0, 0)
     setIsPaid(selectedDate <= today)
   }
 
@@ -478,10 +485,12 @@ function NewTransactionContent() {
     const installmentAmount = totalParcels > 1 && repetition === 'installments' ? rawAmount / totalParcels : rawAmount
 
     try {
+      // Usar a data base local para gerar parcelas consistentes
+      const baseDate = createLocalDate(date)
+
       for (let i = 0; i < totalParcels; i++) {
         let installmentDate: string
         if (repetition === 'recurring') {
-          const baseDate = new Date(date)
           if (frequency === 'weekly') installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
           else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
           else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
@@ -489,7 +498,7 @@ function NewTransactionContent() {
           else if (frequency === 'custom') installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd')
           else installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         } else {
-          installmentDate = format(addMonths(new Date(date), i), 'yyyy-MM-dd')
+          installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         }
 
         const payload = {
