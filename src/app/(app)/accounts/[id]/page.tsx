@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import BankLogo from '@/components/BankLogo'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -221,7 +222,6 @@ export default function AccountStatementPage() {
 
   if (!account) return <div className="p-6 text-center text-gray-500 dark:text-gray-400">Conta não encontrada.</div>
 
-  const initials = account.name ? account.name.substring(0, 2).toUpperCase() : '??'
   const safeBalance = Number(account.balance) || 0
   const selectedDestAcc = allAccounts.find(a => a.id === destAccountId)
 
@@ -239,8 +239,8 @@ export default function AccountStatementPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border-b border-gray-50 dark:border-slate-700 mb-6">
-        <div className="w-14 h-14 rounded-[16px] flex items-center justify-center text-xl font-bold text-white mb-4 shadow-sm" style={{ backgroundColor: account.color || '#f97316' }}>{initials}</div>
-        <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">{account.name}</p>
+        <BankLogo color={account.color || '#f97316'} name={account.name} size="lg" />
+        <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-4">{account.name}</p>
         <p className="text-[32px] font-light text-gray-800 dark:text-gray-100 mb-6">{formatCurrency(safeBalance)}</p>
 
         <div className="flex items-center justify-between w-full max-w-[240px] bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 shadow-sm rounded-full p-1.5 mb-8">
@@ -413,7 +413,7 @@ export default function AccountStatementPage() {
                     onClick={() => { setDestAccountId(acc.id); setShowDestAccModal(false) }}
                     className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
