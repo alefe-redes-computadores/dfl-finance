@@ -512,12 +512,7 @@ export default function MorePage() {
           disabled
           onClick={() => setModalOpen(true)}
         />
-        <MenuItem
-          iconName="users"
-          label="Quem me deve"
-          disabled
-          onClick={() => setModalOpen(true)}
-        />
+        <MenuItem iconName="users" label="Quem me deve" href="/debts" />
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
