@@ -47,7 +47,7 @@ function NewTransactionContent() {
   const [accountId, setAccountId] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [categories, setCategories] = useState<any[]>([])
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
@@ -415,6 +415,7 @@ function NewTransactionContent() {
   }
 
   const handleSave = async () => {
+    if (isSubmitting) return
     if (!user || !user.id) {
       alert('Sessão expirada. Faça login novamente.')
       return
@@ -424,9 +425,8 @@ function NewTransactionContent() {
       alert('Erro: O valor da transação deve ser maior que R$ 0,00.')
       return
     }
-    setSaving(true)
+    setIsSubmitting(true)
 
-    // Verificação de orçamento antes de salvar
     if (type === 'expense' && categoryId && budgets.length > 0) {
       const budget = budgets.find(b => b.category_id === categoryId)
       if (budget) {
@@ -452,13 +452,14 @@ function NewTransactionContent() {
             `Deseja continuar mesmo assim?`
           )
           if (!proceed) {
-            setSaving(false)
+            setIsSubmitting(false)
             return
           }
         }
       }
     }
 
+    const idempotencyKey = crypto.randomUUID()
     let receiptUrl: string | null = null
     if (receipt) {
       try {
@@ -522,7 +523,8 @@ function NewTransactionContent() {
           receipt_url: i === 0 ? receiptUrl : null,
           recurring_group_id: recurringGroupId,
           installment_index: totalParcels > 1 ? i + 1 : 1,
-          total_installments: totalParcels > 1 ? totalParcels : 1
+          total_installments: totalParcels > 1 ? totalParcels : 1,
+          idempotency_key: idempotencyKey,
         }
 
         console.log('Inserindo transação:', payload)
@@ -555,7 +557,7 @@ function NewTransactionContent() {
     } catch (e: any) {
       alert('ERRO DO BANCO:\n' + (e.message || JSON.stringify(e)))
     } finally {
-      setSaving(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -594,7 +596,6 @@ function NewTransactionContent() {
           <input type="text" inputMode="numeric" value={amount} onChange={handleAmount} className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`} />
         </div>
 
-        {/* Alerta de Orçamento */}
         {type === 'expense' && budgetAlert && (
           <div className={`mt-3 mx-6 p-3 rounded-xl text-xs font-bold ${
             budgetAlert.type === 'danger' 
@@ -752,8 +753,8 @@ function NewTransactionContent() {
       </div>
 
       <div className="fixed bottom-8 w-full flex justify-center z-40 pointer-events-none">
-        <button onClick={handleSave} disabled={saving} className={`pointer-events-auto w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform`}>
-          {saving ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : <Check size={30} className="text-white" />}
+        <button onClick={handleSave} disabled={isSubmitting} className={`pointer-events-auto w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform`}>
+          {isSubmitting ? <div className="w-6 h-6 border-2 border-white rounded-full animate-spin" /> : <Check size={30} className="text-white" />}
         </button>
       </div>
 
@@ -799,7 +800,7 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal Lista de Categorias (HIERARQUIA) */}
+      {/* Modal Lista de Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -844,7 +845,7 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* Modal de Subcategorias (SEGUNDO NÍVEL) */}
+      {/* Modal de Subcategorias */}
       {showSubCatModal && selectedParentCat && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
