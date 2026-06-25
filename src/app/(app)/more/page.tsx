@@ -29,7 +29,6 @@ function MenuItem({
   label,
   href,
   disabled = false,
-  pro = false,
   onClick,
   badge
 }: {
@@ -37,7 +36,6 @@ function MenuItem({
   label: string
   href?: string
   disabled?: boolean
-  pro?: boolean
   onClick?: () => void
   badge?: string
 }) {
@@ -75,11 +73,6 @@ function MenuItem({
         )}
       </div>
       <div className="flex items-center gap-2">
-        {pro && (
-          <span className="text-[10px] font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
-            PRO
-          </span>
-        )}
         {disabled ? (
           <Lock size={14} className="text-gray-400 dark:text-gray-500" />
         ) : (
@@ -395,9 +388,9 @@ export default function MorePage() {
       </h1>
 
       <div className="bg-gradient-to-r from-teal-700 to-orange-500 rounded-2xl p-4 mb-8 text-white shadow-lg">
-        <h3 className="font-bold">DFL Finance Pro</h3>
+        <h3 className="font-bold">DFL Finance</h3>
         <p className="text-xs text-teal-50">
-          Sem limites e relatórios avançados
+          Gestão financeira completa
         </p>
       </div>
 
@@ -494,7 +487,7 @@ export default function MorePage() {
         </button>
       </div>
 
-      {/* Seções conforme o design solicitado */}
+      {/* Seções */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
         <SectionTitle>Organizar</SectionTitle>
         <MenuItem iconName="wallet" label="Contas" href="/accounts" />
@@ -512,12 +505,7 @@ export default function MorePage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
         <SectionTitle>Acompanhar</SectionTitle>
-        <MenuItem
-          iconName="repeat"
-          label="Recorrências"
-          disabled
-          onClick={() => setModalOpen(true)}
-        />
+        <MenuItem iconName="repeat" label="Recorrências" href="/subscriptions" />
         <MenuItem
           iconName="file-text"
           label="Financiamentos"
@@ -528,7 +516,6 @@ export default function MorePage() {
           iconName="users"
           label="Quem me deve"
           disabled
-          pro
           onClick={() => setModalOpen(true)}
         />
       </div>
@@ -544,7 +531,6 @@ export default function MorePage() {
           iconName="pie-chart"
           label="Relatórios avançados"
           disabled
-          pro
           onClick={() => setModalOpen(true)}
         />
       </div>
