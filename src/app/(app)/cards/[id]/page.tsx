@@ -21,6 +21,7 @@ import {
   ArrowUp,
   X,
   Check,
+  Edit3,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -152,7 +153,7 @@ function CardDetailContent() {
     const payload = {
       user_id: user.id,
       amount: rawAmount,
-      type: 'income', // Estorno é tratado como entrada no cartão
+      type: 'income',
       status: 'done',
       date: format(new Date(), 'yyyy-MM-dd'),
       description: adjustDescription || 'Estorno / Ajuste',
@@ -166,7 +167,6 @@ function CardDetailContent() {
       alert('Erro ao registrar estorno: ' + error.message)
     } else {
       setShowAdjustModal(false)
-      // Recalcular limite e recarregar dados
       loadCardData()
     }
     setAdjustSaving(false)
@@ -213,7 +213,16 @@ function CardDetailContent() {
         <button onClick={() => router.push('/cards')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
         </button>
-        <ContextToggle />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push(`/cards/${cardId}/edit`)}
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+            title="Editar cartão"
+          >
+            <Edit3 size={20} />
+          </button>
+          <ContextToggle />
+        </div>
         <div className="w-8" />
       </div>
 
