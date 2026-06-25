@@ -33,8 +33,8 @@ function ConfirmModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-[24px] p-6 w-full max-w-sm shadow-2xl">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-[24px] p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
             <AlertTriangle size={20} className="text-red-600 dark:text-red-400" />
@@ -186,7 +186,7 @@ export default function FinancingDetailPage() {
   const [abObservation, setAbObservation] = useState('')
   const [showAccModal, setShowAccModal] = useState(false)
 
-  const previewBalance = Math.max(0, (financing?.outstanding_balance || 0) - abAmountNum)
+  const previewBalance = Math.max(0, (Number(financing?.outstanding_balance) || 0) - abAmountNum)
 
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
@@ -205,7 +205,13 @@ export default function FinancingDetailPage() {
       return
     }
 
-    setFinancing(finData)
+    setFinancing({
+      ...finData,
+      outstanding_balance: Number(finData.outstanding_balance) || 0,
+      installment_value: Number(finData.installment_value) || 0,
+      total_installments: Number(finData.total_installments) || 1,
+      current_installment: Number(finData.current_installment) || 1,
+    })
     setAbAccountId(finData.account_id || '')
 
     const { data: abData } = await supabase
@@ -254,7 +260,6 @@ export default function FinancingDetailPage() {
     try {
       const ab = selectedAbatement
 
-      // 1. Deletar a transação vinculada
       const { data: txData } = await supabase
         .from('transactions')
         .select('id, account_id')
@@ -265,7 +270,6 @@ export default function FinancingDetailPage() {
         .maybeSingle()
 
       if (txData) {
-        // Reverter saldo da conta
         if (txData.account_id) {
           const { data: acc } = await supabase
             .from('accounts')
@@ -282,10 +286,8 @@ export default function FinancingDetailPage() {
         await supabase.from('transactions').delete().eq('id', txData.id)
       }
 
-      // 2. Deletar o abatimento
       await supabase.from('financing_abatements').delete().eq('id', ab.id)
 
-      // 3. Recalcular o financiamento (devolver valor ao saldo)
       const newBalance = Number(financing.outstanding_balance) + Number(ab.amount)
       const newTotalInstallments = Math.max(1, Math.floor(newBalance / Number(financing.installment_value)))
 
@@ -320,7 +322,8 @@ export default function FinancingDetailPage() {
     if (isSubmitting) return
     if (!user?.id || abAmountNum <= 0) return
 
-    if (abAmountNum > (financing.outstanding_balance || 0)) {
+    const currentBalance = Number(financing.outstanding_balance) || 0
+    if (abAmountNum > currentBalance) {
       alert('O valor do abatimento não pode ser maior que o saldo devedor.')
       return
     }
@@ -342,10 +345,10 @@ export default function FinancingDetailPage() {
 
       if (abError) throw abError
 
-      const newBalance = Math.max(0, Number(financing.outstanding_balance) - abAmountNum)
+      const newBalance = Math.max(0, currentBalance - abAmountNum)
 
       if (abType === 'reduce_term') {
-        const newTotalInstallments = Math.max(1, Math.floor(newBalance / Number(financing.installment_value)))
+        const newTotalInstallments = Math.max(1, Math.ceil(newBalance / Number(financing.installment_value)))
         await supabase.from('financings').update({
           outstanding_balance: newBalance,
           total_installments: newTotalInstallments
@@ -414,20 +417,42 @@ export default function FinancingDetailPage() {
   )
 
   const IconComp = getDynamicIcon(financing.icon || 'home')
-  const remainingInstallments = Math.max(0, financing.total_installments - financing.current_installment + 1)
-  const progress = (financing.current_installment / financing.total_installments) * 100
-  const paidSoFar = (Number(financing.installment_value) * (financing.current_installment - 1)) + abatements.reduce((a, ab) => a + Number(ab.amount), 0)
-  const totalToPay = Math.max(0, Number(financing.installment_value) * remainingInstallments)
+  
+  // NOVA LÓGICA: baseada no saldo devedor real
+  const outstandingBalance = Number(financing.outstanding_balance) || 0
+  const installmentValue = Number(financing.installment_value) || 0
+  
+  // Parcelas restantes = saldo devedor / valor da parcela (arredondado pra cima)
+  const remainingInstallments = outstandingBalance > 0 
+    ? Math.ceil(outstandingBalance / installmentValue) 
+    : 0
+  
+  // Soma de tudo que já foi pago (parcelas + abatimentos)
+  const paidSoFar = (Number(financing.installment_value) * (financing.current_installment - 1)) + 
+    abatements.reduce((a, ab) => a + Number(ab.amount), 0)
+  
+  // Total contratado = saldo devedor + já pago
+  const totalContratado = outstandingBalance + paidSoFar
+  const progress = totalContratado > 0 ? (paidSoFar / totalContratado) * 100 : 0
+  
+  const totalToPay = remainingInstallments * installmentValue
   const isOverdue = financing.next_due_date && differenceInDays(new Date(financing.next_due_date), new Date()) < 0
-  const isPaid = remainingInstallments === 0
+  
+  // Status de quitado: sem saldo devedor
+  const isPaid = outstandingBalance <= 0
 
+  // Gerar parcelas futuras
   const installmentsList = []
   if (remainingInstallments > 0) {
-    for (let i = financing.current_installment; i <= financing.total_installments; i++) {
+    for (let i = 0; i < remainingInstallments; i++) {
       const dueDate = financing.next_due_date
-        ? format(addMonths(new Date(financing.next_due_date), i - financing.current_installment), 'yyyy-MM-dd')
+        ? format(addMonths(new Date(financing.next_due_date), i), 'yyyy-MM-dd')
         : null
-      installmentsList.push({ number: i, dueDate, value: Number(financing.installment_value) })
+      installmentsList.push({
+        number: i + 1,
+        dueDate,
+        value: installmentValue
+      })
     }
   }
 
@@ -482,16 +507,21 @@ export default function FinancingDetailPage() {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Parcela mensal</p>
-            <p className="text-[18px] font-bold text-red-500">{formatCurrency(Number(financing.installment_value))}</p>
+            <p className="text-[18px] font-bold text-red-500">{formatCurrency(installmentValue)}</p>
           </div>
           <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Restantes</p>
-            <p className="text-[18px] font-bold text-gray-800 dark:text-gray-200">{remainingInstallments === 0 ? '0 (Quitado)' : remainingInstallments}</p>
+            <p className="text-[18px] font-bold text-gray-800 dark:text-gray-200">
+              {isPaid ? '0 (Quitado)' : remainingInstallments}
+            </p>
           </div>
         </div>
 
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-3">
-          <div className={`h-full rounded-full ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
+          <div 
+            className={`h-full rounded-full ${isOverdue ? 'bg-red-500' : isPaid ? 'bg-emerald-500' : 'bg-teal-500'}`} 
+            style={{ width: `${Math.min(progress, 100)}%` }} 
+          />
         </div>
 
         <div className="flex justify-between mb-3">
@@ -506,14 +536,16 @@ export default function FinancingDetailPage() {
         </div>
 
         <div className="border-t border-gray-50 dark:border-slate-700 pt-3 space-y-1">
+          {!isPaid && (
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              Próxima parcela: <span className="font-bold text-gray-800 dark:text-gray-200">#1</span>
+              {financing.next_due_date && (
+                <> • vence <span className={`font-bold ${isOverdue ? 'text-red-500' : 'text-gray-800 dark:text-gray-200'}`}>{format(new Date(financing.next_due_date), "dd/MM/yyyy")}</span></>
+              )}
+            </p>
+          )}
           <p className="text-[11px] text-gray-400 dark:text-gray-500">
-            Próxima parcela: <span className="font-bold text-gray-800 dark:text-gray-200">#{financing.current_installment}</span>
-            {financing.next_due_date && (
-              <> • vence <span className={`font-bold ${isOverdue ? 'text-red-500' : 'text-gray-800 dark:text-gray-200'}`}>{format(new Date(financing.next_due_date), "dd/MM/yyyy")}</span></>
-            )}
-          </p>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500">
-            Saldo devedor: <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Math.max(0, Number(financing.outstanding_balance)))}</span>
+            Saldo devedor: <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(outstandingBalance)}</span>
             {' '}• atualizado em {format(new Date(), "dd/MM/yyyy")}
           </p>
         </div>
@@ -523,7 +555,7 @@ export default function FinancingDetailPage() {
       {!isPaid && (
         <button
           onClick={() => setShowAbatementModal(true)}
-          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm mb-6"
+          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm mb-6 hover:bg-teal-800 transition-colors"
         >
           Registrar abatimento
         </button>
@@ -534,19 +566,19 @@ export default function FinancingDetailPage() {
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Lançamentos</h3>
         {installmentsList.length === 0 ? (
           <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">
-            {remainingInstallments === 0 ? 'Contrato quitado!' : 'Nenhuma parcela pendente.'}
+            {isPaid ? 'Contrato quitado!' : 'Nenhuma parcela pendente.'}
           </p>
         ) : (
           <div className="space-y-2">
-            {installmentsList.map((inst) => (
-              <div key={inst.number} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
+            {installmentsList.map((inst, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-600 flex items-center justify-center">
                     <Clock size={16} className="text-gray-400 dark:text-gray-500" />
                   </div>
                   <div>
                     <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                      Parcela {inst.number}/{financing.total_installments}
+                      Parcela {index + 1}
                     </p>
                     {inst.dueDate && (
                       <p className="text-[10px] text-gray-400 dark:text-gray-500">
@@ -562,7 +594,7 @@ export default function FinancingDetailPage() {
         )}
       </div>
 
-      {/* Histórico de Abatimentos (agora interativo) */}
+      {/* Histórico de Abatimentos */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de abatimentos</h3>
         {abatements.length === 0 ? (
@@ -575,7 +607,7 @@ export default function FinancingDetailPage() {
                 onClick={() => setSelectedAbatement(ab)}
                 className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
               >
-                <div className="flex-1">
+                <div className="flex-1 text-left">
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-sm text-red-500">- {formatCurrency(Number(ab.amount) || 0)}</p>
                     {ab.observation && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">— {ab.observation}</p>}
@@ -586,7 +618,7 @@ export default function FinancingDetailPage() {
                     {ab.accounts?.name ? ` • ${ab.accounts.name}` : ''}
                   </p>
                 </div>
-                <Eye size={16} className="text-gray-400 dark:text-gray-500 ml-2" />
+                <Eye size={16} className="text-gray-400 dark:text-gray-500 ml-2 flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -611,7 +643,7 @@ export default function FinancingDetailPage() {
                 </div>
                 {abAmountNum > 0 && (
                   <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-1">
-                    Novo saldo devedor: {formatCurrency(previewBalance > 0 ? previewBalance : 0)}
+                    Novo saldo devedor: {formatCurrency(previewBalance)}
                   </p>
                 )}
               </div>
@@ -657,7 +689,7 @@ export default function FinancingDetailPage() {
               <button
                 onClick={handleAbatement}
                 disabled={isSubmitting || abAmountNum <= 0}
-                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50"
+                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
               >
                 {isSubmitting ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Confirmar Abatimento'}
               </button>
