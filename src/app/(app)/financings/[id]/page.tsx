@@ -35,7 +35,7 @@ export default function FinancingDetailPage() {
   const [abObservation, setAbObservation] = useState('')
   const [showAccModal, setShowAccModal] = useState(false)
 
-  const previewBalance = (financing?.outstanding_balance || 0) - abAmountNum
+  const previewBalance = Math.max(0, (financing?.outstanding_balance || 0) - abAmountNum)
 
   const loadData = useCallback(async () => {
     if (!id || !user?.id) {
@@ -116,6 +116,12 @@ export default function FinancingDetailPage() {
     if (isSubmitting) return
     if (!user?.id || abAmountNum <= 0) return
 
+    // Validação para evitar saldo negativo
+    if (abAmountNum > (financing.outstanding_balance || 0)) {
+      alert('O valor do abatimento não pode ser maior que o saldo devedor.')
+      return
+    }
+
     setIsSubmitting(true)
     setSaving(true)
 
@@ -134,17 +140,19 @@ export default function FinancingDetailPage() {
 
       if (abError) throw abError
 
-      // Recalcular saldo devedor e parcelas
-      const newBalance = Number(financing.outstanding_balance) - abAmountNum
+      // Recalcular saldo devedor e parcelas (garantindo que não fique negativo)
+      const newBalance = Math.max(0, Number(financing.outstanding_balance) - abAmountNum)
 
       if (abType === 'reduce_term') {
+        // Reduzir prazo: recalcular total de parcelas
         const newTotalInstallments = Math.max(1, Math.floor(newBalance / Number(financing.installment_value)))
         await supabase.from('financings').update({
           outstanding_balance: newBalance,
           total_installments: newTotalInstallments
         }).eq('id', id)
       } else {
-        const remainingInstallments = financing.total_installments - financing.current_installment + 1
+        // Reduzir parcela: recalcular valor da parcela
+        const remainingInstallments = Math.max(1, financing.total_installments - financing.current_installment + 1)
         const newInstallmentValue = remainingInstallments > 0 ? newBalance / remainingInstallments : 0
         await supabase.from('financings').update({
           outstanding_balance: newBalance,
@@ -153,6 +161,7 @@ export default function FinancingDetailPage() {
       }
 
       // Criar transação (expense) para o abatimento
+      // Garantindo que o payload está limpo e sem credit_card_id
       const { error: txError } = await supabase.from('transactions').insert({
         user_id: user.id,
         type: 'expense',
@@ -180,7 +189,7 @@ export default function FinancingDetailPage() {
         if (acc) {
           await supabase
             .from('accounts')
-            .update({ balance: Number(acc.balance) - abAmountNum })
+            .update({ balance: Math.max(0, Number(acc.balance) - abAmountNum) })
             .eq('id', targetAccountId)
         }
       }
@@ -211,22 +220,25 @@ export default function FinancingDetailPage() {
   )
 
   const IconComp = getDynamicIcon(financing.icon || 'home')
-  const remainingInstallments = financing.total_installments - financing.current_installment + 1
+  const remainingInstallments = Math.max(0, financing.total_installments - financing.current_installment + 1)
   const progress = (financing.current_installment / financing.total_installments) * 100
   const paidSoFar = (Number(financing.installment_value) * (financing.current_installment - 1)) + abatements.reduce((a, ab) => a + Number(ab.amount), 0)
-  const totalToPay = Number(financing.installment_value) * remainingInstallments
+  const totalToPay = Math.max(0, Number(financing.installment_value) * remainingInstallments)
   const isOverdue = financing.next_due_date && differenceInDays(new Date(financing.next_due_date), new Date()) < 0
 
+  // Gerar parcelas dinâmicas (apenas as futuras/atuais)
   const installmentsList = []
-  for (let i = financing.current_installment; i <= financing.total_installments; i++) {
-    const dueDate = financing.next_due_date
-      ? format(addMonths(new Date(financing.next_due_date), i - financing.current_installment), 'yyyy-MM-dd')
-      : null
-    installmentsList.push({
-      number: i,
-      dueDate,
-      value: Number(financing.installment_value)
-    })
+  if (remainingInstallments > 0) {
+    for (let i = financing.current_installment; i <= financing.total_installments; i++) {
+      const dueDate = financing.next_due_date
+        ? format(addMonths(new Date(financing.next_due_date), i - financing.current_installment), 'yyyy-MM-dd')
+        : null
+      installmentsList.push({
+        number: i,
+        dueDate,
+        value: Number(financing.installment_value)
+      })
+    }
   }
 
   const selectedAcc = accounts.find(a => a.id === abAccountId)
@@ -284,7 +296,7 @@ export default function FinancingDetailPage() {
           </div>
           <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Restantes</p>
-            <p className="text-[18px] font-bold text-gray-800 dark:text-gray-200">{remainingInstallments}</p>
+            <p className="text-[18px] font-bold text-gray-800 dark:text-gray-200">{remainingInstallments === 0 ? '0 (Quitado)' : remainingInstallments}</p>
           </div>
         </div>
 
@@ -311,45 +323,53 @@ export default function FinancingDetailPage() {
             )}
           </p>
           <p className="text-[11px] text-gray-400 dark:text-gray-500">
-            Saldo devedor: <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(financing.outstanding_balance))}</span>
+            Saldo devedor: <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Math.max(0, Number(financing.outstanding_balance)))}</span>
             {' '}• atualizado em {format(new Date(), "dd/MM/yyyy")}
           </p>
         </div>
       </div>
 
       {/* Botão Registrar Abatimento */}
-      <button
-        onClick={() => setShowAbatementModal(true)}
-        className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm mb-6"
-      >
-        Registrar abatimento
-      </button>
+      {!isPaid && (
+        <button
+          onClick={() => setShowAbatementModal(true)}
+          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm mb-6"
+        >
+          Registrar abatimento
+        </button>
+      )}
 
       {/* Lista de Parcelas (dinâmica) */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Lançamentos</h3>
-        <div className="space-y-2">
-          {installmentsList.map((inst) => (
-            <div key={inst.number} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-600 flex items-center justify-center">
-                  <Clock size={16} className="text-gray-400 dark:text-gray-500" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                    Parcela {inst.number}/{financing.total_installments}
-                  </p>
-                  {inst.dueDate && (
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                      {format(new Date(inst.dueDate), "dd/MM/yyyy")}
+        {installmentsList.length === 0 ? (
+          <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">
+            {remainingInstallments === 0 ? 'Contrato quitado!' : 'Nenhuma parcela pendente.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {installmentsList.map((inst) => (
+              <div key={inst.number} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-600 flex items-center justify-center">
+                    <Clock size={16} className="text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
+                      Parcela {inst.number}/{financing.total_installments}
                     </p>
-                  )}
+                    {inst.dueDate && (
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                        {format(new Date(inst.dueDate), "dd/MM/yyyy")}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                <p className="text-[14px] font-bold text-red-500">{formatCurrency(inst.value)}</p>
               </div>
-              <p className="text-[14px] font-bold text-red-500">{formatCurrency(inst.value)}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Histórico de Abatimentos */}
