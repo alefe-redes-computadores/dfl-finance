@@ -261,7 +261,7 @@ export default function MorePage() {
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
-    const img = new Image()
+    const img = new Image(0, 0)
     img.src = selectedImage!
 
     img.onload = () => {
