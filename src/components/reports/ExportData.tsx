@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { useContext_ } from '@/components/ContextToggle'
-import { FilterState } from './ReportFilters'
+import { FilterState } from '@/components/reports/ReportFilters'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { Loader2, Download, Check } from 'lucide-react'
 
