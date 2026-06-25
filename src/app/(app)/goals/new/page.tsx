@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase'
 import * as Icons from 'lucide-react'
 import { ChevronLeft, Check, Loader2, X, Wallet, Calendar } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import IconPicker from '@/components/IconPicker' // Importando o novo seletor!
+import IconPicker from '@/components/IconPicker'
+import MoneyInput from '@/components/MoneyInput'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -23,12 +24,12 @@ function NewGoalContent() {
   const [accounts, setAccounts] = useState<any[]>([])
 
   const [name, setName] = useState('')
-  const [targetAmount, setTargetAmount] = useState('0,00')
   const [targetAmountNum, setTargetAmountNum] = useState(0)
+  const [targetAmountFormatted, setTargetAmountFormatted] = useState('0,00')
   const [deadline, setDeadline] = useState('')
   const [accountId, setAccountId] = useState('')
   const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('Target') // Agora usando PascalCase para bater com o lucide-react
+  const [icon, setIcon] = useState('Target')
 
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
@@ -48,12 +49,12 @@ function NewGoalContent() {
     const { data } = await supabase.from('goals').select('*').match({ id: editId, user_id: user.id }).single()
     if (data) {
       setName(data.name)
-      setTargetAmountNum(Number(data.target_amount))
-      setTargetAmount(Number(data.target_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+      const numValue = Number(data.target_amount) || 0
+      setTargetAmountNum(numValue)
+      setTargetAmountFormatted(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setDeadline(data.deadline || '')
       setAccountId(data.account_id || '')
       setColor(data.color)
-      // Ajuste para garantir que a primeira letra seja maiúscula caso venha do modelo antigo
       const iconName = data.icon.charAt(0).toUpperCase() + data.icon.slice(1)
       setIcon(iconName)
     }
@@ -64,18 +65,6 @@ function NewGoalContent() {
     loadAccounts()
     if (editId) loadGoal()
   }, [user, context, editId])
-
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    if (!digits) {
-      setTargetAmount('0,00')
-      setTargetAmountNum(0)
-      return
-    }
-    const num = parseFloat(digits) / 100
-    setTargetAmountNum(num)
-    setTargetAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-  }
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0) {
@@ -116,14 +105,11 @@ function NewGoalContent() {
   )
 
   const selectedAcc = accounts.find(a => a.id === accountId)
-  
-  // Renderização dinâmica do ícone selecionado
   const IconComp = (Icons as any)[icon] || Icons.Target
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -152,12 +138,12 @@ function NewGoalContent() {
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor alvo</label>
           <div className="flex items-center gap-2">
             <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={targetAmount}
-              onChange={handleAmountChange}
-              placeholder="0,00"
+            <MoneyInput
+              value={targetAmountNum}
+              onChange={(num, formatted) => {
+                setTargetAmountNum(num)
+                setTargetAmountFormatted(formatted)
+              }}
               className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
             />
           </div>
@@ -263,7 +249,6 @@ function NewGoalContent() {
         </div>
       )}
 
-      {/* Novo Componente de Seleção de Ícone */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
