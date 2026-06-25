@@ -13,7 +13,8 @@ const tabs = [
   { href: '/more', icon: MoreHorizontal, label: 'Mais' },
 ]
 
-const HIDDEN_ROUTES = ['/new-transaction', '/accounts', '/categories', '/cards/new', '/transactions/card-expense', '/tags']
+// Só mostra o BottomNav nas 4 abas principais
+const VISIBLE_ROUTES = ['/home', '/transactions', '/analysis', '/more']
 
 export default function BottomNav() {
   const pathname = usePathname()
@@ -21,7 +22,10 @@ export default function BottomNav() {
   const [isOpen, setIsOpen] = useState(false)
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
 
-  if (HIDDEN_ROUTES.some(r => pathname.startsWith(r))) return null
+  // Se a rota atual NÃO for uma das 4 abas principais, esconde o BottomNav
+  if (!VISIBLE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '?'))) {
+    return null
+  }
 
   const handleNavigate = (path: string) => {
     setIsOpen(false)
