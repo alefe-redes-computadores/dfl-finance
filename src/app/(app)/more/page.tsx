@@ -255,16 +255,13 @@ export default function MorePage() {
     }
   }
 
-  const handleCropAndUpload = async () => {
+    const handleCropAndUpload = async () => {
     if (!canvasRef.current) return
     setUploading(true)
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
-    const img = document.createElement('img');
-    img.src = selectedImage!;
-
-    img.src = selectedImage!
+    const img = document.createElement('img')
 
     img.onload = () => {
       const size = Math.min(img.width, img.height)
@@ -289,19 +286,25 @@ export default function MorePage() {
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(filePath, file)
+        
         if (uploadError) {
           alert('Erro no upload')
+          setUploading(false)
           return
         }
+        
         const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
         await supabase.auth.updateUser({
           data: { custom_avatar_url: data.publicUrl }
         })
+        
+        setUploading(false)
         setShowCropModal(false)
         window.location.reload()
       }, 'image/jpeg')
     }
-    setUploading(false)
+
+    img.src = selectedImage!
   }
 
   const handleExport = (type: string) => {
