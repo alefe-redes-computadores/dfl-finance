@@ -17,6 +17,7 @@ import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import IconPicker from '@/components/IconPicker'
+import MoneyInput from '@/components/MoneyInput'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -38,8 +39,8 @@ function NewTransactionContent() {
 
   const [type, setType] = useState<TxType>((searchParams.get('type') as TxType) || 'expense')
   const [context, setContext] = useState<Context>('dfl')
-  const [amount, setAmount] = useState('0,00')
   const [amountNum, setAmountNum] = useState(0)
+  const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [desc, setDesc] = useState('')
@@ -200,29 +201,6 @@ function NewTransactionContent() {
       })
   }, [categoryId, amountNum, type, budgets, user, context])
 
-  const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-  let value = e.target.value.replace(/\D/g, '') // remove tudo que não for dígito
-  
-  if (!value || value === '0') {
-    setAmount('0,00')
-    setAmountNum(0)
-    return
-  }
-
-  // Remove zeros à esquerda, mas mantém pelo menos um dígito
-  value = value.replace(/^0+/, '') || '0'
-
-  // Converte para número (considera os últimos 2 dígitos como centavos)
-  const numValue = parseFloat(value) / 100
-  setAmountNum(numValue)
-
-  const formatted = new Intl.NumberFormat('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(numValue)
-
-  setAmount(formatted)
-}
   const formatAmount = (value: string) => {
     const num = parseFloat(value.replace(/\./g, '').replace(',', '.'))
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -246,7 +224,8 @@ function NewTransactionContent() {
         const { amount: extractedAmount, date: extractedDate, description: extractedDesc } = result.data
 
         if (extractedAmount) {
-          setAmount(formatAmount(extractedAmount))
+          const formatted = formatAmount(extractedAmount)
+          setAmountFormatted(formatted)
           setAmountNum(parseFloat(extractedAmount.replace(/\./g, '').replace(',', '.')))
         }
         if (extractedDate) {
@@ -311,7 +290,8 @@ function NewTransactionContent() {
     }
 
     if (extractedAmount) {
-      setAmount(formatAmount(extractedAmount))
+      const formatted = formatAmount(extractedAmount)
+      setAmountFormatted(formatted)
       setAmountNum(parseFloat(extractedAmount.replace(/\./g, '').replace(',', '.')))
     }
     if (extractedDesc) {
@@ -423,7 +403,7 @@ function NewTransactionContent() {
       alert('Sessão expirada. Faça login novamente.')
       return
     }
-    const rawAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0
+    const rawAmount = amountNum
     if (rawAmount <= 0) {
       alert('Erro: O valor da transação deve ser maior que R$ 0,00.')
       return
@@ -596,7 +576,14 @@ function NewTransactionContent() {
         <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">Valor {isIncome ? 'da Receita' : 'da Despesa'}</p>
         <div className="flex justify-center items-center gap-1">
           <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
-          <input type="text" inputMode="numeric" value={amount} onChange={handleAmount} className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`} />
+          <MoneyInput
+            value={amountNum}
+            onChange={(num, formatted) => {
+              setAmountNum(num)
+              setAmountFormatted(formatted)
+            }}
+            className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`}
+          />
         </div>
 
         {type === 'expense' && budgetAlert && (
