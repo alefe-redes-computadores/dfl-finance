@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, X, Wallet, Calendar, Tag,
-  MoreHorizontal, Clock, ChevronDown, ArrowDown
+  ChevronLeft, Edit2, Loader2, Check, Trash2, X, Wallet, Calendar,
+  MoreHorizontal, Clock, ChevronDown
 } from 'lucide-react'
 import { format, addMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -35,55 +35,54 @@ export default function FinancingDetailPage() {
   const [abObservation, setAbObservation] = useState('')
   const [showAccModal, setShowAccModal] = useState(false)
 
-  // Prévia do novo saldo devedor
   const previewBalance = (financing?.outstanding_balance || 0) - abAmountNum
 
   const loadData = useCallback(async () => {
-  if (!id || !user?.id) {
-    console.log('loadData abortado:', { id, userId: user?.id })
-    return
-  }
-  setLoading(true)
-  console.log('Buscando financiamento:', { id, userId: user.id })
+    if (!id || !user?.id) {
+      console.log('loadData abortado:', { id, userId: user?.id })
+      return
+    }
+    setLoading(true)
+    console.log('Buscando financiamento:', { id, userId: user.id })
 
-  const { data: finData, error: finError } = await supabase
-    .from('financings')
-    .select('*, accounts(name, color), categories(name, icon, color)')
-    .match({ id: id, user_id: user.id })
-    .single()
+    const { data: finData, error: finError } = await supabase
+      .from('financings')
+      .select('*, accounts(name, color), categories(name, icon, color)')
+      .match({ id: id, user_id: user.id })
+      .single()
 
-  if (finError) {
-    console.error('Erro ao buscar financiamento:', finError)
+    if (finError) {
+      console.error('Erro ao buscar financiamento:', finError)
+      setLoading(false)
+      return
+    }
+
+    if (finData) {
+      console.log('Financiamento encontrado:', finData)
+      setFinancing(finData)
+      setAbAccountId(finData.account_id || '')
+    } else {
+      console.log('Nenhum financiamento retornado para id:', id)
+      setLoading(false)
+      return
+    }
+
+    const { data: abData } = await supabase
+      .from('financing_abatements')
+      .select('*, accounts(name, color)')
+      .eq('financing_id', id)
+      .order('date', { ascending: false })
+
+    setAbatements(Array.isArray(abData) ? abData : [])
+
+    const { data: accData } = await supabase
+      .from('accounts')
+      .select('id, name, color, balance')
+      .match({ user_id: user.id, context: finData?.context || 'dfl' })
+
+    setAccounts(Array.isArray(accData) ? accData : [])
     setLoading(false)
-    return
-  }
-
-  if (finData) {
-    console.log('Financiamento encontrado:', finData)
-    setFinancing(finData)
-    setAbAccountId(finData.account_id || '')
-  } else {
-    console.log('Nenhum financiamento retornado para id:', id)
-    setLoading(false)
-    return
-  }
-
-  const { data: abData } = await supabase
-    .from('financing_abatements')
-    .select('*, accounts(name, color)')
-    .eq('financing_id', id)
-    .order('date', { ascending: false })
-
-  setAbatements(Array.isArray(abData) ? abData : [])
-
-  const { data: accData } = await supabase
-    .from('accounts')
-    .select('id, name, color, balance')
-    .match({ user_id: user.id, context: finData?.context || 'dfl' })
-
-  setAccounts(Array.isArray(accData) ? accData : [])
-  setLoading(false)
-}, [id, user])
+  }, [id, user])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -139,14 +138,12 @@ export default function FinancingDetailPage() {
       const newBalance = Number(financing.outstanding_balance) - abAmountNum
 
       if (abType === 'reduce_term') {
-        // Reduzir prazo: recalcular total de parcelas
         const newTotalInstallments = Math.max(1, Math.floor(newBalance / Number(financing.installment_value)))
         await supabase.from('financings').update({
           outstanding_balance: newBalance,
           total_installments: newTotalInstallments
         }).eq('id', id)
       } else {
-        // Reduzir parcela: recalcular valor da parcela
         const remainingInstallments = financing.total_installments - financing.current_installment + 1
         const newInstallmentValue = remainingInstallments > 0 ? newBalance / remainingInstallments : 0
         await supabase.from('financings').update({
@@ -220,7 +217,6 @@ export default function FinancingDetailPage() {
   const totalToPay = Number(financing.installment_value) * remainingInstallments
   const isOverdue = financing.next_due_date && differenceInDays(new Date(financing.next_due_date), new Date()) < 0
 
-  // Gerar parcelas dinâmicas (apenas as futuras/atuais)
   const installmentsList = []
   for (let i = financing.current_installment; i <= financing.total_installments; i++) {
     const dueDate = financing.next_due_date
@@ -249,21 +245,25 @@ export default function FinancingDetailPage() {
             <MoreHorizontal size={20} />
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-10 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30">
-              <button onClick={() => { setShowMenu(false); router.push(`/financings/new?edit=${financing.id}`) }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
-                <Edit2 size={16} /> Editar contrato
-              </button>
-              <button onClick={() => { setShowMenu(false); handleArchive() }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
-                <ChevronDown size={16} /> Arquivar/Quitar
-              </button>
-              <button onClick={() => { setShowMenu(false); handleDelete() }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
-                <Trash2 size={16} /> Excluir
-              </button>
-            </div>
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 top-10 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30">
+                <button onClick={() => { setShowMenu(false); router.push(`/financings/new?edit=${financing.id}`) }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
+                  <Edit2 size={16} /> Editar contrato
+                </button>
+                <button onClick={() => { setShowMenu(false); handleArchive() }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2">
+                  <ChevronDown size={16} /> Arquivar/Quitar
+                </button>
+                <button onClick={() => { setShowMenu(false); handleDelete() }} className="w-full text-left px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                  <Trash2 size={16} /> Excluir
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
-            {/* Card Principal */}
+
+      {/* Card Principal */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${financing.color}20`, color: financing.color }}>
@@ -329,7 +329,7 @@ export default function FinancingDetailPage() {
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Lançamentos</h3>
         <div className="space-y-2">
-          {installmentsList.map((inst, index) => (
+          {installmentsList.map((inst) => (
             <div key={inst.number} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-600 flex items-center justify-center">
@@ -388,7 +388,6 @@ export default function FinancingDetailPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Valor */}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor pago</label>
                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
@@ -402,7 +401,6 @@ export default function FinancingDetailPage() {
                 )}
               </div>
 
-              {/* Data */}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Data do pagamento</label>
                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
@@ -411,7 +409,6 @@ export default function FinancingDetailPage() {
                 </div>
               </div>
 
-              {/* Conta */}
               <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
                 <div className="flex items-center gap-2">
                   <Wallet size={16} className="text-gray-400 dark:text-gray-500" />
@@ -422,7 +419,6 @@ export default function FinancingDetailPage() {
                 <ChevronLeft size={16} className="text-gray-300 dark:text-gray-600 rotate-180" />
               </button>
 
-              {/* Tipo de abatimento */}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Tipo de abatimento</label>
                 <div className="flex gap-2">
@@ -438,7 +434,6 @@ export default function FinancingDetailPage() {
                 </p>
               </div>
 
-              {/* Observação */}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Observação (opcional)</label>
                 <input type="text" value={abObservation} onChange={e => setAbObservation(e.target.value)} placeholder="Ex: Pagamento extra" className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200" />
