@@ -10,7 +10,7 @@ import { ptBR } from 'date-fns/locale'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { Loader2, Download } from 'lucide-react'
+import { Loader2, Download, FileText } from 'lucide-react'
 
 interface Props {
   filters: FilterState
@@ -31,7 +31,6 @@ export default function ComparePeriods({ filters, onClose }: Props) {
     setLoading(true)
 
     const today = new Date()
-    // Comparar mês atual com mês passado
     const periods = [
       {
         label: 'Mês Atual',
@@ -80,6 +79,45 @@ export default function ComparePeriods({ filters, onClose }: Props) {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const tableRows = data.map(d => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#059669;">${formatCurrency(d.Receitas)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626;">${formatCurrency(d.Despesas)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d.Saldo >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d.Saldo)}</td>
+      </tr>
+    `).join('')
+
+    const html = `
+      <html>
+        <head>
+          <title>Comparar Períodos - DFL Finance</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
+            h2 { color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th { padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px; text-transform: uppercase; color: #64748b; background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Comparar Períodos</h2>
+          <table>
+            <thead><tr><th>Período</th><th style="text-align:right">Receitas</th><th style="text-align:right">Despesas</th><th style="text-align:right">Saldo</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+          <p style="margin-top:20px;font-size:11px;color:#94a3b8;">DFL Finance • ${new Date().toLocaleDateString('pt-BR')}</p>
+        </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.print()
+  }
+
   const handleExportCSV = () => {
     const header = 'Período,Receitas,Despesas,Saldo\n'
     const rows = data.map(d => `"${d.name}",${d.Receitas.toFixed(2)},${d.Despesas.toFixed(2)},${d.Saldo.toFixed(2)}`).join('\n')
@@ -116,9 +154,14 @@ export default function ComparePeriods({ filters, onClose }: Props) {
         </ResponsiveContainer>
       </div>
 
-      <button onClick={handleExportCSV} className="w-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-        <Download size={18} /> Exportar CSV
-      </button>
+      <div className="flex gap-3">
+        <button onClick={handleExportPDF} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
+          <FileText size={18} /> Exportar PDF
+        </button>
+        <button onClick={handleExportCSV} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
+          <Download size={18} /> Exportar CSV
+        </button>
+      </div>
     </div>
   )
 }
