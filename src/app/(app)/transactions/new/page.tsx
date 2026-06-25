@@ -201,25 +201,28 @@ function NewTransactionContent() {
   }, [categoryId, amountNum, type, budgets, user, context])
 
   const handleAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    
-    if (!digits) {
-      setAmount('0,00')
-      setAmountNum(0)
-      return
-    }
-
-    const numValue = parseFloat(digits) / 100
-    setAmountNum(numValue)
-
-    const formatted = new Intl.NumberFormat('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(numValue)
-
-    setAmount(formatted)
+  let value = e.target.value.replace(/\D/g, '') // remove tudo que não for dígito
+  
+  if (!value || value === '0') {
+    setAmount('0,00')
+    setAmountNum(0)
+    return
   }
 
+  // Remove zeros à esquerda, mas mantém pelo menos um dígito
+  value = value.replace(/^0+/, '') || '0'
+
+  // Converte para número (considera os últimos 2 dígitos como centavos)
+  const numValue = parseFloat(value) / 100
+  setAmountNum(numValue)
+
+  const formatted = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numValue)
+
+  setAmount(formatted)
+}
   const formatAmount = (value: string) => {
     const num = parseFloat(value.replace(/\./g, '').replace(',', '.'))
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
