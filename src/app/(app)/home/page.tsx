@@ -27,6 +27,7 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import NetworkStatus from '@/components/NetworkStatus'
 import InvoiceAlert from '@/components/InvoiceAlert'
+import DebtAlert from '@/components/DebtAlert'
 import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
@@ -104,7 +105,6 @@ function HomeContent() {
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
 
-      // Calcular pagamentos das dívidas
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
         const { data: payments } = await supabase
@@ -272,7 +272,6 @@ function HomeContent() {
   // === GERAR NOTIFICAÇÕES ===
   const notifications: any[] = []
 
-  // Cartões
   cards.forEach(card => {
     const days = card.due_day - todayDay
     if (days < 0) {
@@ -296,7 +295,6 @@ function HomeContent() {
     }
   })
 
-  // Assinaturas
   subscriptions.forEach(sub => {
     const days = sub.due_day - todayDay
     if (days < 0) {
@@ -320,7 +318,6 @@ function HomeContent() {
     }
   })
 
-  // Dívidas (Quem me deve)
   debts.forEach(debt => {
     if (!debt.due_date) return
     const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
@@ -347,7 +344,6 @@ function HomeContent() {
     }
   })
 
-  // Orçamentos
   budgets.forEach(budget => {
     if (budget.remaining < 0) {
       notifications.push({
@@ -370,7 +366,6 @@ function HomeContent() {
     }
   })
 
-  // Pendências
   const pendingExpenses = recentTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
   if (pendingExpenses.length > 0) {
     notifications.push({
@@ -418,6 +413,23 @@ function HomeContent() {
               cardName={card.name}
             />
           ))}
+        </div>
+      )}
+
+      {/* Alertas de dívidas vencidas */}
+      {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
+        <div className="mb-4 space-y-2">
+          {debts
+            .filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid')
+            .map(debt => (
+              <DebtAlert
+                key={debt.id}
+                personName={debt.person_name}
+                amount={Number(debt.total_amount) - (debt.paid_amount || 0)}
+                dueDate={debt.due_date}
+                debtId={debt.id}
+              />
+            ))}
         </div>
       )}
 
