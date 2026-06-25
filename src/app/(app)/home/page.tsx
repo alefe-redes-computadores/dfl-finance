@@ -27,6 +27,7 @@ import NetworkStatus from '@/components/NetworkStatus'
 import InvoiceAlert from '@/components/InvoiceAlert'
 import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
+import SyncButton from '@/components/SyncButton'
 
 function BankInitials({ color, name }: { color: string; name: string }) {
   const initials = name ? name.substring(0, 2).toUpperCase() : '??'
@@ -57,7 +58,7 @@ function HomeContent() {
   const [dataLoading, setDataLoading] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
 
-  const { isOnline, pendingCount } = useOfflineQueue()
+  const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
@@ -215,6 +216,13 @@ function HomeContent() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [loadData])
 
+  // Listener para recarregar dados após sincronização da fila offline
+  useEffect(() => {
+    const handleQueueSynced = () => loadData()
+    window.addEventListener('queue-synced', handleQueueSynced)
+    return () => window.removeEventListener('queue-synced', handleQueueSynced)
+  }, [loadData])
+
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce(
@@ -341,7 +349,7 @@ function HomeContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
-      <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} />
+      <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} isSyncing={isSyncing} />
 
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
@@ -359,6 +367,11 @@ function HomeContent() {
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
         <div className="flex items-center gap-2">
+          <SyncButton
+            pendingCount={pendingCount}
+            isSyncing={isSyncing}
+            onSync={syncQueue}
+          />
           <NotificationBell
             count={totalNotifications}
             hasCritical={criticalCount > 0}
@@ -435,3 +448,432 @@ function HomeContent() {
           </p>
         </div>
       </div>
+
+      {/* NOVO: Card "Próxima Fatura" */}
+      {nextCard && (
+        <div
+          onClick={() => router.push(`/cards/${nextCard.id}`)}
+          className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 mb-8 cursor-pointer hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <CreditCard size={16} className="text-teal-600 dark:text-teal-400" />
+              <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase">
+                Próxima Fatura
+              </span>
+            </div>
+            <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
+                {nextCard.name}
+              </p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                Vence dia {nextCard.due_day}
+              </p>
+            </div>
+            <p className={`text-[15px] font-bold ${(nextCard.faturaAtual || 0) > 0 ? 'text-orange-500' : 'text-gray-800 dark:text-gray-200'}`}>
+              {hideBalance ? '••••' : formatCurrency(nextCard.faturaAtual || 0)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-3 px-1">
+          Pendências
+        </h3>
+        <div className="grid grid-cols-3 gap-3">
+          <div
+            onClick={() => router.push('/transactions?filter=expense')}
+            className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700 shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <div className="flex justify-center mb-1">
+              <ArrowDown size={14} className="text-red-400 opacity-50" />
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">
+              Pagar
+            </p>
+            <p className="text-[13px] font-bold text-red-500">
+              {hideBalance ? '•••' : formatCurrency(pendings.toPay)}
+            </p>
+          </div>
+          <div
+            onClick={() => router.push('/transactions?filter=income')}
+            className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700 shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <div className="flex justify-center mb-1">
+              <ArrowUp size={14} className="text-emerald-500 opacity-50" />
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">
+              Receber
+            </p>
+            <p className="text-[13px] font-bold text-emerald-600">
+              {hideBalance ? '•••' : formatCurrency(pendings.toReceive)}
+            </p>
+          </div>
+          <div
+            onClick={() => router.push('/cards')}
+            className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700 shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none rounded-[16px] p-3 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <div className="flex justify-center mb-1">
+              <div className="w-3.5 h-3.5 border-2 border-orange-300 rounded-[4px] opacity-50" />
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">
+              Faturas
+            </p>
+            <p className="text-[13px] font-bold text-orange-400">
+              {hideBalance ? '•••' : formatCurrency(pendings.faturas)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {budgets.length > 0 && (
+        <div className="mb-8">
+          <div
+            className="flex justify-between items-center mb-3 px-1 cursor-pointer"
+            onClick={() => router.push('/budgets')}
+          >
+            <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">
+              Orçamentos
+            </h3>
+            <ChevronRight
+              size={18}
+              className="text-gray-400 dark:text-gray-500"
+            />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+            {budgets.map((budget) => {
+              const IconComp = getDynamicIcon(budget.icon)
+              const isOverBudget = budget.remaining < 0
+              const isWarning = budget.percent >= 75 && budget.percent < 100
+
+              return (
+                <div
+                  key={budget.id}
+                  onClick={() => router.push(`/budgets/${budget.id}`)}
+                  className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{
+                      backgroundColor: `${budget.color}20`,
+                      color: budget.color
+                    }}
+                  >
+                    <IconComp size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                        {budget.name}
+                      </p>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isOverBudget
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            : isWarning
+                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        }`}
+                      >
+                        {isOverBudget
+                          ? 'Estourado'
+                          : isWarning
+                          ? 'Atenção'
+                          : 'OK'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                          isOverBudget
+                            ? 'bg-red-500'
+                            : isWarning
+                            ? 'bg-orange-500'
+                            : 'bg-teal-500'
+                        }`}
+                        style={{
+                          width: `${Math.min(budget.percent, 100)}%`
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500">
+                      <span>Gasto {formatCurrency(budget.spent)}</span>
+                      <span>de {formatCurrency(Number(budget.amount))}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <div
+          className="flex justify-between items-center mb-3 px-1 cursor-pointer"
+          onClick={() => router.push('/accounts')}
+        >
+          <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">
+            Contas
+          </h3>
+          <ChevronRight
+            size={18}
+            className="text-gray-400 dark:text-gray-500"
+          />
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+          {accounts.length === 0 ? (
+            <div className="p-4 text-center text-gray-400 dark:text-gray-500 text-sm">
+              Nenhuma conta.
+            </div>
+          ) : (
+            accounts.map((acc) => (
+              <div
+                key={acc.id}
+                onClick={() => router.push(`/accounts/${acc.id}`)}
+                className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <BankInitials color={acc.color} name={acc.name} />
+                  <div>
+                    <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">
+                      {acc.name}
+                    </p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                      Previsto
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={`text-[14px] ${getBalanceStyle(
+                      Number(acc.balance) || 0
+                    )}`}
+                  >
+                    {hideBalance
+                      ? '••••'
+                      : formatCurrency(Number(acc.balance) || 0)}
+                  </p>
+                  <p
+                    className={`text-[11px] mt-0.5 ${
+                      (acc.previsto || 0) >= 0
+                        ? 'text-gray-400 dark:text-gray-500'
+                        : 'text-red-400'
+                    }`}
+                  >
+                    {hideBalance
+                      ? '••••'
+                      : formatCurrency(acc.previsto || 0)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+          {accounts.length > 0 && (
+            <div className="flex justify-between items-center p-3 mt-1 border-t border-gray-50 dark:border-slate-700">
+              <div>
+                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">
+                  Total
+                </p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Previsto
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">
+                  {hideBalance
+                    ? '••••'
+                    : formatCurrency(totalAccountsBalance)}
+                </p>
+                <p
+                  className={`text-[11px] mt-0.5 ${
+                    totalPrevistoBalance >= 0
+                      ? 'text-gray-400 dark:text-gray-500'
+                      : 'text-red-400'
+                  }`}
+                >
+                  {hideBalance
+                    ? '••••'
+                    : formatCurrency(totalPrevistoBalance)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <div
+          className="flex justify-between items-center mb-3 px-1 cursor-pointer"
+          onClick={() => router.push('/cards')}
+        >
+          <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">
+            Cartões
+          </h3>
+          <ChevronRight
+            size={18}
+            className="text-gray-400 dark:text-gray-500"
+          />
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+          {cards.length === 0 ? (
+            <button
+              onClick={() => router.push('/cards/new')}
+              className="w-full p-4 flex items-center justify-center gap-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors text-sm font-medium"
+            >
+              <Plus size={18} />
+              Adicionar cartão
+            </button>
+          ) : (
+            cards.map((card) => (
+              <div
+                key={card.id}
+                onClick={() => router.push(`/cards/${card.id}`)}
+                className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shadow-sm"
+                    style={{ backgroundColor: card.color || '#f97316' }}
+                  >
+                    <CreditCard size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">
+                      {card.name}
+                    </p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                      Fatura atual
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={`text-[14px] font-bold ${
+                      (card.faturaAtual || 0) > 0
+                        ? 'text-orange-500'
+                        : 'text-gray-400 dark:text-gray-500'
+                    }`}
+                  >
+                    {hideBalance
+                      ? '••••'
+                      : formatCurrency(card.faturaAtual || 0)}
+                  </p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    Vence dia {card.due_day}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="mb-10">
+        <div
+          className="flex justify-between items-center mb-3 px-1 cursor-pointer"
+          onClick={() => router.push('/transactions')}
+        >
+          <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">
+            Transações recentes
+          </h3>
+          <ChevronRight
+            size={18}
+            className="text-gray-400 dark:text-gray-500"
+          />
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden py-2">
+          {recentTransactions.length === 0 ? (
+            <div className="p-4 text-center text-gray-400 dark:text-gray-500 text-sm">
+              Nenhuma transação recente.
+            </div>
+          ) : (
+            recentTransactions.map((tx, index) => {
+              const isPending = tx.status === 'pending'
+              const IconComp = getDynamicIcon(tx.categories?.icon)
+              return (
+                <div
+                  key={tx.id}
+                  onClick={() => router.push(`/transactions/${tx.id}`)}
+                  className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors gap-3 ${
+                    index !== recentTransactions.length - 1
+                      ? 'border-b border-gray-50 dark:border-slate-700'
+                      : ''
+                  }`}
+                >
+                  {isPending ? (
+                    <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                      <Clock size={12} className="text-red-400" />
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                      <Check size={12} className="text-emerald-500" />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                    <div
+                      className="w-10 h-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0"
+                      style={{
+                        backgroundColor: `${
+                          tx.categories?.color || '#cbd5e1'
+                        }20`,
+                        color: tx.categories?.color || '#64748b'
+                      }}
+                    >
+                      <IconComp size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 uppercase tracking-tight truncate">
+                        {tx.description ||
+                          tx.categories?.name ||
+                          (tx.type === 'income' ? 'Receita' : 'Despesa')}
+                      </p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                        {format(new Date(tx.date), "dd 'de' MMM", {
+                          locale: ptBR
+                        })}{' '}
+                        • {tx.categories?.name || 'Geral'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p
+                    className={`text-[14px] font-bold whitespace-nowrap flex-shrink-0 ${
+                      tx.type === 'income'
+                        ? 'text-emerald-500'
+                        : 'text-red-500'
+                    }`}
+                  >
+                    {tx.type === 'income' ? '+' : '-'}{' '}
+                    {hideBalance
+                      ? '••••'
+                      : formatCurrency(Number(tx.amount) || 0)}
+                  </p>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      <NotificationCenter
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+      />
+    </div>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <ContextProvider>
+      <HomeContent />
+    </ContextProvider>
+  )
+}
