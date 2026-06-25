@@ -9,7 +9,7 @@ import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
   Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff,
   Shield, Zap, TrendingUp, Target, PiggyBank, CreditCard, Wallet,
-  Tags, Hash, Repeat, FileText, Users, BarChart3, Image, FileSpreadsheet
+  Tags, Hash, Repeat, FileText, Users, BarChart3, Image as ImageIcon, FileSpreadsheet
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
