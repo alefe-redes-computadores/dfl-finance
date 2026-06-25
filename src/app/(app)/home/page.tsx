@@ -1,4 +1,4 @@
-'use client'
+ 'use client'
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -31,18 +31,7 @@ import DebtAlert from '@/components/DebtAlert'
 import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
-
-function BankInitials({ color, name }: { color: string; name: string }) {
-  const initials = name ? name.substring(0, 2).toUpperCase() : '??'
-  return (
-    <div
-      className="w-10 h-10 rounded-[14px] flex items-center justify-center text-xs font-bold text-white shadow-sm flex-shrink-0"
-      style={{ backgroundColor: color || '#64748b' }}
-    >
-      {initials}
-    </div>
-  )
-}
+import BankLogo from '@/components/BankLogo'
 
 function HomeContent() {
   const { user, loading: authLoading } = useAuth()
@@ -861,7 +850,7 @@ function HomeContent() {
                 className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <BankInitials color={acc.color} name={acc.name} />
+                  <BankLogo color={acc.color} name={acc.name} size="md" />
                   <div>
                     <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">
                       {acc.name}
