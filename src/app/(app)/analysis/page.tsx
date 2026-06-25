@@ -15,7 +15,8 @@ import {
   Tag,
   SlidersHorizontal,
   X,
-  Download
+  Download,
+  FileText
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -57,11 +58,25 @@ function AnalysisContent() {
     maiorPeso: { name: '', percent: '0' }
   })
 
+  // Estados para os filtros
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [filterAccount, setFilterAccount] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+
+    // Carregar contas e categorias para os filtros
+    const [{ data: accData }, { data: catData }] = await Promise.all([
+      supabase.from('accounts').select('id, name').match({ user_id: user.id, context }),
+      supabase.from('categories').select('id, name').match({ user_id: user.id, context })
+    ])
+    setAccounts(Array.isArray(accData) ? accData : [])
+    setCategories(Array.isArray(catData) ? catData : [])
 
     const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
     const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')
@@ -77,7 +92,15 @@ function AnalysisContent() {
 
     const currentStart = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    const currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
+    let currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
+
+    // Aplicar filtros
+    if (filterAccount) {
+      currentTxs = currentTxs.filter(t => t.account_id === filterAccount)
+    }
+    if (filterCategory) {
+      currentTxs = currentTxs.filter(t => t.category_id === filterCategory)
+    }
 
     const income = currentTxs
       .filter(t => t.type === 'income' && t.status === 'done')
@@ -222,7 +245,7 @@ function AnalysisContent() {
     })
 
     setLoading(false)
-  }, [user, context, currentDate])
+  }, [user, context, currentDate, filterAccount, filterCategory])
 
   useEffect(() => {
     loadData()
@@ -241,6 +264,20 @@ function AnalysisContent() {
       `/api/export-analysis?userId=${user.id}&context=${context}&range=${range}`,
       '_blank'
     )
+  }
+
+  const handleExportPDF = (range: string) => {
+    setShowExportMenu(false)
+    if (!user) return
+    window.open(
+      `/api/export-pdf?userId=${user.id}&context=${context}&range=${range}`,
+      '_blank'
+    )
+  }
+
+  const handleApplyFilters = () => {
+    setShowFilterDrawer(false)
+    loadData()
   }
 
   return (
@@ -291,7 +328,23 @@ function AnalysisContent() {
                     onClick={() => handleExport(opt.key)}
                     className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
-                    {opt.label}
+                    CSV {opt.label}
+                  </button>
+                ))}
+                <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
+                {[
+                  { key: '7', label: '7 dias' },
+                  { key: '14', label: '14 dias' },
+                  { key: '30', label: '30 dias' },
+                  { key: 'total', label: 'Todo período' }
+                ].map(opt => (
+                  <button
+                    key={`pdf-${opt.key}`}
+                    onClick={() => handleExportPDF(opt.key)}
+                    className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <FileText size={14} className="text-teal-600" />
+                    PDF {opt.label}
                   </button>
                 ))}
               </div>
@@ -710,19 +763,36 @@ function AnalysisContent() {
                 <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
                   Conta
                 </label>
-                <select className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200">
+                <select
+                  value={filterAccount}
+                  onChange={(e) => setFilterAccount(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                >
                   <option value="">Todas as contas</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
                   Categoria
                 </label>
-                <select className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200">
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                >
                   <option value="">Todas as categorias</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
                 </select>
               </div>
-              <button className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold">
+              <button
+                onClick={handleApplyFilters}
+                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold"
+              >
                 Aplicar Filtros
               </button>
             </div>
