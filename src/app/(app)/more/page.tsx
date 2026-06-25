@@ -505,7 +505,7 @@ export default function MorePage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-700 mb-6 overflow-hidden">
         <SectionTitle>Acompanhar</SectionTitle>
-        <MenuItem iconName="repeat" label="Recorrências" href="/subscriptions" />
+        <MenuItem iconName="repeat" label="Assinaturas" href="/subscriptions" />
         <MenuItem
           iconName="file-text"
           label="Financiamentos"
