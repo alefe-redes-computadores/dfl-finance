@@ -97,7 +97,42 @@ export default function CategoryResult({ filters, onClose }: Props) {
   useEffect(() => { loadData() }, [loadData])
 
   const handleExportPDF = () => {
-    alert('Exportação PDF em breve')
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const tableRows = data.map(d => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#059669;">${formatCurrency(d.income)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626;">${formatCurrency(d.expense)}</td>
+        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d.balance >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d.balance)}</td>
+      </tr>
+    `).join('')
+
+    const html = `
+      <html>
+        <head>
+          <title>Resultado por Categoria - DFL Finance</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
+            h2 { color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th { padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px; text-transform: uppercase; color: #64748b; background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Resultado por Categoria</h2>
+          <table>
+            <thead><tr><th>Categoria</th><th style="text-align:right">Receitas</th><th style="text-align:right">Despesas</th><th style="text-align:right">Saldo</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+          <p style="margin-top:20px;font-size:11px;color:#94a3b8;">DFL Finance • ${new Date().toLocaleDateString('pt-BR')}</p>
+        </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.print()
   }
 
   const handleExportCSV = () => {
