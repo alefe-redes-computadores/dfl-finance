@@ -16,7 +16,7 @@ export default function CardExpensePage() {
   const { user } = useAuth()
   
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   const [cards, setCards] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
@@ -78,18 +78,19 @@ export default function CardExpensePage() {
   }
 
   const handleSave = async () => {
+    if (isSubmitting) return
     if (!user?.id) {
-        alert("Sessão expirada. Faça login novamente.")
-        return
+      alert("Sessão expirada. Faça login novamente.")
+      return
     }
-
     if (!creditCardId) {
-        alert("Por favor, selecione um cartão de crédito.")
-        return
+      alert("Por favor, selecione um cartão de crédito.")
+      return
     }
 
-    setSaving(true)
+    setIsSubmitting(true)
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.')) || 0;
+    const idempotencyKey = crypto.randomUUID()
     
     const parcelasTexto = installments > 1 ? `[Parcelado em ${installments}x] ` : '';
     const finalNotes = `${parcelasTexto}${notes}`.trim();
@@ -105,7 +106,8 @@ export default function CardExpensePage() {
       tag_id: tagId || null,
       notes: finalNotes || null,
       type: 'expense',
-      context: 'dfl'
+      context: 'dfl',
+      idempotency_key: idempotencyKey,
     }
 
     try {
@@ -113,10 +115,10 @@ export default function CardExpensePage() {
       if (error) throw error
       router.push('/home')
     } catch (err: any) {
-       console.error("Erro ao salvar:", err)
-       alert("Erro ao salvar despesa: " + err.message)
+      console.error("Erro ao salvar:", err)
+      alert("Erro ao salvar despesa: " + err.message)
     } finally {
-      setSaving(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -174,7 +176,6 @@ export default function CardExpensePage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] dark:shadow-none space-y-6 transition-colors duration-300">
         
-        {/* Cartão de Crédito - agora com modal estilizado */}
         <button onClick={() => setShowCardModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
           <CreditCard size={22} className="text-orange-400" />
           <div className="flex-1 flex flex-col text-left">
@@ -196,7 +197,6 @@ export default function CardExpensePage() {
           <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição da compra" className="flex-1 text-[15px] text-gray-800 dark:text-gray-200 outline-none bg-transparent placeholder:text-gray-300 dark:placeholder-gray-500" />
         </div>
 
-        {/* Categoria - agora com modal estilizado */}
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
           <Tag size={22} className="text-gray-400 dark:text-gray-500" />
           <div className="flex-1 flex flex-col text-left">
@@ -234,7 +234,6 @@ export default function CardExpensePage() {
               <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações" className="flex-1 text-[14px] text-gray-800 dark:text-gray-200 outline-none bg-transparent placeholder:text-gray-300 dark:placeholder-gray-500" />
             </div>
 
-            {/* Tags - agora com modal estilizado */}
             <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
               <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
               <div className="flex-1 flex flex-col text-left">
@@ -249,14 +248,13 @@ export default function CardExpensePage() {
 
       </div>
 
-      {/* Botão de Salvar Flutuante */}
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
         <button 
           onClick={handleSave}
-          disabled={saving}
+          disabled={isSubmitting}
           className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-orange-600 transition-colors"
         >
-          {saving ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
+          {isSubmitting ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
         </button>
       </div>
 
