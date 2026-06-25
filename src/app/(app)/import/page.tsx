@@ -24,7 +24,6 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-// Função real de OCR usando a API do Google Vision
 async function processOCR(file: File): Promise<{
   amount: string
   date: string
@@ -46,7 +45,6 @@ async function processOCR(file: File): Promise<{
   const result = await response.json()
   const { amount, date, description, rawText } = result.data
 
-  // Formatar data de dd/mm/yyyy para yyyy-MM-dd
   let formattedDate = format(new Date(), 'yyyy-MM-dd')
   if (date) {
     const parts = date.split('/')
@@ -55,7 +53,6 @@ async function processOCR(file: File): Promise<{
     }
   }
 
-  // Formatar valor (já vem como string com vírgula)
   const formattedAmount = amount || '0,00'
 
   return {
@@ -83,6 +80,7 @@ function ImportContent() {
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (selectedFile: File | null) => {
@@ -111,9 +109,9 @@ function ImportContent() {
   }
 
   const handleSave = async () => {
+    if (isSubmitting) return
     if (!user?.id) return
 
-    // Validação
     const newErrors: Record<string, string> = {}
     const rawAmount = parseFloat(formData.amount.replace(',', '.')) || 0
     if (rawAmount <= 0) newErrors.amount = 'Valor inválido'
@@ -123,9 +121,10 @@ function ImportContent() {
       return
     }
 
-    setLoading(true)
+    setIsSubmitting(true)
     setStep('saving')
 
+    const idempotencyKey = crypto.randomUUID()
     const payload = {
       user_id: user.id,
       amount: rawAmount,
@@ -137,6 +136,7 @@ function ImportContent() {
       credit_card_id: formData.credit_card_id || null,
       notes: formData.notes || null,
       context,
+      idempotency_key: idempotencyKey,
     }
 
     const { error } = await supabase.from('transactions').insert([payload])
@@ -146,7 +146,7 @@ function ImportContent() {
     } else {
       router.push('/home')
     }
-    setLoading(false)
+    setIsSubmitting(false)
   }
 
   const handleReset = () => {
@@ -166,7 +166,6 @@ function ImportContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -219,7 +218,6 @@ function ImportContent() {
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Revisar comprovante</h3>
             
-            {/* Valor */}
             <div className="mb-4">
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor</label>
               <div className={`flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 ${errors.amount ? 'border border-red-400' : ''}`}>
@@ -247,7 +245,6 @@ function ImportContent() {
               {errors.amount && <p className="text-red-500 text-[10px] mt-1">{errors.amount}</p>}
             </div>
 
-            {/* Data */}
             <div className="mb-4">
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Data</label>
               <div className={`flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 ${errors.date ? 'border border-red-400' : ''}`}>
@@ -262,7 +259,6 @@ function ImportContent() {
               {errors.date && <p className="text-red-500 text-[10px] mt-1">{errors.date}</p>}
             </div>
 
-            {/* Descrição */}
             <div className="mb-4">
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Descrição</label>
               <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
@@ -277,7 +273,6 @@ function ImportContent() {
               </div>
             </div>
 
-            {/* Notas (estabelecimento) */}
             <div className="mb-4">
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Estabelecimento</label>
               <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
@@ -301,10 +296,10 @@ function ImportContent() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={loading}
+                disabled={isSubmitting}
                 className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50"
               >
-                {loading ? 'Salvando...' : 'Confirmar'}
+                {isSubmitting ? 'Salvando...' : 'Confirmar'}
               </button>
             </div>
           </div>
