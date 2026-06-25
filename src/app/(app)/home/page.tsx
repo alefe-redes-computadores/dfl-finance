@@ -63,6 +63,7 @@ function HomeContent() {
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
 
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
@@ -73,6 +74,12 @@ function HomeContent() {
     if (val < 0) return 'text-red-500 font-bold'
     return 'text-gray-800 dark:text-gray-200 font-bold'
   }
+
+  // Carregar preferência de notificações
+  useEffect(() => {
+    const saved = localStorage.getItem('dfl_notifications_enabled')
+    setNotificationsEnabled(saved !== 'false')
+  }, [])
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -474,11 +481,13 @@ function HomeContent() {
             isSyncing={isSyncing}
             onSync={syncQueue}
           />
-          <NotificationBell
-            count={totalNotifications}
-            hasCritical={criticalCount > 0}
-            onClick={() => setShowNotifications(true)}
-          />
+          {notificationsEnabled && (
+            <NotificationBell
+              count={totalNotifications}
+              hasCritical={criticalCount > 0}
+              onClick={() => setShowNotifications(true)}
+            />
+          )}
           <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
             <button
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
@@ -1075,11 +1084,13 @@ function HomeContent() {
         </div>
       </div>
 
-      <NotificationCenter
-        isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        notifications={notifications}
-      />
+      {notificationsEnabled && (
+        <NotificationCenter
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+          notifications={notifications}
+        />
+      )}
     </div>
   )
 }
