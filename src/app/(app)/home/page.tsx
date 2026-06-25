@@ -59,6 +59,7 @@ function HomeContent() {
   const [budgets, setBudgets] = useState<any[]>([])
   const [subscriptions, setSubscriptions] = useState<any[]>([])
   const [debts, setDebts] = useState<any[]>([])
+  const [financings, setFinancings] = useState<any[]>([])
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -81,7 +82,7 @@ function HomeContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      const [{ data: transactions }, { data: subsData }, { data: debtsData }] = await Promise.all([
+      const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -99,11 +100,17 @@ function HomeContent() {
           .select('*')
           .match({ user_id: user.id, context: context })
           .in('status', ['pending', 'partial'])
-          .order('due_date', { ascending: true })
+          .order('due_date', { ascending: true }),
+        supabase
+          .from('financings')
+          .select('*')
+          .match({ user_id: user.id, context: context, status: 'active' })
+          .order('next_due_date', { ascending: true })
       ])
 
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
+      setFinancings(Array.isArray(financingsData) ? financingsData : [])
 
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
@@ -313,6 +320,32 @@ function HomeContent() {
         title: `Assinatura próxima: ${sub.name}`,
         subtitle: `Vence em ${days} dia(s) — ${formatCurrency(Number(sub.amount) || 0)}`,
         subId: sub.id,
+        severity: 'warning'
+      })
+    }
+  })
+
+  // Financiamentos
+  financings.forEach(fin => {
+    if (!fin.next_due_date) return
+    const daysUntilDue = differenceInDays(new Date(fin.next_due_date), today)
+
+    if (daysUntilDue < 0) {
+      notifications.push({
+        id: `financing-overdue-${fin.id}`,
+        type: 'financing_overdue',
+        title: `Parcela vencida: ${fin.name}`,
+        subtitle: `Venceu ${format(new Date(fin.next_due_date), "dd/MM")} — ${formatCurrency(Number(fin.installment_value))}`,
+        financingId: fin.id,
+        severity: 'critical'
+      })
+    } else if (daysUntilDue <= 3) {
+      notifications.push({
+        id: `financing-soon-${fin.id}`,
+        type: 'financing_soon',
+        title: `Parcela próxima: ${fin.name}`,
+        subtitle: `Vence em ${daysUntilDue} dia(s) — ${formatCurrency(Number(fin.installment_value))}`,
+        financingId: fin.id,
         severity: 'warning'
       })
     }
@@ -650,6 +683,60 @@ function HomeContent() {
               <div className="p-2 text-center">
                 <span className="text-[11px] text-teal-700 dark:text-teal-400 font-bold">
                   + {debts.length - 3} pessoa(s)
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* NOVO: Card "Financiamentos" */}
+      {financings.length > 0 && (
+        <div className="mb-8">
+          <div
+            className="flex justify-between items-center mb-3 px-1 cursor-pointer"
+            onClick={() => router.push('/financings')}
+          >
+            <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">
+              Financiamentos
+            </h3>
+            <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700 overflow-hidden p-2">
+            {financings.slice(0, 3).map(fin => {
+              const IconComp = getDynamicIcon(fin.icon || 'home')
+              const remaining = fin.total_installments - fin.current_installment + 1
+              const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), today) < 0
+
+              return (
+                <div
+                  key={fin.id}
+                  onClick={() => router.push(`/financings/${fin.id}`)}
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-[16px] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${fin.color}20`, color: fin.color }}>
+                      <IconComp size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{fin.name}</p>
+                      <p className={`text-[10px] font-bold ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {remaining} parcela(s) • {formatCurrency(Number(fin.installment_value))}/mês
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="w-16 bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                      <div className={`h-full rounded-full ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min((fin.current_installment / fin.total_installments) * 100, 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {financings.length > 3 && (
+              <div className="p-2 text-center">
+                <span className="text-[11px] text-teal-700 dark:text-teal-400 font-bold">
+                  + {financings.length - 3} financiamento(s)
                 </span>
               </div>
             )}
