@@ -39,36 +39,51 @@ export default function FinancingDetailPage() {
   const previewBalance = (financing?.outstanding_balance || 0) - abAmountNum
 
   const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
-    setLoading(true)
+  if (!id || !user?.id) {
+    console.log('loadData abortado:', { id, userId: user?.id })
+    return
+  }
+  setLoading(true)
+  console.log('Buscando financiamento:', { id, userId: user.id })
 
-    const { data: finData } = await supabase
-      .from('financings')
-      .select('*, accounts(name, color), categories(name, icon, color)')
-      .match({ id: id, user_id: user.id })
-      .single()
+  const { data: finData, error: finError } = await supabase
+    .from('financings')
+    .select('*, accounts(name, color), categories(name, icon, color)')
+    .match({ id: id, user_id: user.id })
+    .single()
 
-    if (finData) {
-      setFinancing(finData)
-      setAbAccountId(finData.account_id || '')
-    }
-
-    const { data: abData } = await supabase
-      .from('financing_abatements')
-      .select('*, accounts(name, color)')
-      .eq('financing_id', id)
-      .order('date', { ascending: false })
-
-    setAbatements(Array.isArray(abData) ? abData : [])
-
-    const { data: accData } = await supabase
-      .from('accounts')
-      .select('id, name, color, balance')
-      .match({ user_id: user.id, context: finData?.context || 'dfl' })
-
-    setAccounts(Array.isArray(accData) ? accData : [])
+  if (finError) {
+    console.error('Erro ao buscar financiamento:', finError)
     setLoading(false)
-  }, [id, user])
+    return
+  }
+
+  if (finData) {
+    console.log('Financiamento encontrado:', finData)
+    setFinancing(finData)
+    setAbAccountId(finData.account_id || '')
+  } else {
+    console.log('Nenhum financiamento retornado para id:', id)
+    setLoading(false)
+    return
+  }
+
+  const { data: abData } = await supabase
+    .from('financing_abatements')
+    .select('*, accounts(name, color)')
+    .eq('financing_id', id)
+    .order('date', { ascending: false })
+
+  setAbatements(Array.isArray(abData) ? abData : [])
+
+  const { data: accData } = await supabase
+    .from('accounts')
+    .select('id, name, color, balance')
+    .match({ user_id: user.id, context: finData?.context || 'dfl' })
+
+  setAccounts(Array.isArray(accData) ? accData : [])
+  setLoading(false)
+}, [id, user])
 
   useEffect(() => { loadData() }, [loadData])
 
