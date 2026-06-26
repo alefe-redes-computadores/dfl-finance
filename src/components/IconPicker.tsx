@@ -37,7 +37,7 @@ export default function IconPicker({ isOpen, onClose, selectedIcon, onSelect }: 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose}>
+    <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose}>
       <div 
         className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl flex flex-col h-[85vh] animate-slide-up" 
         onClick={e => e.stopPropagation()}
