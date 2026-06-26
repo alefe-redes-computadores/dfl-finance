@@ -281,7 +281,7 @@ export default function NotificationsPage() {
       read_at: new Date().toISOString()
     }, { onConflict: 'user_id,notification_id' })
 
-    setReadIds(prev => new Set([...prev, notif.id]))
+    setReadIds(prev => new Set(Array.from(prev)).add(notif.id))
 
     // Navegar
     if (notif.route) {
