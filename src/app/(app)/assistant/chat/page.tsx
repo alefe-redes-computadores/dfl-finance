@@ -199,17 +199,18 @@ function ChatContent() {
             <p className="text-sm text-gray-400 dark:text-gray-500 mb-6 max-w-xs">
               Tire dúvidas sobre suas finanças, peça análises e receba sugestões personalizadas.
             </p>
-            <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
+            {/* Grid de sugestões corrigida */}
+            <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
               {SUGGESTIONS.map((suggestion, i) => {
                 const IconComp = suggestion.icon
                 return (
                   <button
                     key={i}
                     onClick={() => handleSuggestionClick(suggestion.text)}
-                    className="flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 hover:border-teal-200 dark:hover:border-teal-800 transition-all shadow-sm text-left"
+                    className="flex items-start gap-2 px-3 py-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 hover:border-teal-200 dark:hover:border-teal-800 transition-all shadow-sm text-left h-full"
                   >
-                    <IconComp size={16} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
-                    <span className="leading-tight">{suggestion.text}</span>
+                    <IconComp size={16} className="text-teal-600 dark:text-teal-400 flex-shrink-0 mt-0.5" />
+                    <span className="leading-tight break-words">{suggestion.text}</span>
                   </button>
                 )
               })}
@@ -331,7 +332,6 @@ function ChatContent() {
     </div>
   )
 }
-
 
 export default function ChatPage() {
   return (
