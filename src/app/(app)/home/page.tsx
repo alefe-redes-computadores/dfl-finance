@@ -53,6 +53,8 @@ function HomeContent() {
   const [dataLoading, setDataLoading] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  // 🆕 NOVO: estado para contador de não lidas no sininho
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
@@ -64,7 +66,6 @@ function HomeContent() {
     return 'text-gray-800 dark:text-gray-200 font-bold'
   }
 
-  // Garantir que a data local não sofra deslocamento UTC
   const getLocalDateString = (date: Date) => {
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -404,29 +405,44 @@ function HomeContent() {
   const pendingExpensesList = recentTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
   if (pendingExpensesList.length > 0) {
     notifications.push({
-    id: 'pending-expenses',
-    type: 'pending_expense',
-    title: `${pendingExpensesList.length} despesa(s) pendente(s)`,
-    subtitle: `Total: ${formatCurrency(pendings.toPay)}`,
-    severity: 'info',
-    route: '/transactions?filter=expense&status=pending'
+      id: 'pending-expenses',
+      type: 'pending_expense',
+      title: `${pendingExpensesList.length} despesa(s) pendente(s)`,
+      subtitle: `Total: ${formatCurrency(pendings.toPay)}`,
+      severity: 'info',
+      route: '/transactions?filter=expense&status=pending'
     })
   }
 
   const pendingIncomesList = recentTransactions.filter(t => t.status === 'pending' && t.type === 'income')
   if (pendingIncomesList.length > 0) {
     notifications.push({
-    id: 'pending-incomes',
-    type: 'pending_income',
-    title: `${pendingIncomesList.length} receita(s) a receber`,
-    subtitle: `Total: ${formatCurrency(pendings.toReceive)}`,
-    severity: 'success',
-    route: '/transactions?filter=income&status=pending'
-  })
-}
+      id: 'pending-incomes',
+      type: 'pending_income',
+      title: `${pendingIncomesList.length} receita(s) a receber`,
+      subtitle: `Total: ${formatCurrency(pendings.toReceive)}`,
+      severity: 'success',
+      route: '/transactions?filter=income&status=pending'
+    })
+  }
+
+  // 🆕 Atualiza o contador de não lidas sempre que as notificações mudam
+  useEffect(() => {
+    const saved = localStorage.getItem('dfl_read_notifications')
+    if (saved) {
+      try {
+        const readIds = new Set(JSON.parse(saved))
+        const unread = notifications.filter(n => !readIds.has(n.id)).length
+        setUnreadNotifications(unread)
+      } catch {
+        setUnreadNotifications(notifications.length)
+      }
+    } else {
+      setUnreadNotifications(notifications.length)
+    }
+  }, [notifications])
 
   const criticalCount = notifications.filter(n => n.severity === 'critical').length
-  const totalNotifications = notifications.length
 
   if (authLoading || dataLoading) {
     return (
@@ -479,7 +495,7 @@ function HomeContent() {
           />
           {notificationsEnabled && (
             <NotificationBell
-              count={totalNotifications}
+              count={unreadNotifications}
               hasCritical={criticalCount > 0}
               onClick={() => setShowNotifications(true)}
             />
@@ -1077,11 +1093,13 @@ function HomeContent() {
         </div>
       </div>
 
+      {/* 🆕 NotificationCenter com callback de leitura */}
       {notificationsEnabled && (
         <NotificationCenter
           isOpen={showNotifications}
           onClose={() => setShowNotifications(false)}
           notifications={notifications}
+          onReadChange={(unread) => setUnreadNotifications(unread)}
         />
       )}
     </div>
