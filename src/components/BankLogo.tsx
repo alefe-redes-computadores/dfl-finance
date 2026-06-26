@@ -1,6 +1,6 @@
 'use client'
 
-import { getBankLogoSvg } from '@/lib/bankIcons'
+import { getBankLogoSvg } from '@/lib/BankIcons'
 
 interface BankLogoProps {
   color: string;
