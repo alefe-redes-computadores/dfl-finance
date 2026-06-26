@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { getBankLogoUrl } from '@/lib/bankIcons'
+import { getBankLogoSvg } from '@/lib/bankIcons'
 
 interface BankLogoProps {
   color: string;
@@ -10,8 +9,7 @@ interface BankLogoProps {
 }
 
 export default function BankLogo({ color, name, size = 'md' }: BankLogoProps) {
-  const logoUrl = getBankLogoUrl(name);
-  const [imgFailed, setImgFailed] = useState(false);
+  const logoSvg = getBankLogoSvg(name);
 
   const sizeClasses = {
     sm: 'w-6 h-6 rounded-lg',
@@ -29,19 +27,13 @@ export default function BankLogo({ color, name, size = 'md' }: BankLogoProps) {
     ? name.substring(0, 2).toUpperCase()
     : '??';
 
-  // Se temos URL e a imagem ainda não falhou
-  if (logoUrl && !imgFailed) {
+  // Se encontrou logo SVG
+  if (logoSvg) {
     return (
       <div
-        className={`${sizeClasses[size]} flex items-center justify-center overflow-hidden bg-white border border-gray-100 dark:border-slate-600 shadow-sm flex-shrink-0`}
-      >
-        <img
-          src={logoUrl}
-          alt={name}
-          className="w-full h-full object-contain p-0.5"
-          onError={() => setImgFailed(true)}
-        />
-      </div>
+        className={`${sizeClasses[size]} flex items-center justify-center overflow-hidden shadow-sm flex-shrink-0`}
+        dangerouslySetInnerHTML={{ __html: logoSvg }}
+      />
     );
   }
 
