@@ -20,7 +20,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 px-1 tracking-wider">
+    <h4 className="text-[11px] font-bold text-gray-400 dark:text-gray-300 uppercase mb-1 px-5 pt-4 pb-2 tracking-widest">
       {children}
     </h4>
   )
@@ -55,26 +55,26 @@ function MenuItem({
 
   const content = (
     <div
-      className={`flex items-center justify-between p-4 border-b border-gray-50 dark:border-slate-700 last:border-0 transition-colors ${
+      className={`flex items-center justify-between px-5 py-4 border-b border-gray-50 dark:border-slate-700/50 last:border-0 transition-colors ${
         disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer'
+          : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer'
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-teal-700 dark:text-teal-400">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-teal-700 dark:text-teal-400 flex-shrink-0">
           <IconComp size={18} />
         </div>
-        <span className="font-medium text-sm text-gray-700 dark:text-gray-200">
+        <span className="font-medium text-[14px] text-gray-800 dark:text-gray-200 truncate">
           {label}
         </span>
         {badge && (
-          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400">
+          <span className="ml-auto mr-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 flex-shrink-0">
             {badge}
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
         {disabled ? (
           <Lock size={14} className="text-gray-400 dark:text-gray-500" />
         ) : (
@@ -158,7 +158,7 @@ function QuickSettingsModal({
               )}
               <div>
                 <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Modo escuro</p>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500">{theme === 'dark' ? 'Ativado' : 'Desativado'}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{theme === 'dark' ? 'Ativado' : 'Desativado'}</p>
               </div>
             </div>
             <button
@@ -179,7 +179,7 @@ function QuickSettingsModal({
               )}
               <div>
                 <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Notificações</p>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500">{notificationsEnabled ? 'Ativadas' : 'Desativadas'}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{notificationsEnabled ? 'Ativadas' : 'Desativadas'}</p>
               </div>
             </div>
             <button
@@ -222,7 +222,7 @@ export default function MorePage() {
 
   useEffect(() => {
     const saved = localStorage.getItem('dfl_notifications_enabled')
-    setNotificationsEnabled(saved !== 'false') // padrão: true
+    setNotificationsEnabled(saved !== 'false')
   }, [])
 
   const toggleNotifications = () => {
@@ -255,7 +255,7 @@ export default function MorePage() {
     }
   }
 
-    const handleCropAndUpload = async () => {
+  const handleCropAndUpload = async () => {
     if (!canvasRef.current) return
     setUploading(true)
 
@@ -369,7 +369,7 @@ export default function MorePage() {
               Exportar Dados
             </h3>
 
-            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-300 uppercase mb-2">
               Contexto
             </p>
             <div className="flex gap-2 mb-4">
@@ -388,7 +388,7 @@ export default function MorePage() {
               ))}
             </div>
 
-            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-300 uppercase mb-2">
               Período
             </p>
             <div className="flex gap-2 mb-4">
@@ -425,7 +425,7 @@ export default function MorePage() {
                   <p className="font-bold text-sm text-gray-800 dark:text-gray-200">
                     Extrato de Transações
                   </p>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
                     Lista completa de transações (CSV)
                   </p>
                 </div>
@@ -442,7 +442,7 @@ export default function MorePage() {
                   <p className="font-bold text-sm text-gray-800 dark:text-gray-200">
                     Resumo por Categoria
                   </p>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
                     Gastos agrupados por categoria (CSV)
                   </p>
                 </div>
@@ -550,7 +550,7 @@ export default function MorePage() {
           </label>
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {isEditing ? (
             <div className="flex items-center gap-2 mb-1">
               <input
@@ -568,13 +568,13 @@ export default function MorePage() {
             </div>
           ) : (
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100">
+              <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100 truncate">
                 {name || 'Usuário'}
               </h2>
               {!isGoogleLogin && (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="text-gray-400 dark:text-gray-500 hover:text-teal-700 transition-colors"
+                  className="text-gray-400 dark:text-gray-500 hover:text-teal-700 transition-colors flex-shrink-0"
                 >
                   <Edit2 size={14} />
                 </button>
