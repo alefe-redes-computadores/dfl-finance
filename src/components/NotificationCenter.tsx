@@ -1,11 +1,12 @@
 'use client'
 
-import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react'
+import { useState } from 'react'
+import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Notification {
   id: string
-  type: 'invoice_overdue' | 'invoice_soon' | 'subscription_overdue' | 'subscription_soon' | 'budget_over' | 'budget_warning' | 'pending_expense' | 'pending_income' | 'financing_overdue' | 'financing_soon' | 'debt_overdue' | 'debt_soon'
+  type: string
   title: string
   subtitle: string
   cardId?: string
@@ -18,32 +19,120 @@ interface Notification {
   severity: 'critical' | 'warning' | 'info' | 'success'
 }
 
+interface NotificationGroup {
+  key: string
+  title: string
+  subtitle: string
+  route: string
+  severity: 'critical' | 'warning' | 'info' | 'success'
+  count: number
+  items: Notification[]
+}
+
 interface NotificationCenterProps {
   isOpen: boolean
   onClose: () => void
   notifications: Notification[]
 }
 
+function groupNotifications(notifs: Notification[]): NotificationGroup[] {
+  const groups: Record<string, NotificationGroup> = {}
+
+  notifs.forEach(n => {
+    // Agrupa por tipo similar
+    let key = n.id.split('-')[0] // pega o prefixo (invoice, sub, budget, etc.)
+    
+    // Se tem rota, agrupa pela rota
+    if (n.route) {
+      key = n.route
+    }
+    // Se tem ID específico, mantém individual
+    if (n.cardId || n.budgetId || n.financingId || n.debtId) {
+      key = n.id
+    }
+
+    if (!groups[key]) {
+      groups[key] = {
+        key,
+        title: n.title,
+        subtitle: n.subtitle,
+        route: n.route || '',
+        severity: n.severity,
+        count: 0,
+        items: []
+      }
+    }
+    groups[key].count++
+    groups[key].items.push(n)
+  })
+
+  return Object.values(groups)
+}
+
 export default function NotificationCenter({ isOpen, onClose, notifications }: NotificationCenterProps) {
   const router = useRouter()
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
 
   if (!isOpen) return null
 
+  const grouped = groupNotifications(notifications)
+  
+  // Contagem de não lidos
+  const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
+
+  const handleClick = (group: NotificationGroup) => {
+    // Marca todos do grupo como lidos
+    const newRead = new Set(readIds)
+    group.items.forEach(n => newRead.add(n.id))
+    setReadIds(newRead)
+
+    // Se é grupo com vários itens, vai para a rota geral
+    if (group.route) {
+      router.push(group.route)
+    } 
+    // Se tem item único com ID específico
+    else if (group.items.length === 1) {
+      const notif = group.items[0]
+      if (notif.cardId) router.push(`/cards/${notif.cardId}`)
+      else if (notif.budgetId) router.push(`/budgets/${notif.budgetId}`)
+      else if (notif.financingId) router.push(`/financings/${notif.financingId}`)
+      else if (notif.debtId) router.push(`/debts/${notif.debtId}`)
+      else if (notif.subId) router.push('/subscriptions')
+    }
+    
+    onClose()
+  }
+
+  const handleDirectClick = (group: NotificationGroup, e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Mesmo comportamento do clique principal
+    handleClick(group)
+  }
+
+  const markAllAsRead = () => {
+    const newRead = new Set<string>()
+    notifications.forEach(n => newRead.add(n.id))
+    setReadIds(newRead)
+  }
+
   const getIcon = (type: string) => {
-    switch (type) {
-      case 'invoice_overdue': return <CreditCard size={18} className="text-red-500" />
-      case 'invoice_soon': return <CreditCard size={18} className="text-orange-500" />
-      case 'subscription_overdue': return <Repeat size={18} className="text-red-500" />
-      case 'subscription_soon': return <Repeat size={18} className="text-orange-500" />
-      case 'budget_over': return <Target size={18} className="text-red-500" />
-      case 'budget_warning': return <Target size={18} className="text-orange-500" />
-      case 'pending_expense': return <Clock size={18} className="text-blue-500" />
-      case 'pending_income': return <CheckCircle size={18} className="text-emerald-500" />
-      case 'financing_overdue': return <AlertTriangle size={18} className="text-red-500" />
-      case 'financing_soon': return <AlertTriangle size={18} className="text-orange-500" />
-      case 'debt_overdue': return <AlertTriangle size={18} className="text-red-500" />
-      case 'debt_soon': return <AlertTriangle size={18} className="text-orange-500" />
-      default: return <Bell size={18} className="text-gray-400" />
+    if (type.includes('invoice')) return <CreditCard size={18} />
+    if (type.includes('subscription')) return <Repeat size={18} />
+    if (type.includes('budget')) return <Target size={18} />
+    if (type.includes('pending_expense')) return <Clock size={18} />
+    if (type.includes('pending_income')) return <CheckCircle size={18} />
+    if (type.includes('financing')) return <AlertTriangle size={18} />
+    if (type.includes('debt')) return <AlertTriangle size={18} />
+    return <Bell size={18} />
+  }
+
+  const getIconColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'text-red-500'
+      case 'warning': return 'text-orange-500'
+      case 'info': return 'text-blue-500'
+      case 'success': return 'text-emerald-500'
+      default: return 'text-gray-400'
     }
   }
 
@@ -57,33 +146,8 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
     }
   }
 
-  const handleClick = (notif: Notification) => {
-    // Se tem rota direta, usa ela primeiro
-    if (notif.route) {
-      router.push(notif.route)
-      onClose()
-      return
-    }
-    // Navegação por ID específico
-    if (notif.cardId) {
-      router.push(`/cards/${notif.cardId}`)
-    } else if (notif.budgetId) {
-      router.push(`/budgets/${notif.budgetId}`)
-    } else if (notif.txId) {
-      router.push(`/transactions/${notif.txId}`)
-    } else if (notif.subId) {
-      router.push('/subscriptions')
-    } else if (notif.financingId) {
-      router.push(`/financings/${notif.financingId}`)
-    } else if (notif.debtId) {
-      router.push(`/debts/${notif.debtId}`)
-    }
-    onClose()
-  }
-
-  const criticalCount = notifications.filter(n => n.severity === 'critical').length
-  const warningCount = notifications.filter(n => n.severity === 'warning').length
-  const infoCount = notifications.filter(n => n.severity === 'info' || n.severity === 'success').length
+  const criticalCount = grouped.filter(g => g.severity === 'critical').length
+  const warningCount = grouped.filter(g => g.severity === 'warning').length
 
   return (
     <>
@@ -99,17 +163,28 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
               <div>
                 <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Notificações</h3>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                  {notifications.length} alerta{notifications.length !== 1 ? 's' : ''}
+                  {unreadCount} não lida{unreadCount !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full">
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button 
+                  onClick={markAllAsRead}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-full text-xs font-bold hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                >
+                  <Check size={14} />
+                  Marcar todas
+                </button>
+              )}
+              <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Resumo rápido */}
-          <div className="grid grid-cols-3 gap-2 px-5 py-3 border-b border-gray-50 dark:border-slate-700">
+          <div className="grid grid-cols-2 gap-2 px-5 py-3 border-b border-gray-50 dark:border-slate-700">
             <div className="text-center">
               <span className="text-[11px] font-bold text-red-500">{criticalCount}</span>
               <p className="text-[9px] text-gray-400 dark:text-gray-500">Críticos</p>
@@ -118,15 +193,11 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
               <span className="text-[11px] font-bold text-orange-500">{warningCount}</span>
               <p className="text-[9px] text-gray-400 dark:text-gray-500">Atenção</p>
             </div>
-            <div className="text-center">
-              <span className="text-[11px] font-bold text-blue-500">{infoCount}</span>
-              <p className="text-[9px] text-gray-400 dark:text-gray-500">Informativos</p>
-            </div>
           </div>
 
-          {/* Lista de notificações */}
+          {/* Lista de notificações agrupadas */}
           <div className="max-h-[50vh] overflow-y-auto">
-            {notifications.length === 0 ? (
+            {grouped.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
                   <CheckCircle size={28} className="text-emerald-500" />
@@ -136,22 +207,45 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
               </div>
             ) : (
               <div className="divide-y divide-gray-50 dark:divide-slate-700">
-                {notifications.map(notif => (
-                  <button
-                    key={notif.id}
-                    onClick={() => handleClick(notif)}
-                    className={`w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${getBgColor(notif.severity)}`}
-                  >
-                    <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center shadow-sm">
-                      {getIcon(notif.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{notif.title}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{notif.subtitle}</p>
-                    </div>
-                    <ArrowRight size={16} className="text-gray-300 dark:text-gray-600" />
-                  </button>
-                ))}
+                {grouped.map(group => {
+                  const isRead = group.items.every(n => readIds.has(n.id))
+                  
+                  return (
+                    <button
+                      key={group.key}
+                      onClick={() => handleClick(group)}
+                      className={`w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${getBgColor(group.severity)} ${isRead ? 'opacity-60' : ''}`}
+                    >
+                      <div className="relative w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center shadow-sm">
+                        <span className={getIconColor(group.severity)}>
+                          {getIcon(group.items[0]?.type || '')}
+                        </span>
+                        {!isRead && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-teal-500 rounded-full border-2 border-white dark:border-slate-700" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
+                          {group.title}
+                          {group.count > 1 && (
+                            <span className="ml-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                              ({group.count})
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{group.subtitle}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {group.count > 1 && (
+                          <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
+                            +{group.count - 1}
+                          </span>
+                        )}
+                        <ArrowRight size={16} className="text-gray-300 dark:text-gray-600" />
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
