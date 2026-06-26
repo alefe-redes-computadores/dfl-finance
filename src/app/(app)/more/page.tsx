@@ -9,7 +9,7 @@ import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
   Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff,
   Shield, Zap, TrendingUp, Target, PiggyBank, CreditCard, Wallet,
-  Tags, Hash, Repeat, FileText, Users, BarChart3, Image as ImageIcon, FileSpreadsheet
+  Tags, Hash, Repeat, FileText, Users, BarChart3, ImageIcon, FileSpreadsheet
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -620,6 +620,7 @@ export default function MorePage() {
         <SectionTitle>Ferramentas</SectionTitle>
         <MenuItem iconName="bot" label="Assistente IA" href="/assistant" />
         <MenuItem iconName="image" label="Importar comprovante" href="/import" />
+        <MenuItem iconName="image" label="Galeria de Comprovantes" href="/receipts" />
         <MenuItem iconName="file-spreadsheet" label="Importar extrato CSV" href="/import-csv" />
         <MenuItem
           iconName="download"
