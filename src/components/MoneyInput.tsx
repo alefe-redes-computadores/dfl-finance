@@ -27,13 +27,27 @@ export default function MoneyInput({
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       let raw = e.target.value.replace(/\D/g, '')
-      if (!raw || raw === '0') {
+      
+      // Se o campo ficou vazio ou só tem zeros
+      if (!raw || raw === '0' || raw === '00') {
         setDisplayValue('0,00')
         onChange(0, '0,00')
         return
       }
-      // Remove zeros à esquerda
-      raw = raw.replace(/^0+/, '') || '0'
+      
+      // Remove zeros à esquerda, mas mantém pelo menos 1 dígito para centavos
+      raw = raw.replace(/^0+/, '')
+      
+      // Garante que temos pelo menos 3 dígitos (1 para reais + 2 para centavos)
+      // Se o usuário digitou "5", transforma em "005" = R$ 0,05
+      // Se o usuário digitou "50", transforma em "050" = R$ 0,50
+      // Se o usuário digitou "500", fica "500" = R$ 5,00
+      if (raw.length === 1) {
+        raw = '00' + raw  // "5" → "005" = R$ 0,05
+      } else if (raw.length === 2) {
+        raw = '0' + raw   // "50" → "050" = R$ 0,50
+      }
+      // Se raw.length >= 3, já está no formato correto
 
       const numValue = parseFloat(raw) / 100
       const formatted = new Intl.NumberFormat('pt-BR', {
