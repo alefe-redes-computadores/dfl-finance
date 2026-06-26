@@ -9,11 +9,12 @@ import {
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  ArrowLeftRight as ArrowLeftRightIcon, Wallet
+  ArrowLeftRight as ArrowLeftRightIcon, Wallet, Search, Building, Trash2
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import BankLogo from '@/components/BankLogo'
+import { BANK_LIST } from '@/lib/BankIcons'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -44,10 +45,16 @@ export default function AccountStatementPage() {
   const [showBalanceModal, setShowBalanceModal] = useState(false)
   const [showDestAccModal, setShowDestAccModal] = useState(false)
 
+  // Estados do modal de edição
   const [name, setName] = useState('')
   const [color, setColor] = useState(DEFAULT_COLORS[0])
   const [displayBalance, setDisplayBalance] = useState('')
   const [balanceNum, setBalanceNum] = useState(0)
+  const [allowNegative, setAllowNegative] = useState(false)
+  const [bankSearch, setBankSearch] = useState('')
+  const [filteredBanks, setFilteredBanks] = useState<typeof BANK_LIST>([])
+  const [showBankDropdown, setShowBankDropdown] = useState(false)
+  const [selectedBank, setSelectedBank] = useState<typeof BANK_LIST[0] | null>(null)
 
   const [adjustBalanceDisplay, setAdjustBalanceDisplay] = useState('')
 
@@ -126,10 +133,37 @@ export default function AccountStatementPage() {
     setTransferAmountDisplay(formatMoneyInput(e.target.value).display)
   }
 
+  const handleBankSearch = (value: string) => {
+    setBankSearch(value)
+    if (value.trim().length === 0) {
+      setFilteredBanks([])
+      setShowBankDropdown(false)
+      return
+    }
+    const filtered = BANK_LIST.filter(b =>
+      b.name.toLowerCase().includes(value.toLowerCase())
+    )
+    setFilteredBanks(filtered)
+    setShowBankDropdown(filtered.length > 0)
+  }
+
+  const selectBank = (bank: typeof BANK_LIST[0]) => {
+    setName(bank.name)
+    setColor(bank.color)
+    setSelectedBank(bank)
+    setBankSearch('')
+    setFilteredBanks([])
+    setShowBankDropdown(false)
+  }
+
   const handleSaveAccountInfo = async () => {
     if (!name.trim() || !user) return
     setActionLoading(true)
-    await supabase.from('accounts').update({ name: name.trim(), balance: balanceNum, color }).eq('id', id)
+    await supabase.from('accounts').update({ 
+      name: name.trim(), 
+      color,
+      allow_negative: allowNegative 
+    }).eq('id', id)
     setShowForm(false)
     router.refresh()
     loadData()
@@ -200,9 +234,11 @@ export default function AccountStatementPage() {
     if (!account) return
     setName(account.name)
     setColor(account.color)
-    const safeBalance = Number(account.balance) || 0
-    setBalanceNum(safeBalance)
-    setDisplayBalance(safeBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+    setAllowNegative(account.allow_negative || false)
+    setSelectedBank(null)
+    setBankSearch('')
+    setFilteredBanks([])
+    setShowBankDropdown(false)
     setShowForm(true)
   }
 
@@ -238,7 +274,7 @@ export default function AccountStatementPage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border-b border-gray-50 dark:border-slate-700 mb-6">
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-sm border-b border-gray-50 dark:border-slate-700 mb-6">
         <BankLogo color={account.color || '#f97316'} name={account.name} size="lg" />
         <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-4">{account.name}</p>
         <p className="text-[32px] font-light text-gray-800 dark:text-gray-100 mb-6">{formatCurrency(safeBalance)}</p>
@@ -269,7 +305,7 @@ export default function AccountStatementPage() {
              <p className="text-sm text-gray-400 dark:text-gray-500">Nenhuma movimentação neste mês.</p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden py-2">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700 overflow-hidden py-2">
             {transactions.map((tx, index) => {
                const isTransferIn = tx.type === 'transfer' && tx.description?.includes('de ');
                const isIncomeVisual = tx.type === 'income' || isTransferIn;
@@ -314,28 +350,130 @@ export default function AccountStatementPage() {
         )}
       </div>
 
-      {/* MODAL 1: EDITAR CONTA */}
+      {/* MODAL 1: EDITAR CONTA - COMPLETO E BONITO */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between mb-6">
-              <h2 className="font-bold text-xl text-gray-800 dark:text-gray-100">Editar Conta</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"><X size={20}/></button>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            
+            {/* Cabeçalho com preview */}
+            <div className="flex items-center gap-4 mb-6">
+              {selectedBank ? (
+                <BankLogo color={selectedBank.color} name={selectedBank.name} size="lg" />
+              ) : (
+                <BankLogo color={color} name={name || account?.name || '??'} size="lg" />
+              )}
+              <div className="flex-1">
+                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Editar Conta</h2>
+                <p className="text-xs text-gray-400 dark:text-gray-500">Altere nome, cor e configurações</p>
+              </div>
+              <button onClick={() => setShowForm(false)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 self-start">
+                <X size={20}/>
+              </button>
             </div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da Conta" className="w-full bg-gray-50 dark:bg-slate-700 p-4 rounded-[16px] mb-4 font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-600 border-2 border-transparent transition-colors" />
-            <div className="flex flex-wrap gap-3 mb-8 items-center justify-center">
-              {DEFAULT_COLORS.map(c => (
-                <button key={c} onClick={() => setColor(c)} className={`w-10 h-10 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: c }} />
-              ))}
+
+            {/* Buscar Banco */}
+            <div className="relative mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                Buscar banco
+              </label>
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-100 dark:border-slate-600 overflow-hidden">
+                <Search size={16} className="ml-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                <input
+                  value={bankSearch}
+                  onChange={e => handleBankSearch(e.target.value)}
+                  onFocus={() => {
+                    if (filteredBanks.length > 0) setShowBankDropdown(true)
+                  }}
+                  placeholder="Digite o nome do banco..."
+                  className="w-full bg-transparent py-3 px-3 text-sm outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
+                />
+                {bankSearch && (
+                  <button
+                    onClick={() => {
+                      setBankSearch('')
+                      setFilteredBanks([])
+                      setShowBankDropdown(false)
+                    }}
+                    className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {showBankDropdown && filteredBanks.length > 0 && (
+                <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl mt-1 shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {filteredBanks.map(bank => (
+                    <button
+                      key={bank.key}
+                      onClick={() => selectBank(bank)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0"
+                    >
+                      <BankLogo color={bank.color} name={bank.name} size="sm" />
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{bank.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <button onClick={handleSaveAccountInfo} disabled={actionLoading} className="w-full bg-teal-700 hover:bg-teal-800 transition-colors text-white py-4 rounded-[16px] font-bold flex justify-center items-center shadow-lg shadow-teal-700/20">
-              {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Alterações'}
+
+            {/* Nome */}
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                Nome da conta
+              </label>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Ex: Minha Conta Principal"
+                className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors"
+              />
+            </div>
+
+            {/* Cor */}
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
+              <div className="flex flex-wrap gap-3">
+                {DEFAULT_COLORS.map(c => (
+                  <button 
+                    key={c} 
+                    onClick={() => setColor(c)} 
+                    className="w-9 h-9 rounded-full transition-all duration-200" 
+                    style={{ 
+                      backgroundColor: c,
+                      transform: color === c ? 'scale(1.2)' : 'scale(1)',
+                      boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none'
+                    }} 
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Cheque Especial */}
+            <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
+              <div>
+                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">Limite / Cheque especial</p>
+              </div>
+              <button
+                onClick={() => setAllowNegative(!allowNegative)}
+                className={`w-12 h-7 rounded-full relative transition-colors ${allowNegative ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}
+              >
+                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${allowNegative ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <button 
+              onClick={handleSaveAccountInfo} 
+              disabled={actionLoading || !name.trim()} 
+              className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center"
+            >
+              {actionLoading ? <Loader2 className="animate-spin" size={24} /> : 'Salvar Alterações'}
             </button>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: BALANÇA */}
+      {/* MODAL 2: BALANÇA (mantido igual) */}
       {showBalanceModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowBalanceModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
@@ -357,7 +495,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* MODAL 3: TRANSFERÊNCIA */}
+      {/* MODAL 3: TRANSFERÊNCIA (mantido igual) */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowTransferModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
@@ -396,7 +534,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* Modal de seleção de conta destino */}
+      {/* Modal de seleção de conta destino (mantido igual) */}
       {showDestAccModal && (
         <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowDestAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
