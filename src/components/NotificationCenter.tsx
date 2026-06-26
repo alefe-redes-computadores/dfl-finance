@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check } from 'lucide-react'
+import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -128,6 +128,10 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
 
   const grouped = groupNotifications(notifications)
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
+  
+  // 🆕 Limitar a 5 grupos no dropdown
+  const displayedGroups = grouped.slice(0, 5)
+  const hasMore = grouped.length > 5
 
   const handleClick = async (group: NotificationGroup) => {
     const notifIds = group.items.map(n => n.id)
@@ -236,7 +240,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               </div>
             ) : (
               <div className="divide-y divide-gray-50 dark:divide-slate-700">
-                {grouped.map(group => {
+                {displayedGroups.map(group => {
                   const isRead = group.items.every(n => readIds.has(n.id))
                   
                   return (
@@ -275,6 +279,20 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                     </button>
                   )
                 })}
+                
+                {/* 🆕 Botão "Ver Todas" */}
+                {hasMore && (
+                  <button
+                    onClick={() => {
+                      router.push('/notifications')
+                      onClose()
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-4 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors font-bold text-sm"
+                  >
+                    <ExternalLink size={16} />
+                    Ver todas ({grouped.length})
+                  </button>
+                )}
               </div>
             )}
           </div>
