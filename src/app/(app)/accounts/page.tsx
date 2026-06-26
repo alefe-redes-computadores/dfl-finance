@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search, Building } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
+import { useToast } from '@/contexts/ToastContext'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -20,6 +21,7 @@ const safeNum = (val: any) => {
 export default function AccountsPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const { showToast } = useToast()
   
   const [accounts, setAccounts] = useState<any[]>([])
   const [context, setContext] = useState<'personal' | 'dfl'>('dfl') 
@@ -95,7 +97,14 @@ export default function AccountsPage() {
       allow_negative: allowNegative,
       user_id: user.id
     }
-    await supabase.from('accounts').insert(data)
+    const { error } = await supabase.from('accounts').insert(data)
+    
+    if (error) {
+      showToast('Erro ao criar conta.', 'error')
+    } else {
+      showToast('Conta criada com sucesso!', 'success')
+    }
+    
     setShowForm(false)
     setName('')
     setDisplayBalance('')
@@ -106,6 +115,7 @@ export default function AccountsPage() {
     setFilteredBanks([])
     setShowBankDropdown(false)
     setSelectedBank(null)
+    setLoading(false)
     loadAccounts()
   }
 
@@ -203,7 +213,6 @@ export default function AccountsPage() {
         }}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
             
-            {/* Cabeçalho com preview do banco selecionado */}
             <div className="flex items-center gap-4 mb-6">
               {selectedBank ? (
                 <BankLogo color={selectedBank.color} name={selectedBank.name} size="lg" />
@@ -228,7 +237,6 @@ export default function AccountsPage() {
               </button>
             </div>
 
-            {/* Buscar Banco */}
             <div className="relative mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
                 Buscar banco
@@ -273,7 +281,6 @@ export default function AccountsPage() {
               )}
             </div>
 
-            {/* Nome personalizado */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
                 Nome da conta
@@ -286,7 +293,6 @@ export default function AccountsPage() {
               />
             </div>
             
-            {/* Cor */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
               <div className="flex flex-wrap gap-3">
@@ -305,7 +311,6 @@ export default function AccountsPage() {
               </div>
             </div>
 
-            {/* Saldo Inicial */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Saldo inicial</label>
               <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 flex items-center gap-2 border border-gray-100 dark:border-slate-600">
@@ -321,7 +326,6 @@ export default function AccountsPage() {
               </div>
             </div>
             
-            {/* Cheque Especial */}
             <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
               <div>
                 <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
