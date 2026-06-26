@@ -18,6 +18,7 @@ import QRCodeScanner from '@/components/QRCodeScanner'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
+import BankLogo from '@/components/BankLogo'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -488,7 +489,7 @@ function NewTransactionContent() {
     try {
       const baseDate = createLocalDate(date)
 
-      // 🔥 ATUALIZA O SALDO UMA ÚNICA VEZ (FORA DO LOOP)
+      // ATUALIZA O SALDO UMA ÚNICA VEZ (FORA DO LOOP)
       if (isPaid && accountId && type !== 'transfer') {
         const { data: acc } = await supabase
           .from('accounts')
@@ -688,7 +689,7 @@ function NewTransactionContent() {
           </div>
           <div className="flex items-center gap-2">
             {selectedAcc && (
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: selectedAcc.color }}>{selectedAcc.name.substring(0, 2).toUpperCase()}</div>
+              <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />
             )}
             <div onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true); }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors">
               <Plus size={20} />
@@ -924,6 +925,7 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* MODAL LISTA DE CONTAS - CORRIGIDO COM BankLogo */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -936,7 +938,7 @@ function NewTransactionContent() {
                 const isActive = acc.id === accountId
                 return (
                   <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
