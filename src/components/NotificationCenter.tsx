@@ -129,7 +129,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const grouped = groupNotifications(notifications)
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
   
-  // 🆕 Limitar a 5 grupos no dropdown
   const displayedGroups = grouped.slice(0, 5)
   const hasMore = grouped.length > 5
 
@@ -280,19 +279,21 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                   )
                 })}
                 
-                {/* 🆕 Botão "Ver Todas" */}
-                {hasMore && (
-                  <button
-                    onClick={() => {
-                      router.push('/notifications')
-                      onClose()
-                    }}
-                    className="w-full flex items-center justify-center gap-2 px-5 py-4 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors font-bold text-sm"
-                  >
-                    <ExternalLink size={16} />
-                    Ver todas ({grouped.length})
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    router.push('/notifications')
+                    onClose()
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-4 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors font-bold text-sm border-t border-gray-50 dark:border-slate-700"
+                >
+                  <ExternalLink size={16} />
+                  Ver Central de Notificações
+                  {grouped.length > 0 && (
+                    <span className="text-[10px] bg-teal-100 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
+                      {grouped.length}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>
