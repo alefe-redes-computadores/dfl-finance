@@ -86,7 +86,7 @@ function ChatContent() {
     if (!messageText.trim()) return
     if (!apiKey) {
       showToast('Configure sua chave de API primeiro.', 'warning')
-      setShowSettings(true)
+      router.push('/assistant/settings')
       return
     }
 
@@ -182,7 +182,7 @@ function ChatContent() {
           <button onClick={handleClearChat} className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors" title="Limpar conversa">
             <Trash2 size={18} />
           </button>
-          <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors" title="Configurar API">
+          <button onClick={() => router.push('/assistant/settings')} className="p-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors" title="Configurações">
             <Settings size={18} />
           </button>
         </div>
@@ -191,7 +191,7 @@ function ChatContent() {
       {/* Área de mensagens */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-100 to-emerald-100 dark:from-teal-900/30 dark:to-emerald-900/30 flex items-center justify-center mb-4">
               <Brain size={36} className="text-teal-700 dark:text-teal-400" />
             </div>
@@ -199,19 +199,18 @@ function ChatContent() {
             <p className="text-sm text-gray-400 dark:text-gray-500 mb-6 max-w-xs">
               Tire dúvidas sobre suas finanças, peça análises e receba sugestões personalizadas.
             </p>
-            {/* Grid de sugestões com visual corrigido */}
-            <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
+            {/* Grid de sugestões corrigida */}
+            <div className="grid grid-cols-2 gap-3 w-full max-w-xs auto-rows-fr isolate">
               {SUGGESTIONS.map((suggestion, i) => {
                 const IconComp = suggestion.icon
                 return (
                   <button
                     key={i}
                     onClick={() => handleSuggestionClick(suggestion.text)}
-                    className="relative flex items-start gap-2 px-3 py-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 hover:border-teal-200 dark:hover:border-teal-800 transition-all shadow-sm text-left h-full overflow-hidden"
+                    className="flex items-start gap-2 px-3 py-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 hover:border-teal-200 dark:hover:border-teal-800 transition-all text-left h-full"
                   >
-                    <IconComp size={16} className="text-teal-600 dark:text-teal-400 flex-shrink-0 mt-0.5 relative z-10" />
-                    <span className="leading-tight break-words relative z-10">{suggestion.text}</span>
-                    <div className="absolute inset-0 bg-transparent pointer-events-none" />
+                    <IconComp size={16} className="text-teal-600 dark:text-teal-400 flex-shrink-0 mt-0.5 relative z-20" />
+                    <span className="leading-tight break-words relative z-20">{suggestion.text}</span>
                   </button>
                 )
               })}
