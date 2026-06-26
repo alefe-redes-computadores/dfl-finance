@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, Bot, Key, Settings, Sparkles, TrendingUp,
   PieChart, Target, Lightbulb, MessageSquare, ArrowRight,
-  Coins, Wallet, BarChart3, Zap, Shield, CreditCard
+  Coins, Wallet, BarChart3, Zap, Shield, CreditCard, X
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 
@@ -16,6 +16,7 @@ export default function AssistantPage() {
   const [apiKey, setApiKey] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const [tempKey, setTempKey] = useState('')
+  const [showTutorial, setShowTutorial] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('dfl_assistant_api_key')
@@ -231,6 +232,26 @@ export default function AssistantPage() {
               Sua chave é salva apenas no seu dispositivo (localStorage) e enviada diretamente para a API do Google Gemini. 
               Obtenha sua chave gratuita em: <span className="font-bold text-teal-600 dark:text-teal-400">aistudio.google.com</span>
             </p>
+            
+            {/* Botão do tutorial */}
+            <button
+              onClick={() => setShowTutorial(!showTutorial)}
+              className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-4 flex items-center gap-1"
+            >
+              <Lightbulb size={14} />
+              {showTutorial ? 'Ocultar tutorial' : 'Como obter sua chave?'}
+            </button>
+
+            {showTutorial && (
+              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 mb-4 text-xs text-gray-600 dark:text-gray-300 space-y-2">
+                <p className="font-bold">1. Acesse: <span className="text-teal-600 dark:text-teal-400">aistudio.google.com</span></p>
+                <p>2. Faça login com sua conta Google.</p>
+                <p>3. Clique em <strong>"Get API Key"</strong> no menu lateral.</p>
+                <p>4. Crie uma nova chave (ou use a padrão).</p>
+                <p>5. Copie a chave e cole no campo acima.</p>
+              </div>
+            )}
+
             <input
               type="password"
               value={tempKey}
