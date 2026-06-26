@@ -11,6 +11,7 @@ import {
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import BankLogo from '@/components/BankLogo'
+import { useToast } from '@/contexts/ToastContext'
 
 const ICON_NAMES = [
   'home', 'utensils', 'car', 'heart', 'graduation-cap', 'gamepad-2', 'shirt',
@@ -27,6 +28,7 @@ function NewSubscriptionContent() {
   const searchParams = useSearchParams()
   const { context } = useContext_()
   const editId = searchParams.get('edit')
+  const { showToast } = useToast()
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -91,7 +93,7 @@ function NewSubscriptionContent() {
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || amountNum <= 0) {
-      alert('Preencha todos os campos obrigatórios.')
+      showToast('Preencha todos os campos obrigatórios.', 'warning')
       return
     }
     setSaving(true)
@@ -114,9 +116,10 @@ function NewSubscriptionContent() {
       } else {
         await supabase.from('subscriptions').insert(payload)
       }
+      showToast(editId ? 'Assinatura atualizada com sucesso!' : 'Assinatura criada com sucesso!', 'success')
       router.push('/subscriptions')
     } catch (err: any) {
-      alert('Erro ao salvar: ' + err.message)
+      showToast('Erro ao salvar assinatura.', 'error')
     } finally {
       setSaving(false)
     }
@@ -136,7 +139,6 @@ function NewSubscriptionContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -148,7 +150,6 @@ function NewSubscriptionContent() {
       </div>
 
       <div className="space-y-5">
-        {/* Nome */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome</label>
           <input
@@ -160,7 +161,6 @@ function NewSubscriptionContent() {
           />
         </div>
 
-        {/* Valor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor mensal</label>
           <div className="flex items-center gap-2">
@@ -176,7 +176,6 @@ function NewSubscriptionContent() {
           </div>
         </div>
 
-        {/* Dia do vencimento */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Dia do vencimento</label>
           <div className="flex items-center gap-3">
@@ -194,7 +193,6 @@ function NewSubscriptionContent() {
           </div>
         </div>
 
-        {/* Categoria */}
         <button
           onClick={() => setShowCatModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -209,7 +207,6 @@ function NewSubscriptionContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
-        {/* Conta */}
         <button
           onClick={() => setShowAccModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -224,7 +221,6 @@ function NewSubscriptionContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
-        {/* Cor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
@@ -239,7 +235,6 @@ function NewSubscriptionContent() {
           </div>
         </div>
 
-        {/* Grade de Ícones (dinâmica) */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3">Ícone</p>
           <div className="flex flex-wrap gap-3">
@@ -261,7 +256,6 @@ function NewSubscriptionContent() {
         </div>
       </div>
 
-      {/* Modal Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -300,7 +294,6 @@ function NewSubscriptionContent() {
         </div>
       )}
 
-      {/* Modal Contas - CORRIGIDO COM BankLogo */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
