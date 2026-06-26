@@ -20,7 +20,19 @@ import {
   CreditCard,
   Users,
   Wallet,
-  GripVertical
+  GripVertical,
+  X,
+  Zap,
+  Coffee,
+  ShoppingCart,
+  Car,
+  Home,
+  Smartphone,
+  Utensils,
+  Heart,
+  Briefcase,
+  Gamepad2,
+  BookOpen
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -33,6 +45,7 @@ import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
 import BankLogo from '@/components/BankLogo'
+import MoneyInput from '@/components/MoneyInput'
 import {
   DndContext,
   closestCenter,
@@ -49,6 +62,22 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useToast } from '@/contexts/ToastContext'
+
+// ============================================================
+// CATEGORIAS RÁPIDAS (FAB)
+// ============================================================
+const QUICK_CATEGORIES = [
+  { icon: Coffee, label: 'Café', color: '#8B4513' },
+  { icon: ShoppingCart, label: 'Compras', color: '#FF6B6B' },
+  { icon: Car, label: 'Transporte', color: '#4ECDC4' },
+  { icon: Utensils, label: 'Alimentação', color: '#FF8C00' },
+  { icon: Smartphone, label: 'Celular', color: '#6C5CE7' },
+  { icon: Heart, label: 'Saúde', color: '#E74C3C' },
+  { icon: Briefcase, label: 'Trabalho', color: '#2C3E50' },
+  { icon: Gamepad2, label: 'Lazer', color: '#9B59B6' },
+  { icon: BookOpen, label: 'Estudos', color: '#3498DB' },
+  { icon: Home, label: 'Casa', color: '#1ABC9C' },
+]
 
 // ============================================================
 // COMPONENTE: SortableSection (wrapper arrastável)
@@ -73,7 +102,6 @@ function SortableSection({ id, children }: { id: string; children: React.ReactNo
 
   return (
     <div ref={setNodeRef} style={style} className="mb-8">
-      {/* Alça de arraste */}
       <div
         {...attributes}
         {...listeners}
@@ -128,13 +156,19 @@ function HomeContent() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
-  // 🆕 Drag & Drop
+  // Drag & Drop
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER)
   const [layoutLoaded, setLayoutLoaded] = useState(false)
 
+  // 🆕 FAB - Quick Expense
+  const [showFab, setShowFab] = useState(false)
+  const [quickAmount, setQuickAmount] = useState(0)
+  const [quickAmountFormatted, setQuickAmountFormatted] = useState('0,00')
+  const [quickCategory, setQuickCategory] = useState('')
+  const [quickSaving, setQuickSaving] = useState(false)
+
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
-  // Sensores: pointer (mouse) + touch (celular)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
@@ -160,7 +194,6 @@ function HomeContent() {
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  // 🆕 Carregar layout do banco
   useEffect(() => {
     if (!user) return
     loadLayout()
@@ -209,6 +242,41 @@ function HomeContent() {
     newOrder.splice(newIndex, 0, active.id as string)
 
     saveLayout(newOrder)
+  }
+
+  // 🆕 Função de despesa rápida
+  const handleQuickSave = async () => {
+    if (!user || quickAmount <= 0) {
+      showToast('Informe um valor válido', 'warning')
+      return
+    }
+    setQuickSaving(true)
+    
+    try {
+      const payload = {
+        user_id: user.id,
+        type: 'expense',
+        amount: quickAmount,
+        description: quickCategory || 'Despesa rápida',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        status: 'done',
+        context: context,
+      }
+      
+      const { error } = await supabase.from('transactions').insert(payload)
+      if (error) throw error
+      
+      showToast(`Despesa de ${formatCurrency(quickAmount)} salva!`, 'success')
+      setShowFab(false)
+      setQuickAmount(0)
+      setQuickAmountFormatted('0,00')
+      setQuickCategory('')
+      loadData()
+    } catch (e: any) {
+      showToast('Erro ao salvar despesa rápida', 'error')
+    } finally {
+      setQuickSaving(false)
+    }
   }
 
   const loadData = useCallback(async () => {
@@ -403,7 +471,7 @@ function HomeContent() {
   })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
 
-  // === GERAR NOTIFICAÇÕES (mantido igual) ===
+  // === GERAR NOTIFICAÇÕES ===
   const notifications: any[] = []
 
   cards.forEach(card => {
@@ -572,7 +640,7 @@ function HomeContent() {
   }
 
   // ============================================================
-  // RENDERIZAÇÃO POR SEÇÃO (para facilitar o mapeamento)
+  // RENDERIZAÇÃO POR SEÇÃO
   // ============================================================
   const renderSection = (sectionId: string) => {
     switch (sectionId) {
@@ -904,12 +972,107 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* 🆕 DRAG & DROP CONTEXT */}
+      {/* DRAG & DROP CONTEXT */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
           {sectionOrder.map(sectionId => renderSection(sectionId))}
         </SortableContext>
       </DndContext>
+
+      {/* 🆕 FAB - Floating Action Button */}
+      <button
+        onClick={() => setShowFab(true)}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+        style={{
+          boxShadow: '0 8px 24px rgba(20, 184, 166, 0.4)',
+          animation: 'pulse 2s infinite'
+        }}
+      >
+        <Plus size={28} strokeWidth={2.5} />
+      </button>
+
+      {/* 🆕 Modal de Despesa Rápida */}
+      {showFab && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setShowFab(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          <div 
+            className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-slide-up z-10"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-gray-300 dark:bg-slate-600 rounded-full mx-auto mb-6" />
+            
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Despesa Rápida</h2>
+                <p className="text-xs text-gray-400 dark:text-gray-500">Registre em segundos</p>
+              </div>
+              <button onClick={() => setShowFab(false)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Valor</label>
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-2xl p-4 border border-gray-100 dark:border-slate-600">
+                <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
+                <MoneyInput
+                  value={quickAmount}
+                  onChange={(num, formatted) => {
+                    setQuickAmount(num)
+                    setQuickAmountFormatted(formatted)
+                  }}
+                  className="text-3xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                Categoria (opcional)
+              </label>
+              <div className="grid grid-cols-5 gap-3">
+                {QUICK_CATEGORIES.map(cat => {
+                  const IconComp = cat.icon
+                  const isSelected = quickCategory === cat.label
+                  return (
+                    <button
+                      key={cat.label}
+                      onClick={() => setQuickCategory(isSelected ? '' : cat.label)}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all ${
+                        isSelected 
+                          ? 'bg-teal-50 dark:bg-teal-900/30 ring-2 ring-teal-500 scale-105' 
+                          : 'bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      <IconComp size={22} style={{ color: cat.color }} />
+                      <span className="text-[9px] font-medium text-gray-500 dark:text-gray-400 text-center leading-tight">
+                        {cat.label}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <button
+              onClick={handleQuickSave}
+              disabled={quickSaving || quickAmount <= 0}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-all shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2"
+            >
+              {quickSaving ? (
+                <Loader2 size={22} className="animate-spin" />
+              ) : (
+                <>
+                  <Zap size={20} />
+                  Salvar Despesa
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {notificationsEnabled && (
         <NotificationCenter
