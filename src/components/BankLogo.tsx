@@ -1,6 +1,7 @@
 'use client'
 
-import { getBankLogoSvg } from '@/lib/BankIcons'
+import { getBankColor, getBankLogoSvg } from '@/lib/BankIcons'
+import { Building } from 'lucide-react'
 
 interface BankLogoProps {
   color: string;
@@ -10,6 +11,7 @@ interface BankLogoProps {
 
 export default function BankLogo({ color, name, size = 'md' }: BankLogoProps) {
   const logoSvg = getBankLogoSvg(name);
+  const bankColor = getBankColor(name);
 
   const sizeClasses = {
     sm: 'w-6 h-6 rounded-lg',
@@ -23,27 +25,40 @@ export default function BankLogo({ color, name, size = 'md' }: BankLogoProps) {
     lg: 'text-sm',
   };
 
-  const fallbackInitials = name
+  const initials = name
     ? name.substring(0, 2).toUpperCase()
     : '??';
 
-  // Se encontrou logo SVG
-  if (logoSvg) {
+  // Se tem SVG e cor do banco, mostra o logo com fundo colorido
+  if (logoSvg && bankColor) {
     return (
       <div
         className={`${sizeClasses[size]} flex items-center justify-center overflow-hidden shadow-sm flex-shrink-0`}
+        style={{ backgroundColor: bankColor }}
         dangerouslySetInnerHTML={{ __html: logoSvg }}
       />
     );
   }
 
-  // Fallback: iniciais coloridas
+  // Se tem cor do banco mas sem SVG, mostra iniciais com a cor do banco
+  if (bankColor) {
+    return (
+      <div
+        className={`${sizeClasses[size]} flex items-center justify-center ${textSizeClasses[size]} font-bold text-white shadow-sm flex-shrink-0`}
+        style={{ backgroundColor: bankColor }}
+      >
+        {initials}
+      </div>
+    );
+  }
+
+  // Fallback: iniciais com a cor personalizada da conta
   return (
     <div
       className={`${sizeClasses[size]} flex items-center justify-center ${textSizeClasses[size]} font-bold text-white shadow-sm flex-shrink-0`}
       style={{ backgroundColor: color || '#64748b' }}
     >
-      {fallbackInitials}
+      {initials}
     </div>
   );
 }
