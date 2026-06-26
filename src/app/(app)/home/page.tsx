@@ -426,21 +426,23 @@ function HomeContent() {
     })
   }
 
-  // 🆕 Atualiza o contador de não lidas sempre que as notificações mudam
-  useEffect(() => {
-    const saved = localStorage.getItem('dfl_read_notifications')
-    if (saved) {
-      try {
-        const readIds = new Set(JSON.parse(saved))
-        const unread = notifications.filter(n => !readIds.has(n.id)).length
-        setUnreadNotifications(unread)
-      } catch {
-        setUnreadNotifications(notifications.length)
-      }
-    } else {
-      setUnreadNotifications(notifications.length)
-    }
-  }, [notifications])
+  // 🆕 Atualiza o contador de não lidas do Supabase
+    useEffect(() => {
+     if (!user) return
+  
+    const loadUnreadCount = async () => {
+    const { data } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', user.id)
+    
+    const readIds = new Set(data?.map(d => d.notification_id) || [])
+    const unread = notifications.filter(n => !readIds.has(n.id)).length
+    setUnreadNotifications(unread)
+   }
+  
+    loadUnreadCount()
+    }, [notifications, user])
 
   const criticalCount = notifications.filter(n => n.severity === 'critical').length
 
