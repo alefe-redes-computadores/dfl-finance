@@ -15,6 +15,7 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns
 import { ptBR } from 'date-fns/locale'
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
+import { useToast } from '@/contexts/ToastContext'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -31,6 +32,7 @@ export default function AccountStatementPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { showToast } = useToast()
   
   const [account, setAccount] = useState<any>(null)
   const [allAccounts, setAllAccounts] = useState<any[]>([]) 
@@ -45,7 +47,6 @@ export default function AccountStatementPage() {
   const [showBalanceModal, setShowBalanceModal] = useState(false)
   const [showDestAccModal, setShowDestAccModal] = useState(false)
 
-  // Estados do modal de edição
   const [name, setName] = useState('')
   const [color, setColor] = useState(DEFAULT_COLORS[0])
   const [displayBalance, setDisplayBalance] = useState('')
@@ -159,11 +160,18 @@ export default function AccountStatementPage() {
   const handleSaveAccountInfo = async () => {
     if (!name.trim() || !user) return
     setActionLoading(true)
-    await supabase.from('accounts').update({ 
+    const { error } = await supabase.from('accounts').update({ 
       name: name.trim(), 
       color,
       allow_negative: allowNegative 
     }).eq('id', id)
+    
+    if (error) {
+      showToast('Erro ao salvar alterações.', 'error')
+    } else {
+      showToast('Conta atualizada com sucesso!', 'success')
+    }
+    
     setShowForm(false)
     router.refresh()
     loadData()
@@ -174,7 +182,14 @@ export default function AccountStatementPage() {
     if (!user) return
     setActionLoading(true)
     const rawAmount = parseFloat(adjustBalanceDisplay.replace(/\./g, '').replace(',', '.')) || 0;
-    await supabase.from('accounts').update({ balance: rawAmount }).eq('id', id);
+    const { error } = await supabase.from('accounts').update({ balance: rawAmount }).eq('id', id);
+    
+    if (error) {
+      showToast('Erro ao ajustar saldo.', 'error')
+    } else {
+      showToast('Saldo ajustado com sucesso!', 'success')
+    }
+    
     setShowBalanceModal(false);
     router.refresh()
     loadData();
@@ -182,14 +197,21 @@ export default function AccountStatementPage() {
   }
 
   const handleTransferSubmit = async () => {
-    if (!destAccountId || !transferAmountDisplay) return alert("Preencha o destino e o valor.")
+    if (!destAccountId || !transferAmountDisplay) {
+      showToast('Preencha o destino e o valor.', 'warning')
+      return
+    }
     if (!user) return
     setActionLoading(true)
     
     const rawAmount = parseFloat(transferAmountDisplay.replace(/\./g, '').replace(',', '.')) || 0;
     const destAcc = allAccounts.find(a => a.id === destAccountId);
 
-    if (!destAcc) return;
+    if (!destAcc) {
+      showToast('Conta de destino não encontrada.', 'error')
+      setActionLoading(false)
+      return
+    }
 
     try {
       await supabase.from('accounts').update({ balance: Number(account.balance) - rawAmount }).eq('id', id);
@@ -217,14 +239,14 @@ export default function AccountStatementPage() {
         user_id: user.id
       });
 
+      showToast('Transferência realizada com sucesso!', 'success')
       setShowTransferModal(false);
       setTransferAmountDisplay('');
       setTransferDesc('');
       router.refresh()
       loadData();
     } catch (error) {
-      console.error(error)
-      alert("Erro ao transferir.")
+      showToast('Erro ao realizar transferência.', 'error')
     } finally {
       setActionLoading(false)
     }
@@ -350,12 +372,11 @@ export default function AccountStatementPage() {
         )}
       </div>
 
-      {/* MODAL 1: EDITAR CONTA - COMPLETO E BONITO */}
+      {/* MODAL 1: EDITAR CONTA */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
             
-            {/* Cabeçalho com preview */}
             <div className="flex items-center gap-4 mb-6">
               {selectedBank ? (
                 <BankLogo color={selectedBank.color} name={selectedBank.name} size="lg" />
@@ -371,31 +392,19 @@ export default function AccountStatementPage() {
               </button>
             </div>
 
-            {/* Buscar Banco */}
             <div className="relative mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
-                Buscar banco
-              </label>
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Buscar banco</label>
               <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-100 dark:border-slate-600 overflow-hidden">
                 <Search size={16} className="ml-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                 <input
                   value={bankSearch}
                   onChange={e => handleBankSearch(e.target.value)}
-                  onFocus={() => {
-                    if (filteredBanks.length > 0) setShowBankDropdown(true)
-                  }}
+                  onFocus={() => { if (filteredBanks.length > 0) setShowBankDropdown(true) }}
                   placeholder="Digite o nome do banco..."
                   className="w-full bg-transparent py-3 px-3 text-sm outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
                 />
                 {bankSearch && (
-                  <button
-                    onClick={() => {
-                      setBankSearch('')
-                      setFilteredBanks([])
-                      setShowBankDropdown(false)
-                    }}
-                    className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600"
-                  >
+                  <button onClick={() => { setBankSearch(''); setFilteredBanks([]); setShowBankDropdown(false) }} className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600">
                     <X size={14} />
                   </button>
                 )}
@@ -403,11 +412,7 @@ export default function AccountStatementPage() {
               {showBankDropdown && filteredBanks.length > 0 && (
                 <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl mt-1 shadow-lg z-50 max-h-48 overflow-y-auto">
                   {filteredBanks.map(bank => (
-                    <button
-                      key={bank.key}
-                      onClick={() => selectBank(bank)}
-                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0"
-                    >
+                    <button key={bank.key} onClick={() => selectBank(bank)} className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0">
                       <BankLogo color={bank.color} name={bank.name} size="sm" />
                       <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{bank.name}</span>
                     </button>
@@ -416,64 +421,38 @@ export default function AccountStatementPage() {
               )}
             </div>
 
-            {/* Nome */}
             <div className="mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
-                Nome da conta
-              </label>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Ex: Minha Conta Principal"
-                className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors"
-              />
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Nome da conta</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Minha Conta Principal" className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors" />
             </div>
 
-            {/* Cor */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
               <div className="flex flex-wrap gap-3">
                 {DEFAULT_COLORS.map(c => (
-                  <button 
-                    key={c} 
-                    onClick={() => setColor(c)} 
-                    className="w-9 h-9 rounded-full transition-all duration-200" 
-                    style={{ 
-                      backgroundColor: c,
-                      transform: color === c ? 'scale(1.2)' : 'scale(1)',
-                      boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none'
-                    }} 
-                  />
+                  <button key={c} onClick={() => setColor(c)} className="w-9 h-9 rounded-full transition-all duration-200" style={{ backgroundColor: c, transform: color === c ? 'scale(1.2)' : 'scale(1)', boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }} />
                 ))}
               </div>
             </div>
 
-            {/* Cheque Especial */}
             <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
               <div>
                 <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
                 <p className="text-[10px] text-gray-400 dark:text-gray-500">Limite / Cheque especial</p>
               </div>
-              <button
-                onClick={() => setAllowNegative(!allowNegative)}
-                className={`w-12 h-7 rounded-full relative transition-colors ${allowNegative ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}
-              >
+              <button onClick={() => setAllowNegative(!allowNegative)} className={`w-12 h-7 rounded-full relative transition-colors ${allowNegative ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}>
                 <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${allowNegative ? 'right-1' : 'left-1'}`} />
               </button>
             </div>
 
-            <button 
-              onClick={handleSaveAccountInfo} 
-              disabled={actionLoading || !name.trim()} 
-              className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center"
-            >
+            <button onClick={handleSaveAccountInfo} disabled={actionLoading || !name.trim()} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center">
               {actionLoading ? <Loader2 className="animate-spin" size={24} /> : 'Salvar Alterações'}
             </button>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: BALANÇA (mantido igual) */}
+      {/* MODAL 2: BALANÇA */}
       {showBalanceModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowBalanceModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
@@ -495,7 +474,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* MODAL 3: TRANSFERÊNCIA (mantido igual) */}
+      {/* MODAL 3: TRANSFERÊNCIA */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowTransferModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
@@ -534,7 +513,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* Modal de seleção de conta destino (mantido igual) */}
+      {/* Modal de seleção de conta destino */}
       {showDestAccModal && (
         <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowDestAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -546,11 +525,7 @@ export default function AccountStatementPage() {
               {allAccounts.map(acc => {
                 const isActive = acc.id === destAccountId
                 return (
-                  <button
-                    key={acc.id}
-                    onClick={() => { setDestAccountId(acc.id); setShowDestAccModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
+                  <button key={acc.id} onClick={() => { setDestAccountId(acc.id); setShowDestAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <BankLogo color={acc.color} name={acc.name} size="md" />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
