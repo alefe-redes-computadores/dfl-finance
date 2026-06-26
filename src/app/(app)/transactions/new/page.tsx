@@ -19,6 +19,7 @@ import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
+import { useToast } from '@/contexts/ToastContext'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -41,6 +42,7 @@ function NewTransactionContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { showToast } = useToast()
 
   const [type, setType] = useState<TxType>((searchParams.get('type') as TxType) || 'expense')
   const [context, setContext] = useState<Context>('dfl')
@@ -306,7 +308,7 @@ function NewTransactionContent() {
 
   const handleSaveCategory = async () => {
     if (!user || !user.id) {
-      alert('Sessão expirada. Faça login novamente.')
+      showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
     if (!newCatName.trim()) return
@@ -320,7 +322,6 @@ function NewTransactionContent() {
         context: context,
         type: type === 'income' ? 'income' : 'expense'
       }
-      console.log('Inserindo categoria:', payload)
       const { data, error } = await supabase.from('categories').insert(payload).select().single()
 
       if (error) throw error
@@ -328,11 +329,11 @@ function NewTransactionContent() {
         setCategories(prev => [...prev, data])
         setCategoryId(data.id) 
         setShowCreateCatModal(false)
-        setNewCatName('') 
+        setNewCatName('')
+        showToast('Categoria criada com sucesso!', 'success')
       }
     } catch (error) {
-      console.error("Erro ao criar categoria:", error)
-      alert("Erro ao criar categoria.")
+      showToast('Erro ao criar categoria.', 'error')
     } finally {
       setSavingCategory(false)
     }
@@ -340,7 +341,7 @@ function NewTransactionContent() {
 
   const handleSaveAccount = async () => {
     if (!user || !user.id) {
-      alert('Sessão expirada. Faça login novamente.')
+      showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
     if (!newAccName.trim()) return
@@ -352,7 +353,6 @@ function NewTransactionContent() {
         color: newAccColor,
         context: context
       }
-      console.log('Inserindo conta:', payload)
       const { data, error } = await supabase.from('accounts').insert(payload).select().single()
 
       if (error) throw error
@@ -360,11 +360,11 @@ function NewTransactionContent() {
         setAccounts(prev => [...prev, data])
         setAccountId(data.id) 
         setShowCreateAccModal(false)
-        setNewAccName('') 
+        setNewAccName('')
+        showToast('Conta criada com sucesso!', 'success')
       }
     } catch (error) {
-      console.error("Erro ao criar conta:", error)
-      alert("Erro ao criar conta.")
+      showToast('Erro ao criar conta.', 'error')
     } finally {
       setSavingAccount(false)
     }
@@ -372,7 +372,7 @@ function NewTransactionContent() {
 
   const handleSaveTag = async () => {
     if (!user || !user.id) {
-      alert('Sessão expirada. Faça login novamente.')
+      showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
     if (!newTagName.trim()) return
@@ -384,7 +384,6 @@ function NewTransactionContent() {
         color: newTagColor,
         context: context
       }
-      console.log('Inserindo tag:', payload)
       const { data, error } = await supabase.from('tags').insert(payload).select().single()
 
       if (error) throw error
@@ -392,11 +391,11 @@ function NewTransactionContent() {
         setTags(prev => [...prev, data])
         setSelectedTags(prev => prev.length < 5 ? [...prev, data.id] : prev)
         setShowCreateTagModal(false)
-        setNewTagName('') 
+        setNewTagName('')
+        showToast('Tag criada com sucesso!', 'success')
       }
     } catch (error) {
-      console.error("Erro ao criar tag:", error)
-      alert("Erro ao criar tag.")
+      showToast('Erro ao criar tag.', 'error')
     } finally {
       setSavingTag(false)
     }
@@ -405,12 +404,12 @@ function NewTransactionContent() {
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user || !user.id) {
-      alert('Sessão expirada. Faça login novamente.')
+      showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
     const rawAmount = amountNum
     if (rawAmount <= 0) {
-      alert('Erro: O valor da transação deve ser maior que R$ 0,00.')
+      showToast('O valor da transação deve ser maior que R$ 0,00.', 'warning')
       return
     }
     setIsSubmitting(true)
@@ -528,8 +527,7 @@ function NewTransactionContent() {
             .eq('id', accountId)
           
           if (updateError) {
-            console.error('Erro ao atualizar saldo:', updateError)
-            alert('Erro ao atualizar saldo da conta. Tente novamente.')
+            showToast('Erro ao atualizar saldo da conta.', 'error')
             setIsSubmitting(false)
             return
           }
@@ -568,31 +566,27 @@ function NewTransactionContent() {
           idempotency_key: idempotencyKey,
         }
 
-        console.log('Inserindo transação:', payload)
-
         if (!isOnline) {
           await saveToQueue(payload)
           if (i === totalParcels - 1) {
-            alert('Transação salva localmente. Será enviada quando houver conexão.')
+            showToast('Transação salva localmente. Será enviada quando houver conexão.', 'info')
             router.push('/transactions')
           }
           continue
         }
 
         const { error: insertError } = await supabase.from('transactions').insert(payload)
-        if (insertError) {
-          console.error('Erro ao inserir transação:', insertError)
-          throw insertError
-        }
+        if (insertError) throw insertError
       }
 
       if (isOnline) {
+        const label = isIncome ? 'Receita' : 'Despesa'
+        showToast(`${label} salva com sucesso!`, 'success')
         router.refresh()
         router.push('/transactions')
       }
     } catch (e: any) {
-      console.error('Erro completo:', e)
-      alert('ERRO DO BANCO:\n' + (e.message || JSON.stringify(e)))
+      showToast('Erro ao salvar transação. Tente novamente.', 'error')
     } finally {
       setIsSubmitting(false)
     }
