@@ -1,4 +1,4 @@
-// lib/bankIcons.ts
+// lib/BankIcons.ts
 // SVGs inline dos principais bancos brasileiros
 // Totalmente offline, sem dependência externa
 
