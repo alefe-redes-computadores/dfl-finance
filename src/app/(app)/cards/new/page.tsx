@@ -9,6 +9,7 @@ import {
   CreditCard, Calendar, PiggyBank, Palette, DollarSign, 
   Check, Loader2, X, Plus, Wallet
 } from 'lucide-react'
+import { useToast } from '@/contexts/ToastContext'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -16,6 +17,7 @@ const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
 export default function NewCardPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const { showToast } = useToast()
 
   const [accounts, setAccounts] = useState<any[]>([])
   
@@ -63,7 +65,7 @@ export default function NewCardPage() {
 
   async function handleSave() {
     if (!name.trim()) {
-      alert('Por favor, informe o nome do cartão.')
+      showToast('Por favor, informe o nome do cartão.', 'warning')
       return
     }
     setSaving(true)
@@ -86,15 +88,15 @@ export default function NewCardPage() {
       const { error } = await supabase.from('credit_cards').insert(payload)
       if (error) throw error
       
+      showToast('Cartão criado com sucesso!', 'success')
       router.push('/cards')
     } catch (error: any) {
-      alert(`Erro ao salvar: ${error.message}`)
+      showToast('Erro ao salvar cartão.', 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  // Renderiza a logo da bandeira em miniatura para os botões de seleção
   const renderFlagIcon = (cardFlag: string) => {
     switch (cardFlag) {
       case 'Visa': return <span className="text-[10px] font-bold italic text-blue-800">VISA</span>
@@ -111,7 +113,6 @@ export default function NewCardPage() {
     }
   }
 
-  // Logo grande no header
   const renderCardLogo = (cardFlag: string) => {
     switch (cardFlag) {
       case 'Visa': return <span className="text-xl font-bold italic tracking-tighter text-white">VISA</span>
@@ -158,7 +159,6 @@ export default function NewCardPage() {
 
       <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
         
-        {/* Bandeira com ícones visuais */}
         <div className="p-4 border-b border-gray-50 dark:border-slate-700 flex flex-col gap-3">
           <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <Tag size={18} /> <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Bandeira</span>
@@ -212,7 +212,6 @@ export default function NewCardPage() {
           </div>
         </div>
 
-        {/* Conta para pagamento - agora com modal estilizado */}
         <div className="p-4 border-b border-gray-50 dark:border-slate-700">
           <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <PiggyBank size={18} /> 
@@ -278,7 +277,6 @@ export default function NewCardPage() {
         {saving ? <Loader2 className="animate-spin" size={28} /> : <Check size={28} />}
       </button>
 
-      {/* Modal de seleção de conta */}
       {showAccountModal && (
         <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowAccountModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
