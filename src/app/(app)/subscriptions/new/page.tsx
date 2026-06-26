@@ -10,8 +10,8 @@ import {
 } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import BankLogo from '@/components/BankLogo'
 
-// Lista de ícones disponíveis (nomes iguais aos do lucide-react)
 const ICON_NAMES = [
   'home', 'utensils', 'car', 'heart', 'graduation-cap', 'gamepad-2', 'shirt',
   'smile', 'repeat', 'wrench', 'dog', 'file-text', 'shield', 'gift', 'briefcase',
@@ -300,7 +300,7 @@ function NewSubscriptionContent() {
         </div>
       )}
 
-      {/* Modal Contas */}
+      {/* Modal Contas - CORRIGIDO COM BankLogo */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -325,7 +325,7 @@ function NewSubscriptionContent() {
                     onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
                     className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color || '#14b8a6' }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <BankLogo color={acc.color || '#14b8a6'} name={acc.name} size="md" />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
