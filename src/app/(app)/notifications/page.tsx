@@ -281,7 +281,11 @@ export default function NotificationsPage() {
       read_at: new Date().toISOString()
     }, { onConflict: 'user_id,notification_id' })
 
-    setReadIds(prev => new Set(Array.from(prev)).add(notif.id))
+     setReadIds(prev => {
+      const next = new Set(prev)
+      next.add(notif.id)
+      return next
+     })
 
     // Navegar
     if (notif.route) {
@@ -351,7 +355,11 @@ export default function NotificationsPage() {
     } else {
       // Marcar como lida
       await supabase.from('notification_reads').upsert({ user_id: user!.id, notification_id: notif.id, read_at: new Date().toISOString() }, { onConflict: 'user_id,notification_id' })
-      setReadIds(prev => new Set([...prev, notif.id]))
+      setReadIds(prev => {
+        const next = new Set(prev)
+        next.add(notif.id)
+        return next
+      })
       showToast('Marcada como lida', 'success')
     }
   }
