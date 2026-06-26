@@ -10,6 +10,7 @@ import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
+import { useToast } from '@/contexts/ToastContext'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -19,6 +20,7 @@ function NewFinancingContent() {
   const searchParams = useSearchParams()
   const { context } = useContext_()
   const editId = searchParams.get('edit')
+  const { showToast } = useToast()
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -84,7 +86,7 @@ function NewFinancingContent() {
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || installmentValueNum <= 0) {
-      alert('Preencha todos os campos obrigatórios.')
+      showToast('Preencha todos os campos obrigatórios.', 'warning')
       return
     }
     setSaving(true)
@@ -111,9 +113,10 @@ function NewFinancingContent() {
       } else {
         await supabase.from('financings').insert(payload)
       }
+      showToast(editId ? 'Financiamento atualizado com sucesso!' : 'Financiamento criado com sucesso!', 'success')
       router.push('/financings')
     } catch (err: any) {
-      alert('Erro ao salvar: ' + err.message)
+      showToast('Erro ao salvar financiamento.', 'error')
     } finally {
       setSaving(false)
     }
@@ -132,7 +135,6 @@ function NewFinancingContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-slate-900 flex flex-col font-sans pb-24 relative transition-colors duration-300">
       
-      {/* Header com preview (estilo cartão de crédito) */}
       <div className="pt-6 pb-8 px-4 shadow-sm relative transition-colors duration-300" style={{ backgroundColor: color }}>
         <div className="flex items-center justify-between mb-6 text-white">
           <button onClick={() => router.back()} className="p-2 -ml-2">
@@ -158,7 +160,6 @@ function NewFinancingContent() {
 
       <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
         <div className="space-y-5 p-4">
-          {/* Contexto */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Contexto</label>
             <div className="flex gap-2">
@@ -170,7 +171,6 @@ function NewFinancingContent() {
             </div>
           </div>
 
-          {/* Instituição */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Instituição financeira</label>
             <div className="flex items-center gap-3">
@@ -179,7 +179,6 @@ function NewFinancingContent() {
             </div>
           </div>
 
-          {/* Valor da parcela */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da parcela</label>
             <div className="flex items-center gap-2">
@@ -195,13 +194,11 @@ function NewFinancingContent() {
             </div>
           </div>
 
-          {/* Total de parcelas */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Total de parcelas</label>
             <input type="number" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} min={1} max={360} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
           </div>
 
-          {/* Próximo vencimento */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Próximo vencimento</label>
             <div className="flex items-center gap-3">
@@ -210,7 +207,6 @@ function NewFinancingContent() {
             </div>
           </div>
 
-          {/* Saldo devedor */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Saldo devedor</label>
             <div className="flex items-center gap-2">
@@ -226,7 +222,6 @@ function NewFinancingContent() {
             </div>
           </div>
 
-          {/* Conta */}
           <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Wallet size={18} className="text-gray-400 dark:text-gray-500" />
@@ -238,7 +233,6 @@ function NewFinancingContent() {
             <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
           </button>
 
-          {/* Categoria */}
           <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Tag size={18} className="text-gray-400 dark:text-gray-500" />
@@ -250,7 +244,6 @@ function NewFinancingContent() {
             <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
           </button>
 
-          {/* Cor */}
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
             <div className="flex flex-wrap gap-3">
@@ -260,7 +253,6 @@ function NewFinancingContent() {
             </div>
           </div>
 
-          {/* Ícone */}
           <button onClick={() => setShowIconModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}20`, color: color }}>
@@ -276,7 +268,6 @@ function NewFinancingContent() {
         </div>
       </div>
 
-      {/* Botão Salvar (flutuante) */}
       <button 
         onClick={handleSave} 
         disabled={saving}
@@ -285,7 +276,6 @@ function NewFinancingContent() {
         {saving ? <Loader2 className="animate-spin" size={28} /> : <Check size={28} />}
       </button>
 
-      {/* Modal Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -315,7 +305,6 @@ function NewFinancingContent() {
         </div>
       )}
 
-      {/* Modal Contas - CORRIGIDO COM BankLogo */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
