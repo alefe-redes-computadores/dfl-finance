@@ -169,9 +169,11 @@ function HomeContent() {
   }
 
   const openPersonalize = () => {
-    const enabled = ALL_SECTIONS.filter(s => enabledSections.includes(s.id))
+    const enabledOrder = enabledSections
+      .map(id => ALL_SECTIONS.find(s => s.id === id))
+      .filter(Boolean) as typeof ALL_SECTIONS
     const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id))
-    setPersonalizeOrder([...enabled, ...missing])
+    setPersonalizeOrder([...enabledOrder, ...missing])
     setPersonalizeEnabled(new Set(enabledSections))
     setShowPersonalizeModal(true)
   }
