@@ -63,7 +63,6 @@ function ChatContent() {
       setApiKey(saved)
       setTempKey(saved)
     }
-    // Verifica se há um prompt salvo (vindo da página principal)
     const prompt = localStorage.getItem('dfl_assistant_prompt')
     if (prompt) {
       localStorage.removeItem('dfl_assistant_prompt')
