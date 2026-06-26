@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -33,20 +33,18 @@ interface NotificationCenterProps {
   isOpen: boolean
   onClose: () => void
   notifications: Notification[]
+  onReadChange?: (unreadCount: number) => void
 }
 
 function groupNotifications(notifs: Notification[]): NotificationGroup[] {
   const groups: Record<string, NotificationGroup> = {}
 
   notifs.forEach(n => {
-    // Agrupa por tipo similar
-    let key = n.id.split('-')[0] // pega o prefixo (invoice, sub, budget, etc.)
+    let key = n.id.split('-')[0]
     
-    // Se tem rota, agrupa pela rota
     if (n.route) {
       key = n.route
     }
-    // Se tem ID específico, mantém individual
     if (n.cardId || n.budgetId || n.financingId || n.debtId) {
       key = n.id
     }
@@ -69,29 +67,45 @@ function groupNotifications(notifs: Notification[]): NotificationGroup[] {
   return Object.values(groups)
 }
 
-export default function NotificationCenter({ isOpen, onClose, notifications }: NotificationCenterProps) {
+export default function NotificationCenter({ isOpen, onClose, notifications, onReadChange }: NotificationCenterProps) {
   const router = useRouter()
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
+
+  // Carregar lidos do localStorage ao abrir
+  useEffect(() => {
+    if (isOpen) {
+      const saved = localStorage.getItem('dfl_read_notifications')
+      if (saved) {
+        try {
+          setReadIds(new Set(JSON.parse(saved)))
+        } catch {}
+      }
+    }
+  }, [isOpen])
+
+  // Salvar no localStorage sempre que mudar
+  const updateReadIds = (newRead: Set<string>) => {
+    setReadIds(newRead)
+    localStorage.setItem('dfl_read_notifications', JSON.stringify([...newRead]))
+    
+    // Avisar a Home para atualizar o contador
+    const unread = notifications.filter(n => !newRead.has(n.id)).length
+    onReadChange?.(unread)
+  }
 
   if (!isOpen) return null
 
   const grouped = groupNotifications(notifications)
-  
-  // Contagem de não lidos
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
 
   const handleClick = (group: NotificationGroup) => {
-    // Marca todos do grupo como lidos
     const newRead = new Set(readIds)
     group.items.forEach(n => newRead.add(n.id))
-    setReadIds(newRead)
+    updateReadIds(newRead)
 
-    // Se é grupo com vários itens, vai para a rota geral
     if (group.route) {
       router.push(group.route)
-    } 
-    // Se tem item único com ID específico
-    else if (group.items.length === 1) {
+    } else if (group.items.length === 1) {
       const notif = group.items[0]
       if (notif.cardId) router.push(`/cards/${notif.cardId}`)
       else if (notif.budgetId) router.push(`/budgets/${notif.budgetId}`)
@@ -103,16 +117,10 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
     onClose()
   }
 
-  const handleDirectClick = (group: NotificationGroup, e: React.MouseEvent) => {
-    e.stopPropagation()
-    // Mesmo comportamento do clique principal
-    handleClick(group)
-  }
-
   const markAllAsRead = () => {
     const newRead = new Set<string>()
     notifications.forEach(n => newRead.add(n.id))
-    setReadIds(newRead)
+    updateReadIds(newRead)
   }
 
   const getIcon = (type: string) => {
@@ -154,7 +162,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-x-0 top-0 z-50 mx-auto max-w-md pt-16 px-4">
         <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
-          {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
@@ -183,7 +190,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
             </div>
           </div>
 
-          {/* Resumo rápido */}
           <div className="grid grid-cols-2 gap-2 px-5 py-3 border-b border-gray-50 dark:border-slate-700">
             <div className="text-center">
               <span className="text-[11px] font-bold text-red-500">{criticalCount}</span>
@@ -195,7 +201,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
             </div>
           </div>
 
-          {/* Lista de notificações agrupadas */}
           <div className="max-h-[50vh] overflow-y-auto">
             {grouped.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
