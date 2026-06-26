@@ -102,12 +102,14 @@ function SortableSection({ id, children }: { id: string; children: React.ReactNo
 
   return (
     <div ref={setNodeRef} style={style} className="mb-8">
+      {/* 🔧 ALÇA DE ARRASTE MELHORADA - MAIS FÁCIL DE TOCAR NO CELULAR */}
       <div
         {...attributes}
         {...listeners}
-        className="flex items-center justify-center py-1 cursor-grab active:cursor-grabbing hover:bg-gray-100 dark:hover:bg-slate-700 rounded-t-xl transition-colors"
+        className="flex items-center justify-center gap-2 py-3 cursor-grab active:cursor-grabbing hover:bg-gray-100 dark:hover:bg-slate-700 rounded-t-xl transition-colors select-none"
       >
-        <GripVertical size={18} className="text-gray-400 dark:text-gray-500" />
+        <GripVertical size={20} className="text-gray-400 dark:text-gray-500" />
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Segure e arraste</span>
       </div>
       {children}
     </div>
@@ -972,17 +974,17 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* DRAG & DROP CONTEXT */}
+      {/* 🔧 DRAG & DROP - ALÇA MELHORADA PARA CELULAR */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
           {sectionOrder.map(sectionId => renderSection(sectionId))}
         </SortableContext>
       </DndContext>
 
-      {/* 🆕 FAB - Floating Action Button */}
+      {/* 🔧 FAB - POSIÇÃO CORRIGIDA (ACIMA DO BOTTOMNAV) */}
       <button
         onClick={() => setShowFab(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+        className="fixed bottom-24 right-6 z-[45] w-14 h-14 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95"
         style={{
           boxShadow: '0 8px 24px rgba(20, 184, 166, 0.4)',
           animation: 'pulse 2s infinite'
