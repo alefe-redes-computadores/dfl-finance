@@ -1,102 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, context, userId, chatContext } = await req.json()
+    const body = await req.json()
+    const { messages, apiKey } = body
 
-    if (!userId || !message) {
-      return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Chave de API não fornecida. Configure sua chave nas configurações.' },
+        { status: 400 }
+      )
     }
 
-    // Buscar histórico das últimas 20 mensagens
-    const { data: history } = await supabase
-      .from('chat_history')
-      .select('role, content')
-      .eq('user_id', userId)
-      .eq('context', chatContext || 'dfl')
-      .order('created_at', { ascending: true })
-      .limit(20)
-
-    const conversationHistory = Array.isArray(history) ? history : []
-
-    // Salvar mensagem do usuário
-    await supabase.from('chat_history').insert({
-      user_id: userId,
-      context: chatContext || 'dfl',
-      role: 'user',
-      content: message,
-    })
-
-    // Verificar qual provedor está configurado
-    const apiKey = req.headers.get('x-api-key') || ''
-    const provider = req.headers.get('x-provider') || 'gemini'
-    const model = req.headers.get('x-model') || 'gemini-2.0-flash'
-
-    if (!apiKey.trim()) {
-      return NextResponse.json({ error: 'Chave de API não configurada.' }, { status: 400 })
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json(
+        { error: 'Mensagens inválidas.' },
+        { status: 400 }
+      )
     }
 
-    // Montar mensagens para a IA (histórico + nova pergunta)
-    const systemPrompt = `Você é o assistente financeiro do DFL Finance. Dados do mês atual:\n${context}\n\nResponda de forma curta, objetiva e amigável. Considere o histórico da conversa se houver.`
-
-    let responseContent = ''
-
-    if (provider === 'openai') {
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...conversationHistory.map((m: any) => ({ role: m.role, content: m.content })),
-        { role: 'user', content: message },
-      ]
-
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ model, messages }),
-      })
-      const data = await res.json()
-      responseContent = data.choices?.[0]?.message?.content || 'Erro ao obter resposta.'
-    } else {
-      // Google Gemini
-      const historyText = conversationHistory
-        .map((m: any) => `${m.role === 'user' ? 'Usuário' : 'Assistente'}: ${m.content}`)
-        .join('\n')
-      
-      const fullPrompt = `Contexto financeiro:\n${context}\n\nHistórico da conversa:\n${historyText}\n\nNova pergunta: ${message}`
+        body: JSON.stringify({
+          contents: messages.map((msg: any) => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }],
+          })),
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024,
+          },
+        }),
+      }
+    )
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-          }),
-        }
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Erro da API Gemini:', data)
+
+      // Tratamento de erro de quota
+      if (response.status === 429 || data?.error?.message?.includes('quota') || data?.error?.message?.includes('limit')) {
+        return NextResponse.json(
+          { error: 'Erro de conexão com o servidor de IA. Verifique sua chave de API ou tente novamente mais tarde.' },
+          { status: 429 }
+        )
+      }
+
+      return NextResponse.json(
+        { error: data?.error?.message || 'Erro ao processar requisição.' },
+        { status: response.status }
       )
-      const data = await res.json()
-      responseContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Erro ao obter resposta.'
     }
 
-    // Salvar resposta da IA
-    await supabase.from('chat_history').insert({
-      user_id: userId,
-      context: chatContext || 'dfl',
-      role: 'model',
-      content: responseContent,
-    })
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
 
-    return NextResponse.json({ success: true, message: responseContent })
+    if (!text) {
+      return NextResponse.json(
+        { error: 'Resposta vazia da IA. Tente reformular sua pergunta.' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ text })
   } catch (error: any) {
-    console.error('Erro na API chat:', error)
-    return NextResponse.json({ error: 'Erro ao processar mensagem.' }, { status: 500 })
+    console.error('Erro no servidor:', error)
+    return NextResponse.json(
+      { error: 'Erro interno do servidor. Tente novamente.' },
+      { status: 500 }
+    )
   }
 }
