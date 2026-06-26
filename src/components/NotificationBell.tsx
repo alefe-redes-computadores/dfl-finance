@@ -17,11 +17,11 @@ export default function NotificationBell({ count, onClick, hasCritical }: Notifi
       <Bell size={20} />
       {count > 0 && (
         <span
-          className={`absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white shadow-sm ${
+          className={`absolute -top-0.5 -right-0.5 min-w-[20px] h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white shadow-sm px-1 ${
             hasCritical ? 'bg-red-500' : 'bg-orange-500'
           }`}
         >
-          {count > 9 ? '9+' : count}
+          {count > 99 ? '99+' : count}
         </span>
       )}
     </button>
