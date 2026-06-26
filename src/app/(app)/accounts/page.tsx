@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import { getBankLogoSvg } from '@/lib/BankIcons'
+import { BANK_LIST } from '@/lib/BankIcons'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
