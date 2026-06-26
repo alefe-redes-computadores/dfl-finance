@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/contexts/ToastContext'
 
 interface Notification {
   id: string
@@ -72,9 +73,9 @@ function groupNotifications(notifs: Notification[]): NotificationGroup[] {
 export default function NotificationCenter({ isOpen, onClose, notifications, onReadChange }: NotificationCenterProps) {
   const router = useRouter()
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
 
-  // 🔄 Carregar lidos do Supabase ao abrir
   useEffect(() => {
     if (isOpen && user) {
       loadReadNotifications()
@@ -93,7 +94,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     }
   }
 
-  // 💾 Salvar como lido no Supabase
   const markAsRead = async (notifIds: string[]) => {
     if (!user) return
     
@@ -101,7 +101,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     notifIds.forEach(id => newRead.add(id))
     setReadIds(newRead)
 
-    // Salvar no Supabase (um por um, ignora conflitos)
     for (const notifId of notifIds) {
       await supabase
         .from('notification_reads')
@@ -114,16 +113,15 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
         })
     }
 
-    // Avisar a Home para atualizar o contador
     const unread = notifications.filter(n => !newRead.has(n.id)).length
     onReadChange?.(unread)
   }
 
-  // 📋 Marcar todas como lidas
   const markAllAsRead = async () => {
     if (!user) return
     const allIds = notifications.map(n => n.id)
     await markAsRead(allIds)
+    showToast('Notificações marcadas como lidas!', 'success')
   }
 
   if (!isOpen) return null
