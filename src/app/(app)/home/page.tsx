@@ -401,27 +401,29 @@ function HomeContent() {
     }
   })
 
-  const pendingExpenses = recentTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
-  if (pendingExpenses.length > 0) {
+  const pendingExpensesList = recentTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
+  if (pendingExpensesList.length > 0) {
     notifications.push({
-      id: 'pending-expenses',
-      type: 'pending_expense',
-      title: `${pendingExpenses.length} despesa(s) pendente(s)`,
-      subtitle: `Total: ${formatCurrency(pendings.toPay)}`,
-      severity: 'info'
+    id: 'pending-expenses',
+    type: 'pending_expense',
+    title: `${pendingExpensesList.length} despesa(s) pendente(s)`,
+    subtitle: `Total: ${formatCurrency(pendings.toPay)}`,
+    severity: 'info',
+    route: '/transactions?filter=expense&status=pending'
     })
   }
 
-  const pendingIncomes = recentTransactions.filter(t => t.status === 'pending' && t.type === 'income')
-  if (pendingIncomes.length > 0) {
+  const pendingIncomesList = recentTransactions.filter(t => t.status === 'pending' && t.type === 'income')
+  if (pendingIncomesList.length > 0) {
     notifications.push({
-      id: 'pending-incomes',
-      type: 'pending_income',
-      title: `${pendingIncomes.length} receita(s) a receber`,
-      subtitle: `Total: ${formatCurrency(pendings.toReceive)}`,
-      severity: 'success'
-    })
-  }
+    id: 'pending-incomes',
+    type: 'pending_income',
+    title: `${pendingIncomesList.length} receita(s) a receber`,
+    subtitle: `Total: ${formatCurrency(pendings.toReceive)}`,
+    severity: 'success',
+    route: '/transactions?filter=income&status=pending'
+  })
+}
 
   const criticalCount = notifications.filter(n => n.severity === 'critical').length
   const totalNotifications = notifications.length
