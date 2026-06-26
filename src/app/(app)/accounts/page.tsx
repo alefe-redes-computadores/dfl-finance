@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search, Building } from 'lucide-react'
+import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search, Building, ArrowRightLeft } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
 import { useToast } from '@/contexts/ToastContext'
+import TransferModal from '@/components/TransferModal'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -39,6 +40,9 @@ export default function AccountsPage() {
   const [filteredBanks, setFilteredBanks] = useState<typeof BANK_LIST>([])
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [selectedBank, setSelectedBank] = useState<typeof BANK_LIST[0] | null>(null)
+
+  // Transferência entre contextos
+  const [showTransferModal, setShowTransferModal] = useState(false)
 
   const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -165,6 +169,15 @@ export default function AccountsPage() {
           </p>
         </div>
 
+        {/* Botão Transferência entre Contextos */}
+        <button
+          onClick={() => setShowTransferModal(true)}
+          className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 mb-6 flex items-center justify-center gap-3 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
+        >
+          <ArrowRightLeft size={20} />
+          <span className="font-bold text-sm">Transferência entre Contextos</span>
+        </button>
+
         {/* Lista de Contas */}
         {loading ? (
           <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
@@ -204,7 +217,7 @@ export default function AccountsPage() {
         )}
       </div>
 
-      {/* MODAL DE CRIAÇÃO - REDESENHADO */}
+      {/* MODAL DE CRIAÇÃO DE CONTA */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => {
           setShowForm(false)
@@ -237,6 +250,7 @@ export default function AccountsPage() {
               </button>
             </div>
 
+            {/* Buscar Banco */}
             <div className="relative mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
                 Buscar banco
@@ -281,6 +295,7 @@ export default function AccountsPage() {
               )}
             </div>
 
+            {/* Nome */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
                 Nome da conta
@@ -293,6 +308,7 @@ export default function AccountsPage() {
               />
             </div>
             
+            {/* Cor */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
               <div className="flex flex-wrap gap-3">
@@ -311,6 +327,7 @@ export default function AccountsPage() {
               </div>
             </div>
 
+            {/* Saldo Inicial */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Saldo inicial</label>
               <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 flex items-center gap-2 border border-gray-100 dark:border-slate-600">
@@ -326,6 +343,7 @@ export default function AccountsPage() {
               </div>
             </div>
             
+            {/* Cheque Especial */}
             <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
               <div>
                 <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
@@ -349,6 +367,13 @@ export default function AccountsPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Transferência entre Contextos */}
+      <TransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        onComplete={() => loadAccounts()}
+      />
     </div>
   )
 }
