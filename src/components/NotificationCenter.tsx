@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation'
 
 interface Notification {
   id: string
-  type: 'invoice_overdue' | 'invoice_soon' | 'subscription_overdue' | 'subscription_soon' | 'budget_over' | 'budget_warning' | 'pending_expense' | 'pending_income'
+  type: 'invoice_overdue' | 'invoice_soon' | 'subscription_overdue' | 'subscription_soon' | 'budget_over' | 'budget_warning' | 'pending_expense' | 'pending_income' | 'financing_overdue' | 'financing_soon' | 'debt_overdue' | 'debt_soon'
   title: string
   subtitle: string
   cardId?: string
   budgetId?: string
   txId?: string
   subId?: string
+  financingId?: string
+  debtId?: string
+  route?: string
   severity: 'critical' | 'warning' | 'info' | 'success'
 }
 
@@ -36,6 +39,10 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
       case 'budget_warning': return <Target size={18} className="text-orange-500" />
       case 'pending_expense': return <Clock size={18} className="text-blue-500" />
       case 'pending_income': return <CheckCircle size={18} className="text-emerald-500" />
+      case 'financing_overdue': return <AlertTriangle size={18} className="text-red-500" />
+      case 'financing_soon': return <AlertTriangle size={18} className="text-orange-500" />
+      case 'debt_overdue': return <AlertTriangle size={18} className="text-red-500" />
+      case 'debt_soon': return <AlertTriangle size={18} className="text-orange-500" />
       default: return <Bell size={18} className="text-gray-400" />
     }
   }
@@ -51,6 +58,13 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
   }
 
   const handleClick = (notif: Notification) => {
+    // Se tem rota direta, usa ela primeiro
+    if (notif.route) {
+      router.push(notif.route)
+      onClose()
+      return
+    }
+    // Navegação por ID específico
     if (notif.cardId) {
       router.push(`/cards/${notif.cardId}`)
     } else if (notif.budgetId) {
@@ -59,6 +73,10 @@ export default function NotificationCenter({ isOpen, onClose, notifications }: N
       router.push(`/transactions/${notif.txId}`)
     } else if (notif.subId) {
       router.push('/subscriptions')
+    } else if (notif.financingId) {
+      router.push(`/financings/${notif.financingId}`)
+    } else if (notif.debtId) {
+      router.push(`/debts/${notif.debtId}`)
     }
     onClose()
   }
