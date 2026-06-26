@@ -9,8 +9,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Users, Wallet,
-  Settings2, ToggleLeft, ToggleRight, MoveUp, MoveDown, Bell,
-  X
+  Settings2
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -25,6 +24,7 @@ import SyncButton from '@/components/SyncButton'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
+import PersonalizeModal from '@/components/PersonalizeModal'
 
 // ============================================================
 // SEÇÕES DISPONÍVEIS (para personalização)
@@ -133,16 +133,8 @@ function HomeContent() {
   }
 
   // ============================================================
-  // MODAL DE PERSONALIZAÇÃO
+  // MODAL DE PERSONALIZAÇÃO (funções)
   // ============================================================
-  const openPersonalize = () => {
-    const enabled = ALL_SECTIONS.filter(s => enabledSections.includes(s.id))
-    const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id))
-    setPersonalizeOrder([...enabled, ...missing])
-    setPersonalizeEnabled(new Set(enabledSections))
-    setShowPersonalizeModal(true)
-  }
-
   const toggleSection = (id: string) => {
     setPersonalizeEnabled(prev => {
       const next = new Set(prev)
@@ -176,8 +168,16 @@ function HomeContent() {
     showToast('Tela inicial personalizada!', 'success')
   }
 
+  const openPersonalize = () => {
+    const enabled = ALL_SECTIONS.filter(s => enabledSections.includes(s.id))
+    const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id))
+    setPersonalizeOrder([...enabled, ...missing])
+    setPersonalizeEnabled(new Set(enabledSections))
+    setShowPersonalizeModal(true)
+  }
+
   // ============================================================
-  // LOAD DATA (COMPLETO - COMO ESTAVA ANTES)
+  // LOAD DATA (COMPLETO)
   // ============================================================
   const loadData = useCallback(async () => {
     if (!user) return
@@ -291,169 +291,33 @@ function HomeContent() {
   })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
 
-  // === GERAR NOTIFICAÇÕES (COMPLETO - COMO ESTAVA ANTES) ===
+  // Notificações
   const notifications: any[] = []
-
   cards.forEach(card => {
     const days = card.due_day - todayDay
-    if (days < 0) {
-      notifications.push({
-        id: `invoice-overdue-${card.id}`,
-        type: 'invoice_overdue',
-        title: `Fatura vencida: ${card.name}`,
-        subtitle: `Venceu dia ${card.due_day} — ${formatCurrency(card.faturaAtual || 0)}`,
-        cardId: card.id,
-        severity: 'critical'
-      })
-    } else if (days <= 3) {
-      notifications.push({
-        id: `invoice-soon-${card.id}`,
-        type: 'invoice_soon',
-        title: `Fatura próxima: ${card.name}`,
-        subtitle: `Vence em ${days} dia(s) — ${formatCurrency(card.faturaAtual || 0)}`,
-        cardId: card.id,
-        severity: 'warning'
-      })
-    }
+    if (days < 0) notifications.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day} — ${formatCurrency(card.faturaAtual || 0)}`, cardId: card.id, severity: 'critical' })
+    else if (days <= 3) notifications.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s) — ${formatCurrency(card.faturaAtual || 0)}`, cardId: card.id, severity: 'warning' })
   })
-
   subscriptions.forEach(sub => {
     const days = sub.due_day - todayDay
-    if (days < 0) {
-      notifications.push({
-        id: `sub-overdue-${sub.id}`,
-        type: 'subscription_overdue',
-        title: `Assinatura vencida: ${sub.name}`,
-        subtitle: `Venceu dia ${sub.due_day} — ${formatCurrency(Number(sub.amount) || 0)}`,
-        subId: sub.id,
-        severity: 'critical'
-      })
-    } else if (days <= 5) {
-      notifications.push({
-        id: `sub-soon-${sub.id}`,
-        type: 'subscription_soon',
-        title: `Assinatura próxima: ${sub.name}`,
-        subtitle: `Vence em ${days} dia(s) — ${formatCurrency(Number(sub.amount) || 0)}`,
-        subId: sub.id,
-        severity: 'warning'
-      })
-    }
+    if (days < 0) notifications.push({ id: `sub-overdue-${sub.id}`, type: 'subscription_overdue', title: `Assinatura vencida: ${sub.name}`, subtitle: `Venceu dia ${sub.due_day}`, subId: sub.id, severity: 'critical' })
+    else if (days <= 5) notifications.push({ id: `sub-soon-${sub.id}`, type: 'subscription_soon', title: `Assinatura próxima: ${sub.name}`, subtitle: `Vence em ${days} dia(s)`, subId: sub.id, severity: 'warning' })
   })
+  const criticalCount = notifications.filter(n => n.severity === 'critical').length
 
-  financings.forEach(fin => {
-    if (!fin.next_due_date) return
-    const daysUntilDue = differenceInDays(new Date(fin.next_due_date), today)
-    if (daysUntilDue < 0) {
-      notifications.push({
-        id: `financing-overdue-${fin.id}`,
-        type: 'financing_overdue',
-        title: `Parcela vencida: ${fin.name}`,
-        subtitle: `Venceu ${format(new Date(fin.next_due_date), "dd/MM")} — ${formatCurrency(Number(fin.installment_value))}`,
-        financingId: fin.id,
-        severity: 'critical'
-      })
-    } else if (daysUntilDue <= 3) {
-      notifications.push({
-        id: `financing-soon-${fin.id}`,
-        type: 'financing_soon',
-        title: `Parcela próxima: ${fin.name}`,
-        subtitle: `Vence em ${daysUntilDue} dia(s) — ${formatCurrency(Number(fin.installment_value))}`,
-        financingId: fin.id,
-        severity: 'warning'
-      })
-    }
-  })
-
-  debts.forEach(debt => {
-    if (!debt.due_date) return
-    const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
-    const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
-    if (daysUntilDue < 0) {
-      notifications.push({
-        id: `debt-overdue-${debt.id}`,
-        type: 'debt_overdue',
-        title: `Dívida vencida: ${debt.person_name}`,
-        subtitle: `Venceu ${format(new Date(debt.due_date), "dd/MM")} — ${formatCurrency(remaining)}`,
-        debtId: debt.id,
-        severity: 'critical'
-      })
-    } else if (daysUntilDue <= 3) {
-      notifications.push({
-        id: `debt-soon-${debt.id}`,
-        type: 'debt_soon',
-        title: `Dívida próxima: ${debt.person_name}`,
-        subtitle: `Vence em ${daysUntilDue} dia(s) — ${formatCurrency(remaining)}`,
-        debtId: debt.id,
-        severity: 'warning'
-      })
-    }
-  })
-
-  budgets.forEach(budget => {
-    if (budget.remaining < 0) {
-      notifications.push({
-        id: `budget-over-${budget.id}`,
-        type: 'budget_over',
-        title: `Orçamento estourado: ${budget.name}`,
-        subtitle: `Gasto ${formatCurrency(budget.spent)} de ${formatCurrency(Number(budget.amount))}`,
-        budgetId: budget.id,
-        severity: 'critical'
-      })
-    } else if (budget.percent >= 80) {
-      notifications.push({
-        id: `budget-warn-${budget.id}`,
-        type: 'budget_warning',
-        title: `Orçamento quase lá: ${budget.name}`,
-        subtitle: `${budget.percent.toFixed(0)}% utilizado — ${formatCurrency(budget.remaining)} restante`,
-        budgetId: budget.id,
-        severity: 'warning'
-      })
-    }
-  })
-
-  const pendingExpensesList = recentTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
-  if (pendingExpensesList.length > 0) {
-    notifications.push({
-      id: 'pending-expenses',
-      type: 'pending_expense',
-      title: `${pendingExpensesList.length} despesa(s) pendente(s)`,
-      subtitle: `Total: ${formatCurrency(pendings.toPay)}`,
-      severity: 'info',
-      route: '/transactions?filter=expense&status=pending'
-    })
-  }
-
-  const pendingIncomesList = recentTransactions.filter(t => t.status === 'pending' && t.type === 'income')
-  if (pendingIncomesList.length > 0) {
-    notifications.push({
-      id: 'pending-incomes',
-      type: 'pending_income',
-      title: `${pendingIncomesList.length} receita(s) a receber`,
-      subtitle: `Total: ${formatCurrency(pendings.toReceive)}`,
-      severity: 'success',
-      route: '/transactions?filter=income&status=pending'
-    })
-  }
-
-  // 🆕 Atualiza o contador de não lidas do Supabase
   useEffect(() => {
     if (!user) return
-
     const loadUnreadCount = async () => {
       const { data } = await supabase
         .from('notification_reads')
         .select('notification_id')
         .eq('user_id', user.id)
-
       const readIds = new Set(data?.map(d => d.notification_id) || [])
       const unread = notifications.filter(n => !readIds.has(n.id)).length
       setUnreadNotifications(unread)
     }
-
     loadUnreadCount()
   }, [notifications, user])
-
-  const criticalCount = notifications.filter(n => n.severity === 'critical').length
 
   if (authLoading || dataLoading || !layoutLoaded) {
     return (
@@ -464,7 +328,7 @@ function HomeContent() {
   }
 
   // ============================================================
-  // RENDERIZAÇÃO POR SEÇÃO (COMPLETA - COMO ESTAVA ANTES)
+  // RENDERIZAÇÃO POR SEÇÃO
   // ============================================================
   const renderSection = (sectionId: string) => {
     switch (sectionId) {
@@ -801,40 +665,17 @@ function HomeContent() {
       {/* FAB (COMPONENTE SEPARADO) */}
       <FAB onSave={() => loadData()} />
 
-      {/* MODAL DE PERSONALIZAÇÃO */}
-      {showPersonalizeModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setShowPersonalizeModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-slide-up z-10 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100">Personalizar Tela</h2>
-              <button onClick={() => setShowPersonalizeModal(false)} className="p-2 text-gray-400 dark:text-gray-500"><X size={20} /></button>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">Ative/desative e reordene as seções da tela inicial.</p>
-            <div className="space-y-3">
-              {personalizeOrder.map(section => {
-                const enabled = personalizeEnabled.has(section.id)
-                const index = personalizeOrder.findIndex(s => s.id === section.id)
-                return (
-                  <div key={section.id} className={`flex items-center gap-3 p-3 rounded-xl transition-all ${enabled ? 'bg-white dark:bg-slate-700' : 'bg-gray-100 dark:bg-slate-800 opacity-50'}`}>
-                    <button onClick={() => toggleSection(section.id)} className="flex-shrink-0">
-                      {enabled ? <ToggleRight size={24} className="text-teal-600" /> : <ToggleLeft size={24} className="text-gray-400" />}
-                    </button>
-                    <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">{section.label}</span>
-                    {enabled && (
-                      <div className="flex flex-col gap-1">
-                        <button onClick={() => moveSection(section.id, 'up')} disabled={index === 0} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"><MoveUp size={16} /></button>
-                        <button onClick={() => moveSection(section.id, 'down')} disabled={index === personalizeOrder.length - 1} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"><MoveDown size={16} /></button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <button onClick={handleSavePersonalize} className="w-full mt-6 bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-2xl font-bold">Salvar Personalização</button>
-          </div>
-        </div>
-      )}
+      {/* MODAL DE PERSONALIZAÇÃO (COMPONENTE SEPARADO) */}
+      <PersonalizeModal
+        isOpen={showPersonalizeModal}
+        onClose={() => setShowPersonalizeModal(false)}
+        sections={ALL_SECTIONS}
+        enabled={personalizeEnabled}
+        order={personalizeOrder}
+        onToggle={toggleSection}
+        onMove={moveSection}
+        onSave={handleSavePersonalize}
+      />
 
       {notificationsEnabled && (
         <NotificationCenter
