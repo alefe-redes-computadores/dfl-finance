@@ -33,9 +33,19 @@ export default function AssistantPage() {
     showToast('Chave de API salva!', 'success')
   }
 
+  const handleAnalysisClick = (prompt: string) => {
+    if (!apiKey) {
+      router.push('/assistant/settings')
+      showToast('Configure sua chave de API primeiro.', 'warning')
+      return
+    }
+    localStorage.setItem('dfl_assistant_prompt', prompt)
+    router.push('/assistant/chat')
+  }
+
   const handleChatClick = () => {
     if (!apiKey) {
-      setShowSettings(true)
+      router.push('/assistant/settings')
       showToast('Configure sua chave de API primeiro.', 'warning')
       return
     }
@@ -104,9 +114,9 @@ export default function AssistantPage() {
           </button>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowSettings(true)}
+              onClick={() => router.push('/assistant/settings')}
               className="p-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
-              title="Configurar API"
+              title="Configurações"
             >
               <Settings size={20} />
             </button>
@@ -125,7 +135,7 @@ export default function AssistantPage() {
               : 'Configure sua chave de API para começar'}
           </p>
           <button
-            onClick={() => setShowSettings(true)}
+            onClick={() => router.push('/assistant/settings')}
             className={`mt-3 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${
               apiKey 
                 ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' 
@@ -171,16 +181,7 @@ export default function AssistantPage() {
             return (
               <button
                 key={index}
-                onClick={() => {
-                  if (!apiKey) {
-                    setShowSettings(true)
-                    showToast('Configure sua chave de API primeiro.', 'warning')
-                    return
-                  }
-                  // Salva o prompt no localStorage para o chat usar
-                  localStorage.setItem('dfl_assistant_prompt', action.prompt)
-                  router.push('/assistant/chat')
-                }}
+                onClick={() => handleAnalysisClick(action.prompt)}
                 className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-4 hover:shadow-md transition-all text-left group"
               >
                 <div className={`w-12 h-12 rounded-xl ${action.bg} flex items-center justify-center flex-shrink-0`}>
