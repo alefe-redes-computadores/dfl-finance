@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 
 interface Notification {
   id: string
@@ -69,28 +71,59 @@ function groupNotifications(notifs: Notification[]): NotificationGroup[] {
 
 export default function NotificationCenter({ isOpen, onClose, notifications, onReadChange }: NotificationCenterProps) {
   const router = useRouter()
+  const { user } = useAuth()
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
 
-  // Carregar lidos do localStorage ao abrir
+  // 🔄 Carregar lidos do Supabase ao abrir
   useEffect(() => {
-    if (isOpen) {
-      const saved = localStorage.getItem('dfl_read_notifications')
-      if (saved) {
-        try {
-          setReadIds(new Set(JSON.parse(saved)))
-        } catch {}
-      }
+    if (isOpen && user) {
+      loadReadNotifications()
     }
-  }, [isOpen])
+  }, [isOpen, user])
 
-  // Salvar no localStorage sempre que mudar
-  const updateReadIds = (newRead: Set<string>) => {
-    setReadIds(newRead)
-    localStorage.setItem('dfl_read_notifications', JSON.stringify([...newRead]))
+  const loadReadNotifications = async () => {
+    if (!user) return
+    const { data } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', user.id)
     
+    if (data) {
+      setReadIds(new Set(data.map(d => d.notification_id)))
+    }
+  }
+
+  // 💾 Salvar como lido no Supabase
+  const markAsRead = async (notifIds: string[]) => {
+    if (!user) return
+    
+    const newRead = new Set(readIds)
+    notifIds.forEach(id => newRead.add(id))
+    setReadIds(newRead)
+
+    // Salvar no Supabase (um por um, ignora conflitos)
+    for (const notifId of notifIds) {
+      await supabase
+        .from('notification_reads')
+        .upsert({
+          user_id: user.id,
+          notification_id: notifId,
+          read_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,notification_id'
+        })
+    }
+
     // Avisar a Home para atualizar o contador
     const unread = notifications.filter(n => !newRead.has(n.id)).length
     onReadChange?.(unread)
+  }
+
+  // 📋 Marcar todas como lidas
+  const markAllAsRead = async () => {
+    if (!user) return
+    const allIds = notifications.map(n => n.id)
+    await markAsRead(allIds)
   }
 
   if (!isOpen) return null
@@ -98,10 +131,9 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const grouped = groupNotifications(notifications)
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
 
-  const handleClick = (group: NotificationGroup) => {
-    const newRead = new Set(readIds)
-    group.items.forEach(n => newRead.add(n.id))
-    updateReadIds(newRead)
+  const handleClick = async (group: NotificationGroup) => {
+    const notifIds = group.items.map(n => n.id)
+    await markAsRead(notifIds)
 
     if (group.route) {
       router.push(group.route)
@@ -115,12 +147,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     }
     
     onClose()
-  }
-
-  const markAllAsRead = () => {
-    const newRead = new Set<string>()
-    notifications.forEach(n => newRead.add(n.id))
-    updateReadIds(newRead)
   }
 
   const getIcon = (type: string) => {
