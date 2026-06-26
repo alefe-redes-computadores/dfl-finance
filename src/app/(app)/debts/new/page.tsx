@@ -124,6 +124,10 @@ function NewDebtContent() {
     }
   }
 
+  const handleBack = () => {
+    router.push('/debts')
+  }
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
       <Loader2 className="animate-spin text-teal-700" size={40} />
@@ -137,8 +141,9 @@ function NewDebtContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+        <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
         </button>
         <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? 'Editar Empréstimo' : 'Novo Empréstimo'}</h2>
@@ -148,6 +153,7 @@ function NewDebtContent() {
       </div>
 
       <div className="space-y-5">
+        {/* Contexto */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Contexto</label>
           <div className="flex gap-2">
@@ -163,6 +169,7 @@ function NewDebtContent() {
           </div>
         </div>
 
+        {/* Nome da pessoa */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome da pessoa</label>
           <div className="flex items-center gap-3">
@@ -177,6 +184,7 @@ function NewDebtContent() {
           </div>
         </div>
 
+        {/* Valor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor emprestado</label>
           <div className="flex items-center gap-2">
@@ -192,6 +200,7 @@ function NewDebtContent() {
           </div>
         </div>
 
+        {/* Data de vencimento */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Data de vencimento (opcional)</label>
           <div className="flex items-center gap-3">
@@ -205,6 +214,7 @@ function NewDebtContent() {
           </div>
         </div>
 
+        {/* Descrição */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
           <div className="flex items-center gap-3">
@@ -219,6 +229,7 @@ function NewDebtContent() {
           </div>
         </div>
 
+        {/* Categoria */}
         <button
           onClick={() => setShowCatModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -233,6 +244,7 @@ function NewDebtContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
+        {/* Conta */}
         <button
           onClick={() => setShowAccModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -247,6 +259,7 @@ function NewDebtContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
+        {/* Cor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
@@ -261,6 +274,7 @@ function NewDebtContent() {
           </div>
         </div>
 
+        {/* Ícone */}
         <button
           onClick={() => setShowIconModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -278,6 +292,7 @@ function NewDebtContent() {
         </button>
       </div>
 
+      {/* Modal Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -316,6 +331,7 @@ function NewDebtContent() {
         </div>
       )}
 
+      {/* Modal Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
