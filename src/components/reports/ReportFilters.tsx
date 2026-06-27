@@ -1,85 +1,134 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
+import React, { useState, useEffect } from 'react'
+import { Calendar, ChevronDown } from 'lucide-react'
+import { format, subDays, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { useContext_ } from '@/components/ContextToggle'
 
-export interface FilterState {
-  period: string
-  accountId: string
+export interface ReportFilterValues {
+  context: 'dfl' | 'personal'
+  dateRange: {
+    start: string
+    end: string
+  }
+  preset: '7days' | '30days' | '90days' | 'thisMonth' | 'lastMonth' | 'custom'
 }
 
 interface ReportFiltersProps {
-  filters: FilterState
-  onChange: (filters: FilterState) => void
+  onChange: (filters: ReportFilterValues) => void
+  initialPreset?: ReportFilterValues['preset']
 }
 
-const PERIOD_OPTIONS = [
-  { value: 'this-month', label: 'Este mês' },
-  { value: 'last-month', label: 'Mês passado' },
-  { value: 'last-3-months', label: 'Últimos 3 meses' },
-  { value: 'this-year', label: 'Este ano' },
-  { value: 'last-year', label: 'Ano passado' },
-  { value: 'custom', label: 'Personalizado' },
-]
-
-export default function ReportFilters({ filters, onChange }: ReportFiltersProps) {
-  const { user } = useAuth()
+export default function ReportFilters({ onChange, initialPreset = 'thisMonth' }: ReportFiltersProps) {
   const { context } = useContext_()
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
+  const [preset, setPreset] = useState<ReportFilterValues['preset']>(initialPreset)
+  const [customStart, setCustomStart] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [customEnd, setCustomEnd] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [showCustom, setShowCustom] = useState(preset === 'custom')
+
+  const presets = [
+    { key: '7days', label: '7 dias' },
+    { key: '30days', label: '30 dias' },
+    { key: '90days', label: '90 dias' },
+    { key: 'thisMonth', label: 'Este mês' },
+    { key: 'lastMonth', label: 'Mês passado' },
+    { key: 'custom', label: 'Personalizado' },
+  ] as const
 
   useEffect(() => {
-    if (!user?.id) return
-    supabase
-      .from('accounts')
-      .select('id, name')
-      .match({ user_id: user.id, context })
-      .order('name')
-      .then(({ data }) => setAccounts(Array.isArray(data) ? data : []))
-  }, [user, context])
+    let start = ''
+    let end = ''
 
-  const updateFilter = (key: keyof FilterState, value: string) => {
-    onChange({ ...filters, [key]: value })
+    const today = new Date()
+    switch (preset) {
+      case '7days':
+        start = format(subDays(today, 7), 'yyyy-MM-dd')
+        end = format(today, 'yyyy-MM-dd')
+        break
+      case '30days':
+        start = format(subDays(today, 30), 'yyyy-MM-dd')
+        end = format(today, 'yyyy-MM-dd')
+        break
+      case '90days':
+        start = format(subDays(today, 90), 'yyyy-MM-dd')
+        end = format(today, 'yyyy-MM-dd')
+        break
+      case 'thisMonth':
+        start = format(startOfMonth(today), 'yyyy-MM-dd')
+        end = format(endOfMonth(today), 'yyyy-MM-dd')
+        break
+      case 'lastMonth':
+        const last = subMonths(today, 1)
+        start = format(startOfMonth(last), 'yyyy-MM-dd')
+        end = format(endOfMonth(last), 'yyyy-MM-dd')
+        break
+      case 'custom':
+        start = customStart
+        end = customEnd
+        break
+    }
+
+    onChange({
+      context,
+      dateRange: { start, end },
+      preset,
+    })
+  }, [preset, customStart, customEnd, context])
+
+  const handlePresetChange = (key: ReportFilterValues['preset']) => {
+    setPreset(key)
+    setShowCustom(key === 'custom')
   }
 
   return (
-    <div className="space-y-3 mb-6">
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {PERIOD_OPTIONS.map(opt => (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="flex items-center gap-2 mb-3">
+        <Calendar size={16} className="text-teal-600 dark:text-teal-400" />
+        <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Período</span>
+      </div>
+
+      {/* Presets */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {presets.map(p => (
           <button
-            key={opt.value}
-            onClick={() => updateFilter('period', opt.value)}
-            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-              filters.period === opt.value
+            key={p.key}
+            onClick={() => handlePresetChange(p.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+              preset === p.key
                 ? 'bg-teal-700 text-white'
-                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-100 dark:border-slate-700'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
             }`}
           >
-            {opt.label}
+            {p.label}
           </button>
         ))}
       </div>
 
-      {filters.period === 'custom' && (
-        <div className="flex gap-2">
-          <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl p-2 text-xs text-gray-800 dark:text-gray-200 outline-none" />
-          <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl p-2 text-xs text-gray-800 dark:text-gray-200 outline-none" />
+      {/* Custom date inputs */}
+      {showCustom && (
+        <div className="flex items-center gap-3 mt-2">
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-400 dark:text-gray-500 block mb-1">Início</label>
+            <input
+              type="date"
+              value={customStart}
+              onChange={e => setCustomStart(e.target.value)}
+              className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl px-3 py-2 text-xs outline-none focus:border-teal-500 transition-colors text-gray-800 dark:text-gray-200"
+            />
+          </div>
+          <span className="text-gray-400 mt-4">—</span>
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-400 dark:text-gray-500 block mb-1">Fim</label>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={e => setCustomEnd(e.target.value)}
+              className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl px-3 py-2 text-xs outline-none focus:border-teal-500 transition-colors text-gray-800 dark:text-gray-200"
+            />
+          </div>
         </div>
       )}
-
-      <select
-        value={filters.accountId}
-        onChange={e => updateFilter('accountId', e.target.value)}
-        className="w-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl p-2 text-xs text-gray-800 dark:text-gray-200 outline-none"
-      >
-        <option value="">Todas as contas</option>
-        {accounts.map(acc => (
-          <option key={acc.id} value={acc.id}>{acc.name}</option>
-        ))}
-      </select>
     </div>
   )
 }
