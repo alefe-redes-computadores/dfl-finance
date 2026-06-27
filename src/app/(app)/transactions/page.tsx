@@ -41,33 +41,50 @@ function TransactionContent() {
     })}`
 
   const loadTransactions = useCallback(async () => {
-    if (!user) return
+    if (!user || !context) {
+      // Aguarda usuário e contexto estarem prontos
+      return
+    }
     setLoading(true)
 
-    let query = supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color), accounts(name, color)')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
+    try {
+      let query = supabase
+        .from('transactions')
+        .select('*, categories(name, icon, color), accounts(name, color)')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
 
-    if (filter === 'income') {
-      query = query.eq('type', 'income')
-    } else if (filter === 'expense') {
-      query = query.in('type', ['expense', 'sangria'])
-    } else if (filter === 'transfer') {
-      query = query.eq('type', 'transfer')
-    } else if (filter === 'pending') {
-      query = query.eq('status', 'pending')
+      if (filter === 'income') {
+        query = query.eq('type', 'income')
+      } else if (filter === 'expense') {
+        query = query.in('type', ['expense', 'sangria'])
+      } else if (filter === 'transfer') {
+        query = query.eq('type', 'transfer')
+      } else if (filter === 'pending') {
+        query = query.eq('status', 'pending')
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Erro ao buscar transações:', error)
+        setTransactions([])
+      } else {
+        setTransactions(Array.isArray(data) ? data : [])
+      }
+    } catch (err) {
+      console.error('Erro inesperado:', err)
+      setTransactions([])
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query
-    setTransactions(Array.isArray(data) ? data : [])
-    setLoading(false)
   }, [user, context, filter])
 
-  useEffect(() => { loadTransactions() }, [loadTransactions])
+  useEffect(() => {
+    loadTransactions()
+  }, [loadTransactions])
 
   // Filtro local pela pesquisa (descrição ou nome da categoria)
   const filteredTransactions = searchQuery.trim()
