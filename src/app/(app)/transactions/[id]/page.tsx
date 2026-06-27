@@ -56,11 +56,11 @@ export default function EditTransactionPage() {
   const [isFinancing, setIsFinancing] = useState(false)
   const [isLoan, setIsLoan] = useState(false)
 
-  // Upload de comprovante
-  const [receipt, setReceipt] = useState<File | null>(null)
+  // Upload de comprovante (instantâneo)
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [receiptName, setReceiptName] = useState<string>('')
-  const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   // Vinculação com financiamento/empréstimo
   const [financingId, setFinancingId] = useState<string | null>(null)
@@ -86,9 +86,12 @@ export default function EditTransactionPage() {
     setIsPaid(selectedDate <= today)
   }
 
-  const processReceipt = async (file: File) => {
-    setReceipt(file)
+  // Upload instantâneo
+  const uploadFile = async (file: File) => {
+    if (!user) return
+    setUploading(true)
     setReceiptName(file.name)
+
     if (file.type.startsWith('image/')) {
       const reader = new FileReader()
       reader.onload = (e) => setReceiptPreview(e.target?.result as string)
@@ -96,7 +99,48 @@ export default function EditTransactionPage() {
     } else {
       setReceiptPreview(null)
     }
-    // OCR opcional pode ser adicionado aqui se desejar
+
+    try {
+      const ext = file.name.split('.').pop() || 'jpg'
+      const uniqueName = `${crypto.randomUUID()}.${ext}`
+      const path = `${user.id}/${uniqueName}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(path, file)
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(path)
+
+      // Remove o comprovante anterior, se houver
+      if (receiptUrl) {
+        const oldPath = receiptUrl.split('/').slice(-2).join('/')
+        await supabase.storage.from('receipts').remove([oldPath])
+      }
+
+      setReceiptUrl(urlData.publicUrl)
+      showToast('Comprovante atualizado!', 'success')
+    } catch (err: any) {
+      showToast(`Erro ao anexar: ${err.message}`, 'error')
+      setReceiptPreview(null)
+      setReceiptName('')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleRemoveReceipt = async () => {
+    if (receiptUrl) {
+      const path = receiptUrl.split('/').slice(-2).join('/')
+      await supabase.storage.from('receipts').remove([path])
+    }
+    setReceiptUrl(null)
+    setReceiptPreview(null)
+    setReceiptName('')
+    showToast('Comprovante removido.', 'info')
   }
 
   const handleReceiptOption = (option: string) => {
@@ -105,20 +149,18 @@ export default function EditTransactionPage() {
       setShowCamera(true)
       return
     }
-    if (option === 'galeria' || option === 'pdf') {
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = option === 'pdf' ? 'application/pdf' : 'image/*'
-      input.onchange = (e: any) => {
-        const file = e.target?.files?.[0]
-        if (file) processReceipt(file)
-      }
-      input.click()
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = option === 'pdf' ? 'application/pdf' : 'image/*'
+    input.onchange = (e: any) => {
+      const file = e.target?.files?.[0]
+      if (file) uploadFile(file)
     }
+    input.click()
   }
 
   const handleCameraCapture = (file: File) => {
-    processReceipt(file)
+    uploadFile(file)
     setShowCamera(false)
   }
 
@@ -187,8 +229,9 @@ export default function EditTransactionPage() {
 
           // Comprovante existente
           if (txData.receipt_url) {
-            setExistingReceiptUrl(txData.receipt_url)
+            setReceiptUrl(txData.receipt_url)
             setReceiptName('Comprovante existente')
+            setReceiptPreview(txData.receipt_url) // usa a URL como preview
           }
 
           // Flags de financiamento/empréstimo
@@ -248,29 +291,7 @@ export default function EditTransactionPage() {
       return
     }
 
-    // Upload de novo comprovante, se houver
-    let receiptUrl = existingReceiptUrl
-    if (receipt) {
-      try {
-        const ext = receipt.name.split('.').pop() || 'jpg'
-        const uniqueName = `${crypto.randomUUID()}.${ext}`
-        const path = `${user.id}/${uniqueName}`
-        const { data: uploadData, error: uploadError } = await supabase.storage.from('receipts').upload(path, receipt)
-        if (!uploadError && uploadData) {
-          const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
-          receiptUrl = urlData.publicUrl
-          showToast('Comprovante atualizado!', 'success')
-        } else {
-          showToast('Erro ao anexar comprovante.', 'error')
-        }
-      } catch (err) {
-        showToast('Erro ao fazer upload.', 'error')
-      }
-    } else if (receipt === null && existingReceiptUrl) {
-      // Se o usuário removeu o comprovante (setou null), mantemos a remoção
-      receiptUrl = null
-    }
-
+    // A URL do comprovante já está em receiptUrl (pode ter sido alterada ou removida)
     let finalNotes = notes
     if (txType === 'expense') {
       const flags = []
@@ -450,50 +471,47 @@ export default function EditTransactionPage() {
           </button>
         </div>
 
-        {/* Seção do comprovante (nova) */}
-        <div className="border-b border-gray-100 dark:border-slate-700 pb-5">
-          {(receipt || existingReceiptUrl) ? (
-            <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
-              {receiptPreview || existingReceiptUrl ? (
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
-                  <img src={receiptPreview || existingReceiptUrl || ''} alt="Comprovante" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                  <FileImage size={22} className="text-teal-600 dark:text-teal-400" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">
-                  {receiptName || 'Comprovante'}
-                </p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  {receipt ? 'Novo comprovante' : 'Comprovante atual'}
-                </p>
+        {/* Seção do comprovante (instantâneo) */}
+        {uploading ? (
+          <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
+            <Loader2 size={20} className="animate-spin text-teal-700" />
+            <span className="text-sm text-gray-500">Enviando comprovante...</span>
+          </div>
+        ) : receiptUrl ? (
+          <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
+            {receiptPreview ? (
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
+                <img src={receiptPreview} alt="Comprovante" className="w-full h-full object-cover" />
               </div>
-              <button
-                onClick={() => {
-                  setReceipt(null)
-                  setReceiptPreview(null)
-                  setReceiptName('')
-                  setExistingReceiptUrl(null)
-                  showToast('Comprovante removido.', 'info')
-                }}
-                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <Trash2 size={18} />
-              </button>
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                <FileImage size={22} className="text-teal-600 dark:text-teal-400" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">
+                {receiptName || 'Comprovante'}
+              </p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Comprovante anexado
+              </p>
             </div>
-          ) : (
             <button
-              onClick={() => setShowReceiptModal(true)}
-              className="w-full flex items-center gap-3 py-2 text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+              onClick={handleRemoveReceipt}
+              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
             >
-              <Camera size={20} />
-              <span className="text-sm font-medium">Anexar comprovante</span>
+              <Trash2 size={18} />
             </button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowReceiptModal(true)}
+            className="w-full flex items-center gap-3 py-2 text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+          >
+            <Camera size={20} />
+            <span className="text-sm font-medium">Anexar comprovante</span>
+          </button>
+        )}
 
         <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 relative">
           <Calendar size={22} className="text-gray-400 dark:text-gray-500" />
