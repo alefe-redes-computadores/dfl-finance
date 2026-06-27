@@ -15,7 +15,6 @@ import IconPicker from '@/components/IconPicker'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 
-// Categorias pré‑definidas
 const EXPENSE_CATS = [
   { icon: Coffee, label: 'Café', color: '#8B4513' },
   { icon: ShoppingCart, label: 'Compras', color: '#FF6B6B' },
@@ -40,7 +39,6 @@ const INCOME_CATS = [
   { icon: ShieldIcon, label: 'Seguro', color: '#BF360C' },
 ]
 
-/* Ícones inline */
 function TrendingUpIcon(p: any) { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> }
 function PiggyBankIcon(p: any) { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M19 5c-1.5 0-2.8.8-3.5 2H15c-2.2 0-4 1.8-4 4v1h-1c-.6 0-1 .4-1 1v2c0 .6.4 1 1 1h1v1c0 2.2 1.8 4 4 4h.5c.7 1.2 2 2 3.5 2 2.2 0 4-1.8 4-4s-1.8-4-4-4c-.5 0-1 .1-1.4.3-.6-.5-1.4-.8-2.3-.8H15c-.7 0-1.3-.3-1.7-.8.4-.5 1-.8 1.7-.8h2.5c.7 1.2 2 2 3.5 2 2.2 0 4-1.8 4-4s-1.8-4-4-4z"/></svg> }
 function GiftIcon(p: any) { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg> }
@@ -69,16 +67,22 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
   const [pos, setPos] = useState({ x: 16, y: 96 })
   const [dragging, setDragging] = useState(false)
   const start = useRef({ x: 0, y: 0, rx: 16, by: 96 })
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+  const isLongPress = useRef(false)
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault()
     const t = e.touches[0]
     start.current = { x: t.clientX, y: t.clientY, rx: pos.x, by: pos.y }
-    setDragging(true)
+    isLongPress.current = false
+    // Só inicia arraste após 200ms de toque contínuo (evita conflito com scroll)
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true
+      setDragging(true)
+    }, 200)
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!dragging) return
+    if (!isLongPress.current) return
     e.preventDefault()
     const t = e.touches[0]
     const dx = t.clientX - start.current.x
@@ -90,19 +94,27 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
   }
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    setDragging(false)
-    const t = e.changedTouches[0]
-    const dropArea = document.getElementById('fab-remove-zone')
-    if (dropArea) {
-      const r = dropArea.getBoundingClientRect()
-      if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
-        setVisible(false)
-        showToast('Botão oculto. Recarregue a página para vê‑lo novamente.', 'info')
-        return
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    if (!isLongPress.current) {
+      // Foi um toque rápido → abrir modal
+      setShowModal(true)
+    } else {
+      // Foi arraste → verificar área de remoção
+      const t = e.changedTouches[0]
+      const dropArea = document.getElementById('fab-remove-zone')
+      if (dropArea) {
+        const r = dropArea.getBoundingClientRect()
+        if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
+          setVisible(false)
+          showToast('Botão oculto. Recarregue a página para vê‑lo novamente.', 'info')
+          return
+        }
       }
+      // Volta ao canto
+      setPos({ x: 16, y: 96 })
     }
-    // volta ao canto
-    setPos({ x: 16, y: 96 })
+    setDragging(false)
+    isLongPress.current = false
   }
 
   useEffect(() => {
@@ -134,14 +146,15 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
 
   return (
     <>
-      {/* botão flutuante */}
+      {/* botão flutuante com ícone dinâmico */}
       <button
-        onClick={() => { if (!dragging) setShowModal(true) }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className={`fixed z-[500] w-12 h-12 rounded-full shadow-xl flex items-center justify-center transition-colors ${quickType === 'expense' ? 'bg-red-500' : 'bg-emerald-500'} text-white`}
-        style={{ right: `${pos.x}px`, bottom: `${pos.y}px` }}
+        className={`fixed z-[500] w-12 h-12 rounded-full shadow-xl flex items-center justify-center transition-all active:scale-95 ${
+          quickType === 'expense' ? 'bg-red-500' : 'bg-emerald-500'
+        } text-white`}
+        style={{ right: `${pos.x}px`, bottom: `${pos.y}px`, touchAction: 'none' }}
       >
         {quickType === 'expense' ? <ArrowDown size={22} /> : <ArrowUp size={22} />}
       </button>
