@@ -5,18 +5,20 @@ import { useRouter } from 'next/navigation'
 import {
   BarChart3,
   TrendingUp,
-  TrendingDown,
   DollarSign,
   Calendar,
   ArrowUpDown,
-  FileSpreadsheet,
   Download,
   ChevronLeft,
-  Loader2,
 } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import CategoryResult from '@/components/reports/CategoryResult'
-import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
+import CashFlow from '@/components/reports/CashFlow'
+import BudgetVsReal from '@/components/reports/BudgetVsReal'
+import ComparePeriods from '@/components/reports/ComparePeriods'
+import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
+import FixedVsVariable from '@/components/reports/FixedVsVariable'
+import ExportData from '@/components/reports/ExportData'
 
 const reportItems = [
   {
@@ -31,58 +33,48 @@ const reportItems = [
     title: 'Fluxo de Caixa',
     description: 'Entradas e saídas diárias no período',
     icon: ArrowUpDown,
-    component: null,
+    component: CashFlow,
   },
   {
     id: 'budget-vs-real',
     title: 'Orçamento vs Realizado',
     description: 'Compare seus orçamentos com os gastos reais',
     icon: BarChart3,
-    component: null,
+    component: BudgetVsReal,
   },
   {
     id: 'compare-periods',
     title: 'Comparar Períodos',
     description: 'Veja a evolução em relação ao período anterior',
     icon: Calendar,
-    component: null,
+    component: ComparePeriods,
   },
   {
     id: 'fixed-vs-variable',
     title: 'Fixos vs Variáveis',
     description: 'Análise dos gastos recorrentes e variáveis',
     icon: DollarSign,
-    component: null,
+    component: FixedVsVariable,
   },
   {
     id: 'weekday-expenses',
     title: 'Gastos por Dia da Semana',
     description: 'Descubra em quais dias você gasta mais',
     icon: Calendar,
-    component: null,
+    component: WeekdayExpenses,
   },
   {
     id: 'export-data',
     title: 'Exportar Dados',
     description: 'Baixe suas transações em CSV ou PDF',
     icon: Download,
-    component: null,
+    component: ExportData,
   },
 ]
 
 function ReportsContent() {
   const router = useRouter()
-  const { context } = useContext_()
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
-  const [filters, setFilters] = useState<ReportFilterValues>({
-    context,
-    dateRange: { start: '', end: '' },
-    preset: 'thisMonth',
-  })
-
-  const handleFiltersChange = (newFilters: ReportFilterValues) => {
-    setFilters(newFilters)
-  }
 
   const selectedItem = reportItems.find(item => item.id === selectedReport)
 
@@ -95,7 +87,7 @@ function ReportsContent() {
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios'}
+            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios Avançados'}
           </h1>
           <div className="w-10" />
         </div>
@@ -106,19 +98,13 @@ function ReportsContent() {
       <div className="px-4 pt-4">
         {selectedReport && selectedItem ? (
           <div>
-            <ReportFilters
-              onChange={handleFiltersChange}
-              initialPreset={filters.preset}
-            />
-            <div className="mt-4">
-              {selectedItem.component ? (
-                <selectedItem.component />
-              ) : (
-                <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-                  Em breve
-                </div>
-              )}
-            </div>
+            {selectedItem.component ? (
+              <selectedItem.component />
+            ) : (
+              <div className="text-center py-20 text-gray-400 dark:text-gray-500">
+                Em breve
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
