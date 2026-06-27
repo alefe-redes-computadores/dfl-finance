@@ -80,8 +80,8 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
 
-  // Se o modo for "apenas PF", não renderiza o toggle
-  if (appMode === 'personal_only') return null
+  // Se o modo for "apenas PF", retorna null (não renderiza NADA)
+  if (appMode !== 'full') return null
 
   return (
     <div className={`flex bg-gray-200 dark:bg-slate-700 p-1 rounded-full ${montserrat.className}`}>
