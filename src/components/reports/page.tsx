@@ -4,13 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronLeft,
-  PieChart,
-  BarChart3,
-  CalendarDays,
-  Layers,
-  TrendingUp,
-  Target,
-  Download,
   ChevronRight,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -22,7 +15,6 @@ import ComparePeriods from '@/components/reports/ComparePeriods'
 import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
 import FixedVsVariable from '@/components/reports/FixedVsVariable'
 import ExportData from '@/components/reports/ExportData'
-import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
 const reportItems = [
   {
@@ -31,6 +23,7 @@ const reportItems = [
     description: 'Entradas, saídas e saldo líquido por categoria.',
     icon: 'pie-chart',
     color: '#14b8a6',
+    component: CategoryResult,
   },
   {
     id: 'compare',
@@ -38,6 +31,7 @@ const reportItems = [
     description: 'Compare dois períodos lado a lado.',
     icon: 'bar-chart-3',
     color: '#f97316',
+    component: ComparePeriods,
   },
   {
     id: 'weekday',
@@ -45,6 +39,7 @@ const reportItems = [
     description: 'Veja em quais dias você gasta mais.',
     icon: 'calendar-days',
     color: '#8b5cf6',
+    component: WeekdayExpenses,
   },
   {
     id: 'fixed-variable',
@@ -52,6 +47,7 @@ const reportItems = [
     description: 'Separe gastos recorrentes de avulsos.',
     icon: 'layers',
     color: '#ef4444',
+    component: FixedVsVariable,
   },
   {
     id: 'cashflow',
@@ -59,6 +55,7 @@ const reportItems = [
     description: 'Evolução do saldo mês a mês.',
     icon: 'trending-up',
     color: '#3b82f6',
+    component: CashFlow,
   },
   {
     id: 'budget-real',
@@ -66,6 +63,7 @@ const reportItems = [
     description: 'Compare orçamentos com o gasto real.',
     icon: 'target',
     color: '#22c55e',
+    component: BudgetVsReal,
   },
   {
     id: 'export',
@@ -73,18 +71,13 @@ const reportItems = [
     description: 'Baixe suas transações em CSV.',
     icon: 'download',
     color: '#64748b',
+    component: ExportData,
   },
 ]
 
 function ReportsContent() {
   const router = useRouter()
-  const { context } = useContext_()
   const [activeReport, setActiveReport] = useState<string | null>(null)
-  const [filters, setFilters] = useState<ReportFilterValues>({
-    context,
-    dateRange: { start: '', end: '' },
-    preset: 'thisMonth',
-  })
 
   const handleBack = () => {
     if (activeReport) {
@@ -95,24 +88,10 @@ function ReportsContent() {
   }
 
   const renderReport = () => {
-    switch (activeReport) {
-      case 'category':
-        return <CategoryResult />
-      case 'compare':
-        return <ComparePeriods />
-      case 'weekday':
-        return <WeekdayExpenses />
-      case 'fixed-variable':
-        return <FixedVsVariable />
-      case 'cashflow':
-        return <CashFlow />
-      case 'budget-real':
-        return <BudgetVsReal />
-      case 'export':
-        return <ExportData />
-      default:
-        return null
-    }
+    const item = reportItems.find(r => r.id === activeReport)
+    if (!item) return null
+    const Component = item.component
+    return <Component />
   }
 
   return (
@@ -129,10 +108,7 @@ function ReportsContent() {
       </div>
 
       {activeReport ? (
-        <>
-          <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
-          {renderReport()}
-        </>
+        renderReport()
       ) : (
         <div className="space-y-3">
           {reportItems.map(item => {
