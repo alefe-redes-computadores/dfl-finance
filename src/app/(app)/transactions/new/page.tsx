@@ -20,6 +20,8 @@ import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import ModalFinancing from '@/components/ModalFinancing'
+import ModalEmprestimo from '@/components/ModalEmprestimo'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -71,6 +73,12 @@ function NewTransactionContent() {
   const [repetition, setRepetition] = useState<Repetition>('once')
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const [isRefund, setIsRefund] = useState(false)
+
+  // Novos estados para vinculação com financiamento/empréstimo
+  const [financingId, setFinancingId] = useState<string | null>(null)
+  const [debtId, setDebtId] = useState<string | null>(null)
+  const [showFinancingModal, setShowFinancingModal] = useState(false)
+  const [showLoanModal, setShowLoanModal] = useState(false)
 
   const [showCustomRecurrenceModal, setShowCustomRecurrenceModal] = useState(false)
   const [customParcels, setCustomParcels] = useState(12)
@@ -568,7 +576,7 @@ function NewTransactionContent() {
           installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         }
 
-        const payload = {
+        const payload: any = {
           user_id: user.id,
           type,
           amount: installmentAmount,
@@ -584,6 +592,8 @@ function NewTransactionContent() {
           installment_index: totalParcels > 1 ? i + 1 : 1,
           total_installments: totalParcels > 1 ? totalParcels : 1,
           idempotency_key: idempotencyKey,
+          financing_id: financingId,
+          debt_id: debtId,
         }
 
         if (!isOnline) {
@@ -832,13 +842,13 @@ function NewTransactionContent() {
                   <div className="flex items-center gap-3"><ArrowRightLeft size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span></div>
                   <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                 </div>
-                <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowFinancingModal(true)}>
                   <div className="flex items-center gap-3"><Building size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span></div>
-                  <div className="w-12 h-6 rounded-full bg-gray-200 dark:bg-gray-600"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${financingId ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                 </div>
-                <div className="flex items-center justify-between opacity-50 cursor-pointer" onClick={() => setShowComingSoon(true)}>
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowLoanModal(true)}>
                   <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span></div>
-                  <div className="w-12 h-6 rounded-full bg-gray-200 dark:bg-gray-600"><div className="w-5 h-5 bg-white rounded-full mt-0.5 ml-1" /></div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${debtId ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                 </div>
               </div>
             )}
@@ -1181,6 +1191,18 @@ function NewTransactionContent() {
         onClose={() => setShowIconPicker(false)}
         selectedIcon={newCatIcon}
         onSelect={setNewCatIcon}
+      />
+
+      {/* Modais de Financiamento e Empréstimo */}
+      <ModalFinancing
+        isOpen={showFinancingModal}
+        onClose={() => setShowFinancingModal(false)}
+        onSave={(id) => setFinancingId(id)}
+      />
+      <ModalEmprestimo
+        isOpen={showLoanModal}
+        onClose={() => setShowLoanModal(false)}
+        onSave={(id) => setDebtId(id)}
       />
     </div>
   )
