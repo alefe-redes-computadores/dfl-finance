@@ -22,7 +22,7 @@ import ComparePeriods from '@/components/reports/ComparePeriods'
 import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
 import FixedVsVariable from '@/components/reports/FixedVsVariable'
 import ExportData from '@/components/reports/ExportData'
-import ReportFilters, { FilterState } from '@/components/reports/ReportFilters'
+import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
 const reportItems = [
   {
