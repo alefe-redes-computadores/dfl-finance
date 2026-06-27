@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 interface Message {
@@ -55,14 +56,17 @@ function ChatContent() {
   const [showSettings, setShowSettings] = useState(false)
   const [tempKey, setTempKey] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Carregar chave e histórico
   useEffect(() => {
     const saved = localStorage.getItem('dfl_assistant_api_key')
     if (saved) {
       setApiKey(saved)
       setTempKey(saved)
     }
+    loadChatHistory()
     const prompt = localStorage.getItem('dfl_assistant_prompt')
     if (prompt) {
       localStorage.removeItem('dfl_assistant_prompt')
@@ -73,6 +77,39 @@ function ChatContent() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  // Carregar histórico do Supabase
+  const loadChatHistory = async () => {
+    if (!user) return
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(50)
+
+    if (data) {
+      const loaded: Message[] = data.map((msg: any) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+      }))
+      setMessages(loaded)
+    }
+    setHistoryLoaded(true)
+  }
+
+  // Salvar mensagem no Supabase
+  const saveMessage = async (msg: Message) => {
+    if (!user) return
+    await supabase.from('chat_messages').insert({
+      id: msg.id,
+      user_id: user.id,
+      context: context,
+      role: msg.role,
+      content: msg.content,
+    })
+  }
 
   const saveApiKey = () => {
     localStorage.setItem('dfl_assistant_api_key', tempKey)
@@ -96,19 +133,26 @@ function ChatContent() {
       content: messageText.trim(),
     }
 
-    setMessages(prev => [...prev, userMsg])
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
     setInput('')
     setIsLoading(true)
 
+    // Salvar mensagem do usuário
+    await saveMessage(userMsg)
+
     try {
+      // Enviar últimas 20 mensagens como contexto
+      const contextMessages = newMessages.slice(-20).map(m => ({
+        role: m.role,
+        content: m.content,
+      }))
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMsg].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: contextMessages,
           apiKey,
         }),
       })
@@ -127,6 +171,8 @@ function ChatContent() {
       }
 
       setMessages(prev => [...prev, assistantMsg])
+      // Salvar mensagem do assistente
+      await saveMessage(assistantMsg)
     } catch (error: any) {
       const errorMsg: Message = {
         id: crypto.randomUUID(),
@@ -134,6 +180,7 @@ function ChatContent() {
         content: error.message || 'Configure sua chave de API antes de utilizar ou verifique sua conexão.',
       }
       setMessages(prev => [...prev, errorMsg])
+      await saveMessage(errorMsg)
     } finally {
       setIsLoading(false)
     }
@@ -191,7 +238,11 @@ function ChatContent() {
 
       {/* Área de mensagens */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.length === 0 ? (
+        {!historyLoaded ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="animate-spin text-teal-700" size={40} />
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-100 to-emerald-100 dark:from-teal-900/30 dark:to-emerald-900/30 flex items-center justify-center mb-4">
               <Brain size={36} className="text-teal-700 dark:text-teal-400" />
