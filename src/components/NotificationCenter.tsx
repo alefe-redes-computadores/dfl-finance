@@ -130,7 +130,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
   
   const displayedGroups = grouped.slice(0, 5)
-  const hasMore = grouped.length > 5
 
   const handleClick = async (group: NotificationGroup) => {
     const notifIds = group.items.map(n => n.id)
@@ -151,33 +150,23 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   }
 
   const getIcon = (type: string) => {
-    if (type.includes('invoice')) return <CreditCard size={18} />
-    if (type.includes('subscription')) return <Repeat size={18} />
-    if (type.includes('budget')) return <Target size={18} />
-    if (type.includes('pending_expense')) return <Clock size={18} />
-    if (type.includes('pending_income')) return <CheckCircle size={18} />
-    if (type.includes('financing')) return <AlertTriangle size={18} />
-    if (type.includes('debt')) return <AlertTriangle size={18} />
-    return <Bell size={18} />
+    if (type.includes('invoice')) return <CreditCard size={20} />
+    if (type.includes('subscription')) return <Repeat size={20} />
+    if (type.includes('budget')) return <Target size={20} />
+    if (type.includes('pending_expense')) return <Clock size={20} />
+    if (type.includes('pending_income')) return <CheckCircle size={20} />
+    if (type.includes('financing')) return <AlertTriangle size={20} />
+    if (type.includes('debt')) return <AlertTriangle size={20} />
+    return <Bell size={20} />
   }
 
-  const getIconColor = (severity: string) => {
+  const getThemeVars = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'text-red-500'
-      case 'warning': return 'text-orange-500'
-      case 'info': return 'text-blue-500'
-      case 'success': return 'text-emerald-500'
-      default: return 'text-gray-400'
-    }
-  }
-
-  const getBgColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'bg-red-50 dark:bg-red-900/20'
-      case 'warning': return 'bg-orange-50 dark:bg-orange-900/20'
-      case 'info': return 'bg-blue-50 dark:bg-blue-900/20'
-      case 'success': return 'bg-emerald-50 dark:bg-emerald-900/20'
-      default: return 'bg-gray-50 dark:bg-slate-700'
+      case 'critical': return { icon: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10' }
+      case 'warning': return { icon: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-500/10' }
+      case 'info': return { icon: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10' }
+      case 'success': return { icon: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' }
+      default: return { icon: 'text-gray-400', bg: 'bg-gray-100 dark:bg-slate-700' }
     }
   }
 
@@ -186,18 +175,20 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-x-0 top-0 z-50 mx-auto max-w-md pt-16 px-4">
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-                <Bell size={20} className="text-teal-700 dark:text-teal-400" />
+      <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="fixed inset-x-0 top-0 z-[110] mx-auto max-w-md pt-14 px-4 pointer-events-none">
+        <div className="bg-white dark:bg-slate-800 rounded-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300 pointer-events-auto border border-gray-100 dark:border-slate-700">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 pb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                <Bell size={24} className="text-teal-600 dark:text-teal-400" />
               </div>
               <div>
-                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Notificações</h3>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                  {unreadCount} não lida{unreadCount !== 1 ? 's' : ''}
+                <h3 className="font-bold text-[19px] text-gray-800 dark:text-gray-100 tracking-tight">Notificações</h3>
+                <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">
+                  {unreadCount} alerta{unreadCount !== 1 ? 's' : ''} pendente{unreadCount !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
@@ -205,97 +196,90 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               {unreadCount > 0 && (
                 <button 
                   onClick={markAllAsRead}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-full text-xs font-bold hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                  title="Marcar todas como lidas"
                 >
-                  <Check size={14} />
-                  Marcar todas
+                  <Check size={18} />
                 </button>
               )}
-              <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full">
-                <X size={20} />
+              <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full transition-colors">
+                <X size={18} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 px-5 py-3 border-b border-gray-50 dark:border-slate-700">
-            <div className="text-center">
-              <span className="text-[11px] font-bold text-red-500">{criticalCount}</span>
-              <p className="text-[9px] text-gray-400 dark:text-gray-500">Críticos</p>
+          {/* Indicadores Rápidos */}
+          <div className="flex px-6 pb-4 gap-3">
+            <div className="flex-1 bg-red-50 dark:bg-red-500/10 rounded-2xl p-3 flex flex-col items-center justify-center">
+              <span className="text-[16px] font-bold text-red-600 dark:text-red-400">{criticalCount}</span>
+              <span className="text-[10px] font-bold text-red-500/70 uppercase tracking-wider mt-0.5">Críticos</span>
             </div>
-            <div className="text-center">
-              <span className="text-[11px] font-bold text-orange-500">{warningCount}</span>
-              <p className="text-[9px] text-gray-400 dark:text-gray-500">Atenção</p>
+            <div className="flex-1 bg-orange-50 dark:bg-orange-500/10 rounded-2xl p-3 flex flex-col items-center justify-center">
+              <span className="text-[16px] font-bold text-orange-600 dark:text-orange-400">{warningCount}</span>
+              <span className="text-[10px] font-bold text-orange-500/70 uppercase tracking-wider mt-0.5">Atenção</span>
             </div>
           </div>
 
-          <div className="max-h-[50vh] overflow-y-auto">
+          <div className="max-h-[50vh] overflow-y-auto px-4 pb-2 space-y-2">
             {grouped.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
-                  <CheckCircle size={28} className="text-emerald-500" />
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-20 h-20 rounded-[24px] bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
+                  <CheckCircle size={32} className="text-emerald-500" />
                 </div>
-                <p className="font-bold text-gray-800 dark:text-gray-200">Tudo em dia!</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500">Nenhum alerta no momento.</p>
+                <p className="font-bold text-[17px] text-gray-800 dark:text-gray-200">Tudo em dia!</p>
+                <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1">O seu radar financeiro está limpo.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50 dark:divide-slate-700">
-                {displayedGroups.map(group => {
-                  const isRead = group.items.every(n => readIds.has(n.id))
-                  
-                  return (
-                    <button
-                      key={group.key}
-                      onClick={() => handleClick(group)}
-                      className={`w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${getBgColor(group.severity)} ${isRead ? 'opacity-60' : ''}`}
-                    >
-                      <div className="relative w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center shadow-sm">
-                        <span className={getIconColor(group.severity)}>
-                          {getIcon(group.items[0]?.type || '')}
-                        </span>
-                        {!isRead && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-teal-500 rounded-full border-2 border-white dark:border-slate-700" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                          {group.title}
-                          {group.count > 1 && (
-                            <span className="ml-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                              ({group.count})
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{group.subtitle}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {group.count > 1 && (
-                          <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
-                            +{group.count - 1}
-                          </span>
-                        )}
-                        <ArrowRight size={16} className="text-gray-300 dark:text-gray-600" />
-                      </div>
-                    </button>
-                  )
-                })}
+              displayedGroups.map(group => {
+                const isRead = group.items.every(n => readIds.has(n.id))
+                const theme = getThemeVars(group.severity)
                 
-                <button
-                  onClick={() => {
-                    router.push('/notifications')
-                    onClose()
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-4 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors font-bold text-sm border-t border-gray-50 dark:border-slate-700"
-                >
-                  <ExternalLink size={16} />
-                  Ver Central de Notificações
-                  {grouped.length > 0 && (
-                    <span className="text-[10px] bg-teal-100 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
-                      {grouped.length}
-                    </span>
-                  )}
-                </button>
-              </div>
+                return (
+                  <button
+                    key={group.key}
+                    onClick={() => handleClick(group)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-[24px] text-left transition-all ${isRead ? 'opacity-50 hover:opacity-80' : 'bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md'}`}
+                  >
+                    <div className={`relative w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0 ${theme.bg}`}>
+                      <span className={theme.icon}>{getIcon(group.items[0]?.type || '')}</span>
+                      {!isRead && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-[3px] border-white dark:border-slate-800" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 leading-tight">
+                        {group.title}
+                      </p>
+                      <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 truncate mt-1">
+                        {group.subtitle}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {group.count > 1 && (
+                        <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2.5 py-1 rounded-full">
+                          +{group.count - 1}
+                        </span>
+                      )}
+                      <ArrowRight size={18} className="text-gray-300 dark:text-gray-600" />
+                    </div>
+                  </button>
+                )
+              })
             )}
+          </div>
+          
+          {/* Rodapé Ver Tudo */}
+          <div className="p-4 pt-2">
+            <button
+              onClick={() => {
+                router.push('/notifications')
+                onClose()
+              }}
+              className="w-full flex items-center justify-center gap-2 p-4 text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/40 rounded-[20px] transition-colors font-bold text-[14px]"
+            >
+              <ExternalLink size={18} />
+              Ver Central de Notificações
+            </button>
           </div>
         </div>
       </div>
