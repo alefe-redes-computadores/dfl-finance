@@ -26,9 +26,6 @@ import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 
-// ============================================================
-// SEÇÕES DISPONÍVEIS (para personalização)
-// ============================================================
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
@@ -44,9 +41,6 @@ const ALL_SECTIONS = [
 
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 
-// ============================================================
-// COMPONENTE PRINCIPAL
-// ============================================================
 function HomeContent() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -70,7 +64,6 @@ function HomeContent() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
-  // Layout personalizado
   const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_SECTION_ORDER)
   const [layoutLoaded, setLayoutLoaded] = useState(false)
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
@@ -132,9 +125,6 @@ function HomeContent() {
       }, { onConflict: 'user_id,context' })
   }
 
-  // ============================================================
-  // MODAL DE PERSONALIZAÇÃO (funções)
-  // ============================================================
   const toggleSection = (id: string) => {
     setPersonalizeEnabled(prev => {
       const next = new Set(prev)
@@ -178,9 +168,6 @@ function HomeContent() {
     setShowPersonalizeModal(true)
   }
 
-  // ============================================================
-  // LOAD DATA (COMPLETO)
-  // ============================================================
   const loadData = useCallback(async () => {
     if (!user) return
     setDataLoading(true)
@@ -293,7 +280,6 @@ function HomeContent() {
   })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
 
-  // Notificações
   const notifications: any[] = []
   cards.forEach(card => {
     const days = card.due_day - todayDay
@@ -329,9 +315,6 @@ function HomeContent() {
     )
   }
 
-  // ============================================================
-  // RENDERIZAÇÃO POR SEÇÃO (DESIGN PREMIUM)
-  // ============================================================
   const renderSection = (sectionId: string) => {
     switch (sectionId) {
       case 'balance':
@@ -634,7 +617,6 @@ function HomeContent() {
     <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
       <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} isSyncing={isSyncing} />
 
-      {/* Alertas Faturas */}
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
           {cards.map(card => (
@@ -643,7 +625,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Alertas Dívidas */}
       {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
         <div className="mb-4 space-y-2">
           {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map(debt => (
@@ -652,7 +633,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Header Fixo: Navegação de Meses e Contexto */}
       <div className="flex justify-between items-center mb-8">
         <ContextToggle />
         <div className="flex items-center gap-3">
@@ -668,10 +648,8 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* CARDS NA ORDEM PERSONALIZADA */}
       {enabledSections.map(sectionId => renderSection(sectionId))}
 
-      {/* BOTÃO PERSONALIZAR TELA (ESTILO PÍLULA) */}
       <button
         onClick={openPersonalize}
         className="w-full mt-2 flex items-center justify-center gap-2 py-4 rounded-[24px] bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-100 dark:border-slate-700 shadow-sm transition-all"
@@ -680,10 +658,8 @@ function HomeContent() {
         <span className="font-bold text-[15px]">Personalizar Dashboard</span>
       </button>
 
-      {/* FAB (COMPONENTE SEPARADO) */}
       <FAB onSave={() => loadData()} />
 
-      {/* MODAL DE PERSONALIZAÇÃO (COMPONENTE SEPARADO) */}
       <PersonalizeModal
         isOpen={showPersonalizeModal}
         onClose={() => setShowPersonalizeModal(false)}
