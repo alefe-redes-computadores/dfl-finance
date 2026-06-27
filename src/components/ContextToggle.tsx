@@ -52,11 +52,16 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id])
 
   const setAppMode = useCallback(async (mode: 'personal_only' | 'full') => {
-    if (!user?.id) return
+    // 1. Atualiza o estado local imediatamente (feedback instantâneo no clique)
     setAppModeState(mode)
     if (mode === 'personal_only') {
       setContext('personal')
     }
+
+    // 2. Se o usuário não estiver carregado ainda, apenas sai (não tenta salvar)
+    if (!user?.id) return
+
+    // 3. Persiste no Supabase
     await supabase.from('user_settings').upsert({
       user_id: user.id,
       app_mode: mode,
