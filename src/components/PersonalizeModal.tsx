@@ -38,12 +38,16 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
       setAnimatingId(id)
       setTimeout(() => setAnimatingId(null), 300)
       
-      // Troca
-      [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]]
+      // Troca (Forma segura para o TypeScript)
+      const temp = newOrder[idx];
+      newOrder[idx] = newOrder[target];
+      newOrder[target] = temp;
+      
       setLocalOrder(newOrder)
     }
     onMove(id, dir)
   }
+
 
   if (!isOpen) return null
 
