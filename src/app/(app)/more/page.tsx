@@ -10,6 +10,7 @@ import {
   Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
 
@@ -198,7 +199,8 @@ function QuickSettingsModal({
 export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme: toggleThemeOriginal } = useTheme()
+  const { showToast } = useToast()
   const { appMode, setAppMode } = useContext_()
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -221,15 +223,24 @@ export default function MorePage() {
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
+  // NOVAS FUNÇÕES COM TOASTS
+  const toggleTheme = () => {
+    toggleThemeOriginal()
+    const newTheme = theme === 'dark' ? 'light' : 'dark'
+    showToast(newTheme === 'dark' ? 'Modo escuro ativado' : 'Modo escuro desativado', 'success')
+  }
+
   const toggleNotifications = () => {
     const newValue = !notificationsEnabled
     setNotificationsEnabled(newValue)
     localStorage.setItem('dfl_notifications_enabled', String(newValue))
+    showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
   const toggleAppMode = () => {
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
     setAppMode(newMode)
+    showToast(newMode === 'full' ? 'Modo Pessoa Jurídica ativado' : 'Modo apenas Pessoa Física ativado', 'success')
   }
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
