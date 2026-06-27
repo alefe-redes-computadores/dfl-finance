@@ -1,7 +1,8 @@
+
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MoveUp, MoveDown, ToggleLeft, ToggleRight, X, Save } from 'lucide-react'
+import { MoveUp, MoveDown, X, Save, LayoutGrid } from 'lucide-react'
 
 interface Section {
   id: string
@@ -33,7 +34,7 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
     const newOrder = [...localOrder]
     const target = dir === 'up' ? idx - 1 : idx + 1
     if (target >= 0 && target < newOrder.length) {
-      // Animação: marca o item como animando
+      // Animação de pulso ao mover
       setAnimatingId(id)
       setTimeout(() => setAnimatingId(null), 300)
       
@@ -47,59 +48,87 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-slide-up z-10 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100">Personalizar Tela</h2>
-          <button onClick={onClose} className="p-2 text-gray-400"><X size={20} /></button>
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div className="relative w-full max-w-md bg-[#f8f9fa] dark:bg-slate-900 rounded-t-[32px] sm:rounded-[32px] shadow-2xl animate-in slide-in-from-bottom-10 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        
+        {/* Header Premium */}
+        <div className="flex-shrink-0 bg-white dark:bg-slate-800 px-6 pt-6 pb-4 rounded-t-[32px] sm:rounded-t-[32px] border-b border-gray-100 dark:border-slate-700/50">
+          <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6 sm:hidden" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[14px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                <LayoutGrid size={20} className="text-teal-600 dark:text-teal-400" />
+              </div>
+              <div>
+                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 tracking-tight">Personalizar Home</h2>
+                <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Ative e reordene os blocos</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2.5 bg-gray-50 dark:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full transition-colors">
+              <X size={18} />
+            </button>
+          </div>
         </div>
-        <p className="text-xs text-gray-400 mb-4">Ative/desative e reordene as seções.</p>
 
-        <div className="space-y-2">
+        {/* Lista de Seções */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-3">
           {localOrder.map((sec, idx) => {
             const active = enabled.has(sec.id)
             const isAnimating = animatingId === sec.id
+            
             return (
               <div
                 key={sec.id}
-                className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
-                  active ? 'bg-white dark:bg-slate-700 shadow-sm' : 'bg-gray-100 dark:bg-slate-800 opacity-50'
-                } ${isAnimating ? 'scale-[1.02] shadow-md' : 'scale-100'}`}
+                className={`flex items-center gap-4 p-4 rounded-[20px] transition-all duration-300 border ${
+                  active 
+                    ? 'bg-white dark:bg-slate-800 shadow-sm border-gray-100 dark:border-slate-700' 
+                    : 'bg-gray-100/50 dark:bg-slate-800/30 border-transparent opacity-60 grayscale-[0.2]'
+                } ${isAnimating ? 'scale-[1.03] shadow-md border-teal-200 dark:border-teal-800/50' : 'scale-100'}`}
               >
-                <button onClick={() => onToggle(sec.id)} className="flex-shrink-0">
-                  {active ? <ToggleRight size={24} className="text-teal-600" /> : <ToggleLeft size={24} className="text-gray-400" />}
+                {/* Switch iOS Style */}
+                <button 
+                  onClick={() => onToggle(sec.id)} 
+                  className={`relative w-12 h-7 rounded-full flex-shrink-0 transition-colors duration-300 ease-in-out focus:outline-none ${active ? 'bg-teal-500 shadow-inner' : 'bg-gray-300 dark:bg-slate-600 shadow-inner'}`}
+                >
+                  <div className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform duration-300 ease-in-out ${active ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
-                <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">{sec.label}</span>
-                {active && (
-                  <div className="flex flex-col gap-1">
-                    <button
-                      onClick={() => handleMove(sec.id, 'up')}
-                      disabled={idx === 0}
-                      className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 transition-colors"
-                    >
-                      <MoveUp size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleMove(sec.id, 'down')}
-                      disabled={idx === localOrder.length - 1}
-                      className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 transition-colors"
-                    >
-                      <MoveDown size={16} />
-                    </button>
-                  </div>
-                )}
+                
+                <span className={`flex-1 text-[15px] tracking-tight ${active ? 'font-bold text-gray-800 dark:text-gray-100' : 'font-medium text-gray-500 dark:text-gray-400'}`}>
+                  {sec.label}
+                </span>
+                
+                {/* Botões de Ordem */}
+                <div className={`flex flex-col gap-1 transition-opacity duration-300 ${active ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  <button
+                    onClick={() => handleMove(sec.id, 'up')}
+                    disabled={idx === 0}
+                    className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/30 dark:hover:text-teal-400 rounded-md disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
+                  >
+                    <MoveUp size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleMove(sec.id, 'down')}
+                    disabled={idx === localOrder.length - 1}
+                    className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/30 dark:hover:text-teal-400 rounded-md disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
+                  >
+                    <MoveDown size={16} />
+                  </button>
+                </div>
               </div>
             )
           })}
         </div>
 
-        <button
-          onClick={onSave}
-          className="w-full mt-6 bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
-        >
-          <Save size={20} /> Salvar Personalização
-        </button>
+        {/* Footer */}
+        <div className="flex-shrink-0 bg-white dark:bg-slate-800 p-6 border-t border-gray-100 dark:border-slate-700/50">
+          <button
+            onClick={onSave}
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[16px] flex items-center justify-center gap-2 transition-colors shadow-lg shadow-teal-600/20"
+          >
+            <Save size={20} /> Guardar Alterações
+          </button>
+        </div>
       </div>
     </div>
   )
