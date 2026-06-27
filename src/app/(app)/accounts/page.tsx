@@ -12,7 +12,7 @@ import {
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
 import { useToast } from '@/contexts/ToastContext'
-import { useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -33,10 +33,9 @@ export default function AccountsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { showToast } = useToast()
-  const { appMode } = useContext_()
+  const { context } = useContext_()  // Agora usa o contexto global
 
   const [accounts, setAccounts] = useState<any[]>([])
-  const [context, setContext] = useState<'personal' | 'dfl'>('dfl')
   const [loading, setLoading] = useState(true)
   const [hideBalance, setHideBalance] = useState(false)
 
@@ -88,10 +87,11 @@ export default function AccountsPage() {
   const loadAccounts = useCallback(async () => {
     if (!user) return
     setLoading(true)
+    const currentContext = context || 'dfl'
     const { data } = await supabase
       .from('accounts')
       .select('*')
-      .match({ user_id: user.id, context })
+      .match({ user_id: user.id, context: currentContext })
       .order('order', { ascending: true })
       .order('name', { ascending: true })
 
@@ -131,10 +131,11 @@ export default function AccountsPage() {
       return
     }
     setLoading(true)
+    const currentContext = context || 'dfl'
     const { error } = await supabase.from('accounts').insert({
       name: name.trim(),
       balance: balanceNum,
-      context,
+      context: currentContext,
       color,
       allow_negative: allowNegative,
       type: accountType,
@@ -297,21 +298,8 @@ export default function AccountsPage() {
           </div>
         </div>
 
-        {appMode === 'full' && (
-          <div className="flex bg-white dark:bg-slate-800 rounded-full p-1 border border-gray-100 dark:border-slate-700 max-w-[220px] mx-auto shadow-sm">
-            {(['dfl', 'personal'] as const).map(c => (
-              <button
-                key={c}
-                onClick={() => setContext(c)}
-                className={`flex-1 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 ${
-                  context === c ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-800 dark:text-gray-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'
-                }`}
-              >
-                {c === 'dfl' ? 'DFL' : 'Pessoal'}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Componente ContextToggle substituindo o seletor inline */}
+        <ContextToggle />
       </div>
 
       <div className="px-4 mt-6">
