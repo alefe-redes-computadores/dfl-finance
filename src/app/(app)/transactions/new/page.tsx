@@ -8,7 +8,8 @@ import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
-  QrCode, ChevronRight, FileImage, Trash2, Loader2, Paperclip
+  QrCode, ChevronRight, FileImage, Trash2, Loader2, Paperclip,
+  Image as ImageIcon
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -257,7 +258,7 @@ function NewTransactionContent() {
       }
 
       setReceiptUrl(urlData.publicUrl)
-      showToast('Comprovante anexado!', 'success')
+      showToast('Comprovante anexado com sucesso!', 'success')
     } catch (err: any) {
       showToast(`Erro ao anexar: ${err.message}`, 'error')
       setReceiptPreview(null)
@@ -275,7 +276,7 @@ function NewTransactionContent() {
     setReceiptUrl(null)
     setReceiptPreview(null)
     setReceiptName('')
-    showToast('Comprovante removido.', 'info')
+    showToast('Comprovante excluído com sucesso!', 'success')
   }
 
   const handleReceiptOption = (option: string) => {
@@ -600,9 +601,7 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  return (
+  }  return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
@@ -615,7 +614,7 @@ function NewTransactionContent() {
             <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
           <button onClick={() => setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
-            <Paperclip size={20} className="text-gray-700 dark:text-gray-300" />
+            <Camera size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
         </div>
       </div>
@@ -655,7 +654,7 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Seção do comprovante (local corrigido) */}
+      {/* Seção do comprovante com ícones dinâmicos */}
       {uploading ? (
         <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
           <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -670,7 +669,11 @@ function NewTransactionContent() {
               </div>
             ) : (
               <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                <FileImage size={22} className="text-teal-600 dark:text-teal-400" />
+                {receiptName.toLowerCase().endsWith('.pdf') ? (
+                  <Paperclip size={22} className="text-teal-600 dark:text-teal-400" />
+                ) : (
+                  <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />
+                )}
               </div>
             )}
             <div className="flex-1 min-w-0">
