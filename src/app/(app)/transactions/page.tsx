@@ -1,279 +1,253 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import * as Icons from 'lucide-react'
-import { 
-  Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check,
-  ArrowLeftRight, Download
+import { supabase } from '@/lib/supabase'
+import {
+  ChevronLeft,
+  ArrowDown,
+  ArrowUp,
+  Clock,
+  Check,
+  Loader2,
+  Filter,
+  SlidersHorizontal,
 } from 'lucide-react'
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import { getDynamicIcon } from '@/lib/iconUtils'
 
-type Filter = 'all' | 'income' | 'expense' | 'transfer'
-type StatusFilter = 'all' | 'pending' | 'done'
-type Context = 'dfl' | 'personal'
+type FilterType = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
 
-// Helper para renderizar os ícones dinamicamente
-const getDynamicIcon = (iconName: string) => {
-  if (!iconName) return Icons.Tag
-  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
-  return (Icons as any)[formattedName] || Icons.Tag
-}
-
-const safeNum = (val: any) => {
-  if (!val) return 0;
-  if (typeof val === 'number') return val;
-  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g,""));
-  return isNaN(parsed) ? 0 : parsed;
-}
-
-function groupByDate(transactions: any[]) {
-  const groups: Record<string, any[]> = {}
-  transactions.forEach(t => {
-    const key = t.date || 'Sem Data'
-    if (!groups[key]) groups[key] = []
-    groups[key].push(t)
-  })
-  return groups
-}
-
-function dateLabel(dateStr: string) {
-  if (dateStr === 'Sem Data') return dateStr;
-  const d = new Date(dateStr + 'T12:00:00')
-  if (isToday(d)) return 'HOJE'
-  if (isYesterday(d)) return 'ONTEM'
-  return format(d, "dd 'DE' MMMM", { locale: ptBR }).toUpperCase()
-}
-
-export default function TransactionsPage() {
+function TransactionContent() {
   const { user } = useAuth()
   const router = useRouter()
-  const [context, setContext] = useState<Context>('dfl')
+  const searchParams = useSearchParams()
+  const { context } = useContext_()
+
   const [transactions, setTransactions] = useState<any[]>([])
-  const [filter, setFilter] = useState<Filter>('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [showStatusMenu, setShowStatusMenu] = useState(false)
-  const [showExportMenu, setShowExportMenu] = useState(false)
-  const [search, setSearch] = useState('')
-  const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<FilterType>(
+    (searchParams.get('filter') as FilterType) || 'all'
+  )
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const queryFilter = params.get('filter') as Filter
-      if (queryFilter && ['all', 'income', 'expense', 'transfer'].includes(queryFilter)) {
-        setFilter(queryFilter)
-      }
-    }
-  }, [])
-
-  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
 
   const loadTransactions = useCallback(async () => {
-    if (!user) return;
+    if (!user) return
     setLoading(true)
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
     let query = supabase
       .from('transactions')
-      .select('*, categories(name, icon, color), accounts!account_id(name)')
-      .match({ user_id: user.id, context: context })
-      .gte('date', start)
-      .lte('date', end)
+      .select('*, categories(name, icon, color), accounts(name, color)')
+      .eq('user_id', user.id)
+      .eq('context', context)
       .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
 
-    if (filter !== 'all') query = query.eq('type', filter)
-    
-    const { data, error } = await query
-    
-    if (error) {
-      console.error("Erro na listagem de transações:", error)
+    if (filter === 'income') {
+      query = query.eq('type', 'income')
+    } else if (filter === 'expense') {
+      query = query.in('type', ['expense', 'sangria'])
+    } else if (filter === 'transfer') {
+      query = query.eq('type', 'transfer')
+    } else if (filter === 'pending') {
+      query = query.eq('status', 'pending')
     }
-    
+
+    const { data } = await query
     setTransactions(Array.isArray(data) ? data : [])
     setLoading(false)
-  }, [context, currentDate, filter, user])
+  }, [user, context, filter])
 
   useEffect(() => { loadTransactions() }, [loadTransactions])
 
-  const filtered = transactions.filter(t => {
-    let matchSearch = true;
-    if (search) {
-      const desc = String(t.description || '').toLowerCase();
-      const cat = String(t.categories?.name || '').toLowerCase();
-      const term = search.toLowerCase();
-      matchSearch = desc.includes(term) || cat.includes(term);
-    }
+  // Separa pendentes e concluídas
+  const pendentes = transactions.filter(t => t.status === 'pending')
+  const concluidas = transactions.filter(t => t.status !== 'pending')
 
-    let matchStatus = true;
-    if (statusFilter !== 'all') {
-      matchStatus = t.status === statusFilter;
-    }
+  // Agrupa concluídas por data relativa
+  const groupByDate = (txs: any[]) => {
+    const hoje = format(new Date(), 'yyyy-MM-dd')
+    const ontem = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
 
-    return matchSearch && matchStatus;
-  })
+    const grupos: Record<string, any[]> = {}
+    txs.forEach(tx => {
+      let chave = tx.date
+      if (tx.date === hoje) chave = 'HOJE'
+      else if (tx.date === ontem) chave = 'ONTEM'
+      else chave = format(parseISO(tx.date), "dd 'de' MMMM", { locale: ptBR }).toUpperCase()
+      
+      if (!grupos[chave]) grupos[chave] = []
+      grupos[chave].push(tx)
+    })
+    return grupos
+  }
 
-  const grouped = groupByDate(filtered)
-  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+  const gruposConcluidas = groupByDate(concluidas)
 
-  const filters: { key: Filter; label: string }[] = [
+  const filterButtons: { key: FilterType; label: string }[] = [
     { key: 'all', label: 'Todas' },
     { key: 'income', label: 'Receitas' },
     { key: 'expense', label: 'Despesas' },
     { key: 'transfer', label: 'Transferências' },
+    { key: 'pending', label: 'Pendentes' },
   ]
 
-  const handleExport = (range: string) => {
-    setShowExportMenu(false)
-    if (!user) return
-    window.open(`/api/export-transactions?userId=${user.id}&context=${context}&range=${range}`, '_blank')
-  }
-
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
-      <div className="px-4 pt-6 pb-4 bg-[#f8f9fa] dark:bg-slate-900 sticky top-0 z-20">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <button 
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
-              >
-                <Download size={18} className="text-gray-700 dark:text-gray-300" />
-              </button>
-              {showExportMenu && (
-                <div className="absolute right-0 top-[42px] w-40 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
-                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Exportar extrato</p>
-                  {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
-                    <button key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-              <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
-              <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-24 text-center">{monthLabel}</span>
-              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-5">
-          {(['dfl', 'personal'] as Context[]).map(c => (
-            <button key={c} onClick={() => setContext(c)}
-              className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${context === c ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>
-              {c === 'dfl' ? 'Empresa' : 'Pessoal'}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex gap-2 mb-4 relative">
-          <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
-            <Search size={18} className="text-gray-400 dark:text-gray-500" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar transação..."
-              className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
-          </div>
-          
-          <button 
-            onClick={() => setShowStatusMenu(!showStatusMenu)} 
-            className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-          >
-            <SlidersHorizontal size={20} />
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+            <ChevronLeft size={24} />
           </button>
-
-          {showStatusMenu && (
-            <div className="absolute right-0 top-[54px] w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
-              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Filtrar por Status</p>
-              <button onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
-              <button onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
-              <button onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
-            </div>
-          )}
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Transações</h1>
+          <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 font-bold text-sm">
+            + Nova
+          </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {filters.map(f => (
-            <button key={f.key} onClick={() => setFilter(f.key)}
-              className={`px-5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border ${filter === f.key ? 'bg-teal-700 text-white border-teal-700 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-              {f.label}
+        {/* Filtros */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {filterButtons.map(btn => (
+            <button
+              key={btn.key}
+              onClick={() => setFilter(btn.key)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                filter === btn.key
+                  ? 'bg-teal-700 text-white'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {btn.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="px-4">
+      {/* Lista */}
+      <div className="px-4 pt-4">
         {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center py-20 text-gray-400 dark:text-gray-500">
-            <ReceiptText size={48} className="mb-4 opacity-20" />
-            <p className="text-[15px] font-bold text-gray-500 dark:text-gray-400">Nenhuma transação</p>
-            <p className="text-[13px] mt-1">Nenhum resultado encontrado.</p>
+          <div className="flex justify-center py-20">
+            <Loader2 className="animate-spin text-teal-700" size={40} />
           </div>
         ) : (
-          <div className="space-y-6">
-            {sortedDates.map(date => (
-              <div key={date}>
-                <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 mb-3 px-1 tracking-wide">{dateLabel(date)}</p>
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden">
-                  {grouped[date].map((t, index) => {
-                    const isTransferIn = t.type === 'transfer' && t.description?.includes('de ');
-                    const isIncomeVisual = t.type === 'income' || isTransferIn;
-                    const isPending = t.status === 'pending';
-                    
-                    // A MÁGICA ACONTECE AQUI:
-                    const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
-                    
-                    return (
-                      <div 
-                        key={t.id} 
-                        onClick={() => router.push(`/transactions/${t.id}`)}
-                        className={`px-4 py-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${index !== grouped[date].length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
-                      >
-                        {isPending ? (
-                          <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                            <Clock size={12} className="text-red-400" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                            <Check size={12} className="text-emerald-500" />
-                          </div>
-                        )}
+          <>
+            {/* Pendentes no topo */}
+            {pendentes.length > 0 && (
+              <div className="mb-6">
+                {pendentes.map(tx => (
+                  <CardTransacao key={tx.id} tx={tx} router={router} formatCurrency={formatCurrency} />
+                ))}
+              </div>
+            )}
 
-                        <div className="w-10 h-10 rounded-[12px] flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6', color: t.categories?.color || '#64748b' }}>
-                          <IconComp size={18} />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">{t.description ?? t.categories?.name ?? 'Sem descrição'}</p>
-                          <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{t.categories?.name ?? 'Geral'} • {t.accounts?.name ?? ''}</p>
-                        </div>
+            {/* Divisor Concluídas */}
+            {concluidas.length > 0 && pendentes.length > 0 && (
+              <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
+                Concluídas
+              </h3>
+            )}
 
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600 mb-1">
-                            {format(new Date(t.date), "dd 'de' MMM", { locale: ptBR })}
-                          </p>
-                          <p className={`text-[14px] font-bold whitespace-nowrap ${isIncomeVisual ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {isIncomeVisual ? '+' : '-'} R$ {safeNum(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
+            {/* Concluídas agrupadas */}
+            {Object.entries(gruposConcluidas).map(([cabecalho, txs]) => (
+              <div key={cabecalho} className="mb-6">
+                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 mt-6">
+                  {cabecalho}
+                </h3>
+                <div className="space-y-2">
+                  {txs.map(tx => (
+                    <CardTransacao key={tx.id} tx={tx} router={router} formatCurrency={formatCurrency} />
+                  ))}
                 </div>
               </div>
             ))}
-          </div>
+
+            {pendentes.length === 0 && concluidas.length === 0 && (
+              <div className="text-center py-20 text-gray-400 dark:text-gray-500">
+                Nenhuma transação encontrada.
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
+  )
+}
+
+// Componente de Card Refatorado (Design Premium)
+function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; formatCurrency: (v: number) => string }) {
+  const IconComp = getDynamicIcon(tx.categories?.icon)
+  const bgColor = tx.categories?.color || '#64748b'
+  const isPending = tx.status === 'pending'
+  const isIncome = tx.type === 'income'
+  const isTransfer = tx.type === 'transfer'
+
+  return (
+    <div
+      onClick={() => router.push(`/transactions/${tx.id}`)}
+      className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors"
+    >
+      {/* Status */}
+      <div className="flex-shrink-0 w-5 flex justify-center">
+        {isPending ? (
+          <Clock size={14} className="text-red-400" />
+        ) : (
+          <Check size={14} className="text-emerald-500" />
+        )}
+      </div>
+
+      {/* Ícone com fundo suave */}
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: `${bgColor}18`, color: bgColor }}
+      >
+        {isTransfer ? (
+          <ArrowDown size={18} />
+        ) : (
+          <IconComp size={18} />
+        )}
+      </div>
+
+      {/* Informações principais */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
+          {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
+        </p>
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+          {tx.categories?.name || 'Geral'}{tx.accounts?.name ? ` • ${tx.accounts.name}` : ''}
+        </p>
+      </div>
+
+      {/* Data e Valor */}
+      <div className="flex-shrink-0 text-right">
+        <p className="text-[10px] text-gray-400 dark:text-gray-500">
+          {format(parseISO(tx.date), "dd 'de' MMM", { locale: ptBR })}
+        </p>
+        <p className={`text-[14px] font-bold mt-0.5 ${
+          isIncome || isTransfer
+            ? 'text-emerald-600'
+            : 'text-red-500'
+        }`}>
+          {isIncome ? '+ ' : isTransfer ? '' : '- '}
+          {formatCurrency(Number(tx.amount) || 0)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default function TransactionsPage() {
+  return (
+    <ContextProvider>
+      <TransactionContent />
+    </ContextProvider>
   )
 }
