@@ -7,10 +7,11 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
-  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff
+  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { useContext_ } from '@/components/ContextToggle'
 
 /* ------------------------------------------------------------------ */
 /*  Componentes internos (SectionTitle, MenuItem)                      */
@@ -90,7 +91,7 @@ function MenuItem({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Modal de Configurações Rápidas                                     */
+/*  Modal de Configurações Rápidas (agora com Modo PF/PJ)             */
 /* ------------------------------------------------------------------ */
 
 function QuickSettingsModal({
@@ -100,6 +101,8 @@ function QuickSettingsModal({
   toggleTheme,
   notificationsEnabled,
   toggleNotifications,
+  appMode,
+  toggleAppMode,
 }: {
   isOpen: boolean
   onClose: () => void
@@ -107,6 +110,8 @@ function QuickSettingsModal({
   toggleTheme: () => void
   notificationsEnabled: boolean
   toggleNotifications: () => void
+  appMode: 'personal_only' | 'full' | null
+  toggleAppMode: () => void
 }) {
   if (!isOpen) return null
 
@@ -155,6 +160,31 @@ function QuickSettingsModal({
               <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
+
+          {/* Terceira opção: Modo PF e PJ */}
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
+                <Building size={20} className="text-teal-500" />
+              </div>
+              <div>
+                <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Modo PF e PJ</p>
+                <p className="text-[12px] text-gray-500 dark:text-gray-400 font-medium">
+                  {appMode === 'full' ? 'Gerenciar PF e PJ' : 'Apenas Pessoa Física'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={toggleAppMode}
+              className={`w-14 h-8 rounded-full relative transition-colors shadow-inner ${
+                appMode === 'full' ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${
+                appMode === 'full' ? 'right-1' : 'left-1'
+              }`} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -169,6 +199,7 @@ export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { appMode, setAppMode } = useContext_()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -194,6 +225,11 @@ export default function MorePage() {
     const newValue = !notificationsEnabled
     setNotificationsEnabled(newValue)
     localStorage.setItem('dfl_notifications_enabled', String(newValue))
+  }
+
+  const toggleAppMode = () => {
+    const newMode = appMode === 'full' ? 'personal_only' : 'full'
+    setAppMode(newMode)
   }
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
@@ -282,7 +318,6 @@ export default function MorePage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 px-4 pt-8 font-sans transition-colors duration-300">
       
-      {/* Modais omitidos para clareza visual no fluxo (Recorte, Exportar, Indisponível) */}
       {/* Modal de recorte de avatar */}
       {showCropModal && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
@@ -350,8 +385,17 @@ export default function MorePage() {
         </div>
       )}
 
-      {/* Modal Configurações Rápidas */}
-      <QuickSettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} theme={theme} toggleTheme={toggleTheme} notificationsEnabled={notificationsEnabled} toggleNotifications={toggleNotifications} />
+      {/* Modal Configurações Rápidas com a terceira opção */}
+      <QuickSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        notificationsEnabled={notificationsEnabled}
+        toggleNotifications={toggleNotifications}
+        appMode={appMode}
+        toggleAppMode={toggleAppMode}
+      />
 
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-8">
