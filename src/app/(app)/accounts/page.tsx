@@ -4,30 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search, Building, ArrowRightLeft } from 'lucide-react'
+import { ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff, Search, Building } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
-import { useToast } from '@/contexts/ToastContext'
-import TransferModal from '@/components/TransferModal'
-
-// DND Kit Imports
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -38,62 +17,9 @@ const safeNum = (val: any) => {
   return isNaN(parsed) ? 0 : parsed;
 }
 
-// Componente individual arrastável
-function SortableAccountItem({ acc, router, hideBalance }: { acc: any; router: any; hideBalance: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: acc.id })
-  
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : 1,
-  }
-
-  const bal = safeNum(acc.balance);
-  let balanceColorClass = 'text-gray-400 dark:text-gray-500';
-  if (bal > 0) balanceColorClass = 'text-emerald-600';
-  if (bal < 0) balanceColorClass = 'text-red-500';
-
-  return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      className={`bg-white dark:bg-slate-800 p-4 rounded-[20px] flex items-center justify-between transition-all ${
-        isDragging 
-          ? 'shadow-2xl scale-[1.02] border-teal-500 ring-2 ring-teal-500/20' 
-          : 'shadow-sm border border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-      }`}
-    >
-      <div className="flex items-center gap-4 flex-1">
-        {/* Apenas o ícone Grip inicia o arrasto */}
-        <div {...attributes} {...listeners} className="p-2 -ml-2 text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 touch-none cursor-grab active:cursor-grabbing transition-colors">
-          <GripVertical size={18} />
-        </div>
-        
-        {/* O resto do card clica e abre a conta */}
-        <div onClick={() => router.push(`/accounts/${acc.id}`)} className="flex items-center gap-4 cursor-pointer flex-1">
-          <div className="bg-gray-50 dark:bg-slate-700 p-1.5 rounded-2xl shadow-sm">
-            <BankLogo color={acc.color} name={acc.name} size="md" />
-          </div>
-          <div>
-            <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{acc.name}</p>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">Conta Corrente</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="text-right cursor-pointer" onClick={() => router.push(`/accounts/${acc.id}`)}>
-        <p className={`font-bold text-[15px] ${balanceColorClass}`}>
-            {hideBalance ? '••••' : `R$ ${bal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        </p>
-      </div>
-    </div>
-  )
-}
-
 export default function AccountsPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { showToast } = useToast()
   
   const [accounts, setAccounts] = useState<any[]>([])
   const [context, setContext] = useState<'personal' | 'dfl'>('dfl') 
@@ -112,21 +38,6 @@ export default function AccountsPage() {
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [selectedBank, setSelectedBank] = useState<typeof BANK_LIST[0] | null>(null)
 
-  const [showTransferModal, setShowTransferModal] = useState(false)
-
-  // Configuração dos sensores para Mobile (Evita drag acidental ao fazer scroll)
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        delay: 150,
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
   const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
     const num = safeNum(rawValue) / 100
@@ -141,7 +52,6 @@ export default function AccountsPage() {
       .from('accounts')
       .select('*')
       .match({ user_id: user.id, context: context })
-      .order('order_index', { ascending: true, nullsFirst: false })
       .order('name')
     
     setAccounts(Array.isArray(data) ? data : [])
@@ -149,35 +59,6 @@ export default function AccountsPage() {
   }, [context, user])
 
   useEffect(() => { loadAccounts() }, [loadAccounts])
-
-  // Lógica de Reordenação e atualização em background
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (over && active.id !== over.id) {
-      setAccounts((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over.id);
-        const newArray = arrayMove(items, oldIndex, newIndex);
-        
-        saveOrderToDB(newArray);
-        return newArray;
-      });
-    }
-  };
-
-  const saveOrderToDB = async (newArray: any[]) => {
-    try {
-      for (let i = 0; i < newArray.length; i++) {
-        await supabase
-          .from('accounts')
-          .update({ order_index: i })
-          .eq('id', newArray[i].id);
-      }
-    } catch (error) {
-      console.error('Erro ao salvar nova ordem:', error);
-    }
-  };
 
   const handleBankSearch = (value: string) => {
     setBankSearch(value)
@@ -212,17 +93,9 @@ export default function AccountsPage() {
       context, 
       color,
       allow_negative: allowNegative,
-      user_id: user.id,
-      order_index: accounts.length // Adiciona no final da lista
+      user_id: user.id
     }
-    const { error } = await supabase.from('accounts').insert(data)
-    
-    if (error) {
-      showToast('Erro ao criar conta.', 'error')
-    } else {
-      showToast('Conta criada com sucesso!', 'success')
-    }
-    
+    await supabase.from('accounts').insert(data)
     setShowForm(false)
     setName('')
     setDisplayBalance('')
@@ -233,7 +106,6 @@ export default function AccountsPage() {
     setFilteredBanks([])
     setShowBankDropdown(false)
     setSelectedBank(null)
-    setLoading(false)
     loadAccounts()
   }
 
@@ -271,51 +143,58 @@ export default function AccountsPage() {
 
       <div className="px-4 mt-6">
         {/* Saldo total */}
-        <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-50 dark:border-slate-700 mb-6 text-center transition-all">
-          <div className="flex items-center justify-center gap-2 mb-3">
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-50 dark:border-slate-700 mb-6 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">Saldo total</span>
             <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              {hideBalance ? <EyeOff size={16} /> : <Eye size={16} />}
+              {hideBalance ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
-          <p className="text-[36px] font-light text-gray-800 dark:text-gray-100 tracking-tight">
+          <p className="text-[32px] font-light text-gray-800 dark:text-gray-100">
              {hideBalance ? '••••••' : `R$ ${totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </p>
         </div>
 
-        {/* Botão Transferência entre Contextos */}
-        <button
-          onClick={() => setShowTransferModal(true)}
-          className="w-full bg-teal-50 dark:bg-teal-900/20 rounded-[20px] p-4 mb-6 flex items-center justify-center gap-3 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors"
-        >
-          <ArrowRightLeft size={18} />
-          <span className="font-bold text-[14px]">Transferência entre Contextos</span>
-        </button>
-
-        {/* Lista de Contas (Drag and Drop) */}
+        {/* Lista de Contas */}
         {loading ? (
           <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
         ) : accounts.length === 0 ? (
           <div className="text-center py-20 text-gray-400 dark:text-gray-500 text-sm">Nenhuma conta encontrada.</div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={accounts.map(a => a.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3">
-                {accounts.map((acc) => (
-                  <SortableAccountItem 
-                    key={acc.id} 
-                    acc={acc} 
-                    router={router} 
-                    hideBalance={hideBalance} 
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+          <div className="space-y-3">
+            {accounts.map((acc) => {
+              const bal = safeNum(acc.balance);
+              let balanceColorClass = 'text-gray-400 dark:text-gray-500';
+              if (bal > 0) balanceColorClass = 'text-emerald-600';
+              if (bal < 0) balanceColorClass = 'text-red-500';
+
+              return (
+                <div 
+                  key={acc.id} 
+                  onClick={() => router.push(`/accounts/${acc.id}`)} 
+                  className="bg-white dark:bg-slate-800 p-4 rounded-[20px] shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <GripVertical className="text-gray-300 dark:text-gray-600 cursor-grab hover:text-gray-500 dark:hover:text-gray-400 transition-colors" size={18} />
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <div>
+                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{acc.name}</p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">Conta Corrente</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-bold text-[14px] ${balanceColorClass}`}>
+                       {hideBalance ? '••••' : `R$ ${bal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
-      {/* MODAL DE CRIAÇÃO DE CONTA */}
+      {/* MODAL DE CRIAÇÃO - REDESENHADO */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => {
           setShowForm(false)
@@ -324,6 +203,7 @@ export default function AccountsPage() {
         }}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
             
+            {/* Cabeçalho com preview do banco selecionado */}
             <div className="flex items-center gap-4 mb-6">
               {selectedBank ? (
                 <BankLogo color={selectedBank.color} name={selectedBank.name} size="lg" />
@@ -393,7 +273,7 @@ export default function AccountsPage() {
               )}
             </div>
 
-            {/* Nome */}
+            {/* Nome personalizado */}
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
                 Nome da conta
@@ -465,13 +345,6 @@ export default function AccountsPage() {
           </div>
         </div>
       )}
-
-      {/* Modal de Transferência entre Contextos */}
-      <TransferModal
-        isOpen={showTransferModal}
-        onClose={() => setShowTransferModal(false)}
-        onComplete={() => loadAccounts()}
-      />
     </div>
   )
 }
