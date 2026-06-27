@@ -46,19 +46,28 @@ function TransactionContent() {
     setLoading(true)
 
     try {
-      // TESTE SEM JOIN: apenas transactions
-      const { data, error } = await supabase
+      let query = supabase
         .from('transactions')
-        .select('*')
+        .select('*, categories(name, icon, color), accounts(name)')
         .eq('user_id', user.id)
         .eq('context', currentContext)
         .order('date', { ascending: false })
-        .limit(10)
+        .order('created_at', { ascending: false })
 
-      console.log('Teste sem JOIN:', { data, error, userId: user.id, context: currentContext })
+      if (filter === 'income') {
+        query = query.eq('type', 'income')
+      } else if (filter === 'expense') {
+        query = query.in('type', ['expense', 'sangria'])
+      } else if (filter === 'transfer') {
+        query = query.eq('type', 'transfer')
+      } else if (filter === 'pending') {
+        query = query.eq('status', 'pending')
+      }
+
+      const { data, error } = await query
 
       if (error) {
-        console.error('Erro Supabase:', error)
+        console.error('Erro ao buscar transações:', error)
         setTransactions([])
       } else {
         setTransactions(Array.isArray(data) ? data : [])
@@ -69,7 +78,7 @@ function TransactionContent() {
     } finally {
       setLoading(false)
     }
-  }, [user, currentContext])
+  }, [user, currentContext, filter])
 
   useEffect(() => {
     loadTransactions()
@@ -80,7 +89,8 @@ function TransactionContent() {
     ? transactions.filter(tx => {
         const term = searchQuery.toLowerCase()
         const desc = (tx.description || '').toLowerCase()
-        return desc.includes(term)
+        const cat = (tx.categories?.name || '').toLowerCase()
+        return desc.includes(term) || cat.includes(term)
       })
     : transactions
 
@@ -179,15 +189,6 @@ function TransactionContent() {
           </div>
         ) : (
           <>
-            {/* DEBUG TEMPORÁRIO */}
-            <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-xs p-2 rounded mb-4">
-              DEBUG: {transactions.length} transações recebidas do banco.<br />
-              Contexto atual: {currentContext}<br />
-              Filtro: {filter}<br />
-              Pesquisa: "{searchQuery}"<br />
-              Pendentes: {pendentes.length} | Concluídas: {concluidas.length}
-            </div>
-
             {/* Pendentes no topo */}
             {pendentes.length > 0 && (
               <div className="mb-6">
@@ -231,12 +232,8 @@ function TransactionContent() {
 }
 
 function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; formatCurrency: (v: number) => string }) {
-  // Adaptação para exibir o card mesmo sem dados de categoria/contas (já que removemos o JOIN)
-  const iconName = tx.categories?.icon || tx.category_icon // fallback
-  const IconComp = iconName ? getDynamicIcon(iconName) : null
-  const bgColor = tx.categories?.color || tx.category_color || '#64748b'
-  const categoryName = tx.categories?.name || tx.category_name || 'Geral'
-  const accountName = tx.accounts?.name || tx.account_name || ''
+  const IconComp = getDynamicIcon(tx.categories?.icon)
+  const bgColor = tx.categories?.color || '#64748b'
   const isPending = tx.status === 'pending'
   const isIncome = tx.type === 'income'
   const isTransfer = tx.type === 'transfer'
@@ -258,15 +255,15 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
         className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{ backgroundColor: `${bgColor}18`, color: bgColor }}
       >
-        {isTransfer ? <ArrowDown size={18} /> : IconComp ? <IconComp size={18} /> : <span className="text-lg">💰</span>}
+        {isTransfer ? <ArrowDown size={18} /> : <IconComp size={18} />}
       </div>
 
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
-          {tx.description || categoryName || (isIncome ? 'Receita' : 'Despesa')}
+          {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
         </p>
         <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
-          {categoryName}{accountName ? ` • ${accountName}` : ''}
+          {tx.categories?.name || 'Geral'}{tx.accounts?.name ? ` • ${tx.accounts.name}` : ''}
         </p>
       </div>
 
