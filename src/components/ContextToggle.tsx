@@ -31,7 +31,7 @@ export const useContext_ = () => useContext(ContextCtx)
 
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const [context, setContext] = useState<Context>('dfl')
+  const [context, setContextState] = useState<Context>('dfl')
   const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
 
   // Carrega a preferência do usuário do Supabase
@@ -46,22 +46,30 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
         const mode = data?.app_mode || 'full'
         setAppModeState(mode)
         if (mode === 'personal_only') {
-          setContext('personal')
+          setContextState('personal')
         }
       })
   }, [user?.id])
 
+  // NOVA FUNÇÃO setContext que respeita o appMode
+  const setContext = useCallback((c: Context) => {
+    // Se o modo for "apenas PF", força sempre 'personal'
+    if (appMode === 'personal_only') {
+      setContextState('personal')
+      return
+    }
+    setContextState(c)
+  }, [appMode])
+
   const setAppMode = useCallback(async (mode: 'personal_only' | 'full') => {
-    // 1. Atualiza o estado local imediatamente (feedback instantâneo no clique)
+    // Atualiza o estado local imediatamente
     setAppModeState(mode)
     if (mode === 'personal_only') {
-      setContext('personal')
+      setContextState('personal')
     }
 
-    // 2. Se o usuário não estiver carregado ainda, apenas sai (não tenta salvar)
+    // Persiste no Supabase
     if (!user?.id) return
-
-    // 3. Persiste no Supabase
     await supabase.from('user_settings').upsert({
       user_id: user.id,
       app_mode: mode,
