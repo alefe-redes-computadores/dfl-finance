@@ -78,10 +78,12 @@ const reportItems = [
 
 function ReportsContent() {
   const router = useRouter()
+  const { context } = useContext_()
   const [activeReport, setActiveReport] = useState<string | null>(null)
-  const [filters, setFilters] = useState<FilterState>({
-    period: 'this-month',
-    accountId: '',
+  const [filters, setFilters] = useState<ReportFilterValues>({
+    context,
+    dateRange: { start: '', end: '' },
+    preset: 'thisMonth',
   })
 
   const handleBack = () => {
@@ -95,19 +97,19 @@ function ReportsContent() {
   const renderReport = () => {
     switch (activeReport) {
       case 'category':
-        return <CategoryResult filters={filters} onClose={() => setActiveReport(null)} />
+        return <CategoryResult />
       case 'compare':
-        return <ComparePeriods filters={filters} onClose={() => setActiveReport(null)} />
+        return <ComparePeriods />
       case 'weekday':
-        return <WeekdayExpenses filters={filters} onClose={() => setActiveReport(null)} />
+        return <WeekdayExpenses />
       case 'fixed-variable':
-        return <FixedVsVariable filters={filters} onClose={() => setActiveReport(null)} />
+        return <FixedVsVariable />
       case 'cashflow':
-        return <CashFlow filters={filters} onClose={() => setActiveReport(null)} />
+        return <CashFlow />
       case 'budget-real':
-        return <BudgetVsReal filters={filters} onClose={() => setActiveReport(null)} />
+        return <BudgetVsReal />
       case 'export':
-        return <ExportData filters={filters} onClose={() => setActiveReport(null)} />
+        return <ExportData />
       default:
         return null
     }
@@ -128,7 +130,7 @@ function ReportsContent() {
 
       {activeReport ? (
         <>
-          <ReportFilters filters={filters} onChange={setFilters} />
+          <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
           {renderReport()}
         </>
       ) : (
