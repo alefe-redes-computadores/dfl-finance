@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Plus, GripVertical, Loader2, X, Eye, EyeOff,
+  ChevronLeft, Plus, Loader2, X, Eye, EyeOff,
   Search, Building, Settings, ArrowUp, ArrowDown, Trash2
 } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
@@ -107,7 +107,7 @@ export default function AccountsPage() {
       color,
       allow_negative: allowNegative,
       user_id: user.id,
-      order: accounts.length // coloca no final
+      order: accounts.length
     })
     if (error) {
       showToast('Erro ao criar conta.', 'error')
@@ -150,24 +150,29 @@ export default function AccountsPage() {
     const targetIndex = direction === 'up' ? index - 1 : index + 1
     if (targetIndex < 0 || targetIndex >= newList.length) return
 
-    // Troca os itens
     ;[newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]]
     setReorderList(newList)
   }
 
   const saveReorder = async () => {
-    const updates = reorderList.map((acc, index) => ({
-      id: acc.id,
-      order: index,
-    }))
+    try {
+      // Atualiza cada conta individualmente (mais confiável que upsert em lote)
+      const updates = reorderList.map((acc, index) => ({
+        id: acc.id,
+        order: index,
+      }))
 
-    const { error } = await supabase.from('accounts').upsert(updates, { onConflict: 'id' })
-    if (error) {
-      showToast('Erro ao salvar ordem.', 'error')
-    } else {
+      await Promise.all(
+        updates.map(({ id, order }) =>
+          supabase.from('accounts').update({ order }).eq('id', id)
+        )
+      )
+
       showToast('Ordem salva com sucesso!', 'success')
       setShowReorderModal(false)
       loadAccounts()
+    } catch (error) {
+      showToast('Erro ao salvar ordem.', 'error')
     }
   }
 
@@ -228,7 +233,7 @@ export default function AccountsPage() {
           </p>
         </div>
 
-        {/* Lista de Contas */}
+        {/* Lista de Contas (sem GripVertical) */}
         {loading ? (
           <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
         ) : accounts.length === 0 ? (
@@ -247,7 +252,6 @@ export default function AccountsPage() {
                   className="bg-white dark:bg-slate-800 p-4 rounded-[20px] shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group"
                 >
                   <div onClick={() => router.push(`/accounts/${acc.id}`)} className="flex items-center gap-4 flex-1 cursor-pointer">
-                    <GripVertical className="text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 transition-colors" size={18} />
                     <BankLogo color={acc.color} name={acc.name} size="md" />
                     <div>
                       <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{acc.name}</p>
@@ -459,7 +463,7 @@ export default function AccountsPage() {
                   </div>
                   <BankLogo color={acc.color} name={acc.name} size="sm" />
                   <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">{acc.name}</span>
-                  <GripVertical size={16} className="text-gray-400" />
+                  <ArrowUp size={16} className="text-gray-400" />
                 </div>
               ))}
             </div>
