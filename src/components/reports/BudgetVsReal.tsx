@@ -1,171 +1,106 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useContext_ } from '@/components/ContextToggle'
-import { getDynamicIcon } from '@/lib/iconUtils'
-import { FilterState } from '@/components/reports/ReportFilters'
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
-import { Loader2, Download, FileText } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import ReportFilters, { ReportFilterValues } from './ReportFilters'
+import { Loader2 } from 'lucide-react'
+import { useAuth } from '@/lib/hooks/useAuth'
 
-interface Props {
-  filters: FilterState
-  onClose: () => void
-}
-
-export default function BudgetVsReal({ filters, onClose }: Props) {
+export default function BudgetVsReal() {
   const { user } = useAuth()
-  const { context } = useContext_()
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState<ReportFilterValues | null>(null)
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
+  const loadData = useCallback(async (f: ReportFilterValues) => {
+    if (!user) return
     setLoading(true)
 
-    const today = new Date()
-    const start = format(startOfMonth(today), 'yyyy-MM-dd')
-    const end = format(endOfMonth(today), 'yyyy-MM-dd')
+    // Buscar transações no período
+    const { data: transactions } = await supabase
+      .from('transactions')
+      .select('*, categories(name)')
+      .eq('user_id', user.id)
+      .eq('context', f.context)
+      .gte('date', f.dateRange.start)
+      .lte('date', f.dateRange.end)
 
-    const [{ data: budgets }, { data: txs }] = await Promise.all([
-      supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context: context }),
-      supabase.from('transactions').select('category_id, amount, type, status').match({ user_id: user.id, context: context }).gte('date', start).lte('date', end),
-    ])
+    // Buscar orçamentos
+    const { data: budgets } = await supabase
+      .from('budgets')
+      .select('*, categories(name)')
+      .eq('user_id', user.id)
+      .eq('context', f.context)
 
-    const budgetsArray = Array.isArray(budgets) ? budgets : []
-    const txsArray = Array.isArray(txs) ? txs : []
+    const txs = Array.isArray(transactions) ? transactions : []
+    const bdgs = Array.isArray(budgets) ? budgets : []
 
-    const result = budgetsArray.map((budget: any) => {
-      const spent = txsArray
-        .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      const planned = Number(budget.amount) || 0
-      const diff = planned - spent
+    // Agrupar gastos por categoria
+    const spentMap: Record<string, number> = {}
+    txs
+      .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+      .forEach((t: any) => {
+        const catName = t.categories?.name || 'Outros'
+        spentMap[catName] = (spentMap[catName] || 0) + Number(t.amount || 0)
+      })
+
+    // Montar dados para o gráfico
+    const chartData = bdgs.map((b: any) => {
+      const catName = b.categories?.name || 'Outros'
       return {
-        name: budget.name || budget.categories?.name || 'Sem nome',
-        icon: budget.categories?.icon || 'other',
-        color: budget.categories?.color || '#64748b',
-        previsto: planned,
-        gasto: spent,
-        diff,
-        percent: planned > 0 ? (spent / planned) * 100 : 0,
+        name: catName,
+        Orçamento: Number(b.amount || 0),
+        Realizado: spentMap[catName] || 0,
       }
     })
 
-    setData(result.sort((a: any, b: any) => b.percent - a.percent))
+    setData(chartData)
     setLoading(false)
-  }, [user, context, filters])
+  }, [user])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    if (filters) loadData(filters)
+  }, [filters, loadData])
 
-  const handleExportPDF = () => {
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
-
-    const tableRows = data.map(d => `
-      <tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">${formatCurrency(d.previsto)}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d.diff >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d.gasto)}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d.diff >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d.diff)}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">${d.percent.toFixed(0)}%</td>
-      </tr>
-    `).join('')
-
-    const html = `
-      <html>
-        <head>
-          <title>Previsto x Realizado - DFL Finance</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
-            h2 { color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th { padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px; text-transform: uppercase; color: #64748b; background: #f8fafc; }
-          </style>
-        </head>
-        <body>
-          <h2>Previsto x Realizado</h2>
-          <table>
-            <thead><tr><th>Orçamento</th><th style="text-align:right">Previsto</th><th style="text-align:right">Gasto</th><th style="text-align:right">Diferença</th><th style="text-align:right">%</th></tr></thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-          <p style="margin-top:20px;font-size:11px;color:#94a3b8;">DFL Finance • ${new Date().toLocaleDateString('pt-BR')}</p>
-        </body>
-      </html>
-    `
-    printWindow.document.write(html)
-    printWindow.document.close()
-    printWindow.print()
-  }
-
-  const handleExportCSV = () => {
-    const header = 'Orçamento,Previsto,Gasto,Diferença,Percentual\n'
-    const rows = data.map(d => `"${d.name}",${d.previsto.toFixed(2)},${d.gasto.toFixed(2)},${d.diff.toFixed(2)},${d.percent.toFixed(0)}%`).join('\n')
-    const blob = new Blob([header + rows], { type: 'text/csv; charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `previsto-x-realizado.csv`
-    a.click()
+  if (!filters) {
+    return (
+      <ReportFilters
+        onChange={setFilters}
+        initialPreset="thisMonth"
+      />
+    )
   }
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
+      <div className="flex justify-center py-10">
+        <Loader2 className="animate-spin text-teal-700" size={32} />
       </div>
     )
   }
 
-  if (data.length === 0) {
-    return <p className="text-center py-20 text-gray-400 dark:text-gray-500">Nenhum orçamento cadastrado.</p>
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Previsto x Realizado</h3>
-        <div className="space-y-4">
-          {data.map(row => {
-            const IconComp = getDynamicIcon(row.icon)
-            const isOver = row.gasto > row.previsto
-            return (
-              <div key={row.name}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${row.color}20`, color: row.color }}>
-                      <IconComp size={14} />
-                    </div>
-                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{row.name}</span>
-                  </div>
-                  <span className={`text-xs font-bold ${isOver ? 'text-red-500' : 'text-emerald-600'}`}>
-                    {row.percent.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="flex justify-between text-[11px] text-gray-400 dark:text-gray-500 mb-1">
-                  <span>Gasto: {formatCurrency(row.gasto)}</span>
-                  <span>Previsto: {formatCurrency(row.previsto)}</span>
-                </div>
-                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                  <div className={`h-full rounded-full ${isOver ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(row.percent, 100)}%` }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="flex gap-3">
-        <button onClick={handleExportPDF} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-          <FileText size={18} /> Exportar PDF
-        </button>
-        <button onClick={handleExportCSV} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-          <Download size={18} /> Exportar CSV
-        </button>
+    <div>
+      <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
+      
+      <div className="mt-6 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+        <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Orçamento vs Realizado</h3>
+        {data.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-10">Nenhum dado no período.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="Orçamento" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Realizado" fill="#f97316" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   )
