@@ -26,6 +26,7 @@ function TransactionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { context } = useContext_()
+  const currentContext = context || 'dfl' // ← CORREÇÃO AQUI
 
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,10 +42,7 @@ function TransactionContent() {
     })}`
 
   const loadTransactions = useCallback(async () => {
-    if (!user || !context) {
-      // Aguarda usuário e contexto estarem prontos
-      return
-    }
+    if (!user) return
     setLoading(true)
 
     try {
@@ -52,7 +50,7 @@ function TransactionContent() {
         .from('transactions')
         .select('*, categories(name, icon, color), accounts(name, color)')
         .eq('user_id', user.id)
-        .eq('context', context)
+        .eq('context', currentContext) // ← CORREÇÃO AQUI
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
 
@@ -80,7 +78,7 @@ function TransactionContent() {
     } finally {
       setLoading(false)
     }
-  }, [user, context, filter])
+  }, [user, currentContext, filter]) // ← CORREÇÃO AQUI
 
   useEffect(() => {
     loadTransactions()
