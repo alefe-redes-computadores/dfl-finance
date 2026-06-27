@@ -8,7 +8,7 @@ import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
-  QrCode, ChevronRight
+  QrCode, ChevronRight, Paperclip, FileImage, Trash2
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -62,6 +62,8 @@ function NewTransactionContent() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
   const [receipt, setReceipt] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
+  const [receiptName, setReceiptName] = useState<string>('')
   const [installments, setInstallments] = useState(1)
   const [budgets, setBudgets] = useState<any[]>([])
   const [budgetAlert, setBudgetAlert] = useState<{ message: string; type: 'warning' | 'danger' } | null>(null)
@@ -215,7 +217,21 @@ function NewTransactionContent() {
 
   const processReceipt = async (file: File) => {
     setReceipt(file)
+    setReceiptName(file.name)
+    
+    // Gerar preview se for imagem
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setReceiptPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    } else {
+      // Para PDFs, mostrar ícone genérico
+      setReceiptPreview(null)
+    }
 
+    // Tentar OCR automático (opcional)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -448,6 +464,7 @@ function NewTransactionContent() {
 
     const idempotencyKey = crypto.randomUUID()
     let receiptUrl: string | null = null
+    
     if (receipt) {
       try {
         const ext = receipt.name.split('.').pop() || 'jpg'
@@ -457,9 +474,12 @@ function NewTransactionContent() {
         if (!uploadError && data) {
           const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
           receiptUrl = urlData.publicUrl
+          showToast('Comprovante anexado com sucesso!', 'success')
+        } else {
+          showToast('Erro ao anexar comprovante. Continuando sem ele.', 'warning')
         }
       } catch (err) {
-        console.log('Falha no upload do comprovante, continuando sem anexo.')
+        showToast('Erro ao fazer upload do comprovante.', 'error')
       }
     }
 
@@ -576,7 +596,10 @@ function NewTransactionContent() {
         }
 
         const { error: insertError } = await supabase.from('transactions').insert(payload)
-        if (insertError) throw insertError
+        if (insertError) {
+          console.error('Erro ao inserir transação:', insertError)
+          throw insertError
+        }
       }
 
       if (isOnline) {
@@ -651,6 +674,42 @@ function NewTransactionContent() {
             <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
+
+        {/* Feedback visual do comprovante anexado */}
+        {receipt && (
+          <div className="px-5 py-4 border-b border-gray-50 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-700/30">
+            <div className="flex items-center gap-3">
+              {receiptPreview ? (
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
+                  <img src={receiptPreview} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                  <FileImage size={22} className="text-teal-600 dark:text-teal-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">
+                  {receiptName}
+                </p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Comprovante anexado
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setReceipt(null)
+                  setReceiptPreview(null)
+                  setReceiptName('')
+                  showToast('Comprovante removido.', 'info')
+                }}
+                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        )}
 
         <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           <div className="flex items-center gap-4">
@@ -919,7 +978,6 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {/* MODAL LISTA DE CONTAS - CORRIGIDO COM BankLogo */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
