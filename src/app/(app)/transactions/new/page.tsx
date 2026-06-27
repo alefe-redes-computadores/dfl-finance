@@ -601,7 +601,9 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }  return (
+  }
+
+  return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
