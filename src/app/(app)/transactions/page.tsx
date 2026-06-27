@@ -7,14 +7,14 @@ import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft,
   ArrowDown,
-  ArrowUp,
   Clock,
   Check,
   Loader2,
   Search,
   X,
+  Paperclip, // <-- Ícone de anexo adicionado
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns' // <-- Datas adicionadas para garantir a listagem
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -34,6 +34,7 @@ function TransactionContent() {
     (searchParams.get('filter') as FilterType) || 'all'
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentDate] = useState(new Date())
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
@@ -46,11 +47,17 @@ function TransactionContent() {
     setLoading(true)
 
     try {
+      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
       let query = supabase
         .from('transactions')
+        // CORREÇÃO CRÍTICA AQUI: Removido o 'color' de accounts
         .select('*, categories(name, icon, color), accounts(name)')
         .eq('user_id', user.id)
         .eq('context', currentContext)
+        .gte('date', start)
+        .lte('date', end)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
 
@@ -78,13 +85,12 @@ function TransactionContent() {
     } finally {
       setLoading(false)
     }
-  }, [user, currentContext, filter])
+  }, [user, currentContext, filter, currentDate])
 
   useEffect(() => {
     loadTransactions()
   }, [loadTransactions])
 
-  // Filtro local pela pesquisa (descrição ou nome da categoria)
   const filteredTransactions = searchQuery.trim()
     ? transactions.filter(tx => {
         const term = searchQuery.toLowerCase()
@@ -126,7 +132,6 @@ function TransactionContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -138,12 +143,10 @@ function TransactionContent() {
           </button>
         </div>
 
-        {/* ContextToggle */}
         <div className="mb-3">
           <ContextToggle />
         </div>
 
-        {/* Barra de Pesquisa */}
         <div className="relative mb-3">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -163,7 +166,6 @@ function TransactionContent() {
           )}
         </div>
 
-        {/* Filtros */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {filterButtons.map(btn => (
             <button
@@ -181,7 +183,6 @@ function TransactionContent() {
         </div>
       </div>
 
-      {/* Lista */}
       <div className="px-4 pt-4">
         {loading ? (
           <div className="flex justify-center py-20">
@@ -189,7 +190,6 @@ function TransactionContent() {
           </div>
         ) : (
           <>
-            {/* Pendentes no topo */}
             {pendentes.length > 0 && (
               <div className="mb-6">
                 {pendentes.map(tx => (
@@ -198,14 +198,12 @@ function TransactionContent() {
               </div>
             )}
 
-            {/* Divisor Concluídas */}
             {concluidas.length > 0 && pendentes.length > 0 && (
               <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
                 Concluídas
               </h3>
             )}
 
-            {/* Concluídas agrupadas */}
             {Object.entries(gruposConcluidas).map(([cabecalho, txs]) => (
               <div key={cabecalho} className="mb-6">
                 <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 mt-6">
@@ -237,11 +235,14 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
   const isPending = tx.status === 'pending'
   const isIncome = tx.type === 'income'
   const isTransfer = tx.type === 'transfer'
+  
+  // Verifica se existe URL de comprovante
+  const hasAttachment = tx.receipt_url && tx.receipt_url.trim() !== ''
 
   return (
     <div
       onClick={() => router.push(`/transactions/${tx.id}`)}
-      className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors"
+      className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors relative"
     >
       <div className="flex-shrink-0 w-5 flex justify-center">
         {isPending ? (
@@ -252,16 +253,22 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
       </div>
 
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 relative"
         style={{ backgroundColor: `${bgColor}18`, color: bgColor }}
       >
         {isTransfer ? <ArrowDown size={18} /> : <IconComp size={18} />}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
-          {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
-        </p>
+      <div className="flex-1 min-w-0 pr-2">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
+            {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
+          </p>
+          {/* Ícone de Anexo (Comprovante) */}
+          {hasAttachment && (
+            <Paperclip size={12} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
+          )}
+        </div>
         <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
           {tx.categories?.name || 'Geral'}{tx.accounts?.name ? ` • ${tx.accounts.name}` : ''}
         </p>
