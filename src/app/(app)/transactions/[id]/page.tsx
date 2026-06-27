@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight,
-  ArrowRightLeft, Building, HandCoins, Plus, X, FileImage, Paperclip, QrCode
+  ArrowRightLeft, Building, HandCoins, Plus, X, FileImage, Camera, QrCode, Paperclip,
+  Image as ImageIcon
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -116,7 +117,7 @@ export default function EditTransactionPage() {
       }
 
       setReceiptUrl(urlData.publicUrl)
-      showToast('Comprovante atualizado!', 'success')
+      showToast('Comprovante anexado com sucesso!', 'success')
     } catch (err: any) {
       showToast(`Erro ao anexar: ${err.message}`, 'error')
       setReceiptPreview(null)
@@ -134,7 +135,7 @@ export default function EditTransactionPage() {
     setReceiptUrl(null)
     setReceiptPreview(null)
     setReceiptName('')
-    showToast('Comprovante removido.', 'info')
+    showToast('Comprovante excluído com sucesso!', 'success')
   }
 
   const handleReceiptOption = (option: string) => {
@@ -160,6 +161,7 @@ export default function EditTransactionPage() {
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
+
     if (id === 'new') {
       setIsNew(true)
       const paramType = searchParams.get('type')
@@ -168,6 +170,7 @@ export default function EditTransactionPage() {
         if (paramType === 'income') setIsPaid(true)
       }
     }
+
     setLoading(true)
 
     try {
@@ -203,7 +206,7 @@ export default function EditTransactionPage() {
           .single()
 
         if (txError) {
-          console.error('Erro Supabase:', txError)
+          console.error('Erro Supabase (Transação):', txError)
           showToast('Erro ao buscar transação.', 'error')
         } else if (txData) {
           setTx(txData)
@@ -221,7 +224,7 @@ export default function EditTransactionPage() {
 
           if (txData.receipt_url) {
             setReceiptUrl(txData.receipt_url)
-            setReceiptName('Comprovante existente')
+            setReceiptName('Comprovante anexado')
             setReceiptPreview(txData.receipt_url)
           }
 
@@ -233,6 +236,7 @@ export default function EditTransactionPage() {
             setDebtId(txData.debt_id)
             setIsLoan(true)
           }
+
           if (txData.notes && txData.notes.includes('[Devolução/Estorno]')) {
             setIsRefund(true)
           }
@@ -245,7 +249,9 @@ export default function EditTransactionPage() {
     }
   }, [id, searchParams, user, txType])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -263,12 +269,14 @@ export default function EditTransactionPage() {
 
   const handleSave = async () => {
     if (!user?.id) {
-      showToast('Sessão expirada.', 'error')
+      showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
+
     setSaving(true)
 
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
+
     if (isNaN(rawAmount) || rawAmount <= 0) {
       showToast('Informe um valor válido.', 'warning')
       setSaving(false)
@@ -309,11 +317,19 @@ export default function EditTransactionPage() {
           .single()
 
         if (oldAccError) throw oldAccError
+
         const oldBalance = Number(oldAccData.balance) || 0
         const oldAmount = Number(tx.amount)
-        const revertedBalance = tx.type === 'income' ? oldBalance - oldAmount : oldBalance + oldAmount
+        const revertedBalance = tx.type === 'income'
+          ? oldBalance - oldAmount
+          : oldBalance + oldAmount
 
-        await supabase.from('accounts').update({ balance: revertedBalance }).match({ id: tx.account_id, user_id: user.id })
+        const { error: revertError } = await supabase
+          .from('accounts')
+          .update({ balance: revertedBalance })
+          .match({ id: tx.account_id, user_id: user.id })
+
+        if (revertError) throw revertError
       }
 
       if (isPaid && accountId) {
@@ -324,16 +340,26 @@ export default function EditTransactionPage() {
           .single()
 
         if (newAccError) throw newAccError
-        const currentBalance = Number(newAccData.balance) || 0
-        const updatedBalance = txType === 'income' ? currentBalance + rawAmount : currentBalance - rawAmount
 
-        await supabase.from('accounts').update({ balance: updatedBalance }).match({ id: accountId, user_id: user.id })
+        const currentBalance = Number(newAccData.balance) || 0
+        const updatedBalance = txType === 'income'
+          ? currentBalance + rawAmount
+          : currentBalance - rawAmount
+
+        const { error: applyError } = await supabase
+          .from('accounts')
+          .update({ balance: updatedBalance })
+          .match({ id: accountId, user_id: user.id })
+
+        if (applyError) throw applyError
       }
 
       if (isNew) {
-        await supabase.from('transactions').insert([payload])
+        const { error } = await supabase.from('transactions').insert([payload])
+        if (error) throw error
       } else {
-        await supabase.from('transactions').update(payload).match({ id: id, user_id: user.id })
+        const { error } = await supabase.from('transactions').update(payload).match({ id: id, user_id: user.id })
+        if (error) throw error
       }
 
       showToast('Transação salva com sucesso!', 'success')
@@ -353,15 +379,24 @@ export default function EditTransactionPage() {
     setSaving(true)
 
     if (tx && tx.status === 'done' && tx.account_id) {
-      const { data: accData } = await supabase.from('accounts').select('balance').match({ id: tx.account_id, user_id: user.id }).single()
-      if (accData) {
+      const { data: accData, error: accError } = await supabase
+        .from('accounts')
+        .select('balance')
+        .match({ id: tx.account_id, user_id: user.id })
+        .single()
+
+      if (!accError && accData) {
         const oldAmount = Number(tx.amount)
         const currentBalance = Number(accData.balance) || 0
-        const newBalance = tx.type === 'income' ? currentBalance - oldAmount : currentBalance + oldAmount
+        const newBalance = tx.type === 'income'
+          ? currentBalance - oldAmount
+          : currentBalance + oldAmount
         await supabase.from('accounts').update({ balance: newBalance }).match({ id: tx.account_id, user_id: user.id })
       }
     }
+
     await supabase.from('transactions').delete().match({ id: id, user_id: user.id })
+
     showToast('Transação excluída.', 'info')
     router.refresh()
     router.back()
@@ -438,7 +473,10 @@ export default function EditTransactionPage() {
               </div>
             ) : (
               <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                <FileImage size={22} className="text-teal-600 dark:text-teal-400" />
+                {(receiptName.toLowerCase().endsWith('.pdf') || receiptUrl.toLowerCase().includes('.pdf')) 
+                  ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" /> 
+                  : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />
+                }
               </div>
             )}
             <div className="flex-1 min-w-0">
@@ -449,7 +487,10 @@ export default function EditTransactionPage() {
                 Comprovante anexado
               </p>
             </div>
-            <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+            <button
+              onClick={handleRemoveReceipt}
+              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+            >
               <Trash2 size={18} />
             </button>
           </div>
@@ -458,8 +499,7 @@ export default function EditTransactionPage() {
             onClick={() => setShowReceiptModal(true)}
             className="w-full flex items-center gap-3 py-2 text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
           >
-            {/* Ícone atualizado para Paperclip */}
-            <Paperclip size={20} />
+            <Camera size={20} />
             <span className="text-sm font-medium">Anexar comprovante</span>
           </button>
         )}
@@ -537,6 +577,7 @@ export default function EditTransactionPage() {
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
+
                 <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5 cursor-pointer" onClick={() => setShowFinancingModal(true)}>
                   <div className="flex items-center gap-4">
                     <Building size={22} className="text-gray-400 dark:text-gray-500" />
@@ -546,6 +587,7 @@ export default function EditTransactionPage() {
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${financingId ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
+
                 <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5 cursor-pointer" onClick={() => setShowLoanModal(true)}>
                   <div className="flex items-center gap-4">
                     <HandCoins size={22} className="text-gray-400 dark:text-gray-500" />
@@ -616,7 +658,9 @@ export default function EditTransactionPage() {
                       <IconComp size={20} />
                     </div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
-                    {subCount > 0 && <span className="text-xs text-gray-400 dark:text-gray-500 font-medium mr-2">{subCount}</span>}
+                    {subCount > 0 && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500 font-medium mr-2">{subCount}</span>
+                    )}
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                     {subCount > 0 && <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
                   </button>
@@ -632,7 +676,9 @@ export default function EditTransactionPage() {
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2"><ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" /></button>
+              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2">
+                <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
+              </button>
               <div>
                 <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{selectedParentCat.name}</p>
@@ -643,14 +689,25 @@ export default function EditTransactionPage() {
                 const SubIconComp = getDynamicIcon(sub.icon)
                 const isActive = sub.id === categoryId
                 return (
-                  <button key={sub.id} onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}><SubIconComp size={20} /></div>
+                  <button
+                    key={sub.id}
+                    onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
+                      <SubIconComp size={20} />
+                    </div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
-              <button onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }} className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors text-gray-500 dark:text-gray-400 font-medium">Usar "{selectedParentCat.name}" sem subcategoria</button>
+              <button
+                onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }}
+                className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors text-gray-500 dark:text-gray-400 font-medium"
+              >
+                Usar "{selectedParentCat.name}" sem subcategoria
+              </button>
             </div>
           </div>
         </div>
@@ -667,7 +724,11 @@ export default function EditTransactionPage() {
               {accounts.map(acc => {
                 const isActive = acc.id === accountId
                 return (
-                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                  <button
+                    key={acc.id}
+                    onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
@@ -691,7 +752,11 @@ export default function EditTransactionPage() {
               {tags.map(tag => {
                 const isActive = selectedTags.includes(tag.id);
                 return (
-                  <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
@@ -706,12 +771,24 @@ export default function EditTransactionPage() {
 
       <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />
       <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
-      
-      <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => { setFinancingId(id); setIsFinancing(true); }} />
-      <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => { setDebtId(id); setIsLoan(true); }} />
+
+      <ModalFinancing
+        isOpen={showFinancingModal}
+        onClose={() => setShowFinancingModal(false)}
+        onSave={(id) => { setFinancingId(id); setIsFinancing(true); }}
+      />
+      <ModalEmprestimo
+        isOpen={showLoanModal}
+        onClose={() => setShowLoanModal(false)}
+        onSave={(id) => { setDebtId(id); setIsLoan(true); }}
+      />
 
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
-        <button onClick={handleSave} disabled={saving} className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-teal-800 transition-colors">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-teal-800 transition-colors"
+        >
           {saving ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
         </button>
       </div>
