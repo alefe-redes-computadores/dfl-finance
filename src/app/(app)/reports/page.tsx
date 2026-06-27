@@ -1,112 +1,167 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft,
-  PieChart,
   BarChart3,
-  CalendarDays,
-  Layers,
   TrendingUp,
-  Target,
+  TrendingDown,
+  DollarSign,
+  Calendar,
+  ArrowUpDown,
+  FileSpreadsheet,
   Download,
-  ChevronRight,
+  ChevronLeft,
+  Loader2,
 } from 'lucide-react'
-import { getDynamicIcon } from '@/lib/iconUtils'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import CategoryResult from '@/components/reports/CategoryResult'
-import ReportFilters, { FilterState } from '@/components/reports/ReportFilters'
+import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
 const reportItems = [
   {
-    id: 'category',
-    title: 'Resultado por categoria',
-    description: 'Entradas, saídas e saldo líquido por categoria.',
-    icon: 'pie-chart',
-    color: '#14b8a6',
+    id: 'category-result',
+    title: 'Resultado por Categoria',
+    description: 'Receitas e despesas agrupadas por categoria no período selecionado',
+    icon: TrendingUp,
+    component: CategoryResult,
   },
   {
-    id: 'compare',
-    title: 'Comparar períodos',
-    description: 'Compare dois períodos lado a lado.',
-    icon: 'bar-chart-3',
-    color: '#f97316',
+    id: 'cash-flow',
+    title: 'Fluxo de Caixa',
+    description: 'Entradas e saídas diárias no período',
+    icon: ArrowUpDown,
+    component: null,
   },
   {
-    id: 'weekday',
-    title: 'Despesas por dia da semana',
-    description: 'Veja em quais dias você gasta mais.',
-    icon: 'calendar-days',
-    color: '#8b5cf6',
+    id: 'budget-vs-real',
+    title: 'Orçamento vs Realizado',
+    description: 'Compare seus orçamentos com os gastos reais',
+    icon: BarChart3,
+    component: null,
   },
   {
-    id: 'fixed-variable',
-    title: 'Fixas x Variáveis',
-    description: 'Separe gastos recorrentes de avulsos.',
-    icon: 'layers',
-    color: '#ef4444',
+    id: 'compare-periods',
+    title: 'Comparar Períodos',
+    description: 'Veja a evolução em relação ao período anterior',
+    icon: Calendar,
+    component: null,
   },
   {
-    id: 'cashflow',
-    title: 'Fluxo de caixa',
-    description: 'Evolução do saldo mês a mês.',
-    icon: 'trending-up',
-    color: '#3b82f6',
+    id: 'fixed-vs-variable',
+    title: 'Fixos vs Variáveis',
+    description: 'Análise dos gastos recorrentes e variáveis',
+    icon: DollarSign,
+    component: null,
   },
   {
-    id: 'budget-real',
-    title: 'Previsto x Realizado',
-    description: 'Compare orçamentos com o gasto real.',
-    icon: 'target',
-    color: '#22c55e',
+    id: 'weekday-expenses',
+    title: 'Gastos por Dia da Semana',
+    description: 'Descubra em quais dias você gasta mais',
+    icon: Calendar,
+    component: null,
   },
   {
-    id: 'export',
-    title: 'Exportar para planilha',
-    description: 'Baixe suas transações em CSV.',
-    icon: 'download',
-    color: '#64748b',
+    id: 'export-data',
+    title: 'Exportar Dados',
+    description: 'Baixe suas transações em CSV ou PDF',
+    icon: Download,
+    component: null,
   },
 ]
 
 function ReportsContent() {
   const router = useRouter()
-  const [activeReport, setActiveReport] = useState<string | null>(null)
-  const [filters, setFilters] = useState<FilterState>({
-    period: 'this-month',
-    accountId: '',
+  const { context } = useContext_()
+  const [selectedReport, setSelectedReport] = useState<string | null>(null)
+  const [filters, setFilters] = useState<ReportFilterValues>({
+    context,
+    dateRange: { start: '', end: '' },
+    preset: 'thisMonth',
   })
 
-  const handleBack = () => {
-    if (activeReport) {
-      setActiveReport(null)
-    } else {
-      router.push('/more')
-    }
+  const handleFiltersChange = (newFilters: ReportFilterValues) => {
+    setFilters(newFilters)
   }
 
-  const renderReport = () => {
-    switch (activeReport) {
-      case 'category':
-        return <CategoryResult filters={filters} onClose={() => setActiveReport(null)} />
-      case 'compare':
-        // return <ComparePeriods filters={filters} onClose={() => setActiveReport(null)} />
-        return <p className="text-center py-20 text-gray-400">Em breve</p>
-      case 'weekday':
-        return <p className="text-center py-20 text-gray-400">Em breve</p>
-      case 'fixed-variable':
-        return <p className="text-center py-20 text-gray-400">Em breve</p>
-      case 'cashflow':
-        return <p className="text-center py-20 text-gray-400">Em breve</p>
-      case 'budget-real':
-        return <p className="text-center py-20 text-gray-400">Em breve</p>
-      case 'export':
-        return <p className="text-center py-20 text-gray-400">Em breve</p>
-      default:
-        return null
-    }
-  }
+  const selectedItem = reportItems.find(item => item.id === selectedReport)
+
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => selectedReport ? setSelectedReport(null) : router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios'}
+          </h1>
+          <div className="w-10" />
+        </div>
+        {!selectedReport && <ContextToggle />}
+      </div>
+
+      {/* Conteúdo */}
+      <div className="px-4 pt-4">
+        {selectedReport && selectedItem ? (
+          <div>
+            <ReportFilters
+              onChange={handleFiltersChange}
+              initialPreset={filters.preset}
+            />
+            <div className="mt-4">
+              {selectedItem.component ? (
+                <selectedItem.component
+                  context={context}
+                  dateRange={filters.dateRange}
+                  preset={filters.preset}
+                />
+              ) : (
+                <div className="text-center py-20 text-gray-400 dark:text-gray-500">
+                  Em breve
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {reportItems.map(item => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedReport(item.id)}
+                  className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 flex items-center gap-3 active:bg-gray-50 dark:active:bg-slate-700 transition-colors text-left shadow-sm border border-gray-50 dark:border-slate-700"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                    <Icon size={20} className="text-teal-700 dark:text-teal-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                      {item.title}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {item.description}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <ContextProvider>
+      <ReportsContent />
+    </ContextProvider>
+  )
+}  }
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
