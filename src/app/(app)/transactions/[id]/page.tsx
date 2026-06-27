@@ -6,9 +6,16 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import {
-  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X
+  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight,
+  ArrowRightLeft, Building, HandCoins, Plus, X, FileImage, Camera, QrCode
 } from 'lucide-react'
 import { format } from 'date-fns'
+import ReceiptModal from '@/components/ReceiptModal'
+import CameraCapture from '@/components/CameraCapture'
+import QRCodeScanner from '@/components/QRCodeScanner'
+import ModalFinancing from '@/components/ModalFinancing'
+import ModalEmprestimo from '@/components/ModalEmprestimo'
+import { useToast } from '@/contexts/ToastContext'
 
 // Helper para renderizar os ícones dinamicamente (aceitando lowercase do banco antigo e PascalCase do novo)
 const getDynamicIcon = (iconName: string) => {
@@ -22,6 +29,7 @@ export default function EditTransactionPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
+  const { showToast } = useToast()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -48,11 +56,26 @@ export default function EditTransactionPage() {
   const [isFinancing, setIsFinancing] = useState(false)
   const [isLoan, setIsLoan] = useState(false)
 
+  // Upload de comprovante
+  const [receipt, setReceipt] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
+  const [receiptName, setReceiptName] = useState<string>('')
+  const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
+
+  // Vinculação com financiamento/empréstimo
+  const [financingId, setFinancingId] = useState<string | null>(null)
+  const [debtId, setDebtId] = useState<string | null>(null)
+
+  // Modais
   const [showCatModal, setShowCatModal] = useState(false)
   const [showSubCatModal, setShowSubCatModal] = useState(false)
   const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
+  const [showFinancingModal, setShowFinancingModal] = useState(false)
+  const [showLoanModal, setShowLoanModal] = useState(false)
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
@@ -61,6 +84,42 @@ export default function EditTransactionPage() {
     today.setHours(0, 0, 0, 0)
     selectedDate.setHours(0, 0, 0, 0)
     setIsPaid(selectedDate <= today)
+  }
+
+  const processReceipt = async (file: File) => {
+    setReceipt(file)
+    setReceiptName(file.name)
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = (e) => setReceiptPreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+    } else {
+      setReceiptPreview(null)
+    }
+    // OCR opcional pode ser adicionado aqui se desejar
+  }
+
+  const handleReceiptOption = (option: string) => {
+    setShowReceiptModal(false)
+    if (option === 'camera') {
+      setShowCamera(true)
+      return
+    }
+    if (option === 'galeria' || option === 'pdf') {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = option === 'pdf' ? 'application/pdf' : 'image/*'
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0]
+        if (file) processReceipt(file)
+      }
+      input.click()
+    }
+  }
+
+  const handleCameraCapture = (file: File) => {
+    processReceipt(file)
+    setShowCamera(false)
   }
 
   const loadData = useCallback(async () => {
@@ -81,9 +140,9 @@ export default function EditTransactionPage() {
       const catType = txType === 'income' ? 'income' : 'expense'
 
       const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
-        supabase.from('accounts').select('id, name, balance').match({ user_id: user.id }).order('name'),
+        supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
         supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
-        supabase.from('tags').select('id, name').match({ user_id: user.id }).order('name')
+        supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name')
       ])
 
       setAccounts(Array.isArray(accData) ? accData : [])
@@ -111,7 +170,7 @@ export default function EditTransactionPage() {
 
         if (txError) {
           console.error('Erro Supabase (Transação):', txError)
-          alert('Erro ao buscar transação.')
+          showToast('Erro ao buscar transação.', 'error')
         } else if (txData) {
           setTx(txData)
           setTxType(txData.type)
@@ -125,6 +184,27 @@ export default function EditTransactionPage() {
 
           const amountSafe = Number(txData.amount) || 0
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+
+          // Comprovante existente
+          if (txData.receipt_url) {
+            setExistingReceiptUrl(txData.receipt_url)
+            setReceiptName('Comprovante existente')
+          }
+
+          // Flags de financiamento/empréstimo
+          if (txData.financing_id) {
+            setFinancingId(txData.financing_id)
+            setIsFinancing(true)
+          }
+          if (txData.debt_id) {
+            setDebtId(txData.debt_id)
+            setIsLoan(true)
+          }
+
+          // Se havia flag de estorno no notes (legado)
+          if (txData.notes && txData.notes.includes('[Devolução/Estorno]')) {
+            setIsRefund(true)
+          }
         }
       }
     } catch (err) {
@@ -154,7 +234,7 @@ export default function EditTransactionPage() {
 
   const handleSave = async () => {
     if (!user?.id) {
-      alert('Sessão expirada. Faça login novamente.')
+      showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
 
@@ -163,21 +243,44 @@ export default function EditTransactionPage() {
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
 
     if (isNaN(rawAmount) || rawAmount <= 0) {
-      alert('Informe um valor válido.')
+      showToast('Informe um valor válido.', 'warning')
       setSaving(false)
       return
     }
 
-    let finalNotes = notes
-    if (txType === 'expense' && (isRefund || isFinancing || isLoan)) {
-      const flags = []
-      if (isRefund) flags.push('[Devolução/Estorno]')
-      if (isFinancing) flags.push('[Financiamento]')
-      if (isLoan) flags.push('[Empréstimo]')
-      finalNotes = `${flags.join(' ')} ${notes}`.trim()
+    // Upload de novo comprovante, se houver
+    let receiptUrl = existingReceiptUrl
+    if (receipt) {
+      try {
+        const ext = receipt.name.split('.').pop() || 'jpg'
+        const uniqueName = `${crypto.randomUUID()}.${ext}`
+        const path = `${user.id}/${uniqueName}`
+        const { data: uploadData, error: uploadError } = await supabase.storage.from('receipts').upload(path, receipt)
+        if (!uploadError && uploadData) {
+          const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
+          receiptUrl = urlData.publicUrl
+          showToast('Comprovante atualizado!', 'success')
+        } else {
+          showToast('Erro ao anexar comprovante.', 'error')
+        }
+      } catch (err) {
+        showToast('Erro ao fazer upload.', 'error')
+      }
+    } else if (receipt === null && existingReceiptUrl) {
+      // Se o usuário removeu o comprovante (setou null), mantemos a remoção
+      receiptUrl = null
     }
 
-    const payload = {
+    let finalNotes = notes
+    if (txType === 'expense') {
+      const flags = []
+      if (isRefund) flags.push('[Devolução/Estorno]')
+      if (financingId) flags.push('[Financiamento]')
+      if (debtId) flags.push('[Empréstimo]')
+      if (flags.length > 0) finalNotes = `${flags.join(' ')} ${notes}`.trim()
+    }
+
+    const payload: any = {
       user_id: user.id,
       amount: rawAmount,
       status: isPaid ? 'done' : 'pending',
@@ -188,10 +291,13 @@ export default function EditTransactionPage() {
       tag_ids: selectedTags.length > 0 ? selectedTags : null,
       notes: finalNotes || null,
       type: txType,
-      context: 'dfl'
+      receipt_url: receiptUrl,
+      financing_id: financingId,
+      debt_id: debtId,
     }
 
     try {
+      // Reverter saldo da transação original, se estava paga
       if (!isNew && tx && tx.status === 'done' && tx.account_id) {
         const { data: oldAccData, error: oldAccError } = await supabase
           .from('accounts')
@@ -215,6 +321,7 @@ export default function EditTransactionPage() {
         if (revertError) throw revertError
       }
 
+      // Aplicar novo saldo
       if (isPaid && accountId) {
         const { data: newAccData, error: newAccError } = await supabase
           .from('accounts')
@@ -245,11 +352,12 @@ export default function EditTransactionPage() {
         if (error) throw error
       }
 
+      showToast('Transação salva com sucesso!', 'success')
       router.refresh()
       router.back()
     } catch (err: any) {
       console.error('Erro ao salvar:', err)
-      alert('Erro ao salvar: ' + err.message)
+      showToast('Erro ao salvar transação.', 'error')
     } finally {
       setSaving(false)
     }
@@ -279,6 +387,7 @@ export default function EditTransactionPage() {
 
     await supabase.from('transactions').delete().match({ id: id, user_id: user.id })
 
+    showToast('Transação excluída.', 'info')
     router.refresh()
     router.back()
   }
@@ -339,6 +448,51 @@ export default function EditTransactionPage() {
           <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}>
             <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
           </button>
+        </div>
+
+        {/* Seção do comprovante (nova) */}
+        <div className="border-b border-gray-100 dark:border-slate-700 pb-5">
+          {(receipt || existingReceiptUrl) ? (
+            <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
+              {receiptPreview || existingReceiptUrl ? (
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
+                  <img src={receiptPreview || existingReceiptUrl || ''} alt="Comprovante" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                  <FileImage size={22} className="text-teal-600 dark:text-teal-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">
+                  {receiptName || 'Comprovante'}
+                </p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  {receipt ? 'Novo comprovante' : 'Comprovante atual'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setReceipt(null)
+                  setReceiptPreview(null)
+                  setReceiptName('')
+                  setExistingReceiptUrl(null)
+                  showToast('Comprovante removido.', 'info')
+                }}
+                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowReceiptModal(true)}
+              className="w-full flex items-center gap-3 py-2 text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+            >
+              <Camera size={20} />
+              <span className="text-sm font-medium">Anexar comprovante</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 relative">
@@ -417,17 +571,17 @@ export default function EditTransactionPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5 cursor-pointer" onClick={() => setShowFinancingModal(true)}>
                   <div className="flex items-center gap-4">
                     <Building size={22} className="text-gray-400 dark:text-gray-500" />
                     <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Financiamento</span>
                   </div>
-                  <button onClick={() => setIsFinancing(!isFinancing)} className={`w-11 h-6 rounded-full relative transition-colors ${isFinancing ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isFinancing ? 'right-1' : 'left-1'}`} />
+                  <button className={`w-11 h-6 rounded-full relative transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${financingId ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5 cursor-pointer" onClick={() => setShowLoanModal(true)}>
                   <div className="flex items-center gap-4">
                     <HandCoins size={22} className="text-gray-400 dark:text-gray-500" />
                     <div className="flex flex-col">
@@ -435,8 +589,8 @@ export default function EditTransactionPage() {
                       <span className="text-[11px] text-gray-400 dark:text-gray-500">Vira saldo a receber em "Quem me deve"</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsLoan(!isLoan)} className={`w-11 h-6 rounded-full relative transition-colors ${isLoan ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isLoan ? 'right-1' : 'left-1'}`} />
+                  <button className={`w-11 h-6 rounded-full relative transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${debtId ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
               </>
@@ -453,7 +607,6 @@ export default function EditTransactionPage() {
               />
             </div>
 
-            {/* Tag com modal estilizado - múltipla seleção */}
             <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
               <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
               <div className="flex-1 flex flex-col text-left">
@@ -468,7 +621,7 @@ export default function EditTransactionPage() {
         )}
       </div>
 
-      {/* Modal Categorias com HIERARQUIA */}
+      {/* Modais de categorias, contas, tags (mantidos iguais) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -513,7 +666,6 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Modal de Subcategorias */}
       {showSubCatModal && selectedParentCat && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -610,6 +762,22 @@ export default function EditTransactionPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de comprovante */}
+      <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />
+      <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
+
+      {/* Modais de Financiamento e Empréstimo */}
+      <ModalFinancing
+        isOpen={showFinancingModal}
+        onClose={() => setShowFinancingModal(false)}
+        onSave={(id) => { setFinancingId(id); setIsFinancing(true); }}
+      />
+      <ModalEmprestimo
+        isOpen={showLoanModal}
+        onClose={() => setShowLoanModal(false)}
+        onSave={(id) => { setDebtId(id); setIsLoan(true); }}
+      />
 
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
         <button
