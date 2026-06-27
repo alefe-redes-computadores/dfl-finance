@@ -20,24 +20,27 @@ interface Props {
 }
 
 export default function PersonalizeModal({ isOpen, onClose, sections, enabled, order, onToggle, onMove, onSave }: Props) {
-  // Estado local para animação
   const [localOrder, setLocalOrder] = useState<Section[]>(order)
+  const [animatingId, setAnimatingId] = useState<string | null>(null)
 
   useEffect(() => {
     setLocalOrder(order)
   }, [order])
 
   const handleMove = (id: string, dir: 'up' | 'down') => {
-    // Atualiza localmente para animação instantânea
     const idx = localOrder.findIndex(s => s.id === id)
     if (idx === -1) return
     const newOrder = [...localOrder]
     const target = dir === 'up' ? idx - 1 : idx + 1
     if (target >= 0 && target < newOrder.length) {
+      // Animação: marca o item como animando
+      setAnimatingId(id)
+      setTimeout(() => setAnimatingId(null), 300)
+      
+      // Troca
       [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]]
       setLocalOrder(newOrder)
     }
-    // Dispara callback para o pai (Home) que atualiza o estado real
     onMove(id, dir)
   }
 
@@ -53,16 +56,16 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
         </div>
         <p className="text-xs text-gray-400 mb-4">Ative/desative e reordene as seções.</p>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {localOrder.map((sec, idx) => {
             const active = enabled.has(sec.id)
+            const isAnimating = animatingId === sec.id
             return (
               <div
                 key={sec.id}
                 className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
                   active ? 'bg-white dark:bg-slate-700 shadow-sm' : 'bg-gray-100 dark:bg-slate-800 opacity-50'
-                } ${idx !== localOrder.length - 1 ? 'mb-1' : ''}`}
-                style={{ transform: 'translateY(0)', transition: 'transform 0.2s ease, opacity 0.2s ease' }}
+                } ${isAnimating ? 'scale-[1.02] shadow-md' : 'scale-100'}`}
               >
                 <button onClick={() => onToggle(sec.id)} className="flex-shrink-0">
                   {active ? <ToggleRight size={24} className="text-teal-600" /> : <ToggleLeft size={24} className="text-gray-400" />}
