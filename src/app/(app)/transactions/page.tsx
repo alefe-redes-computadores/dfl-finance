@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -26,7 +26,7 @@ function TransactionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { context } = useContext_()
-  const currentContext = context || 'dfl' // ← CORREÇÃO AQUI
+  const currentContext = context || 'dfl'
 
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +50,7 @@ function TransactionContent() {
         .from('transactions')
         .select('*, categories(name, icon, color), accounts(name, color)')
         .eq('user_id', user.id)
-        .eq('context', currentContext) // ← CORREÇÃO AQUI
+        .eq('context', currentContext)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
 
@@ -78,7 +78,7 @@ function TransactionContent() {
     } finally {
       setLoading(false)
     }
-  }, [user, currentContext, filter]) // ← CORREÇÃO AQUI
+  }, [user, currentContext, filter])
 
   useEffect(() => {
     loadTransactions()
@@ -189,6 +189,15 @@ function TransactionContent() {
           </div>
         ) : (
           <>
+            {/* DEBUG TEMPORÁRIO */}
+            <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-xs p-2 rounded mb-4">
+              DEBUG: {transactions.length} transações recebidas do banco.<br />
+              Contexto atual: {currentContext}<br />
+              Filtro: {filter}<br />
+              Pesquisa: "{searchQuery}"<br />
+              Pendentes: {pendentes.length} | Concluídas: {concluidas.length}
+            </div>
+
             {/* Pendentes no topo */}
             {pendentes.length > 0 && (
               <div className="mb-6">
@@ -285,7 +294,9 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
 export default function TransactionsPage() {
   return (
     <ContextProvider>
-      <TransactionContent />
+      <Suspense fallback={<div className="text-center py-20 text-gray-400">Carregando...</div>}>
+        <TransactionContent />
+      </Suspense>
     </ContextProvider>
   )
 }
