@@ -473,8 +473,8 @@ export default function EditTransactionPage() {
               </div>
             ) : (
               <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                {(receiptName.toLowerCase().endsWith('.pdf') || receiptUrl.toLowerCase().includes('.pdf')) 
-                  ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" /> 
+                {(receiptName || '').toLowerCase().endsWith('.pdf') || (receiptUrl || '').toLowerCase().includes('.pdf')
+                  ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" />
                   : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />
                 }
               </div>
@@ -487,10 +487,7 @@ export default function EditTransactionPage() {
                 Comprovante anexado
               </p>
             </div>
-            <button
-              onClick={handleRemoveReceipt}
-              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-            >
+            <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
               <Trash2 size={18} />
             </button>
           </div>
