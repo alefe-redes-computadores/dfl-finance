@@ -1,18 +1,25 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Plus, Loader2, X, Eye, EyeOff,
-  Search, Building, Settings, ArrowUp, ArrowDown, Trash2
+  Search, Building, Settings, ArrowUp, ArrowDown, Trash2,
+  Wallet, TrendingUp, CreditCard
 } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
 import { useToast } from '@/contexts/ToastContext'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
+
+const ACCOUNT_TYPES = [
+  { key: 'CC', label: 'Conta Corrente', icon: CreditCard, color: 'bg-blue-100 text-blue-700' },
+  { key: 'CP', label: 'Poupança', icon: Wallet, color: 'bg-green-100 text-green-700' },
+  { key: 'CT', label: 'Carteira', icon: Wallet, color: 'bg-orange-100 text-orange-700' },
+]
 
 const safeNum = (val: any) => {
   if (!val) return 0
@@ -38,6 +45,7 @@ export default function AccountsPage() {
   const [displayBalance, setDisplayBalance] = useState('')
   const [balanceNum, setBalanceNum] = useState(0)
   const [allowNegative, setAllowNegative] = useState(false)
+  const [accountType, setAccountType] = useState('CC')
   const [bankSearch, setBankSearch] = useState('')
   const [filteredBanks, setFilteredBanks] = useState<typeof BANK_LIST>([])
   const [showBankDropdown, setShowBankDropdown] = useState(false)
@@ -46,6 +54,27 @@ export default function AccountsPage() {
   // Modal de reordenação
   const [showReorderModal, setShowReorderModal] = useState(false)
   const [reorderList, setReorderList] = useState<any[]>([])
+
+  // Modal de exclusão (custom)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [accountToDelete, setAccountToDelete] = useState<any>(null)
+
+  // Undo Toast
+  const [undoState, setUndoState] = useState<{
+    account: any
+    timer: NodeJS.Timeout | null
+    progress: number
+    visible: boolean
+  }>({ account: null, timer: null, progress: 100, visible: false })
+  const undoProgressRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Limpa o timer ao desmontar
+  useEffect(() => {
+    return () => {
+      if (undoState.timer) clearTimeout(undoState.timer)
+      if (undoProgressRef.current) clearInterval(undoProgressRef.current)
+    }
+  }, [undoState.timer])
 
   const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '')
@@ -106,6 +135,7 @@ export default function AccountsPage() {
       context,
       color,
       allow_negative: allowNegative,
+      type: accountType,
       user_id: user.id,
       order: accounts.length
     })
@@ -119,6 +149,7 @@ export default function AccountsPage() {
       setBalanceNum(0)
       setColor(DEFAULT_COLORS[0])
       setAllowNegative(false)
+      setAccountType('CC')
       setBankSearch('')
       setFilteredBanks([])
       setShowBankDropdown(false)
@@ -128,15 +159,76 @@ export default function AccountsPage() {
     setLoading(false)
   }
 
-  const handleDeleteAccount = async (accId: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta conta?')) return
-    const { error } = await supabase.from('accounts').delete().eq('id', accId)
-    if (error) {
-      showToast('Erro ao excluir conta.', 'error')
+  // Abre o modal de confirmação customizado
+  const handleDeleteClick = (acc: any) => {
+    setAccountToDelete(acc)
+    setShowDeleteModal(true)
+  }
+
+  // Confirma a exclusão (inicia o undo)
+  const confirmDelete = () => {
+    if (!accountToDelete) return
+    setShowDeleteModal(false)
+
+    // Remove do estado local imediatamente
+    setAccounts(prev => prev.filter(a => a.id !== accountToDelete.id))
+
+    // Configura o temporizador de 2 segundos
+    const timer = setTimeout(() => {
+      performDelete(accountToDelete)
+      setUndoState({ account: null, timer: null, progress: 0, visible: false })
+    }, 2000)
+
+    // Configura a barra de progresso (20 steps de 100ms)
+    let progress = 100
+    const progressInterval = setInterval(() => {
+      progress -= 5
+      if (progress <= 0) {
+        clearInterval(progressInterval)
+      }
+      setUndoState(prev => ({ ...prev, progress }))
+    }, 100)
+
+    setUndoState({
+      account: accountToDelete,
+      timer,
+      progress: 100,
+      visible: true
+    })
+
+    // Salva o id do intervalo para limpar depois
+    undoProgressRef.current = progressInterval
+    setAccountToDelete(null)
+  }
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false)
+    setAccountToDelete(null)
+  }
+
+  const performDelete = async (acc: any) => {
+    const { error } = await supabase.from('accounts').delete().eq('id', acc.id)
+    if (!error) {
+      showToast('Conta excluída.', 'info')
     } else {
-      showToast('Conta excluída com sucesso!', 'success')
+      showToast('Erro ao excluir conta.', 'error')
+      // Se falhar, recarrega a lista para restaurar
       loadAccounts()
     }
+  }
+
+  const undoDelete = () => {
+    // Cancela o timer e a barra de progresso
+    if (undoState.timer) clearTimeout(undoState.timer)
+    if (undoProgressRef.current) clearInterval(undoProgressRef.current)
+
+    // Restaura a conta na lista
+    if (undoState.account) {
+      setAccounts(prev => [...prev, undoState.account].sort((a, b) => (a.order || 0) - (b.order || 0)))
+    }
+
+    // Limpa o estado de undo
+    setUndoState({ account: null, timer: null, progress: 100, visible: false })
   }
 
   // Reordenação
@@ -156,7 +248,6 @@ export default function AccountsPage() {
 
   const saveReorder = async () => {
     try {
-      // Atualiza cada conta individualmente (mais confiável que upsert em lote)
       const updates = reorderList.map((acc, index) => ({
         id: acc.id,
         order: index,
@@ -233,7 +324,7 @@ export default function AccountsPage() {
           </p>
         </div>
 
-        {/* Lista de Contas (sem GripVertical) */}
+        {/* Lista de Contas Padronizada */}
         {loading ? (
           <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
         ) : accounts.length === 0 ? (
@@ -246,23 +337,31 @@ export default function AccountsPage() {
               if (bal > 0) balanceColorClass = 'text-emerald-600';
               if (bal < 0) balanceColorClass = 'text-red-500';
 
+              const typeInfo = ACCOUNT_TYPES.find(t => t.key === acc.type) || ACCOUNT_TYPES[0];
+              const TypeIcon = typeInfo.icon;
+
               return (
                 <div
                   key={acc.id}
-                  className="bg-white dark:bg-slate-800 p-4 rounded-[20px] shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group"
+                  className="bg-white dark:bg-slate-800 p-4 rounded-[20px] shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors group min-h-[80px]"
                 >
-                  <div onClick={() => router.push(`/accounts/${acc.id}`)} className="flex items-center gap-4 flex-1 cursor-pointer">
-                    <BankLogo color={acc.color} name={acc.name} size="md" />
-                    <div>
-                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{acc.name}</p>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">Conta Corrente</p>
+                  <div onClick={() => router.push(`/accounts/${acc.id}`)} className="flex items-center gap-4 flex-1 cursor-pointer min-w-0">
+                    <div className="relative">
+                      <BankLogo color={acc.color} name={acc.name} size="md" />
+                      <span className={`absolute -top-1 -right-1 w-5 h-5 rounded-full ${typeInfo.color} flex items-center justify-center text-[9px] font-bold`}>
+                        <TypeIcon size={10} />
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200 truncate">{acc.name}</p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">{typeInfo.label}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 ml-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleDeleteAccount(acc.id)
+                        handleDeleteClick(acc)
                       }}
                       className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors p-1"
                       title="Excluir conta"
@@ -282,7 +381,7 @@ export default function AccountsPage() {
         )}
       </div>
 
-      {/* MODAL DE CRIAÇÃO */}
+      {/* Modal de Criação (com tipo de conta) */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => {
           setShowForm(false)
@@ -370,6 +469,30 @@ export default function AccountsPage() {
                 className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors"
               />
             </div>
+
+            {/* Seletor de Tipo de Conta */}
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Tipo</label>
+              <div className="flex gap-2">
+                {ACCOUNT_TYPES.map(t => {
+                  const Icon = t.icon
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setAccountType(t.key)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors ${
+                        accountType === t.key
+                          ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 border border-teal-300'
+                          : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'
+                      }`}
+                    >
+                      <Icon size={12} />
+                      {t.key}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             
             <div className="mb-5">
               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
@@ -428,7 +551,33 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* MODAL DE REORDENAÇÃO */}
+      {/* Modal de Confirmação de Exclusão (Custom) */}
+      {showDeleteModal && accountToDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-6" onClick={cancelDelete}>
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Excluir conta</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir a conta <span className="font-bold text-gray-700 dark:text-gray-200">"{accountToDelete.name}"</span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 py-3 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-xl font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reordenação */}
       {showReorderModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowReorderModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -462,8 +611,7 @@ export default function AccountsPage() {
                     </button>
                   </div>
                   <BankLogo color={acc.color} name={acc.name} size="sm" />
-                  <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">{acc.name}</span>
-                  <ArrowUp size={16} className="text-gray-400" />
+                  <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{acc.name}</span>
                 </div>
               ))}
             </div>
@@ -473,6 +621,30 @@ export default function AccountsPage() {
             >
               Salvar ordem
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de Desfazer (Undo) */}
+      {undoState.visible && (
+        <div className="fixed bottom-4 left-0 right-0 z-[300] px-4 pointer-events-none">
+          <div className="max-w-md mx-auto bg-red-600 text-white rounded-2xl p-4 shadow-2xl pointer-events-auto">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-bold text-sm">Você excluiu sua conta com sucesso!</p>
+              <button
+                onClick={undoDelete}
+                className="px-4 py-1.5 bg-white text-red-600 rounded-full font-bold text-sm hover:bg-gray-100 transition-colors"
+              >
+                Desfazer
+              </button>
+            </div>
+            {/* Barra de progresso */}
+            <div className="w-full h-1 bg-red-400 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white transition-all duration-100 ease-linear"
+                style={{ width: `${undoState.progress}%` }}
+              />
+            </div>
           </div>
         </div>
       )}
