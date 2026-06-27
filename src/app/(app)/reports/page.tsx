@@ -113,7 +113,6 @@ function ReportsContent() {
             <div className="mt-4">
               {selectedItem.component ? (
                 <selectedItem.component
-                  context={context}
                   dateRange={filters.dateRange}
                   preset={filters.preset}
                 />
