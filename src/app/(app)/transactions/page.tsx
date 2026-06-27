@@ -11,8 +11,8 @@ import {
   Clock,
   Check,
   Loader2,
-  Filter,
-  SlidersHorizontal,
+  Search,
+  X,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -32,6 +32,7 @@ function TransactionContent() {
   const [filter, setFilter] = useState<FilterType>(
     (searchParams.get('filter') as FilterType) || 'all'
   )
+  const [searchQuery, setSearchQuery] = useState('')
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
@@ -68,11 +69,19 @@ function TransactionContent() {
 
   useEffect(() => { loadTransactions() }, [loadTransactions])
 
-  // Separa pendentes e concluídas
-  const pendentes = transactions.filter(t => t.status === 'pending')
-  const concluidas = transactions.filter(t => t.status !== 'pending')
+  // Filtro local pela pesquisa (descrição ou nome da categoria)
+  const filteredTransactions = searchQuery.trim()
+    ? transactions.filter(tx => {
+        const term = searchQuery.toLowerCase()
+        const desc = (tx.description || '').toLowerCase()
+        const cat = (tx.categories?.name || '').toLowerCase()
+        return desc.includes(term) || cat.includes(term)
+      })
+    : transactions
 
-  // Agrupa concluídas por data relativa
+  const pendentes = filteredTransactions.filter(t => t.status === 'pending')
+  const concluidas = filteredTransactions.filter(t => t.status !== 'pending')
+
   const groupByDate = (txs: any[]) => {
     const hoje = format(new Date(), 'yyyy-MM-dd')
     const ontem = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
@@ -112,6 +121,31 @@ function TransactionContent() {
           <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 font-bold text-sm">
             + Nova
           </button>
+        </div>
+
+        {/* ContextToggle */}
+        <div className="mb-3">
+          <ContextToggle />
+        </div>
+
+        {/* Barra de Pesquisa */}
+        <div className="relative mb-3">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por descrição ou categoria..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-teal-500 transition-colors"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Filtros */}
@@ -182,7 +216,6 @@ function TransactionContent() {
   )
 }
 
-// Componente de Card Refatorado (Design Premium)
 function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; formatCurrency: (v: number) => string }) {
   const IconComp = getDynamicIcon(tx.categories?.icon)
   const bgColor = tx.categories?.color || '#64748b'
@@ -195,7 +228,6 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
       onClick={() => router.push(`/transactions/${tx.id}`)}
       className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors"
     >
-      {/* Status */}
       <div className="flex-shrink-0 w-5 flex justify-center">
         {isPending ? (
           <Clock size={14} className="text-red-400" />
@@ -204,19 +236,13 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
         )}
       </div>
 
-      {/* Ícone com fundo suave */}
       <div
         className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{ backgroundColor: `${bgColor}18`, color: bgColor }}
       >
-        {isTransfer ? (
-          <ArrowDown size={18} />
-        ) : (
-          <IconComp size={18} />
-        )}
+        {isTransfer ? <ArrowDown size={18} /> : <IconComp size={18} />}
       </div>
 
-      {/* Informações principais */}
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
           {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
@@ -226,15 +252,12 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
         </p>
       </div>
 
-      {/* Data e Valor */}
       <div className="flex-shrink-0 text-right">
         <p className="text-[10px] text-gray-400 dark:text-gray-500">
           {format(parseISO(tx.date), "dd 'de' MMM", { locale: ptBR })}
         </p>
         <p className={`text-[14px] font-bold mt-0.5 ${
-          isIncome || isTransfer
-            ? 'text-emerald-600'
-            : 'text-red-500'
+          isIncome || isTransfer ? 'text-emerald-600' : 'text-red-500'
         }`}>
           {isIncome ? '+ ' : isTransfer ? '' : '- '}
           {formatCurrency(Number(tx.amount) || 0)}
