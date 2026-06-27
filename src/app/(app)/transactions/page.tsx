@@ -32,7 +32,6 @@ function TransactionContent() {
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // SOLUÇÃO À PROVA DE FALHAS (Sem depender de JOIN do Supabase)
   const loadTransactions = useCallback(async () => {
     if (!user) return
     setLoading(true)
@@ -41,7 +40,6 @@ function TransactionContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      // 1. Busca transações PURAS (Isso a gente sabe que não falha)
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .select('*')
@@ -60,24 +58,17 @@ function TransactionContent() {
         return
       }
 
-      // 2. Busca Categorias e Contas em paralelo
       const [{ data: catData }, { data: accData }] = await Promise.all([
         supabase.from('categories').select('id, name, icon, color').eq('user_id', user.id),
         supabase.from('accounts').select('id, name, color').eq('user_id', user.id)
       ])
 
-      // 3. Junta tudo manualmente no frontend
       let finalData = txData.map(tx => {
         const category = (catData || []).find(c => c.id === tx.category_id)
         const account = (accData || []).find(a => a.id === tx.account_id)
-        return {
-          ...tx,
-          categories: category || null,
-          accounts: account || null
-        }
+        return { ...tx, categories: category || null, accounts: account || null }
       })
 
-      // 4. Aplica os filtros dos botões
       if (filter === 'income') finalData = finalData.filter(t => t.type === 'income')
       else if (filter === 'expense') finalData = finalData.filter(t => t.type === 'expense' || t.type === 'sangria')
       else if (filter === 'transfer') finalData = finalData.filter(t => t.type === 'transfer')
@@ -92,9 +83,7 @@ function TransactionContent() {
     }
   }, [user, currentContext, filter, currentDate])
 
-  useEffect(() => {
-    loadTransactions()
-  }, [loadTransactions])
+  useEffect(() => { loadTransactions() }, [loadTransactions])
 
   const filteredTransactions = searchQuery.trim()
     ? transactions.filter(tx => {
@@ -111,14 +100,12 @@ function TransactionContent() {
   const groupByDate = (txs: any[]) => {
     const hoje = format(new Date(), 'yyyy-MM-dd')
     const ontem = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
-
     const grupos: Record<string, any[]> = {}
     txs.forEach(tx => {
       let chave = tx.date
       if (tx.date === hoje) chave = 'HOJE'
       else if (tx.date === ontem) chave = 'ONTEM'
       else chave = format(parseISO(tx.date), "dd 'de' MMMM", { locale: ptBR }).toUpperCase()
-      
       if (!grupos[chave]) grupos[chave] = []
       grupos[chave].push(tx)
     })
@@ -197,18 +184,12 @@ function TransactionContent() {
                 ))}
               </div>
             )}
-
             {concluidas.length > 0 && pendentes.length > 0 && (
-              <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
-                Concluídas
-              </h3>
+              <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">Concluídas</h3>
             )}
-
             {Object.entries(gruposConcluidas).map(([cabecalho, txs]) => (
               <div key={cabecalho} className="mb-6">
-                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 mt-6">
-                  {cabecalho}
-                </h3>
+                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 mt-6">{cabecalho}</h3>
                 <div className="space-y-2">
                   {txs.map(tx => (
                     <CardTransacao key={tx.id} tx={tx} router={router} formatCurrency={formatCurrency} />
@@ -216,11 +197,8 @@ function TransactionContent() {
                 </div>
               </div>
             ))}
-
             {pendentes.length === 0 && concluidas.length === 0 && (
-              <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-                Nenhuma transação encontrada.
-              </div>
+              <div className="text-center py-20 text-gray-400 dark:text-gray-500">Nenhuma transação encontrada.</div>
             )}
           </>
         )}
@@ -235,52 +213,29 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
   const isPending = tx.status === 'pending'
   const isIncome = tx.type === 'income'
   const isTransfer = tx.type === 'transfer'
-  
   const hasAttachment = tx.receipt_url && tx.receipt_url.trim() !== ''
 
   return (
-    <div
-      onClick={() => router.push(`/transactions/${tx.id}`)}
-      className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors relative"
-    >
+    <div onClick={() => router.push(`/transactions/${tx.id}`)} className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors relative">
       <div className="flex-shrink-0 w-5 flex justify-center">
-        {isPending ? (
-          <Clock size={14} className="text-red-400" />
-        ) : (
-          <Check size={14} className="text-emerald-500" />
-        )}
+        {isPending ? <Clock size={14} className="text-red-400" /> : <Check size={14} className="text-emerald-500" />}
       </div>
-
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 relative"
-        style={{ backgroundColor: `${bgColor}18`, color: bgColor }}
-      >
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 relative" style={{ backgroundColor: `${bgColor}18`, color: bgColor }}>
         {isTransfer ? <ArrowDown size={18} /> : <IconComp size={18} />}
       </div>
-
       <div className="flex-1 min-w-0 pr-2">
         <div className="flex items-center gap-1.5">
           <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
             {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
           </p>
-          {hasAttachment && (
-            <Paperclip size={12} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
-          )}
+          {hasAttachment && <Paperclip size={12} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />}
         </div>
-        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
-          {tx.categories?.name || 'Geral'}{tx.accounts?.name ? ` • ${tx.accounts.name}` : ''}
-        </p>
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{tx.categories?.name || 'Geral'}{tx.accounts?.name ? ` • ${tx.accounts.name}` : ''}</p>
       </div>
-
       <div className="flex-shrink-0 text-right">
-        <p className="text-[10px] text-gray-400 dark:text-gray-500">
-          {format(parseISO(tx.date), "dd 'de' MMM", { locale: ptBR })}
-        </p>
-        <p className={`text-[14px] font-bold mt-0.5 ${
-          isIncome || isTransfer ? 'text-emerald-600' : 'text-red-500'
-        }`}>
-          {isIncome ? '+ ' : isTransfer ? '' : '- '}
-          {formatCurrency(Number(tx.amount) || 0)}
+        <p className="text-[10px] text-gray-400 dark:text-gray-500">{format(parseISO(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
+        <p className={`text-[14px] font-bold mt-0.5 ${isIncome || isTransfer ? 'text-emerald-600' : 'text-red-500'}`}>
+          {isIncome ? '+ ' : isTransfer ? '' : '- '}{formatCurrency(Number(tx.amount) || 0)}
         </p>
       </div>
     </div>
