@@ -112,10 +112,7 @@ function ReportsContent() {
             />
             <div className="mt-4">
               {selectedItem.component ? (
-                <selectedItem.component
-                  dateRange={filters.dateRange}
-                  preset={filters.preset}
-                />
+                <selectedItem.component />
               ) : (
                 <div className="text-center py-20 text-gray-400 dark:text-gray-500">
                   Em breve
