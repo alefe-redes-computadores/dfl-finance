@@ -1,166 +1,166 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useContext_ } from '@/components/ContextToggle'
-import { FilterState } from '@/components/reports/ReportFilters'
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts'
-import { Loader2, Download, FileText } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import ReportFilters, { ReportFilterValues } from './ReportFilters'
+import { Loader2, TrendingUp, TrendingDown } from 'lucide-react'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { format, parseISO, differenceInDays, subDays } from 'date-fns'
 
-interface Props {
-  filters: FilterState
-  onClose: () => void
-}
-
-export default function ComparePeriods({ filters, onClose }: Props) {
+export default function ComparePeriods() {
   const { user } = useAuth()
-  const { context } = useContext_()
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState<ReportFilterValues | null>(null)
+  const [summary, setSummary] = useState({ current: 0, previous: 0, diff: 0, percent: 0 })
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
+  const loadData = useCallback(async (f: ReportFilterValues) => {
+    if (!user) return
     setLoading(true)
 
-    const today = new Date()
-    const periods = [
-      {
-        label: 'Mês Atual',
-        start: format(startOfMonth(today), 'yyyy-MM-dd'),
-        end: format(endOfMonth(today), 'yyyy-MM-dd'),
-      },
-      {
-        label: 'Mês Passado',
-        start: format(startOfMonth(subMonths(today, 1)), 'yyyy-MM-dd'),
-        end: format(endOfMonth(subMonths(today, 1)), 'yyyy-MM-dd'),
-      },
-      {
-        label: '2 Meses Atrás',
-        start: format(startOfMonth(subMonths(today, 2)), 'yyyy-MM-dd'),
-        end: format(endOfMonth(subMonths(today, 2)), 'yyyy-MM-dd'),
-      },
-    ]
+    const currentStart = f.dateRange.start
+    const currentEnd = f.dateRange.end
 
-    const allStart = periods[2].start
-    const allEnd = periods[0].end
+    // Calcular período anterior com a mesma duração
+    const duration = differenceInDays(parseISO(currentEnd), parseISO(currentStart))
+    const previousEnd = format(subDays(parseISO(currentStart), 1), 'yyyy-MM-dd')
+    const previousStart = format(subDays(parseISO(previousEnd), duration), 'yyyy-MM-dd')
 
-    const { data: txs } = await supabase
+    // Buscar transações do período atual
+    const { data: currentTxs } = await supabase
       .from('transactions')
-      .select('amount, type, date, status')
-      .match({ user_id: user.id, context: context })
-      .gte('date', allStart)
-      .lte('date', allEnd)
+      .select('*, categories(name)')
+      .eq('user_id', user.id)
+      .eq('context', f.context)
+      .gte('date', currentStart)
+      .lte('date', currentEnd)
 
-    const txArray = Array.isArray(txs) ? txs : []
+    // Buscar transações do período anterior
+    const { data: previousTxs } = await supabase
+      .from('transactions')
+      .select('*, categories(name)')
+      .eq('user_id', user.id)
+      .eq('context', f.context)
+      .gte('date', previousStart)
+      .lte('date', previousEnd)
 
-    const result = periods.map(p => {
-      const periodTxs = txArray.filter((tx: any) => tx.date >= p.start && tx.date <= p.end && tx.status === 'done')
-      const income = periodTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      const expense = periodTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      return {
-        name: p.label,
-        Receitas: income,
-        Despesas: expense,
-        Saldo: income - expense,
-      }
-    })
+    const curr = Array.isArray(currentTxs) ? currentTxs : []
+    const prev = Array.isArray(previousTxs) ? previousTxs : []
 
-    setData(result)
+    // Agrupar por categoria (despesas)
+    const catMap: Record<string, { current: number; previous: number }> = {}
+    
+    curr
+      .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+      .forEach((t: any) => {
+        const name = t.categories?.name || 'Outros'
+        if (!catMap[name]) catMap[name] = { current: 0, previous: 0 }
+        catMap[name].current += Number(t.amount || 0)
+      })
+
+    prev
+      .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+      .forEach((t: any) => {
+        const name = t.categories?.name || 'Outros'
+        if (!catMap[name]) catMap[name] = { current: 0, previous: 0 }
+        catMap[name].previous += Number(t.amount || 0)
+      })
+
+    const chartData = Object.entries(catMap).map(([name, values]) => ({
+      name,
+      'Período Atual': values.current,
+      'Período Anterior': values.previous,
+    }))
+
+    // Calcular totais
+    const currentTotal = curr
+      .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+      .reduce((acc: number, t: any) => acc + Number(t.amount || 0), 0)
+    const previousTotal = prev
+      .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+      .reduce((acc: number, t: any) => acc + Number(t.amount || 0), 0)
+    
+    const diff = currentTotal - previousTotal
+    const percent = previousTotal > 0 ? ((diff / previousTotal) * 100) : 0
+
+    setSummary({ current: currentTotal, previous: previousTotal, diff, percent })
+    setData(chartData)
     setLoading(false)
-  }, [user, context, filters])
+  }, [user])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    if (filters) loadData(filters)
+  }, [filters, loadData])
 
-  const handleExportPDF = () => {
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
-
-    const tableRows = data.map(d => `
-      <tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#059669;">${formatCurrency(d.Receitas)}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626;">${formatCurrency(d.Despesas)}</td>
-        <td style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;color:${d.Saldo >= 0 ? '#059669' : '#dc2626'};">${formatCurrency(d.Saldo)}</td>
-      </tr>
-    `).join('')
-
-    const html = `
-      <html>
-        <head>
-          <title>Comparar Períodos - DFL Finance</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
-            h2 { color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th { padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px; text-transform: uppercase; color: #64748b; background: #f8fafc; }
-          </style>
-        </head>
-        <body>
-          <h2>Comparar Períodos</h2>
-          <table>
-            <thead><tr><th>Período</th><th style="text-align:right">Receitas</th><th style="text-align:right">Despesas</th><th style="text-align:right">Saldo</th></tr></thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-          <p style="margin-top:20px;font-size:11px;color:#94a3b8;">DFL Finance • ${new Date().toLocaleDateString('pt-BR')}</p>
-        </body>
-      </html>
-    `
-    printWindow.document.write(html)
-    printWindow.document.close()
-    printWindow.print()
-  }
-
-  const handleExportCSV = () => {
-    const header = 'Período,Receitas,Despesas,Saldo\n'
-    const rows = data.map(d => `"${d.name}",${d.Receitas.toFixed(2)},${d.Despesas.toFixed(2)},${d.Saldo.toFixed(2)}`).join('\n')
-    const blob = new Blob([header + rows], { type: 'text/csv; charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `comparar-periodos.csv`
-    a.click()
+  if (!filters) {
+    return (
+      <ReportFilters
+        onChange={setFilters}
+        initialPreset="thisMonth"
+      />
+    )
   }
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
+      <div className="flex justify-center py-10">
+        <Loader2 className="animate-spin text-teal-700" size={32} />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Comparar Períodos</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(val: number) => formatCurrency(val)} />
-            <Legend />
-            <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+    <div>
+      <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
+
+      {/* Resumo comparativo */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold mb-1">Período Atual</p>
+          <p className="text-lg font-bold text-gray-800 dark:text-gray-200">R$ {summary.current.toFixed(2)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold mb-1">Período Anterior</p>
+          <p className="text-lg font-bold text-gray-800 dark:text-gray-200">R$ {summary.previous.toFixed(2)}</p>
+        </div>
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={handleExportPDF} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-          <FileText size={18} /> Exportar PDF
-        </button>
-        <button onClick={handleExportCSV} className="flex-1 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl py-3 text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2">
-          <Download size={18} /> Exportar CSV
-        </button>
+      {/* Variação */}
+      <div className="mt-3 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-3">
+        {summary.diff > 0 ? (
+          <TrendingUp size={24} className="text-red-500" />
+        ) : (
+          <TrendingDown size={24} className="text-emerald-500" />
+        )}
+        <div>
+          <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
+            {summary.diff > 0 ? '+' : ''}R$ {summary.diff.toFixed(2)}
+          </p>
+          <p className={`text-xs font-bold ${summary.diff > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+            {summary.percent > 0 ? '+' : ''}{summary.percent.toFixed(1)}% vs período anterior
+          </p>
+        </div>
+      </div>
+
+      {/* Gráfico */}
+      <div className="mt-6 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+        <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Comparação por Categoria</h3>
+        {data.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-10">Nenhum dado no período.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
+              <Legend />
+              <Bar dataKey="Período Atual" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Período Anterior" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   )
