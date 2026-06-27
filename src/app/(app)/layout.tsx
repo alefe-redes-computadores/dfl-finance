@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import BottomNav from '@/components/BottomNav'
+import { ContextProvider } from '@/components/ContextToggle'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -22,9 +23,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-      {children}
-      <BottomNav />
-    </div>
+    <ContextProvider>
+      <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
+        {children}
+        <BottomNav />
+      </div>
+    </ContextProvider>
   )
 }
