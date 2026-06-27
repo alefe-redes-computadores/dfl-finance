@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { X, Check, Loader2, Wallet, Calendar, Tag, ChevronLeft, Building } from 'lucide-react'
+import { X, Check, Loader2, Wallet, Calendar, User, FileText, Tag, ChevronLeft } from 'lucide-react'
 import { useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
