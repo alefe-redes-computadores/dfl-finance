@@ -5,16 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft,
-  ArrowDown,
-  Clock,
-  Check,
-  Loader2,
-  Search,
-  X,
-  Paperclip, // <-- Ícone de anexo adicionado
+  ChevronLeft, ArrowDown, Clock, Check, Loader2, Search, X, Paperclip
 } from 'lucide-react'
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns' // <-- Datas adicionadas para garantir a listagem
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -37,11 +30,9 @@ function TransactionContent() {
   const [currentDate] = useState(new Date())
 
   const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+  // SOLUÇÃO À PROVA DE FALHAS (Sem depender de JOIN do Supabase)
   const loadTransactions = useCallback(async () => {
     if (!user) return
     setLoading(true)
@@ -50,10 +41,10 @@ function TransactionContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-      let query = supabase
+      // 1. Busca transações PURAS (Isso a gente sabe que não falha)
+      const { data: txData, error: txError } = await supabase
         .from('transactions')
-        // CORREÇÃO CRÍTICA AQUI: Removido o 'color' de accounts
-        .select('*, categories(name, icon, color), accounts(name)')
+        .select('*')
         .eq('user_id', user.id)
         .eq('context', currentContext)
         .gte('date', start)
@@ -61,24 +52,38 @@ function TransactionContent() {
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
 
-      if (filter === 'income') {
-        query = query.eq('type', 'income')
-      } else if (filter === 'expense') {
-        query = query.in('type', ['expense', 'sangria'])
-      } else if (filter === 'transfer') {
-        query = query.eq('type', 'transfer')
-      } else if (filter === 'pending') {
-        query = query.eq('status', 'pending')
-      }
+      if (txError) throw txError
 
-      const { data, error } = await query
-
-      if (error) {
-        console.error('Erro ao buscar transações:', error)
+      if (!txData || txData.length === 0) {
         setTransactions([])
-      } else {
-        setTransactions(Array.isArray(data) ? data : [])
+        setLoading(false)
+        return
       }
+
+      // 2. Busca Categorias e Contas em paralelo
+      const [{ data: catData }, { data: accData }] = await Promise.all([
+        supabase.from('categories').select('id, name, icon, color').eq('user_id', user.id),
+        supabase.from('accounts').select('id, name, color').eq('user_id', user.id)
+      ])
+
+      // 3. Junta tudo manualmente no frontend
+      let finalData = txData.map(tx => {
+        const category = (catData || []).find(c => c.id === tx.category_id)
+        const account = (accData || []).find(a => a.id === tx.account_id)
+        return {
+          ...tx,
+          categories: category || null,
+          accounts: account || null
+        }
+      })
+
+      // 4. Aplica os filtros dos botões
+      if (filter === 'income') finalData = finalData.filter(t => t.type === 'income')
+      else if (filter === 'expense') finalData = finalData.filter(t => t.type === 'expense' || t.type === 'sangria')
+      else if (filter === 'transfer') finalData = finalData.filter(t => t.type === 'transfer')
+      else if (filter === 'pending') finalData = finalData.filter(t => t.status === 'pending')
+
+      setTransactions(finalData)
     } catch (err) {
       console.error('Erro inesperado:', err)
       setTransactions([])
@@ -157,10 +162,7 @@ function TransactionContent() {
             className="w-full bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-teal-500 transition-colors"
           />
           {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
               <X size={14} />
             </button>
           )}
@@ -172,9 +174,7 @@ function TransactionContent() {
               key={btn.key}
               onClick={() => setFilter(btn.key)}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                filter === btn.key
-                  ? 'bg-teal-700 text-white'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                filter === btn.key ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
               }`}
             >
               {btn.label}
@@ -236,7 +236,6 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
   const isIncome = tx.type === 'income'
   const isTransfer = tx.type === 'transfer'
   
-  // Verifica se existe URL de comprovante
   const hasAttachment = tx.receipt_url && tx.receipt_url.trim() !== ''
 
   return (
@@ -264,7 +263,6 @@ function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; f
           <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
             {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
           </p>
-          {/* Ícone de Anexo (Comprovante) */}
           {hasAttachment && (
             <Paperclip size={12} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
           )}
