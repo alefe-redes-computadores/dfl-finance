@@ -76,7 +76,7 @@ function HomeContent() {
 
   const getBalanceStyle = (val: number) => {
     if (val > 0) return 'text-emerald-600 font-bold'
-    if (val < 0) return 'text-red-600 font-bold'   // alterado para 600
+    if (val < 0) return 'text-red-600 font-bold'
     return 'text-gray-800 dark:text-gray-200 font-bold'
   }
 
@@ -327,7 +327,6 @@ function HomeContent() {
                   {hideBalance ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              {/* fonte normal em vez de light */}
               <h1 className={`text-[36px] font-normal text-gray-800 dark:text-gray-100 tracking-tight ${hideBalance ? 'tracking-widest' : ''}`}>
                 {hideBalance ? '••••••' : formatCurrency(totalAccountsBalance)}
               </h1>
@@ -350,7 +349,6 @@ function HomeContent() {
                   <ArrowDown size={20} className="text-red-500" />
                 </div>
                 <span className="text-[12px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Despesas</span>
-                {/* despesas em vermelho 600 */}
                 <p className="text-[16px] font-bold text-red-600">{hideBalance ? '••••' : formatCurrency(summary.expense)}</p>
               </div>
             </div>
@@ -390,7 +388,6 @@ function HomeContent() {
                      <ArrowDown size={18} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">A Pagar</p>
-                  <!-- text-red-600 -->
                   <p className="text-[14px] font-bold text-red-600">{hideBalance ? '•••' : formatCurrency(pendings.toPay)}</p>
                 </div>
                 <div onClick={() => router.push('/transactions?filter=income')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
@@ -602,7 +599,6 @@ function HomeContent() {
                             <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
                           </div>
                         </div>
-                        {/* sinal colado ao valor, despesas em vermelho 600 */}
                         <p className={`text-[15px] font-bold whitespace-nowrap shrink-0 ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>
                           {tx.type === 'income' ? '+' : '-'}{hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
                         </p>
@@ -656,7 +652,6 @@ function HomeContent() {
 
       {enabledSections.map(sectionId => renderSection(sectionId))}
 
-      {/* Botão personalizar com padding reduzido e arredondamento suave */}
       <button
         onClick={openPersonalize}
         className="w-full mt-2 flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-100 dark:border-slate-700 shadow-sm transition-all"
