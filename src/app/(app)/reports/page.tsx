@@ -76,6 +76,14 @@ function ReportsContent() {
   const router = useRouter()
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
 
+  const handleBack = () => {
+    if (selectedReport) {
+      setSelectedReport(null)
+    } else {
+      router.back()
+    }
+  }
+
   const selectedItem = reportItems.find(item => item.id === selectedReport)
 
   return (
@@ -83,7 +91,7 @@ function ReportsContent() {
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => selectedReport ? setSelectedReport(null) : router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
@@ -99,7 +107,9 @@ function ReportsContent() {
         {selectedReport && selectedItem ? (
           <div>
             {selectedItem.component ? (
-              <selectedItem.component />
+              <ErrorBoundary key={selectedReport}>
+                <selectedItem.component />
+              </ErrorBoundary>
             ) : (
               <div className="text-center py-20 text-gray-400 dark:text-gray-500">
                 Em breve
@@ -135,6 +145,27 @@ function ReportsContent() {
       </div>
     </div>
   )
+}
+
+// ErrorBoundary simples para evitar que um relatório quebre os outros
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="text-center py-20 text-gray-400 dark:text-gray-500">
+          Erro ao carregar relatório. Tente novamente.
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 export default function ReportsPage() {
