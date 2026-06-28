@@ -307,7 +307,11 @@ export default function MorePage() {
   const handleExport = (type: string) => {
     if (!user) return
     const endpoint = type === 'transactions' ? 'export-transactions' : 'export-analysis'
-    window.open(`/api/${endpoint}?userId=${user.id}&context=${exportContext}&range=${exportRange}`, '_blank')
+    
+    // Força o contexto de exportação para 'personal' caso esteja no modo 'Apenas PF'
+    const finalContext = appMode === 'personal_only' ? 'personal' : exportContext
+    
+    window.open(`/api/${endpoint}?userId=${user.id}&context=${finalContext}&range=${exportRange}`, '_blank')
     setShowExportModal(false)
   }
 
@@ -338,18 +342,23 @@ export default function MorePage() {
                <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20}/></button>
             </div>
 
-            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Contexto</p>
-            <div className="flex gap-2 mb-6">
-              {(['dfl', 'personal'] as const).map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setExportContext(c)}
-                  className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all ${exportContext === c ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
-                >
-                  {c === 'dfl' ? 'DFL' : 'Pessoal'}
-                </button>
-              ))}
-            </div>
+            {/* SELETOR DE CONTEXTO: Só aparece se estiver no modo FULL */}
+            {appMode === 'full' && (
+              <>
+                <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Contexto</p>
+                <div className="flex gap-2 mb-6">
+                  {(['dfl', 'personal'] as const).map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setExportContext(c)}
+                      className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all ${exportContext === c ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
+                    >
+                      {c === 'dfl' ? 'PJ' : 'PF'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Período</p>
             <div className="flex gap-2 mb-8">
