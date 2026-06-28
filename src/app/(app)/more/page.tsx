@@ -223,11 +223,11 @@ export default function MorePage() {
     showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
+     
     const toggleAppMode = async () => {
     if (!user?.id) return
     
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
-    const oldMode = appMode
     
     // 1. Muda visualmente NA HORA e salva no cache local para evitar o loop
     setAppMode(newMode)
@@ -253,11 +253,10 @@ export default function MorePage() {
     } catch (err: any) {
       console.error('Erro de Supabase:', err.message)
       
-      // Se der erro no banco, reverte o estado para o valor anterior
-      setAppMode(oldMode || 'full')
-      localStorage.setItem('dfl_app_mode', oldMode || 'full')
+      // APAGAMOS a parte que revertia o estado!
+      // Agora a chave vai ficar parada onde você clicou, mesmo se o banco der erro.
       
-      showToast('Erro ao salvar preferência na nuvem.', 'error')
+      showToast('Erro ao salvar na nuvem, mas salvo no celular!', 'error')
     }
   }
 
