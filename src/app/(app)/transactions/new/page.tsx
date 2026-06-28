@@ -579,15 +579,24 @@ function NewTransactionContent() {
           }
 
           // Atualiza o total da fatura
-          if (invoiceId) {
-            await supabase
-              .from('credit_invoices')
-              .update({
-                total_amount: supabase.sql`total_amount + ${installmentAmount}`,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', invoiceId)
-          }
+          // Atualiza o total da fatura
+if (invoiceId) {
+  const { data: currentInvoice } = await supabase
+    .from('credit_invoices')
+    .select('total_amount')
+    .eq('id', invoiceId)
+    .single()
+
+  const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
+
+  await supabase
+    .from('credit_invoices')
+    .update({
+      total_amount: newTotal,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', invoiceId)
+}
         }
       }
 
