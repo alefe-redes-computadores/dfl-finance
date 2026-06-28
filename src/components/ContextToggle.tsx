@@ -34,7 +34,16 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   const [context, setContextState] = useState<Context>('dfl')
   const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
 
-  // Carrega apenas no início
+  useEffect(() => {
+    const savedMode = localStorage.getItem('dfl_app_mode') as 'personal_only' | 'full' | null
+    if (savedMode) {
+      setAppModeState(savedMode)
+      if (savedMode === 'personal_only') {
+        setContextState('personal')
+      }
+    }
+  }, [])
+
   useEffect(() => {
     async function loadInitialSettings() {
       if (!user?.id) return
@@ -48,9 +57,10 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
         if (!error && data) {
           const mode = data.app_mode || 'full'
           setAppModeState(mode)
-          if (mode === 'personal_only') setContextState('personal')
-        } else {
-          setAppModeState('full') // Fallback se não existir registro
+          localStorage.setItem('dfl_app_mode', mode)
+          if (mode === 'personal_only') {
+            setContextState('personal')
+          }
         }
       } catch (err) {
         console.error('Erro:', err)
@@ -59,7 +69,6 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     loadInitialSettings()
   }, [user?.id])
 
-  // Setter apenas de Estado Local (Síncrono e Rápido)
   function setContext(c: Context) {
     if (appMode === 'personal_only') return
     setContextState(c)
@@ -67,7 +76,9 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 
   function setAppMode(mode: 'personal_only' | 'full') {
     setAppModeState(mode)
-    if (mode === 'personal_only') setContextState('personal')
+    if (mode === 'personal_only') {
+      setContextState('personal')
+    }
   }
 
   return (
