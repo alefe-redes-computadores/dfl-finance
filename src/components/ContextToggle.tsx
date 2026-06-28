@@ -35,64 +35,93 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast()
   const [context, setContextState] = useState<Context>('dfl')
   const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false) // 🔒 Bloqueio de concorrência
 
-  // Carrega a preferência do usuário UMA VEZ quando o usuário estiver pronto
+  // Carrega a preferência do usuário APENAS UMA VEZ e NÃO sobrescreve durante uma sincronização
   useEffect(() => {
-    if (!user?.id) return
-    
-    supabase
-      .from('user_settings')
-      .select('app_mode')
-      .eq('user_id', user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          setAppModeState('full')
-          return
+    async function loadInitialSettings() {
+      if (!user?.id) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('app_mode')
+          .eq('user_id', user.id)
+          .single()
+
+        if (!error && data) {
+          // Só atualiza se não houver uma gravação em andamento
+          if (!isSyncing) {
+            const mode = data.app_mode || 'full'
+            setAppModeState(mode)
+            if (mode === 'personal_only') {
+              setContextState('personal')
+            }
+          }
+        } else if (error) {
+          // Se não encontrou registro, usa o padrão
+          if (!isSyncing) {
+            setAppModeState('full')
+          }
         }
-        const mode = data?.app_mode || 'full'
-        setAppModeState(mode)
-        if (mode === 'personal_only') {
-          setContextState('personal')
-        }
-      })
+      } catch (err) {
+        console.error('Erro ao carregar configurações:', err)
+      }
+    }
+
+    loadInitialSettings()
+    // Depende APENAS do user.id - NUNCA de appMode ou context
   }, [user?.id])
 
+  // setContext sem useCallback - sem stale closure
   function setContext(c: Context) {
     if (appMode === 'personal_only') return
     setContextState(c)
   }
 
+  // setAppMode com bloqueio de concorrência
   async function setAppMode(mode: 'personal_only' | 'full') {
-    setAppModeState(mode)
-    if (mode === 'personal_only') {
-      setContextState('personal')
-    }
-
     if (!user?.id) {
       showToast('Sessão expirada. Faça login novamente.', 'error')
       return
     }
 
-    const { error } = await supabase.from('user_settings').upsert({
-      user_id: user.id,
-      app_mode: mode,
-      updated_at: new Date().toISOString(),
-    })
+    setIsSyncing(true) // 🔒 Bloqueia o useEffect de sobrescrever
 
-    if (error) {
-      showToast(`Erro ao salvar: ${error.message}`, 'error')
+    // Atualização otimista da UI (imediata)
+    setAppModeState(mode)
+    if (mode === 'personal_only') {
+      setContextState('personal')
+    }
+
+    try {
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          app_mode: mode,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+
+      if (error) throw error
+
+      showToast(
+        mode === 'full'
+          ? 'Modo Pessoa Jurídica ativado'
+          : 'Modo apenas Pessoa Física ativado',
+        'success'
+      )
+    } catch (error: any) {
+      console.error('Erro ao salvar appMode:', error.message)
+      // Reverte o estado em caso de erro real
       setAppModeState(mode === 'full' ? 'personal_only' : 'full')
       if (mode === 'full') {
         setContextState('personal')
       }
-    } else {
-      showToast(
-        mode === 'full' 
-          ? 'Modo Pessoa Jurídica ativado' 
-          : 'Modo apenas Pessoa Física ativado', 
-        'success'
-      )
+      showToast('Erro ao salvar preferência.', 'error')
+    } finally {
+      // Libera o bloqueio com um pequeno delay para evitar loops
+      setTimeout(() => setIsSyncing(false), 300)
     }
   }
 
@@ -106,6 +135,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
 
+  // Se NÃO for 'full', não renderiza NADA (some da tela)
   if (appMode !== 'full') return null
 
   return (
