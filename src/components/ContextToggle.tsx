@@ -90,7 +90,6 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     </ContextCtx.Provider>
   )
 }
-}
 
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
