@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import {
-  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2, ChevronRight,
-  ArrowRightLeft, Building, HandCoins, Plus, X, FileImage, Camera, QrCode, Paperclip,
-  Image as ImageIcon
+  ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
+  ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -20,8 +20,8 @@ import { useToast } from '@/contexts/ToastContext'
 
 const getDynamicIcon = (iconName: string) => {
   if (!iconName) return Icons.Tag
-  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
-  return (Icons as any)[formattedName] || Icons.Tag
+  const f = iconName.charAt(0).toUpperCase() + iconName.slice(1)
+  return (Icons as any)[f] || Icons.Tag
 }
 
 export default function EditTransactionPage() {
@@ -30,6 +30,10 @@ export default function EditTransactionPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { showToast } = useToast()
+
+  // inputs ocultos para upload mobile
+  const galeriaInputRef = useRef<HTMLInputElement>(null)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -53,12 +57,11 @@ export default function EditTransactionPage() {
   const [notes, setNotes] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isRefund, setIsRefund] = useState(false)
-  const [isFinancing, setIsFinancing] = useState(false)
-  const [isLoan, setIsLoan] = useState(false)
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [receiptName, setReceiptName] = useState<string>('')
+  const [receiptType, setReceiptType] = useState<'image' | 'pdf' | null>(null)
   const [uploading, setUploading] = useState(false)
 
   const [financingId, setFinancingId] = useState<string | null>(null)
@@ -76,19 +79,23 @@ export default function EditTransactionPage() {
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
-    const selectedDate = new Date(newDateStr + 'T12:00:00')
+    const selected = new Date(newDateStr + 'T12:00:00')
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    selectedDate.setHours(0, 0, 0, 0)
-    setIsPaid(selectedDate <= today)
+    selected.setHours(0, 0, 0, 0)
+    setIsPaid(selected <= today)
   }
 
+  // ─── UPLOAD ────────────────────────────────────────────────────────────────
   const uploadFile = async (file: File) => {
     if (!user) return
     setUploading(true)
     setReceiptName(file.name)
 
-    if (file.type.startsWith('image/')) {
+    const isImage = file.type.startsWith('image/')
+    setReceiptType(isImage ? 'image' : 'pdf')
+
+    if (isImage) {
       const reader = new FileReader()
       reader.onload = (e) => setReceiptPreview(e.target?.result as string)
       reader.readAsDataURL(file)
@@ -100,16 +107,14 @@ export default function EditTransactionPage() {
       const ext = file.name.split('.').pop() || 'jpg'
       const uniqueName = `${crypto.randomUUID()}.${ext}`
       const path = `${user.id}/${uniqueName}`
-      
+
       const { error: uploadError } = await supabase.storage
         .from('receipts')
-        .upload(path, file)
+        .upload(path, file, { upsert: false })
 
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(path)
+      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
 
       if (receiptUrl) {
         const oldPath = receiptUrl.split('/').slice(-2).join('/')
@@ -117,11 +122,13 @@ export default function EditTransactionPage() {
       }
 
       setReceiptUrl(urlData.publicUrl)
-      showToast('Comprovante anexado com sucesso!', 'success')
+      showToast('Comprovante anexado!', 'success')
     } catch (err: any) {
+      console.error('Erro upload:', err)
       showToast(`Erro ao anexar: ${err.message}`, 'error')
       setReceiptPreview(null)
       setReceiptName('')
+      setReceiptType(null)
     } finally {
       setUploading(false)
     }
@@ -135,23 +142,18 @@ export default function EditTransactionPage() {
     setReceiptUrl(null)
     setReceiptPreview(null)
     setReceiptName('')
-    showToast('Comprovante excluído com sucesso!', 'success')
+    setReceiptType(null)
+    showToast('Comprovante removido.', 'success')
   }
 
   const handleReceiptOption = (option: string) => {
     setShowReceiptModal(false)
     if (option === 'camera') {
-      setShowCamera(true)
+      setTimeout(() => setShowCamera(true), 150)
       return
     }
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = option === 'pdf' ? 'application/pdf' : 'image/*'
-    input.onchange = (e: any) => {
-      const file = e.target?.files?.[0]
-      if (file) uploadFile(file)
-    }
-    input.click()
+    if (option === 'galeria') { galeriaInputRef.current?.click(); return }
+    if (option === 'pdf') { pdfInputRef.current?.click(); return }
   }
 
   const handleCameraCapture = (file: File) => {
@@ -161,39 +163,25 @@ export default function EditTransactionPage() {
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
-
-    if (id === 'new') {
-      setIsNew(true)
-      const paramType = searchParams.get('type')
-      if (paramType === 'income' || paramType === 'expense') {
-        setTxType(paramType)
-        if (paramType === 'income') setIsPaid(true)
-      }
-    }
-
     setLoading(true)
 
     try {
       const catType = txType === 'income' ? 'income' : 'expense'
-
       const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
         supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
         supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
-        supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name')
+        supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name'),
       ])
 
       setAccounts(Array.isArray(accData) ? accData : [])
       const allCats = Array.isArray(catData) ? catData : []
-      const mainCats = allCats.filter(c => !c.parent_id)
-      const subCats = allCats.filter(c => c.parent_id)
-      
+      const mainCats = allCats.filter((c) => !c.parent_id)
+      const subCats = allCats.filter((c) => c.parent_id)
       const subsMap: Record<string, any[]> = {}
-      subCats.forEach(sub => {
-        const key = sub.parent_id
-        if (!subsMap[key]) subsMap[key] = []
-        subsMap[key].push(sub)
+      subCats.forEach((sub) => {
+        if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
+        subsMap[sub.parent_id].push(sub)
       })
-
       setCategories(mainCats)
       setSubcategories(subsMap)
       setTags(Array.isArray(tagData) ? tagData : [])
@@ -202,11 +190,10 @@ export default function EditTransactionPage() {
         const { data: txData, error: txError } = await supabase
           .from('transactions')
           .select('*')
-          .match({ id: id, user_id: user.id })
+          .match({ id, user_id: user.id })
           .single()
 
         if (txError) {
-          console.error('Erro Supabase (Transação):', txError)
           showToast('Erro ao buscar transação.', 'error')
         } else if (txData) {
           setTx(txData)
@@ -218,65 +205,57 @@ export default function EditTransactionPage() {
           setAccountId(txData.account_id || '')
           setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
           setNotes(txData.notes || '')
-
           const amountSafe = Number(txData.amount) || 0
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
           if (txData.receipt_url) {
             setReceiptUrl(txData.receipt_url)
-            setReceiptName('Comprovante anexado')
-            setReceiptPreview(txData.receipt_url)
+            const isPdf = txData.receipt_url.toLowerCase().includes('.pdf')
+            setReceiptType(isPdf ? 'pdf' : 'image')
+            setReceiptName(isPdf ? 'comprovante.pdf' : 'comprovante.jpg')
+            if (!isPdf) setReceiptPreview(txData.receipt_url)
           }
 
-          if (txData.financing_id) {
-            setFinancingId(txData.financing_id)
-            setIsFinancing(true)
-          }
-          if (txData.debt_id) {
-            setDebtId(txData.debt_id)
-            setIsLoan(true)
-          }
-
-          if (txData.notes && txData.notes.includes('[Devolução/Estorno]')) {
-            setIsRefund(true)
-          }
+          if (txData.financing_id) setFinancingId(txData.financing_id)
+          if (txData.debt_id) setDebtId(txData.debt_id)
+          if (txData.notes?.includes('[Devolução/Estorno]')) setIsRefund(true)
+        }
+      } else {
+        setIsNew(true)
+        const paramType = searchParams.get('type')
+        if (paramType === 'income' || paramType === 'expense') {
+          setTxType(paramType)
+          if (paramType === 'income') setIsPaid(true)
         }
       }
     } catch (err) {
-      console.error('Erro inesperado no loadData:', err)
+      console.error('Erro inesperado:', err)
     } finally {
       setLoading(false)
     }
-  }, [id, searchParams, user, txType])
+  }, [id, user, txType, searchParams])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  useEffect(() => { loadData() }, [loadData])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\D/g, '')
-    const num = Number(rawValue) / 100
+    const raw = e.target.value.replace(/\D/g, '')
+    const num = Number(raw) / 100
     setAmountInput(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
 
   const toggleTag = (id: string) => {
-    setSelectedTags(prev => {
-      if (prev.includes(id)) return prev.filter(t => t !== id)
+    setSelectedTags((prev) => {
+      if (prev.includes(id)) return prev.filter((t) => t !== id)
       if (prev.length >= 5) return prev
       return [...prev, id]
     })
   }
 
   const handleSave = async () => {
-    if (!user?.id) {
-      showToast('Sessão expirada. Faça login novamente.', 'error')
-      return
-    }
-
+    if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     setSaving(true)
 
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
-
     if (isNaN(rawAmount) || rawAmount <= 0) {
       showToast('Informe um valor válido.', 'warning')
       setSaving(false)
@@ -309,60 +288,55 @@ export default function EditTransactionPage() {
     }
 
     try {
-      if (!isNew && tx && tx.status === 'done' && tx.account_id) {
-        const { data: oldAccData, error: oldAccError } = await supabase
+      if (!isNew && tx?.status === 'done' && tx?.account_id) {
+        const { data: oldAcc, error: oldAccErr } = await supabase
           .from('accounts')
           .select('balance')
           .match({ id: tx.account_id, user_id: user.id })
           .single()
+        if (oldAccErr) throw oldAccErr
 
-        if (oldAccError) throw oldAccError
+        const revertedBalance =
+          tx.type === 'income'
+            ? Number(oldAcc.balance) - Number(tx.amount)
+            : Number(oldAcc.balance) + Number(tx.amount)
 
-        const oldBalance = Number(oldAccData.balance) || 0
-        const oldAmount = Number(tx.amount)
-        const revertedBalance = tx.type === 'income'
-          ? oldBalance - oldAmount
-          : oldBalance + oldAmount
-
-        const { error: revertError } = await supabase
+        const { error: revertErr } = await supabase
           .from('accounts')
           .update({ balance: revertedBalance })
           .match({ id: tx.account_id, user_id: user.id })
-
-        if (revertError) throw revertError
+        if (revertErr) throw revertErr
       }
 
       if (isPaid && accountId) {
-        const { data: newAccData, error: newAccError } = await supabase
+        const { data: newAcc, error: newAccErr } = await supabase
           .from('accounts')
           .select('balance')
           .match({ id: accountId, user_id: user.id })
           .single()
+        if (newAccErr) throw newAccErr
 
-        if (newAccError) throw newAccError
+        const updatedBalance =
+          txType === 'income'
+            ? Number(newAcc.balance) + rawAmount
+            : Number(newAcc.balance) - rawAmount
 
-        const currentBalance = Number(newAccData.balance) || 0
-        const updatedBalance = txType === 'income'
-          ? currentBalance + rawAmount
-          : currentBalance - rawAmount
-
-        const { error: applyError } = await supabase
+        const { error: applyErr } = await supabase
           .from('accounts')
           .update({ balance: updatedBalance })
           .match({ id: accountId, user_id: user.id })
-
-        if (applyError) throw applyError
+        if (applyErr) throw applyErr
       }
 
       if (isNew) {
         const { error } = await supabase.from('transactions').insert([payload])
         if (error) throw error
       } else {
-        const { error } = await supabase.from('transactions').update(payload).match({ id: id, user_id: user.id })
+        const { error } = await supabase.from('transactions').update(payload).match({ id, user_id: user.id })
         if (error) throw error
       }
 
-      showToast('Transação salva com sucesso!', 'success')
+      showToast('Transação salva!', 'success')
       router.refresh()
       router.back()
     } catch (err: any) {
@@ -378,25 +352,22 @@ export default function EditTransactionPage() {
     if (!confirm('Tem certeza que deseja excluir esta transação?')) return
     setSaving(true)
 
-    if (tx && tx.status === 'done' && tx.account_id) {
-      const { data: accData, error: accError } = await supabase
+    if (tx?.status === 'done' && tx?.account_id) {
+      const { data: accData } = await supabase
         .from('accounts')
         .select('balance')
         .match({ id: tx.account_id, user_id: user.id })
         .single()
-
-      if (!accError && accData) {
-        const oldAmount = Number(tx.amount)
-        const currentBalance = Number(accData.balance) || 0
-        const newBalance = tx.type === 'income'
-          ? currentBalance - oldAmount
-          : currentBalance + oldAmount
+      if (accData) {
+        const newBalance =
+          tx.type === 'income'
+            ? Number(accData.balance) - Number(tx.amount)
+            : Number(accData.balance) + Number(tx.amount)
         await supabase.from('accounts').update({ balance: newBalance }).match({ id: tx.account_id, user_id: user.id })
       }
     }
 
-    await supabase.from('transactions').delete().match({ id: id, user_id: user.id })
-
+    await supabase.from('transactions').delete().match({ id, user_id: user.id })
     showToast('Transação excluída.', 'info')
     router.refresh()
     router.back()
@@ -415,25 +386,49 @@ export default function EditTransactionPage() {
   const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800 dark:text-gray-200'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-600' : 'bg-teal-700') : 'bg-gray-300 dark:bg-gray-600'
 
-  const selectedCat = categories.find(c => c.id === categoryId) || 
+  const selectedCat =
+    categories.find((c) => c.id === categoryId) ||
     Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
+  const selectedAcc = accounts.find((a) => a.id === accountId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+
+      {/* inputs ocultos */}
+      <input
+        ref={galeriaInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
+      />
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
+      />
+
+      {/* ── Header ── */}
       <div className="flex justify-between items-center p-4">
         <button onClick={() => router.back()} className="text-gray-800 dark:text-gray-200 p-2 -ml-2">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 capitalize">{isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}</h1>
+        <h1 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 capitalize">
+          {isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}
+        </h1>
         <div className="flex items-center gap-4 text-teal-700 dark:text-teal-400">
           {!isNew && <button><Copy size={20} /></button>}
           {!isNew && <button onClick={handleDelete} className="text-red-500"><Trash2 size={20} /></button>}
         </div>
       </div>
 
+      {/* ── Valor ── */}
       <div className="px-6 py-4 mb-4">
-        <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mb-2 capitalize">Valor da {typeLabel}</p>
+        <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mb-2 capitalize">
+          Valor da {typeLabel}
+        </p>
         <div className="flex items-center gap-2">
           <span className="text-3xl text-gray-400 dark:text-gray-500 font-light">R$</span>
           <input
@@ -447,19 +442,28 @@ export default function EditTransactionPage() {
         </div>
       </div>
 
+      {/* ── Card principal ── */}
       <div className="bg-white dark:bg-slate-800 rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] dark:shadow-none space-y-6 transition-colors duration-300">
+
+        {/* Pago/Recebido */}
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
           <div className="flex items-center gap-4">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid ? 'bg-gray-800 dark:bg-gray-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
               <Check size={14} />
             </div>
-            <span className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{isIncome ? 'Recebido' : 'Pago'}</span>
+            <span className="font-bold text-[15px] text-gray-800 dark:text-gray-200">
+              {isIncome ? 'Recebido' : 'Pago'}
+            </span>
           </div>
-          <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}>
+          <button
+            onClick={() => setIsPaid(!isPaid)}
+            className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}
+          >
             <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
           </button>
         </div>
 
+        {/* Comprovante */}
         {uploading ? (
           <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
             <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -473,19 +477,15 @@ export default function EditTransactionPage() {
               </div>
             ) : (
               <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                {(receiptName || '').toLowerCase().endsWith('.pdf') || (receiptUrl || '').toLowerCase().includes('.pdf')
+                {receiptType === 'pdf'
                   ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" />
                   : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />
                 }
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">
-                {receiptName || 'Comprovante'}
-              </p>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                Comprovante anexado
-              </p>
+              <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{receiptName || 'Comprovante'}</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Comprovante anexado</p>
             </div>
             <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
               <Trash2 size={18} />
@@ -501,7 +501,8 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 relative">
+        {/* Data */}
+        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
           <Calendar size={22} className="text-gray-400 dark:text-gray-500" />
           <input
             type="date"
@@ -511,6 +512,7 @@ export default function EditTransactionPage() {
           />
         </div>
 
+        {/* Descrição */}
         <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
           <Edit3 size={22} className="text-gray-400 dark:text-gray-500" />
           <input
@@ -522,44 +524,47 @@ export default function EditTransactionPage() {
           />
         </div>
 
-        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
+        {/* Categoria */}
+        <button
+          onClick={() => setShowCatModal(true)}
+          className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5"
+        >
           <Tag size={22} className="text-gray-400 dark:text-gray-500" />
           <div className="flex-1 flex flex-col text-left">
             <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Categoria</span>
-            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedCat ? selectedCat.name : 'Selecione...'}</span>
+            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
+              {selectedCat ? selectedCat.name : 'Selecione...'}
+            </span>
           </div>
-          <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+          <ChevronRight size={18} className="text-gray-300" />
         </button>
 
-        <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
+        {/* Conta */}
+        <button
+          onClick={() => setShowAccModal(true)}
+          className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5"
+        >
           <Wallet size={22} className="text-gray-400 dark:text-gray-500" />
           <div className="flex-1 flex flex-col text-left">
             <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Conta</span>
-            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">{selectedAcc ? selectedAcc.name : 'Selecione...'}</span>
+            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
+              {selectedAcc ? selectedAcc.name : 'Selecione...'}
+            </span>
           </div>
-          <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+          <ChevronRight size={18} className="text-gray-300" />
         </button>
 
         <div className="flex justify-center pt-2 pb-2">
-          <button onClick={() => setShowDetails(!showDetails)} className="text-[14px] font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="text-[14px] font-bold text-teal-700 dark:text-teal-400"
+          >
             {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           </button>
         </div>
 
         {showDetails && (
           <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
-              <RefreshCw size={22} className="text-gray-400 dark:text-gray-500" />
-              <div className="flex-1 flex flex-col gap-3">
-                <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Repetição</span>
-                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-                  <button className="px-4 py-1.5 rounded-full border border-teal-700 dark:border-teal-500 text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 text-[13px] font-medium whitespace-nowrap">Única</button>
-                  <button className="px-4 py-1.5 rounded-full bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-[13px] font-medium whitespace-nowrap">Parcelar</button>
-                  <button className="px-4 py-1.5 rounded-full bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-[13px] font-medium whitespace-nowrap">Recorrente</button>
-                </div>
-              </div>
-            </div>
-
             {!isIncome && (
               <>
                 <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
@@ -567,10 +572,13 @@ export default function EditTransactionPage() {
                     <ArrowRightLeft size={22} className="text-gray-400 dark:text-gray-500" />
                     <div className="flex flex-col">
                       <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
-                      <span className="text-[11px] text-gray-400 dark:text-gray-500">Abate o gasto da categoria no relatório</span>
+                      <span className="text-[11px] text-gray-400">Abate o gasto da categoria no relatório</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                  <button
+                    onClick={() => setIsRefund(!isRefund)}
+                    className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
+                  >
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
@@ -590,7 +598,7 @@ export default function EditTransactionPage() {
                     <HandCoins size={22} className="text-gray-400 dark:text-gray-500" />
                     <div className="flex flex-col">
                       <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Empréstimo a alguém</span>
-                      <span className="text-[11px] text-gray-400 dark:text-gray-500">Vira saldo a receber em "Quem me deve"</span>
+                      <span className="text-[11px] text-gray-400">Vira saldo a receber em "Quem me deve"</span>
                     </div>
                   </div>
                   <button className={`w-11 h-6 rounded-full relative transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
@@ -611,7 +619,7 @@ export default function EditTransactionPage() {
               />
             </div>
 
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-lg">
+            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2">
               <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
               <div className="flex-1 flex flex-col text-left">
                 <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Tags</span>
@@ -619,51 +627,38 @@ export default function EditTransactionPage() {
                   {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Nenhuma tag'}
                 </span>
               </div>
-              <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+              <ChevronRight size={18} className="text-gray-300" />
             </button>
           </div>
         )}
       </div>
 
+      {/* ── Modais ── */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => { setShowCatModal(false); router.push('/categories'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+              <button onClick={() => { setShowCatModal(false); router.push('/categories') }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {categories.map(cat => {
+              {categories.map((cat) => {
                 const IconComp = getDynamicIcon(cat.icon)
                 const subCount = subcategories[cat.id]?.length || 0
                 const isActive = cat.id === categoryId
                 return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      setCategoryId(cat.id)
-                      setSelectedParentCat(cat)
-                      if (subCount > 0) {
-                        setShowSubCatModal(true)
-                      } else {
-                        setShowCatModal(false)
-                      }
-                    }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setSelectedParentCat(cat); subCount > 0 ? setShowSubCatModal(true) : setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
-                      <IconComp size={20} />
-                    </div>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={20} /></div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
-                    {subCount > 0 && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500 font-medium mr-2">{subCount}</span>
-                    )}
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
+                    {subCount > 0 && <span className="text-xs text-gray-400 mr-2">{subCount}</span>}
+                    {isActive && <Check size={20} className="text-teal-700" />}
+                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300" />}
                   </button>
                 )
               })}
-              {categories.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma categoria encontrada.</p>}
+              {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
         </div>
@@ -671,38 +666,29 @@ export default function EditTransactionPage() {
 
       {showSubCatModal && selectedParentCat && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2">
-                <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
-              </button>
+              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2"><ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" /></button>
               <div>
                 <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{selectedParentCat.name}</p>
+                <p className="text-xs text-gray-500">{selectedParentCat.name}</p>
               </div>
             </div>
             <div className="space-y-2">
               {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
-                const SubIconComp = getDynamicIcon(sub.icon)
+                const SubIcon = getDynamicIcon(sub.icon)
                 const isActive = sub.id === categoryId
                 return (
-                  <button
-                    key={sub.id}
-                    onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  <button key={sub.id} onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
-                      <SubIconComp size={20} />
-                    </div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}><SubIcon size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
                   </button>
                 )
               })}
-              <button
-                onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }}
-                className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors text-gray-500 dark:text-gray-400 font-medium"
-              >
+              <button onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }} className="w-full p-3 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-slate-700 text-gray-500 font-medium">
                 Usar "{selectedParentCat.name}" sem subcategoria
               </button>
             </div>
@@ -712,27 +698,25 @@ export default function EditTransactionPage() {
 
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
-              <button onClick={() => { setShowAccModal(false); router.push('/accounts'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+              <button onClick={() => { setShowAccModal(false); router.push('/accounts') }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {accounts.map(acc => {
+              {accounts.map((acc) => {
                 const isActive = acc.id === accountId
                 return (
-                  <button
-                    key={acc.id}
-                    onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
                   </button>
                 )
               })}
-              {accounts.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma conta encontrada.</p>}
+              {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
             </div>
           </div>
         </div>
@@ -740,46 +724,52 @@ export default function EditTransactionPage() {
 
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
-              <button onClick={() => { setShowTagModal(false); router.push('/tags'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+              <button onClick={() => { setShowTagModal(false); router.push('/tags') }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {tags.map(tag => {
-                const isActive = selectedTags.includes(tag.id);
+              {tags.map((tag) => {
+                const isActive = selectedTags.includes(tag.id)
                 return (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTag(tag.id)}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  <button key={tag.id} onClick={() => toggleTag(tag.id)}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                   >
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700" />}
                   </button>
-                );
+                )
               })}
-              {tags.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma tag encontrada.</p>}
+              {tags.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma tag encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
-      <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />
-      <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
-
+      <ReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        onOptionSelect={handleReceiptOption}
+      />
+      <CameraCapture
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={handleCameraCapture}
+      />
       <ModalFinancing
         isOpen={showFinancingModal}
         onClose={() => setShowFinancingModal(false)}
-        onSave={(id) => { setFinancingId(id); setIsFinancing(true); }}
+        onSave={(id) => setFinancingId(id)}
       />
       <ModalEmprestimo
         isOpen={showLoanModal}
         onClose={() => setShowLoanModal(false)}
-        onSave={(id) => { setDebtId(id); setIsLoan(true); }}
+        onSave={(id) => { setDebtId(id) }}
       />
 
+      {/* ── Botão salvar ── */}
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
         <button
           onClick={handleSave}
