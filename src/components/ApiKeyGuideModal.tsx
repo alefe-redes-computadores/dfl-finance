@@ -83,7 +83,6 @@ export default function ApiKeyGuideModal({ isOpen, onClose }: ApiKeyGuideModalPr
     setTimeout(() => setCopiedStep(null), 2000)
   }
 
-
   const steps = activeTab === 'gemini' ? geminiSteps : openaiSteps
 
   return (
