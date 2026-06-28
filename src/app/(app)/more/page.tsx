@@ -14,10 +14,6 @@ import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
 
-/* ------------------------------------------------------------------ */
-/*  Componentes internos (SectionTitle, MenuItem)                      */
-/* ------------------------------------------------------------------ */
-
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h4 className="text-[13px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 ml-4 mt-6 tracking-widest">
@@ -91,10 +87,6 @@ function MenuItem({
   return <button type="button" className="w-full text-left" onClick={handleClick}>{content}</button>
 }
 
-/* ------------------------------------------------------------------ */
-/*  Modal de Configurações Rápidas (agora com Modo PF/PJ)             */
-/* ------------------------------------------------------------------ */
-
 function QuickSettingsModal({
   isOpen,
   onClose,
@@ -162,7 +154,6 @@ function QuickSettingsModal({
             </button>
           </div>
 
-          {/* Terceira opção: Modo PF e PJ */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
@@ -192,10 +183,6 @@ function QuickSettingsModal({
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Página principal "Mais"                                            */
-/* ------------------------------------------------------------------ */
-
 export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -223,7 +210,6 @@ export default function MorePage() {
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  // NOVAS FUNÇÕES COM TOASTS
   const toggleTheme = () => {
     toggleThemeOriginal()
     const newTheme = theme === 'dark' ? 'light' : 'dark'
@@ -240,7 +226,7 @@ export default function MorePage() {
   const toggleAppMode = () => {
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
     setAppMode(newMode)
-    showToast(newMode === 'full' ? 'Modo Pessoa Jurídica ativado' : 'Modo apenas Pessoa Física ativado', 'success')
+    // O toast agora é mostrado pelo ContextProvider
   }
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
@@ -329,7 +315,6 @@ export default function MorePage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 px-4 pt-8 font-sans transition-colors duration-300">
       
-      {/* Modal de recorte de avatar */}
       {showCropModal && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white dark:bg-slate-800 p-6 rounded-[32px]">
@@ -346,7 +331,6 @@ export default function MorePage() {
         </div>
       )}
 
-      {/* Modal de exportação */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
@@ -396,7 +380,6 @@ export default function MorePage() {
         </div>
       )}
 
-      {/* Modal Configurações Rápidas com a terceira opção */}
       <QuickSettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
@@ -408,7 +391,6 @@ export default function MorePage() {
         toggleAppMode={toggleAppMode}
       />
 
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-[28px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">Mais</h1>
         <button onClick={() => setShowSettingsModal(true)} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:text-teal-700 transition-colors">
@@ -416,7 +398,6 @@ export default function MorePage() {
         </button>
       </div>
 
-      {/* Banner 100% Gratuito (Estilo Cartão Black) */}
       <div className="bg-slate-900 dark:bg-slate-800 rounded-[24px] p-6 mb-8 text-white shadow-xl relative overflow-hidden">
         <div className="absolute -right-6 -top-6 w-32 h-32 bg-gradient-to-br from-teal-400 to-emerald-600 rounded-full blur-3xl opacity-20" />
         <div className="flex items-center gap-4 relative z-10">
@@ -430,7 +411,6 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* Perfil */}
       <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50">
         <div className="relative w-16 h-16 shrink-0">
           <img
@@ -462,7 +442,6 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* Agrupamentos de Menu (Estilo Nubank/iOS) */}
       <div className="space-y-6">
         
         <div>
@@ -513,7 +492,6 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* Botão de Sair (Estilo Alerta Premium) */}
       <button
         onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
         className="w-full mt-10 mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px]"
