@@ -118,7 +118,12 @@ function ReportsContent() {
         {selectedReport && selectedItem ? (
           <div>
             {/* ADICIONADO: O componente que faltava */}
-            <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
+            <ReportFilters 
+              onChange={setFilters} 
+              initialPreset={filters.preset} 
+              context={context} 
+             />
+
             
             <div className="mt-4">
               {selectedItem.component ? (
