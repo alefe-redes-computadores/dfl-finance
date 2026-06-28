@@ -22,12 +22,17 @@ import {
   X,
   Check,
   Edit3,
+  Receipt,
+  Banknote,
+  Wallet,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import InvoiceAlert from '@/components/InvoiceAlert'
+import BankLogo from '@/components/BankLogo'
+import { useToast } from '@/contexts/ToastContext'
 
 async function calculateCardLimit(cardId: string, userId: string) {
   const { data: card } = await supabase
@@ -56,9 +61,12 @@ function CardDetailContent() {
   const cardId = params?.id as string
   const { user } = useAuth()
   const { context } = useContext_()
+  const { showToast } = useToast()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [card, setCard] = useState<any>(null)
   const [transactions, setTransactions] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [totalSpent, setTotalSpent] = useState(0)
   const [availableLimit, setAvailableLimit] = useState(0)
@@ -74,6 +82,13 @@ function CardDetailContent() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [newLimit, setNewLimit] = useState('')
   const [limitSaving, setLimitSaving] = useState(false)
+
+  // Modal de pagamento de fatura
+  const [showPayModal, setShowPayModal] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
+  const [payAccountId, setPayAccountId] = useState('')
+  const [payAmount, setPayAmount] = useState('')
+  const [paying, setPaying] = useState(false)
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
@@ -96,13 +111,27 @@ function CardDetailContent() {
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-    const { data: txsData } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color)')
-      .match({ credit_card_id: cardId, user_id: user.id, context })
-      .gte('date', start)
-      .lte('date', end)
-      .order('date', { ascending: false })
+    const [{ data: txsData }, { data: invoicesData }, { data: accsData }] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('*, categories(name, icon, color)')
+        .match({ credit_card_id: cardId, user_id: user.id, context })
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: false }),
+      supabase
+        .from('credit_invoices')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('credit_card_id', cardId)
+        .order('closing_date', { ascending: false })
+        .limit(6),
+      supabase
+        .from('accounts')
+        .select('id, name, color')
+        .eq('user_id', user.id)
+        .order('name'),
+    ])
 
     const txs = Array.isArray(txsData) ? txsData : []
 
@@ -115,8 +144,9 @@ function CardDetailContent() {
     setTransactions(txs)
     setTotalSpent(spent)
     setEstornosTotal(totalEstornos)
+    setInvoices(Array.isArray(invoicesData) ? invoicesData : [])
+    setAccounts(Array.isArray(accsData) ? accsData : [])
 
-    // Limite disponível recalculado
     const limit = Number(cardData.limit_amount) || 0
     setAvailableLimit(limit - spent)
 
@@ -228,6 +258,97 @@ function CardDetailContent() {
     )
   }
 
+  // ─── Pagamento de fatura ───
+  const openPayModal = (invoice: any) => {
+    setSelectedInvoice(invoice)
+    const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount || 0)
+    setPayAmount(remaining.toFixed(2).replace('.', ','))
+    setPayAccountId('')
+    setShowPayModal(true)
+  }
+
+  const handlePayInvoice = async () => {
+    if (!selectedInvoice || !payAccountId || !user?.id) return
+    setPaying(true)
+
+    const rawAmount = parseFloat(payAmount.replace(/\./g, '').replace(',', '.'))
+    if (isNaN(rawAmount) || rawAmount <= 0) {
+      showToast('Valor inválido.', 'warning')
+      setPaying(false)
+      return
+    }
+
+    try {
+      const { data: accData, error: accError } = await supabase
+        .from('accounts')
+        .select('balance')
+        .eq('id', payAccountId)
+        .eq('user_id', user.id)
+        .single()
+
+      if (accError) throw accError
+
+      const newBalance = (Number(accData.balance) || 0) - rawAmount
+
+      await supabase
+        .from('accounts')
+        .update({ balance: newBalance })
+        .eq('id', payAccountId)
+        .eq('user_id', user.id)
+
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          type: 'expense',
+          amount: rawAmount,
+          description: `Pagamento fatura ${card.name} - ${format(new Date(selectedInvoice.closing_date), "MMM/yy", { locale: ptBR })}`,
+          account_id: payAccountId,
+          date: new Date().toISOString().split('T')[0],
+          status: 'done',
+          context: context,
+          category_id: null,
+        })
+
+      const newPaidAmount = (Number(selectedInvoice.paid_amount) || 0) + rawAmount
+      const totalAmount = Number(selectedInvoice.total_amount)
+      const newStatus = newPaidAmount >= totalAmount ? 'paid' : 'partial'
+
+      await supabase
+        .from('credit_invoices')
+        .update({
+          paid_amount: newPaidAmount,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedInvoice.id)
+
+      showToast('Fatura paga com sucesso!', 'success')
+      setShowPayModal(false)
+      loadCardData()
+    } catch (err: any) {
+      console.error('Erro ao pagar fatura:', err)
+      showToast(`Erro: ${err.message}`, 'error')
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'open':
+        return { label: 'Aberta', color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' }
+      case 'closed':
+        return { label: 'Fechada', color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' }
+      case 'paid':
+        return { label: 'Paga', color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' }
+      case 'partial':
+        return { label: 'Parcial', color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' }
+      default:
+        return { label: status, color: 'bg-gray-50 text-gray-600' }
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
@@ -323,6 +444,75 @@ function CardDetailContent() {
       <div className="mb-4">
         <InvoiceAlert dueDay={card.due_day} closingDay={card.closing_day} />
       </div>
+
+      {/* ── NOVO: Seção de Faturas ── */}
+      {invoices.length > 0 && (
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-2">Faturas</h3>
+          <div className="space-y-2">
+            {invoices.slice(0, 3).map((invoice) => {
+              const statusBadge = getStatusBadge(invoice.status)
+              const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount || 0)
+              const progress = Number(invoice.total_amount) > 0
+                ? ((Number(invoice.paid_amount) || 0) / Number(invoice.total_amount)) * 100
+                : 0
+
+              return (
+                <div key={invoice.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
+                        {format(new Date(invoice.closing_date), "MMMM 'de' yyyy", { locale: ptBR })}
+                      </p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        Vence {format(new Date(invoice.due_date), "dd/MM/yyyy")}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${statusBadge.color}`}>
+                      {statusBadge.label}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-500 dark:text-gray-400">Total</span>
+                    <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(invoice.total_amount))}</span>
+                  </div>
+
+                  {Number(invoice.paid_amount) > 0 && (
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-gray-500 dark:text-gray-400">Pago</span>
+                      <span className="font-bold text-emerald-600">{formatCurrency(Number(invoice.paid_amount))}</span>
+                    </div>
+                  )}
+
+                  {invoice.status !== 'paid' && remaining > 0 && (
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-gray-500 dark:text-gray-400">Restante</span>
+                      <span className="font-bold text-red-600">{formatCurrency(remaining)}</span>
+                    </div>
+                  )}
+
+                  {Number(invoice.paid_amount) > 0 && (
+                    <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(progress, 100)}%` }} />
+                    </div>
+                  )}
+
+                  {(invoice.status === 'open' || invoice.status === 'partial') && remaining > 0 && (
+                    <button
+                      onClick={() => openPayModal(invoice)}
+                      className="w-full py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Banknote size={14} />
+                      Pagar fatura
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Navegação de meses */}
       <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-full p-1.5 mb-4 shadow-sm border border-gray-50 dark:border-slate-700">
@@ -426,6 +616,69 @@ function CardDetailContent() {
           </div>
         )}
       </div>
+
+      {/* Modal de Pagamento de Fatura */}
+      {showPayModal && selectedInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => !paying && setShowPayModal(false)}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Pagar Fatura</h3>
+              <button onClick={() => setShowPayModal(false)} className="text-gray-400 dark:text-gray-500 p-1"><X size={20} /></button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              {format(new Date(selectedInvoice.closing_date), "MMMM 'de' yyyy", { locale: ptBR })}
+            </p>
+
+            <div className="mb-4">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor</label>
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+                <span className="text-gray-400 dark:text-gray-500 font-bold mr-2">R$</span>
+                <input
+                  type="text"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  className="bg-transparent w-full outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
+                  placeholder="0,00"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Restante: {formatCurrency(Number(selectedInvoice.total_amount) - Number(selectedInvoice.paid_amount || 0))}
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-2">Conta</label>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {accounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => setPayAccountId(acc.id)}
+                    className={`w-full p-3 flex items-center gap-3 rounded-xl transition-colors ${
+                      payAccountId === acc.id
+                        ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700'
+                        : 'bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    <BankLogo color={acc.color} name={acc.name} size="sm" />
+                    <span className={`font-medium text-sm ${payAccountId === acc.id ? 'text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                      {acc.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handlePayInvoice}
+              disabled={paying || !payAccountId || !payAmount}
+              className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {paying ? <Loader2 size={20} className="animate-spin" /> : null}
+              {paying ? 'Pagando...' : 'Confirmar pagamento'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Ajuste (Estorno) */}
       {showAdjustModal && (
