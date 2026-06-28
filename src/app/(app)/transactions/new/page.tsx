@@ -323,25 +323,24 @@ function NewTransactionContent() {
   // A chave do fix: usar refs de <input> já montados no DOM.
   // Isso preserva o gesto do usuário e funciona no mobile.
   const handleReceiptOption = (option: string) => {
+  if (option === 'camera') {
     setShowReceiptModal(false)
-
-    if (option === 'camera') {
-      // Pequeno delay para o modal fechar antes de abrir câmera
-      setTimeout(() => setShowCamera(true), 150)
-      return
-    }
-
-    if (option === 'galeria') {
-      galeriaInputRef.current?.click()
-      return
-    }
-
-    if (option === 'pdf') {
-      pdfInputRef.current?.click()
-      return
-    }
+    setTimeout(() => setShowCamera(true), 150)
+    return
   }
 
+  if (option === 'galeria') {
+    galeriaInputRef.current?.click()
+    setTimeout(() => setShowReceiptModal(false), 200)
+    return
+  }
+
+  if (option === 'pdf') {
+    pdfInputRef.current?.click()
+    setTimeout(() => setShowReceiptModal(false), 200)
+    return
+  }
+}
   const handleCameraCapture = (file: File) => {
     uploadFile(file)
     setShowCamera(false)
@@ -1237,3 +1236,4 @@ export default function NewTransactionPage() {
     </Suspense>
   )
 }
+
