@@ -33,7 +33,7 @@ export default function AccountsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { showToast } = useToast()
-  const { context } = useContext_()  // Agora usa o contexto global
+  const { context, appMode } = useContext_()
 
   const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -298,8 +298,8 @@ export default function AccountsPage() {
           </div>
         </div>
 
-        {/* Componente ContextToggle substituindo o seletor inline */}
-        <ContextToggle />
+        {/* ContextToggle - SÓ APARECE SE appMode === 'full' */}
+        {appMode === 'full' && <ContextToggle />}
       </div>
 
       <div className="px-4 mt-6">
