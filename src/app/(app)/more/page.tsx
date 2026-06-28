@@ -490,7 +490,6 @@ export default function MorePage() {
           </div>
         </div>
       </div>
-
       <button
         onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
         className="w-full mt-10 mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px]"
