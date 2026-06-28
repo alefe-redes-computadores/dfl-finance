@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
 
@@ -23,11 +23,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null
 
   return (
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
+      {children}
+      <BottomNav />
+    </div>
+  )
+}
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
     <ContextProvider>
-      <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-        {children}
-        <BottomNav />
-      </div>
+      <AppContent>{children}</AppContent>
     </ContextProvider>
   )
 }
