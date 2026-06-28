@@ -1,15 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  BarChart3,
-  TrendingUp,
-  DollarSign,
-  Calendar,
-  ArrowUpDown,
-  Download,
-  ChevronLeft,
+  BarChart3, TrendingUp, DollarSign, Calendar,
+  ArrowUpDown, Download, ChevronLeft,
 } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import CategoryResult from '@/components/reports/CategoryResult'
@@ -31,7 +26,7 @@ const reportItems: {
   {
     id: 'category-result',
     title: 'Resultado por Categoria',
-    description: 'Receitas e despesas agrupadas por categoria no período selecionado',
+    description: 'Receitas e despesas agrupadas por categoria no período',
     icon: TrendingUp,
     component: CategoryResult,
   },
@@ -83,12 +78,16 @@ function ReportsContent() {
   const router = useRouter()
   const { context } = useContext_()
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
-
   const [filters, setFilters] = useState<ReportFilterValues>({
     context: context as string,
     dateRange: { start: '', end: '' },
     preset: 'thisMonth',
   })
+
+  // Mantém filters.context sincronizado com o ContextToggle
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, context: context as string }))
+  }, [context])
 
   const handleBack = () => {
     if (selectedReport) {
@@ -98,7 +97,18 @@ function ReportsContent() {
     }
   }
 
+  const handleSelectReport = (id: string) => {
+    // Reseta os filtros ao abrir um novo relatório para evitar cascata
+    setFilters({
+      context: context as string,
+      dateRange: { start: '', end: '' },
+      preset: 'thisMonth',
+    })
+    setSelectedReport(id)
+  }
+
   const selectedItem = reportItems.find(item => item.id === selectedReport)
+  const ReportComponent = selectedItem?.component ?? null
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
@@ -109,7 +119,7 @@ function ReportsContent() {
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios Avançados'}
+            {selectedReport ? selectedItem?.title ?? 'Relatório' : 'Relatórios Avançados'}
           </h1>
           <div className="w-10" />
         </div>
@@ -118,24 +128,27 @@ function ReportsContent() {
 
       {/* Conteúdo */}
       <div className="px-4 pt-4">
-        {selectedReport && selectedItem ? (
+        {selectedReport && selectedItem && ReportComponent ? (
           <div>
-            <ReportFilters 
-              onChange={setFilters} 
-              initialPreset={filters.preset} 
-              context={context as string} 
+            {/* key no ReportFilters garante remount limpo a cada relatório */}
+            <ReportFilters
+              key={selectedReport}
+              onChange={setFilters}
+              initialPreset="thisMonth"
+              context={context as string}
             />
-            
+
             <div className="mt-4">
-              {selectedItem.component ? (
-                <ErrorBoundary key={selectedReport}>
-                  <selectedItem.component filters={filters} />
-                </ErrorBoundary>
-              ) : (
-                <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-                  Em breve
-                </div>
-              )}
+              <ErrorBoundary key={`${selectedReport}-${filters.dateRange.start}`}>
+                {/* Só renderiza o componente depois que os filtros tiverem datas */}
+                {filters.dateRange.start && filters.dateRange.end ? (
+                  <ReportComponent filters={filters} />
+                ) : (
+                  <div className="flex justify-center p-8">
+                    <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </ErrorBoundary>
             </div>
           </div>
         ) : (
@@ -145,19 +158,15 @@ function ReportsContent() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setSelectedReport(item.id)}
+                  onClick={() => handleSelectReport(item.id)}
                   className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 flex items-center gap-3 active:bg-gray-50 dark:active:bg-slate-700 transition-colors text-left shadow-sm border border-gray-50 dark:border-slate-700"
                 >
                   <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
                     <Icon size={20} className="text-teal-700 dark:text-teal-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
-                      {item.title}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {item.description}
-                    </p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.description}</p>
                   </div>
                 </button>
               )
@@ -169,13 +178,22 @@ function ReportsContent() {
   )
 }
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
   constructor(props: any) {
     super(props)
     this.state = { hasError: false }
   }
   static getDerivedStateFromError() {
     return { hasError: true }
+  }
+  componentDidUpdate(prevProps: any) {
+    // Reseta o erro quando os filhos mudarem (ex: novo relatório)
+    if (prevProps.children !== this.props.children && this.state.hasError) {
+      this.setState({ hasError: false })
+    }
   }
   render() {
     if (this.state.hasError) {
