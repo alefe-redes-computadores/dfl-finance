@@ -105,6 +105,7 @@ export default function ReportFilters({ onChange, initialPreset = 'thisMonth', c
     }
   }, [customStart, customEnd])
 
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
