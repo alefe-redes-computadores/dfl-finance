@@ -229,12 +229,11 @@ export default function MorePage() {
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
     const oldMode = appMode
     
-    // 1. Muda visualmente NA HORA e salva no armazenamento do celular (Cache)
+    // Muda visualmente NA HORA e salva no cache
     setAppMode(newMode)
     localStorage.setItem('dfl_app_mode', newMode)
 
     try {
-      // 2. Salva no Supabase definitivamente
       const { error } = await supabase
         .from('user_settings')
         .upsert({
@@ -245,14 +244,12 @@ export default function MorePage() {
 
       if (error) throw error
 
-      // 3. O TOAST DE SUCESSO AQUI!
       showToast(
         newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 
         'success'
       )
     } catch (err: any) {
       console.error('Erro de Supabase:', err.message)
-      // Se der erro, desfaz a alteração e avisa o usuário
       setAppMode(oldMode || 'full')
       localStorage.setItem('dfl_app_mode', oldMode || 'full')
       showToast('Erro ao salvar preferência na nuvem.', 'error')
@@ -339,7 +336,6 @@ export default function MorePage() {
     if (!user) return
     const endpoint = type === 'transactions' ? 'export-transactions' : 'export-analysis'
     
-    // Força o contexto de exportação para 'personal' caso esteja no modo 'Apenas PF'
     const finalContext = appMode === 'personal_only' ? 'personal' : exportContext
     
     window.open(`/api/${endpoint}?userId=${user.id}&context=${finalContext}&range=${exportRange}`, '_blank')
@@ -373,7 +369,6 @@ export default function MorePage() {
                <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20}/></button>
             </div>
 
-            {/* SELETOR DE CONTEXTO: Só aparece se estiver no modo FULL */}
             {appMode === 'full' && (
               <>
                 <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Contexto</p>
