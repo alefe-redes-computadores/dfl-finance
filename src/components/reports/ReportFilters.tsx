@@ -15,8 +15,9 @@ export interface ReportFilterValues {
 interface ReportFiltersProps {
   onChange: (values: ReportFilterValues) => void
   initialPreset?: string
-  context: string
+  context: string // Garanta que é 'string' e não outro tipo
 }
+
 
 const presets: Record<string, { label: string; start: string; end: string }> = {
   thisMonth: {
