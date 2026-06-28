@@ -1,94 +1,109 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { useContext_ } from '@/components/ContextToggle'
-import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
-import { format, parseISO, subMonths } from 'date-fns'
-import { Loader2, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
+import { ReportFilterValues } from './ReportFilters'
 
-export default function ComparePeriods() {
+interface ComparePeriodsProps {
+  filters: ReportFilterValues
+}
+
+export default function ComparePeriods({ filters }: ComparePeriodsProps) {
   const { user } = useAuth()
-  const { context } = useContext_()
-  const [currentTotal, setCurrentTotal] = useState(0)
-  const [previousTotal, setPreviousTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState<ReportFilterValues>({
-    context,
-    dateRange: { start: '', end: '' },
-    preset: 'thisMonth',
-  })
-
-  const loadData = useCallback(async (f: ReportFilterValues) => {
-    if (!user || !f.dateRange.start || !f.dateRange.end) return
-    setLoading(true)
-
-    const { data: currentTx } = await supabase
-      .from('transactions')
-      .select('amount')
-      .eq('user_id', user.id)
-      .eq('context', f.context)
-      .in('type', ['expense', 'sangria'])
-      .gte('date', f.dateRange.start)
-      .lte('date', f.dateRange.end)
-
-    const currentSum = (Array.isArray(currentTx) ? currentTx : []).reduce(
-      (sum, t) => sum + Number(t.amount || 0), 0
-    )
-    setCurrentTotal(currentSum)
-
-    const start = parseISO(f.dateRange.start)
-    const end = parseISO(f.dateRange.end)
-    const prevStart = format(subMonths(start, 1), 'yyyy-MM-dd')
-    const prevEnd = format(subMonths(end, 1), 'yyyy-MM-dd')
-
-    const { data: prevTx } = await supabase
-      .from('transactions')
-      .select('amount')
-      .eq('user_id', user.id)
-      .eq('context', f.context)
-      .in('type', ['expense', 'sangria'])
-      .gte('date', prevStart)
-      .lte('date', prevEnd)
-
-    const prevSum = (Array.isArray(prevTx) ? prevTx : []).reduce(
-      (sum, t) => sum + Number(t.amount || 0), 0
-    )
-    setPreviousTotal(prevSum)
-    setLoading(false)
-  }, [user])
+  const [currentPeriod, setCurrentPeriod] = useState<any[]>([])
+  const [previousPeriod, setPreviousPeriod] = useState<any[]>([])
 
   useEffect(() => {
-    loadData(filters)
-  }, [filters, loadData])
+    if (!user?.id || !filters.dateRange.start || !filters.dateRange.end) return
+    setLoading(true)
 
-  const difference = currentTotal - previousTotal
-  const percent = previousTotal > 0 ? ((difference / previousTotal) * 100) : 0
+    const load = async () => {
+      const currentStart = filters.dateRange.start
+      const currentEnd = filters.dateRange.end
+
+      // Período anterior de mesma duração
+      const diff = new Date(currentEnd).getTime() - new Date(currentStart).getTime()
+      const prevEnd = new Date(new Date(currentStart).getTime() - 86400000)
+      const prevStart = new Date(prevEnd.getTime() - diff)
+
+      let queryCurr = supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', currentStart)
+        .lte('date', currentEnd)
+      if (filters.context === 'personal') queryCurr = queryCurr.eq('context', 'personal')
+      const { data: currData, error: currErr } = await queryCurr
+      if (currErr) console.error(currErr)
+
+      let queryPrev = supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', prevStart.toISOString())
+        .lte('date', prevEnd.toISOString())
+      if (filters.context === 'personal') queryPrev = queryPrev.eq('context', 'personal')
+      const { data: prevData, error: prevErr } = await queryPrev
+      if (prevErr) console.error(prevErr)
+
+      setCurrentPeriod(currData || [])
+      setPreviousPeriod(prevData || [])
+      setLoading(false)
+    }
+
+    load()
+  }, [user?.id, filters])
+
+  const calc = (arr: any[], type: string) => arr.filter(t => t.type === type).reduce((s, t) => s + t.amount, 0)
+  const curInc = calc(currentPeriod, 'income')
+  const curExp = calc(currentPeriod, 'expense')
+  const prevInc = calc(previousPeriod, 'income')
+  const prevExp = calc(previousPeriod, 'expense')
+
+  const incDiff = curInc - prevInc
+  const expDiff = curExp - prevExp
+  const incPerc = prevInc ? (incDiff / prevInc) * 100 : 0
+  const expPerc = prevExp ? (expDiff / prevExp) * 100 : 0
 
   return (
-    <div className="space-y-4">
-      <ReportFilters onChange={setFilters} initialPreset="thisMonth" />
-      
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-50 dark:border-slate-700">
-        <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Evolução Mensal</h3>
-        
-        {loading ? (
-           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div><p className="text-xs text-gray-500">Atual</p><p className="text-lg font-bold text-gray-800 dark:text-gray-200">R$ {currentTotal.toFixed(2)}</p></div>
-              <ArrowRight size={20} className="text-gray-400" />
-              <div><p className="text-xs text-gray-500">Anterior</p><p className="text-lg font-bold text-gray-800 dark:text-gray-200">R$ {previousTotal.toFixed(2)}</p></div>
+    <div className="flex-1">
+      {loading ? (
+        <div className="flex justify-center p-8"><div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
+              <p className="text-xs text-slate-500 mb-2">Receitas (período atual)</p>
+              <p className="text-lg font-bold text-emerald-600">R$ {curInc.toFixed(2)}</p>
+              <div className="flex items-center mt-2 text-xs">
+                {incDiff >= 0 ? <TrendingUp size={14} className="text-emerald-500 mr-1"/> : <TrendingDown size={14} className="text-red-500 mr-1"/>}
+                <span className={incDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}>{incPerc.toFixed(1)}% vs anterior</span>
+              </div>
             </div>
-            <div className={`flex items-center gap-2 ${difference < 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-              {difference < 0 ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
-              <span className="text-sm font-bold">{difference < 0 ? '-' : '+'} R$ {Math.abs(difference).toFixed(2)} ({percent.toFixed(1)}%)</span>
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
+              <p className="text-xs text-slate-500 mb-2">Despesas (período atual)</p>
+              <p className="text-lg font-bold text-red-600">R$ {curExp.toFixed(2)}</p>
+              <div className="flex items-center mt-2 text-xs">
+                {expDiff <= 0 ? <TrendingDown size={14} className="text-emerald-500 mr-1"/> : <TrendingUp size={14} className="text-red-500 mr-1"/>}
+                <span className={expDiff <= 0 ? 'text-emerald-600' : 'text-red-600'}>{expPerc.toFixed(1)}% vs anterior</span>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3">Resumo comparativo</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">Receita anterior</span><span>R$ {prevInc.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Despesa anterior</span><span>R$ {prevExp.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Saldo anterior</span><span>R$ {(prevInc - prevExp).toFixed(2)}</span></div>
+              <hr className="dark:border-slate-700" />
+              <div className="flex justify-between"><span className="text-slate-500">Saldo atual</span><span className={`font-bold ${curInc-curExp >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>R$ {(curInc-curExp).toFixed(2)}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
