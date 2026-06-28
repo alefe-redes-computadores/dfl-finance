@@ -8,7 +8,7 @@ import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
   ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
-  Image as ImageIcon,
+  Image as ImageIcon, CreditCard,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -31,7 +31,6 @@ export default function EditTransactionPage() {
   const { user } = useAuth()
   const { showToast } = useToast()
 
-  // inputs ocultos para upload mobile
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
@@ -44,6 +43,7 @@ export default function EditTransactionPage() {
   const [categories, setCategories] = useState<any[]>([])
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [tags, setTags] = useState<any[]>([])
+  const [creditCards, setCreditCards] = useState<any[]>([])
 
   const [amountInput, setAmountInput] = useState('')
   const [isPaid, setIsPaid] = useState(false)
@@ -51,6 +51,7 @@ export default function EditTransactionPage() {
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
+  const [creditCardId, setCreditCardId] = useState('')
   const [txType, setTxType] = useState<'income' | 'expense'>('expense')
 
   const [showDetails, setShowDetails] = useState(false)
@@ -71,6 +72,7 @@ export default function EditTransactionPage() {
   const [showSubCatModal, setShowSubCatModal] = useState(false)
   const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
+  const [showCardModal, setShowCardModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
@@ -86,7 +88,6 @@ export default function EditTransactionPage() {
     setIsPaid(selected <= today)
   }
 
-  // ─── UPLOAD ────────────────────────────────────────────────────────────────
   const uploadFile = async (file: File) => {
     if (!user) return
     setUploading(true)
@@ -147,24 +148,25 @@ export default function EditTransactionPage() {
   }
 
   const handleReceiptOption = (option: string) => {
-  if (option === 'camera') {
-    setShowReceiptModal(false)
-    setTimeout(() => setShowCamera(true), 150)
-    return
+    if (option === 'camera') {
+      setShowReceiptModal(false)
+      setTimeout(() => setShowCamera(true), 150)
+      return
+    }
+
+    if (option === 'galeria') {
+      galeriaInputRef.current?.click()
+      setTimeout(() => setShowReceiptModal(false), 200)
+      return
+    }
+
+    if (option === 'pdf') {
+      pdfInputRef.current?.click()
+      setTimeout(() => setShowReceiptModal(false), 200)
+      return
+    }
   }
 
-  if (option === 'galeria') {
-    galeriaInputRef.current?.click()
-    setTimeout(() => setShowReceiptModal(false), 200)
-    return
-  }
-
-  if (option === 'pdf') {
-    pdfInputRef.current?.click()
-    setTimeout(() => setShowReceiptModal(false), 200)
-    return
-  }
-}
   const handleCameraCapture = (file: File) => {
     uploadFile(file)
     setShowCamera(false)
@@ -176,13 +178,15 @@ export default function EditTransactionPage() {
 
     try {
       const catType = txType === 'income' ? 'income' : 'expense'
-      const [{ data: accData }, { data: catData }, { data: tagData }] = await Promise.all([
+      const [{ data: accData }, { data: catData }, { data: tagData }, { data: cardsData }] = await Promise.all([
         supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
         supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
         supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name'),
+        supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_archived', false).order('name'),
       ])
 
       setAccounts(Array.isArray(accData) ? accData : [])
+      setCreditCards(Array.isArray(cardsData) ? cardsData : [])
       const allCats = Array.isArray(catData) ? catData : []
       const mainCats = allCats.filter((c) => !c.parent_id)
       const subCats = allCats.filter((c) => c.parent_id)
@@ -212,6 +216,7 @@ export default function EditTransactionPage() {
           setDescription(txData.description || '')
           setCategoryId(txData.category_id || '')
           setAccountId(txData.account_id || '')
+          setCreditCardId(txData.credit_card_id || '')
           setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
           setNotes(txData.notes || '')
           const amountSafe = Number(txData.amount) || 0
@@ -283,11 +288,12 @@ export default function EditTransactionPage() {
     const payload: any = {
       user_id: user.id,
       amount: rawAmount,
-      status: isPaid ? 'done' : 'pending',
+      status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
       date,
       description: description || null,
       category_id: categoryId || null,
-      account_id: accountId || null,
+      account_id: creditCardId ? null : (accountId || null),
+      credit_card_id: creditCardId || null,
       tag_ids: selectedTags.length > 0 ? selectedTags : null,
       notes: finalNotes || null,
       type: txType,
@@ -317,7 +323,7 @@ export default function EditTransactionPage() {
         if (revertErr) throw revertErr
       }
 
-      if (isPaid && accountId) {
+      if (isPaid && accountId && !creditCardId) {
         const { data: newAcc, error: newAccErr } = await supabase
           .from('accounts')
           .select('balance')
@@ -399,11 +405,11 @@ export default function EditTransactionPage() {
     categories.find((c) => c.id === categoryId) ||
     Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
   const selectedAcc = accounts.find((a) => a.id === accountId)
+  const selectedCard = creditCards.find((c) => c.id === creditCardId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
 
-      {/* inputs ocultos */}
       <input
         ref={galeriaInputRef}
         type="file"
@@ -454,23 +460,54 @@ export default function EditTransactionPage() {
       {/* ── Card principal ── */}
       <div className="bg-white dark:bg-slate-800 rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] dark:shadow-none space-y-6 transition-colors duration-300">
 
-        {/* Pago/Recebido */}
+        {/* Pago/Recebido ou Cartão */}
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
           <div className="flex items-center gap-4">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid ? 'bg-gray-800 dark:bg-gray-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid || creditCardId ? 'bg-gray-800 dark:bg-gray-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
               <Check size={14} />
             </div>
             <span className="font-bold text-[15px] text-gray-800 dark:text-gray-200">
-              {isIncome ? 'Recebido' : 'Pago'}
+              {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
             </span>
           </div>
-          <button
-            onClick={() => setIsPaid(!isPaid)}
-            className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}
-          >
-            <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
-          </button>
+          {!creditCardId && (
+            <button
+              onClick={() => setIsPaid(!isPaid)}
+              className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}
+            >
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
+            </button>
+          )}
         </div>
+
+        {/* Seletor de Cartão (apenas despesas) */}
+        {!isIncome && creditCards.length > 0 && (
+          <button
+            onClick={() => setShowCardModal(true)}
+            className="w-full flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5"
+          >
+            <div className="flex items-center gap-4">
+              <CreditCard size={22} className="text-gray-400 dark:text-gray-500" />
+              <div className="flex-1 flex flex-col text-left">
+                <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Cartão</span>
+                <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  {selectedCard ? selectedCard.name : 'Selecione...'}
+                </span>
+              </div>
+            </div>
+            {selectedCard && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCreditCardId('')
+                }}
+                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <X size={16} />
+              </div>
+            )}
+          </button>
+        )}
 
         {/* Comprovante */}
         {uploading ? (
@@ -548,20 +585,22 @@ export default function EditTransactionPage() {
           <ChevronRight size={18} className="text-gray-300" />
         </button>
 
-        {/* Conta */}
-        <button
-          onClick={() => setShowAccModal(true)}
-          className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5"
-        >
-          <Wallet size={22} className="text-gray-400 dark:text-gray-500" />
-          <div className="flex-1 flex flex-col text-left">
-            <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Conta</span>
-            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
-              {selectedAcc ? selectedAcc.name : 'Selecione...'}
-            </span>
-          </div>
-          <ChevronRight size={18} className="text-gray-300" />
-        </button>
+        {/* Conta (se não for cartão) */}
+        {!creditCardId && (
+          <button
+            onClick={() => setShowAccModal(true)}
+            className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5"
+          >
+            <Wallet size={22} className="text-gray-400 dark:text-gray-500" />
+            <div className="flex-1 flex flex-col text-left">
+              <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Conta</span>
+              <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
+                {selectedAcc ? selectedAcc.name : 'Selecione...'}
+              </span>
+            </div>
+            <ChevronRight size={18} className="text-gray-300" />
+          </button>
+        )}
 
         <div className="flex justify-center pt-2 pb-2">
           <button
@@ -726,6 +765,38 @@ export default function EditTransactionPage() {
                 )
               })}
               {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCardModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {creditCards.map((card) => {
+                const isActive = card.id === creditCardId
+                return (
+                  <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}>
+                      <CreditCard size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {card.name}
+                    </span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {creditCards.length === 0 && (
+                <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>
+              )}
             </div>
           </div>
         </div>
