@@ -224,10 +224,10 @@ export default function MorePage() {
   }
 
   const toggleAppMode = () => {
-    const newMode = appMode === 'full' ? 'personal_only' : 'full'
-    setAppMode(newMode)
-    // O toast agora é mostrado pelo ContextProvider
-  }
+  alert('Clicou!'); // DEBUG: aparecerá uma caixa de diálogo se o clique funcionar
+  const newMode = appMode === 'full' ? 'personal_only' : 'full';
+  setAppMode(newMode);
+}
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
