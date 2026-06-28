@@ -9,7 +9,7 @@ import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight, Trash2, Loader2, Paperclip,
-  Image as ImageIcon,
+  Image as ImageIcon, CreditCard, Calendar,
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -51,10 +51,8 @@ function NewTransactionContent() {
   const { showToast } = useToast()
   const { appMode } = useContext_()
 
-  // ---------- inputs ocultos para galeria e pdf (fix mobile) ----------
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
-  // --------------------------------------------------------------------
 
   const [type, setType] = useState<TxType>(
     (searchParams.get('type') as TxType) || 'expense'
@@ -67,6 +65,7 @@ function NewTransactionContent() {
   const [desc, setDesc] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
+  const [creditCardId, setCreditCardId] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -74,6 +73,7 @@ function NewTransactionContent() {
   const [categories, setCategories] = useState<any[]>([])
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [accounts, setAccounts] = useState<any[]>([])
+  const [creditCards, setCreditCards] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
@@ -106,6 +106,7 @@ function NewTransactionContent() {
   const [showSubCatModal, setShowSubCatModal] = useState(false)
   const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
+  const [showCardModal, setShowCardModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
@@ -154,6 +155,7 @@ function NewTransactionContent() {
       .flat()
       .find((s: any) => s.id === categoryId)
   const selectedAcc = accounts.find((a) => a.id === accountId)
+  const selectedCard = creditCards.find((c) => c.id === creditCardId)
 
   const toggleTag = (id: string) => {
     setSelectedTags((prev) => {
@@ -167,7 +169,7 @@ function NewTransactionContent() {
     if (!user?.id) return
     const catType = type === 'income' ? 'income' : 'expense'
 
-    const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }] =
+    const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }, { data: cardsData }] =
       await Promise.all([
         supabase
           .from('categories')
@@ -191,6 +193,13 @@ function NewTransactionContent() {
           .from('budgets')
           .select('*')
           .match({ user_id: user.id, context }),
+        supabase
+          .from('credit_cards')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('context', context)
+          .eq('is_archived', false)
+          .order('name'),
       ])
 
     const allCats = Array.isArray(cats) ? cats : []
@@ -205,6 +214,7 @@ function NewTransactionContent() {
     setCategories(mainCats)
     setSubcategories(subsMap)
     setAccounts(Array.isArray(accs) ? accs : [])
+    setCreditCards(Array.isArray(cardsData) ? cardsData : [])
     setTags(Array.isArray(tgs) ? tgs : [])
     setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
   }, [user, context, type])
@@ -256,7 +266,6 @@ function NewTransactionContent() {
       })
   }, [categoryId, amountNum, type, budgets, user, context])
 
-  // ─── UPLOAD ────────────────────────────────────────────────────────────────
   const uploadFile = async (file: File) => {
     if (!user) return
     setUploading(true)
@@ -288,7 +297,6 @@ function NewTransactionContent() {
         .from('receipts')
         .getPublicUrl(path)
 
-      // Remove arquivo anterior se existia
       if (receiptUrl) {
         const oldPath = receiptUrl.split('/').slice(-2).join('/')
         await supabase.storage.from('receipts').remove([oldPath])
@@ -319,34 +327,31 @@ function NewTransactionContent() {
     showToast('Comprovante removido.', 'success')
   }
 
-  // ─── OPÇÃO DO MODAL ─────────────────────────────────────────────────────────
-  // A chave do fix: usar refs de <input> já montados no DOM.
-  // Isso preserva o gesto do usuário e funciona no mobile.
   const handleReceiptOption = (option: string) => {
-  if (option === 'camera') {
-    setShowReceiptModal(false)
-    setTimeout(() => setShowCamera(true), 150)
-    return
+    if (option === 'camera') {
+      setShowReceiptModal(false)
+      setTimeout(() => setShowCamera(true), 150)
+      return
+    }
+
+    if (option === 'galeria') {
+      galeriaInputRef.current?.click()
+      setTimeout(() => setShowReceiptModal(false), 200)
+      return
+    }
+
+    if (option === 'pdf') {
+      pdfInputRef.current?.click()
+      setTimeout(() => setShowReceiptModal(false), 200)
+      return
+    }
   }
 
-  if (option === 'galeria') {
-    galeriaInputRef.current?.click()
-    setTimeout(() => setShowReceiptModal(false), 200)
-    return
-  }
-
-  if (option === 'pdf') {
-    pdfInputRef.current?.click()
-    setTimeout(() => setShowReceiptModal(false), 200)
-    return
-  }
-}
   const handleCameraCapture = (file: File) => {
     uploadFile(file)
     setShowCamera(false)
   }
 
-  // ─── QR CODE ────────────────────────────────────────────────────────────────
   const handleQRResult = (text: string) => {
     let extractedAmount: string | null = null
     let extractedDesc: string | null = null
@@ -372,7 +377,6 @@ function NewTransactionContent() {
     if (extractedDesc) setDesc(extractedDesc)
   }
 
-  // ─── SAVE CATEGORY / ACCOUNT / TAG ──────────────────────────────────────────
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
     setSavingCategory(true)
@@ -446,7 +450,6 @@ function NewTransactionContent() {
     }
   }
 
-  // ─── SAVE TRANSACTION ────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
@@ -510,7 +513,86 @@ function NewTransactionContent() {
     try {
       const baseDate = createLocalDate(date)
 
-      if (isPaid && accountId && type !== 'transfer') {
+      // Lógica de fatura do cartão
+      let invoiceId: string | null = null
+
+      if (type === 'expense' && creditCardId && !isRefund) {
+        // Encontra ou cria fatura para o período da transação
+        const txDate = new Date(date)
+        const { data: cardData } = await supabase
+          .from('credit_cards')
+          .select('closing_day, due_day')
+          .eq('id', creditCardId)
+          .single()
+
+        if (cardData) {
+          // Calcula as datas da fatura baseado no dia de fechamento
+          let closingDate = new Date(txDate.getFullYear(), txDate.getMonth(), cardData.closing_day)
+          if (txDate > closingDate) {
+            closingDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, cardData.closing_day)
+          }
+
+          const startDate = new Date(closingDate)
+          startDate.setMonth(startDate.getMonth() - 1)
+          startDate.setDate(cardData.closing_day + 1)
+
+          const dueDate = new Date(closingDate)
+          dueDate.setDate(cardData.due_day)
+          if (dueDate <= closingDate) {
+            dueDate.setMonth(dueDate.getMonth() + 1)
+          }
+
+          // Busca fatura aberta para este cartão e período
+          const { data: existingInvoice } = await supabase
+            .from('credit_invoices')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('credit_card_id', creditCardId)
+            .eq('status', 'open')
+            .lte('start_date', date)
+            .gte('end_date', date)
+            .single()
+
+          if (existingInvoice) {
+            invoiceId = existingInvoice.id
+          } else {
+            // Cria nova fatura
+            const { data: newInvoice, error: invoiceError } = await supabase
+              .from('credit_invoices')
+              .insert({
+                user_id: user.id,
+                credit_card_id: creditCardId,
+                closing_date: closingDate.toISOString().split('T')[0],
+                due_date: dueDate.toISOString().split('T')[0],
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: closingDate.toISOString().split('T')[0],
+                total_amount: 0,
+                paid_amount: 0,
+                status: 'open',
+                context,
+              })
+              .select()
+              .single()
+
+            if (invoiceError) throw invoiceError
+            invoiceId = newInvoice.id
+          }
+
+          // Atualiza o total da fatura
+          if (invoiceId) {
+            await supabase
+              .from('credit_invoices')
+              .update({
+                total_amount: supabase.sql`total_amount + ${installmentAmount}`,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', invoiceId)
+          }
+        }
+      }
+
+      // Atualiza saldo da conta (se for débito normal)
+      if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
         const { data: acc } = await supabase
           .from('accounts')
           .select('balance, allow_negative')
@@ -561,10 +643,12 @@ function NewTransactionContent() {
           amount: installmentAmount,
           description: desc || null,
           category_id: categoryId || null,
-          account_id: accountId || null,
+          account_id: creditCardId ? null : (accountId || null),
+          credit_card_id: creditCardId || null,
+          invoice_id: invoiceId,
           tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
-          status: isPaid ? 'done' : 'pending',
+          status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
           context,
           receipt_url: i === 0 ? receiptUrl : null,
           recurring_group_id: recurringGroupId,
@@ -598,7 +682,6 @@ function NewTransactionContent() {
     }
   }
 
-  // ─── ÍCONE DO BOTÃO DE COMPROVANTE (header) ──────────────────────────────────
   const AttachmentIcon = () => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
     if (receiptUrl) {
@@ -611,7 +694,6 @@ function NewTransactionContent() {
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
 
-      {/* ── Inputs ocultos – montados no DOM desde o início ── */}
       <input
         ref={galeriaInputRef}
         type="file"
@@ -644,7 +726,7 @@ function NewTransactionContent() {
           <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
         </button>
         <h1 className="font-bold text-base text-gray-800 dark:text-gray-100">
-          {isIncome ? 'Nova Receita' : 'Nova Despesa'}
+          {isIncome ? 'Nova Receita' : creditCardId ? 'Nova Compra no Cartão' : 'Nova Despesa'}
         </h1>
         <div className="flex items-center gap-2">
           <button
@@ -653,7 +735,6 @@ function NewTransactionContent() {
           >
             <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
-          {/* Botão de comprovante com ícone dinâmico */}
           <button
             onClick={() => !receiptUrl && setShowReceiptModal(true)}
             className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm"
@@ -668,7 +749,7 @@ function NewTransactionContent() {
       {/* ── Valor ── */}
       <div className="py-6 text-center px-6">
         <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">
-          Valor {isIncome ? 'da Receita' : 'da Despesa'}
+          Valor {isIncome ? 'da Receita' : creditCardId ? 'da Compra' : 'da Despesa'}
         </p>
         <div className="flex justify-center items-center gap-1">
           <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
@@ -734,15 +815,43 @@ function NewTransactionContent() {
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
-            {isIncome ? 'Recebido' : 'Pago'}
+            {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
           </span>
-          <button
-            onClick={() => setIsPaid(!isPaid)}
-            className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-200 dark:bg-gray-600'}`}
-          >
-            <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
+          {!creditCardId && (
+            <button
+              onClick={() => setIsPaid(!isPaid)}
+              className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-200 dark:bg-gray-600'}`}
+            >
+              <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          )}
         </div>
+
+        {/* Seletor de Cartão de Crédito (apenas para despesas) */}
+        {!isIncome && creditCards.length > 0 && (
+          <button
+            onClick={() => setShowCardModal(true)}
+            className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <div className="flex items-center gap-4">
+              <CreditCard size={20} className="text-gray-400 dark:text-gray-500" />
+              <span className={`text-sm font-medium ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                {selectedCard ? selectedCard.name : 'Cartão de crédito (opcional)'}
+              </span>
+            </div>
+            {selectedCard && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCreditCardId('')
+                }}
+                className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <X size={16} />
+              </div>
+            )}
+          </button>
+        )}
 
         <button
           onClick={() => setShowCatModal(true)}
@@ -775,26 +884,28 @@ function NewTransactionContent() {
           </div>
         </button>
 
-        <button
-          onClick={() => setShowAccModal(true)}
-          className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
-          <div className="flex items-center gap-4">
-            <Wallet size={20} className="text-gray-400 dark:text-gray-500" />
-            <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-              {selectedAcc ? selectedAcc.name : 'Conta'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
-            <div
-              onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true) }}
-              className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors"
-            >
-              <Plus size={20} />
+        {!creditCardId && (
+          <button
+            onClick={() => setShowAccModal(true)}
+            className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <div className="flex items-center gap-4">
+              <Wallet size={20} className="text-gray-400 dark:text-gray-500" />
+              <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                {selectedAcc ? selectedAcc.name : 'Conta'}
+              </span>
             </div>
-          </div>
-        </button>
+            <div className="flex items-center gap-2">
+              {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
+              <div
+                onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true) }}
+                className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors"
+              >
+                <Plus size={20} />
+              </div>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* ── Mais detalhes ── */}
@@ -965,7 +1076,40 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* ── Modais ── */}
+      {/* ── Modal Cartões ── */}
+      {showCardModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {creditCards.map((card) => {
+                const isActive = card.id === creditCardId
+                return (
+                  <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}>
+                      <CreditCard size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {card.name}
+                    </span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {creditCards.length === 0 && (
+                <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Demais modais (mantidos originais) ── */}
       {showCustomRecurrenceModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
@@ -1236,4 +1380,3 @@ export default function NewTransactionPage() {
     </Suspense>
   )
 }
-
