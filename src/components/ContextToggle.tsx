@@ -31,43 +31,45 @@ export const useContext_ = () => useContext(ContextCtx)
 
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const [context, setContextState] = useState<Context>('dfl')
-  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
-
-  useEffect(() => {
-    const savedMode = localStorage.getItem('dfl_app_mode') as 'personal_only' | 'full' | null
-    if (savedMode) {
-      setAppModeState(savedMode)
-      if (savedMode === 'personal_only') {
-        setContextState('personal')
-      }
+  
+  // 1. Inicialização FORÇADA pelo localStorage na criação do estado
+  const [context, setContextState] = useState<Context>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('dfl_app_mode') === 'personal_only' ? 'personal' : 'dfl'
     }
-  }, [])
+    return 'dfl'
+  })
 
-    useEffect(() => {
-    // Carrega do Supabase APENAS SE o localStorage estiver vazio
-    async function loadInitialSettings() {
-      if (!user?.id || localStorage.getItem('dfl_app_mode')) return; 
-      
+  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('dfl_app_mode') as 'personal_only' | 'full') || null
+    }
+    return null
+  })
+
+  // 2. Este useEffect SÓ busca se o banco for diferente do que está salvo
+  useEffect(() => {
+    if (!user?.id) return
+    
+    async function syncWithSupabase() {
       try {
         const { data } = await supabase
           .from('user_settings')
           .select('app_mode')
           .eq('user_id', user.id)
-          .single();
+          .single()
 
-        if (data?.app_mode) {
-          setAppModeState(data.app_mode);
-          localStorage.setItem('dfl_app_mode', data.app_mode);
-          if (data.app_mode === 'personal_only') setContextState('personal');
+        if (data?.app_mode && data.app_mode !== localStorage.getItem('dfl_app_mode')) {
+          setAppModeState(data.app_mode)
+          localStorage.setItem('dfl_app_mode', data.app_mode)
+          setContextState(data.app_mode === 'personal_only' ? 'personal' : 'dfl')
         }
       } catch (err) {
-        console.error('Erro:', err);
+        console.error('Erro na sincronização:', err)
       }
     }
-    loadInitialSettings();
-  }, [user?.id]);
-
+    syncWithSupabase()
+  }, [user?.id])
 
   function setContext(c: Context) {
     if (appMode === 'personal_only') return
@@ -76,6 +78,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 
   function setAppMode(mode: 'personal_only' | 'full') {
     setAppModeState(mode)
+    localStorage.setItem('dfl_app_mode', mode) // Garantia absoluta
     if (mode === 'personal_only') {
       setContextState('personal')
     }
@@ -86,6 +89,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
       {children}
     </ContextCtx.Provider>
   )
+}
 }
 
 export default function ContextToggle() {
