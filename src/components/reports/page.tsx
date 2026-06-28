@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { getDynamicIcon } from '@/lib/iconUtils'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import React, { useState } from 'react'
+import {
+  BarChart3,
+  TrendingUp,
+  ArrowUpDown,
+  Calendar,
+  DollarSign,
+  Download,
+  ChevronLeft,
+} from 'lucide-react'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import CategoryResult from '@/components/reports/CategoryResult'
 import CashFlow from '@/components/reports/CashFlow'
 import BudgetVsReal from '@/components/reports/BudgetVsReal'
@@ -12,136 +18,81 @@ import ComparePeriods from '@/components/reports/ComparePeriods'
 import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
 import FixedVsVariable from '@/components/reports/FixedVsVariable'
 import ExportData from '@/components/reports/ExportData'
+import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
 const reportItems = [
-  {
-    id: 'category',
-    title: 'Resultado por categoria',
-    description: 'Entradas, saídas e saldo líquido por categoria.',
-    icon: 'pie-chart',
-    color: '#14b8a6',
-    component: CategoryResult,
-  },
-  {
-    id: 'compare',
-    title: 'Comparar períodos',
-    description: 'Compare dois períodos lado a lado.',
-    icon: 'bar-chart-3',
-    color: '#f97316',
-    component: ComparePeriods,
-  },
-  {
-    id: 'weekday',
-    title: 'Despesas por dia da semana',
-    description: 'Veja em quais dias você gasta mais.',
-    icon: 'calendar-days',
-    color: '#8b5cf6',
-    component: WeekdayExpenses,
-  },
-  {
-    id: 'fixed-variable',
-    title: 'Fixas x Variáveis',
-    description: 'Separe gastos recorrentes de avulsos.',
-    icon: 'layers',
-    color: '#ef4444',
-    component: FixedVsVariable,
-  },
-  {
-    id: 'cashflow',
-    title: 'Fluxo de caixa',
-    description: 'Evolução do saldo mês a mês.',
-    icon: 'trending-up',
-    color: '#3b82f6',
-    component: CashFlow,
-  },
-  {
-    id: 'budget-real',
-    title: 'Previsto x Realizado',
-    description: 'Compare orçamentos com o gasto real.',
-    icon: 'target',
-    color: '#22c55e',
-    component: BudgetVsReal,
-  },
-  {
-    id: 'export',
-    title: 'Exportar para planilha',
-    description: 'Baixe suas transações em CSV.',
-    icon: 'download',
-    color: '#64748b',
-    component: ExportData,
-  },
+  { id: 'category-result', title: 'Resultado por Categoria', icon: TrendingUp, component: CategoryResult },
+  { id: 'cash-flow', title: 'Fluxo de Caixa', icon: ArrowUpDown, component: CashFlow },
+  { id: 'budget-vs-real', title: 'Orçamento vs Realizado', icon: BarChart3, component: BudgetVsReal },
+  { id: 'compare-periods', title: 'Comparar Períodos', icon: Calendar, component: ComparePeriods },
+  { id: 'fixed-vs-variable', title: 'Fixos vs Variáveis', icon: DollarSign, component: FixedVsVariable },
+  { id: 'weekday-expenses', title: 'Gastos por Dia da Semana', icon: Calendar, component: WeekdayExpenses },
+  { id: 'export-data', title: 'Exportar Dados', icon: Download, component: ExportData },
 ]
 
-function ReportsContent() {
-  const router = useRouter()
-  const [activeReport, setActiveReport] = useState<string | null>(null)
+export default function ReportsPage() {
+  const { context } = useContext_()
+  const [selectedReport, setSelectedReport] = useState<string | null>(null)
 
-  const handleBack = () => {
-    if (activeReport) {
-      setActiveReport(null)
-    } else {
-      router.push('/more')
-    }
-  }
+  const [filters, setFilters] = useState<ReportFilterValues>({
+    context,
+    dateRange: { start: '', end: '' },
+    preset: 'thisMonth',
+  })
 
-  const renderReport = () => {
-    const item = reportItems.find(r => r.id === activeReport)
-    if (!item) return null
-    const Component = item.component
-    return <Component />
-  }
+  const selectedItem = reportItems.find((item) => item.id === selectedReport)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Header Centralizado - Nenhum componente filho deve ter botão de voltar próprio */}
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-          {activeReport ? reportItems.find(r => r.id === activeReport)?.title : 'Relatórios Avançados'}
-        </h1>
-        <ContextToggle />
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => (selectedReport ? setSelectedReport(null) : window.history.back())}
+            className="p-2 -ml-2 text-gray-800 dark:text-gray-200"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios'}
+          </h1>
+          <div className="w-10" /> {/* Espaçador */}
+        </div>
+        {!selectedReport && <ContextToggle />}
       </div>
 
-      {activeReport ? (
-        <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-          {renderReport()}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {reportItems.map(item => {
-            const IconComp = getDynamicIcon(item.icon)
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveReport(item.id)}
-                className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: `${item.color}20`, color: item.color }}
-                >
-                  <IconComp size={20} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{item.title}</p>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500">{item.description}</p>
-                </div>
-                <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
+      <div className="px-4 pt-4">
+        {selectedReport && selectedItem ? (
+          <div className="space-y-4">
+            {/* Filtro único que controla todos os relatórios */}
+            <ReportFilters onChange={setFilters} initialPreset={filters.preset} context={context} />
 
-export default function ReportsPage() {
-  return (
-    <ContextProvider>
-      <ReportsContent />
-    </ContextProvider>
+            <div className="mt-4">
+              {/* Passando filters para o componente filho */}
+              <selectedItem.component filters={filters} />
+            </div>
+          </div>
+        ) : (
+          /* Lista de relatórios */
+          <div className="space-y-2">
+            {reportItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedReport(item.id)}
+                  className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 flex items-center gap-3 active:bg-gray-50 dark:active:bg-slate-700 transition-colors text-left shadow-sm border border-gray-50 dark:border-slate-700"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                    <Icon size={20} className="text-teal-700 dark:text-teal-400" />
+                  </div>
+                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.title}</p>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
