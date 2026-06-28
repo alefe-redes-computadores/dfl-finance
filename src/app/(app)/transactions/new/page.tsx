@@ -22,7 +22,7 @@ import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import ModalFinancing from '@/components/ModalFinancing'
 import ModalEmprestimo from '@/components/ModalEmprestimo'
-import { useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -614,17 +614,7 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {appMode === 'full' && (
-        <div className="flex justify-center mt-2 mb-1">
-          <div className="flex bg-gray-200 dark:bg-slate-700 p-1 rounded-full">
-            {(['dfl', 'personal'] as Context[]).map(c => (
-              <button key={c} onClick={() => setContext(c)} className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all ${context === c ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                {c === 'dfl' ? 'DFL' : 'Pessoal'}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <ContextToggle />
 
       <div className="py-6 text-center px-6">
         <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">Valor {isIncome ? 'da Receita' : 'da Despesa'}</p>
