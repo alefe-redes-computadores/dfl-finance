@@ -35,11 +35,10 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast()
   const [context, setContextState] = useState<Context>('dfl')
   const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
-  const [loaded, setLoaded] = useState(false)
 
-  // Carrega a preferência do usuário APENAS uma vez ao iniciar
+  // Carrega a preferência do usuário UMA VEZ quando o usuário estiver pronto
   useEffect(() => {
-    if (!user?.id || loaded) return
+    if (!user?.id) return
     
     supabase
       .from('user_settings')
@@ -48,9 +47,8 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
       .single()
       .then(({ data, error }) => {
         if (error) {
-          console.log('Nenhuma config salva ainda, usando padrão full')
+          // Nenhuma config salva ainda, usa padrão
           setAppModeState('full')
-          setLoaded(true)
           return
         }
         const mode = data?.app_mode || 'full'
@@ -58,9 +56,56 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
         if (mode === 'personal_only') {
           setContextState('personal')
         }
-        setLoaded(true)
       })
-  }, [user?.id, loaded])
+  }, [user?.id]) // Só roda quando o ID do usuário mudar (login/logout)
+
+  const setContext = useCallback((c: Context) => {
+    if (appMode === 'personal_only') return
+    setContextState(c)
+  }, [appMode])
+
+  const setAppMode = useCallback(async (mode: 'personal_only' | 'full') => {
+    // 1. Atualiza o estado local IMEDIATAMENTE
+    setAppModeState(mode)
+    if (mode === 'personal_only') {
+      setContextState('personal')
+    }
+
+    // 2. Tenta salvar no banco
+    if (!user?.id) {
+      showToast('Sessão expirada. Faça login novamente.', 'error')
+      return
+    }
+
+    const { error } = await supabase.from('user_settings').upsert({
+      user_id: user.id,
+      app_mode: mode,
+      updated_at: new Date().toISOString(),
+    })
+
+    if (error) {
+      showToast(`Erro ao salvar configuração: ${error.message}`, 'error')
+      // Reverte o estado em caso de erro
+      setAppModeState(mode === 'full' ? 'personal_only' : 'full')
+      if (mode === 'full') {
+        setContextState('personal')
+      }
+    } else {
+      showToast(
+        mode === 'full' 
+          ? 'Modo Pessoa Jurídica ativado' 
+          : 'Modo apenas Pessoa Física ativado', 
+        'success'
+      )
+    }
+  }, [user?.id, showToast])
+
+  return (
+    <ContextCtx.Provider value={{ context, setContext, appMode, setAppMode }}>
+      {children}
+    </ContextCtx.Provider>
+  )
+}
 
   const setContext = useCallback((c: Context) => {
     // Se estiver bloqueado, IGNORA totalmente
