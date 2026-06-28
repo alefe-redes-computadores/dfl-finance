@@ -19,6 +19,8 @@ import ComparePeriods from '@/components/reports/ComparePeriods'
 import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
 import FixedVsVariable from '@/components/reports/FixedVsVariable'
 import ExportData from '@/components/reports/ExportData'
+// ADICIONADO: Import dos filtros
+import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
 const reportItems = [
   {
@@ -74,7 +76,15 @@ const reportItems = [
 
 function ReportsContent() {
   const router = useRouter()
+  const { context } = useContext_()
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
+
+  // ADICIONADO: Estado dos filtros para o compilador reconhecer
+  const [filters, setFilters] = useState<ReportFilterValues>({
+    context,
+    dateRange: { start: '', end: '' },
+    preset: 'thisMonth',
+  })
 
   const handleBack = () => {
     if (selectedReport) {
@@ -106,15 +116,20 @@ function ReportsContent() {
       <div className="px-4 pt-4">
         {selectedReport && selectedItem ? (
           <div>
-            {selectedItem.component ? (
-              <ErrorBoundary key={selectedReport}>
-                <selectedItem.component filters={filters} />
-              </ErrorBoundary>
-            ) : (
-              <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-                Em breve
-              </div>
-            )}
+            {/* ADICIONADO: O componente que faltava */}
+            <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
+            
+            <div className="mt-4">
+              {selectedItem.component ? (
+                <ErrorBoundary key={selectedReport}>
+                  <selectedItem.component filters={filters} />
+                </ErrorBoundary>
+              ) : (
+                <div className="text-center py-20 text-gray-400 dark:text-gray-500">
+                  Em breve
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -147,7 +162,6 @@ function ReportsContent() {
   )
 }
 
-// ErrorBoundary simples para evitar que um relatório quebre os outros
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: any) {
     super(props)
