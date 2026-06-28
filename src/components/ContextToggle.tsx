@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useToast } from '@/contexts/ToastContext'
 import { Montserrat } from 'next/font/google'
 
 const montserrat = Montserrat({
@@ -31,6 +32,7 @@ export const useContext_ = () => useContext(ContextCtx)
 
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [context, setContextState] = useState<Context>('dfl')
   const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
 
@@ -41,7 +43,11 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
       .select('app_mode')
       .eq('user_id', user.id)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Erro ao carregar configuração:', error.message)
+          return
+        }
         const mode = data?.app_mode || 'full'
         setAppModeState(mode)
         if (mode === 'personal_only') {
@@ -61,13 +67,23 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     if (mode === 'personal_only') {
       setContextState('personal')
     }
-    if (!user?.id) return
-    await supabase.from('user_settings').upsert({
+    if (!user?.id) {
+      showToast('Sessão não encontrada. Faça login novamente.', 'error')
+      return
+    }
+
+    const { error } = await supabase.from('user_settings').upsert({
       user_id: user.id,
       app_mode: mode,
       updated_at: new Date().toISOString(),
     })
-  }, [user?.id])
+
+    if (error) {
+      showToast(`Erro ao salvar: ${error.message}`, 'error')
+    } else {
+      showToast(`Modo ${mode === 'full' ? 'PF e PJ' : 'Apenas PF'} salvo!`, 'success')
+    }
+  }, [user?.id, showToast])
 
   return (
     <ContextCtx.Provider value={{ context, setContext, appMode, setAppMode }}>
