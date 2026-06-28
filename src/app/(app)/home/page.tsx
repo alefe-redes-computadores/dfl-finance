@@ -9,7 +9,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle
+  PieChart, AlertTriangle, Receipt, Banknote
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -30,6 +30,7 @@ const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
   { id: 'next-card', label: 'Próxima Fatura' },
+  { id: 'invoices', label: 'Faturas de Cartão' },
   { id: 'pendings', label: 'Pendências' },
   { id: 'receivables', label: 'A Receber' },
   { id: 'financings', label: 'Financiamentos' },
@@ -53,6 +54,7 @@ function HomeContent() {
   const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0, faturas: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
   const [budgets, setBudgets] = useState<any[]>([])
   const [subscriptions, setSubscriptions] = useState<any[]>([])
@@ -176,7 +178,7 @@ function HomeContent() {
       const start = getLocalDateString(startOfMonth(currentDate))
       const end = getLocalDateString(endOfMonth(currentDate))
 
-      const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }] = await Promise.all([
+      const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }, { data: invoicesData }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -199,12 +201,20 @@ function HomeContent() {
           .from('financings')
           .select('*')
           .match({ user_id: user.id, context: context, status: 'active' })
-          .order('next_due_date', { ascending: true })
+          .order('next_due_date', { ascending: true }),
+        supabase
+          .from('credit_invoices')
+          .select('*, credit_cards(name, color, due_day)')
+          .eq('user_id', user.id)
+          .in('status', ['open', 'closed', 'partial'])
+          .order('due_date', { ascending: true })
+          .limit(5),
       ])
 
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
       setFinancings(Array.isArray(financingsData) ? financingsData : [])
+      setInvoices(Array.isArray(invoicesData) ? invoicesData : [])
 
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
@@ -373,6 +383,58 @@ function HomeContent() {
                 <p className={`text-[16px] font-bold ${(nextCard.faturaAtual || 0) > 0 ? 'text-orange-500' : 'text-gray-800 dark:text-gray-200'}`}>
                   {hideBalance ? '••••' : formatCurrency(nextCard.faturaAtual || 0)}
                 </p>
+              </div>
+            </div>
+          </div>
+        )
+      case 'invoices':
+        if (invoices.length === 0) return null
+        return (
+          <div key="invoices" className="mb-6">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/cards')}>
+                <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Faturas de Cartão</h3>
+                <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+              </div>
+              <div className="px-2 pb-2">
+                {invoices.slice(0, 3).map(invoice => {
+                  const cardData = invoice.credit_cards
+                  const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount || 0)
+                  const daysUntilDue = differenceInDays(new Date(invoice.due_date), today)
+                  const isOverdue = daysUntilDue < 0
+                  const isSoon = daysUntilDue >= 0 && daysUntilDue <= 3
+
+                  return (
+                    <div
+                      key={invoice.id}
+                      onClick={() => router.push(`/cards/${invoice.credit_card_id}`)}
+                      className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 text-white"
+                          style={{ backgroundColor: cardData?.color || '#f97316' }}
+                        >
+                          <CreditCard size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100">{cardData?.name || 'Cartão'}</p>
+                          <p className={`text-[12px] font-medium mt-0.5 ${isOverdue ? 'text-red-500' : isSoon ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                            {isOverdue ? `Atrasada ${Math.abs(daysUntilDue)} dia(s)` : isSoon ? `Vence em ${daysUntilDue} dia(s)` : `Vence ${format(new Date(invoice.due_date), "dd/MM")}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-[15px] font-bold ${isOverdue ? 'text-red-600' : 'text-gray-800 dark:text-gray-200'}`}>
+                          {hideBalance ? '••••' : formatCurrency(remaining)}
+                        </p>
+                        {invoice.status === 'partial' && (
+                          <p className="text-[10px] text-amber-600 font-medium mt-0.5">Pagamento parcial</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
