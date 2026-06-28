@@ -2,6 +2,7 @@
 
 import { getBankIcon } from '@/lib/BankIcons'
 
+
 interface BankLogoProps {
   color: string
   name: string
