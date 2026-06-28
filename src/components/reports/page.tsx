@@ -2,10 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import CategoryResult from '@/components/reports/CategoryResult'
@@ -96,9 +93,9 @@ function ReportsContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Header */}
+      {/* Header Centralizado - Nenhum componente filho deve ter botão de voltar próprio */}
       <div className="flex items-center justify-between mb-6">
-        <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+        <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors">
           <ChevronLeft size={24} />
         </button>
         <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
@@ -108,7 +105,9 @@ function ReportsContent() {
       </div>
 
       {activeReport ? (
-        renderReport()
+        <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+          {renderReport()}
+        </div>
       ) : (
         <div className="space-y-3">
           {reportItems.map(item => {
