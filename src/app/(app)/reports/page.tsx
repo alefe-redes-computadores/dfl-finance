@@ -22,6 +22,7 @@ import ExportData from '@/components/reports/ExportData'
 // ADICIONADO: Import dos filtros
 import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
+
 const reportItems = [
   {
     id: 'category-result',
