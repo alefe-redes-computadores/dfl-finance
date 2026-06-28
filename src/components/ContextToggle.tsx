@@ -32,7 +32,6 @@ export const useContext_ = () => useContext(ContextCtx)
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   
-  // 1. Inicialização FORÇADA pelo localStorage na criação do estado
   const [context, setContextState] = useState<Context>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('dfl_app_mode') === 'personal_only' ? 'personal' : 'dfl'
@@ -47,7 +46,6 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     return null
   })
 
-  // 2. Este useEffect SÓ busca se o banco for diferente do que está salvo
   useEffect(() => {
     if (!user?.id) return
     
@@ -78,7 +76,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 
   function setAppMode(mode: 'personal_only' | 'full') {
     setAppModeState(mode)
-    localStorage.setItem('dfl_app_mode', mode) // Garantia absoluta
+    localStorage.setItem('dfl_app_mode', mode)
     if (mode === 'personal_only') {
       setContextState('personal')
     }
