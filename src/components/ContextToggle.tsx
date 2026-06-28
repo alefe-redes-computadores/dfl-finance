@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Montserrat } from 'next/font/google'
@@ -31,7 +31,17 @@ export const useContext_ = () => useContext(ContextCtx)
 
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  
+  // Controla se o sync inicial já foi feito nesta sessão de browser
+  const hasSynced = useRef(false)
+
+  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('dfl_app_mode')
+      return (cached as 'personal_only' | 'full') || null
+    }
+    return null
+  })
+
   const [context, setContextState] = useState<Context>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('dfl_app_mode') === 'personal_only' ? 'personal' : 'dfl'
@@ -39,34 +49,50 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     return 'dfl'
   })
 
-  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('dfl_app_mode') as 'personal_only' | 'full') || null
-    }
-    return null
-  })
-
   useEffect(() => {
+    // Só busca do Supabase UMA VEZ por sessão de browser
+    // e apenas se não houver valor em cache (primeiro acesso / dispositivo novo)
     if (!user?.id) return
-    
-    async function syncWithSupabase() {
+    if (hasSynced.current) return
+
+    const cached = localStorage.getItem('dfl_app_mode')
+
+    // Se já tem cache local, confia nele — não vai ao banco
+    if (cached === 'personal_only' || cached === 'full') {
+      hasSynced.current = true
+      return
+    }
+
+    // Sem cache: busca do Supabase para saber a preferência salva
+    async function fetchFromSupabase() {
       try {
         const { data } = await supabase
           .from('user_settings')
           .select('app_mode')
-          .eq('user_id', user.id)
+          .eq('user_id', user!.id)
           .single()
 
-        if (data?.app_mode && data.app_mode !== localStorage.getItem('dfl_app_mode')) {
+        if (data?.app_mode) {
           setAppModeState(data.app_mode)
           localStorage.setItem('dfl_app_mode', data.app_mode)
           setContextState(data.app_mode === 'personal_only' ? 'personal' : 'dfl')
+        } else {
+          // Sem registro no banco → padrão 'full'
+          setAppModeState('full')
+          localStorage.setItem('dfl_app_mode', 'full')
+          setContextState('dfl')
         }
       } catch (err) {
         console.error('Erro na sincronização:', err)
+        // Fallback seguro
+        setAppModeState('full')
+        setContextState('dfl')
+      } finally {
+        hasSynced.current = true
       }
     }
-    syncWithSupabase()
+
+    fetchFromSupabase()
   }, [user?.id])
 
   function setContext(c: Context) {
@@ -79,6 +105,8 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('dfl_app_mode', mode)
     if (mode === 'personal_only') {
       setContextState('personal')
+    } else {
+      setContextState('dfl')
     }
   }
 
