@@ -167,7 +167,7 @@ function QuickSettingsModal({
               </div>
             </div>
             <button
-              onClick={toggleAppMode}
+              onClick={q}
               className={`w-14 h-8 rounded-full relative transition-colors shadow-inner ${
                 appMode === 'full' ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'
               }`}
@@ -223,17 +223,18 @@ export default function MorePage() {
     showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
-    const toggleAppMode = async () => {
+      const toggleAppMode = async () => {
     if (!user?.id) return
     
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
-    const oldMode = appMode // Guarda o valor antigo por segurança
+    const oldMode = appMode
     
-    // 1. Muda visualmente NA HORA pelo contexto
+    // 1. Muda visualmente NA HORA e salva no armazenamento do celular (Cache)
     setAppMode(newMode)
+    localStorage.setItem('dfl_app_mode', newMode)
 
     try {
-      // 2. Salva no banco de dados (usando upsert para garantir que cria se não existir)
+      // 2. Salva no Supabase definitivamente
       const { error } = await supabase
         .from('user_settings')
         .upsert({
@@ -244,14 +245,20 @@ export default function MorePage() {
 
       if (error) throw error
 
-      showToast(newMode === 'full' ? 'Modo Pessoa Jurídica ativado' : 'Modo apenas Pessoa Física ativado', 'success')
+      // 3. O TOAST DE SUCESSO AQUI!
+      showToast(
+        newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 
+        'success'
+      )
     } catch (err: any) {
       console.error('Erro de Supabase:', err.message)
-      // 3. Se o banco rejeitar (RLS), desfaz a animação do botão e mostra o erro!
+      // Se der erro, desfaz a alteração e avisa o usuário
       setAppMode(oldMode || 'full')
-      showToast('Erro ao salvar. Verifique o RLS do Supabase.', 'error')
+      localStorage.setItem('dfl_app_mode', oldMode || 'full')
+      showToast('Erro ao salvar preferência na nuvem.', 'error')
     }
   }
+
 
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
