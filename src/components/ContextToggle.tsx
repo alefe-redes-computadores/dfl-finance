@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
@@ -47,7 +47,6 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
       .single()
       .then(({ data, error }) => {
         if (error) {
-          // Nenhuma config salva ainda, usa padrão
           setAppModeState('full')
           return
         }
@@ -57,22 +56,19 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
           setContextState('personal')
         }
       })
-  }, [user?.id]) // Só roda quando o ID do usuário mudar (login/logout)
+  }, [user?.id])
 
-  const setContext = useCallback((c: Context) => {
-    // Se estiver bloqueado, IGNORA totalmente
+  function setContext(c: Context) {
     if (appMode === 'personal_only') return
     setContextState(c)
-  }, [appMode])
+  }
 
-  const setAppMode = useCallback(async (mode: 'personal_only' | 'full') => {
-    // 1. Atualiza o estado local IMEDIATAMENTE
+  async function setAppMode(mode: 'personal_only' | 'full') {
     setAppModeState(mode)
     if (mode === 'personal_only') {
       setContextState('personal')
     }
 
-    // 2. Tenta salvar no banco
     if (!user?.id) {
       showToast('Sessão expirada. Faça login novamente.', 'error')
       return
@@ -85,8 +81,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (error) {
-      showToast(`Erro ao salvar configuração: ${error.message}`, 'error')
-      // Reverte o estado em caso de erro
+      showToast(`Erro ao salvar: ${error.message}`, 'error')
       setAppModeState(mode === 'full' ? 'personal_only' : 'full')
       if (mode === 'full') {
         setContextState('personal')
@@ -99,7 +94,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
         'success'
       )
     }
-  }, [user?.id, showToast])
+  }
 
   return (
     <ContextCtx.Provider value={{ context, setContext, appMode, setAppMode }}>
@@ -111,7 +106,6 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
 
-  // Se NÃO for 'full', não renderiza NADA (some da tela)
   if (appMode !== 'full') return null
 
   return (
