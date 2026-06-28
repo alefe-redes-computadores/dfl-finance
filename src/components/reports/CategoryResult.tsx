@@ -1,112 +1,118 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  BarChart3,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Calendar,
-  ArrowUpDown,
-  Download,
-  ChevronLeft,
-} from 'lucide-react'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import CategoryResult from '@/components/reports/CategoryResult'
-import CashFlow from '@/components/reports/CashFlow'
-import BudgetVsReal from '@/components/reports/BudgetVsReal'
-import ComparePeriods from '@/components/reports/ComparePeriods'
-import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
-import FixedVsVariable from '@/components/reports/FixedVsVariable'
-import ExportData from '@/components/reports/ExportData'
-import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
+import React, { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { ReportFilterValues } from './ReportFilters'
 
-const reportItems = [
-  { id: 'category-result', title: 'Resultado por Categoria', icon: TrendingUp, component: CategoryResult },
-  { id: 'cash-flow', title: 'Fluxo de Caixa', icon: ArrowUpDown, component: CashFlow },
-  { id: 'budget-vs-real', title: 'Orçamento vs Realizado', icon: BarChart3, component: BudgetVsReal },
-  { id: 'compare-periods', title: 'Comparar Períodos', icon: Calendar, component: ComparePeriods },
-  { id: 'fixed-vs-variable', title: 'Fixos vs Variáveis', icon: DollarSign, component: FixedVsVariable },
-  { id: 'weekday-expenses', title: 'Gastos por Dia da Semana', icon: Calendar, component: WeekdayExpenses },
-  { id: 'export-data', title: 'Exportar Dados', icon: Download, component: ExportData },
-]
-
-function ReportsContent() {
-  const router = useRouter()
-  const { context } = useContext_()
-  const [selectedReport, setSelectedReport] = useState<string | null>(null)
-  
-  // Estado centralizado que controla TODOS os relatórios
-  const [filters, setFilters] = useState<ReportFilterValues>({
-    context,
-    dateRange: { start: '', end: '' },
-    preset: 'thisMonth',
-  })
-
-  const selectedItem = reportItems.find(item => item.id === selectedReport)
-
-  return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-4">
-          <button 
-            onClick={() => selectedReport ? setSelectedReport(null) : router.back()} 
-            className="p-2 -ml-2 text-gray-800 dark:text-gray-200"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios'}
-          </h1>
-          <div className="w-10" />
-        </div>
-        {!selectedReport && <ContextToggle />}
-      </div>
-
-      <div className="px-4 pt-4">
-        {selectedReport && selectedItem ? (
-          <div className="space-y-4">
-            {/* Filtro global que alimenta todos os componentes */}
-            <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
-            
-            <div className="mt-4">
-              {selectedItem.component ? (
-                // PASSANDO OS FILTROS PARA O FILHO
-                <selectedItem.component filters={filters} />
-              ) : (
-                <div className="text-center py-20 text-gray-400">Em breve</div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {reportItems.map(item => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedReport(item.id)}
-                  className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 flex items-center gap-3 active:bg-gray-50 dark:active:bg-slate-700 transition-colors text-left shadow-sm border border-gray-50 dark:border-slate-700"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                    <Icon size={20} className="text-teal-700 dark:text-teal-400" />
-                  </div>
-                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.title}</p>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+const CATEGORY_COLORS: Record<string, string> = {
+  Alimentação: '#FF6B6B', Transporte: '#4ECDC4', Moradia: '#45B7D1', Lazer: '#96CEB4',
+  Saúde: '#FFEAA7', Educação: '#DDA0DD', Assinaturas: '#98D8C8', Salário: '#6C5CE7',
+  Freelance: '#A8E6CF', Investimentos: '#FFD93D', Vendas: '#FF8B94', Serviços: '#B8A9C9',
+  Outros: '#95A5A6',
 }
 
-export default function ReportsPage() {
+interface CategoryResultProps {
+  filters: ReportFilterValues
+}
+
+export default function CategoryResult({ filters }: CategoryResultProps) {
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [transactions, setTransactions] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!user?.id || !filters.dateRange.start || !filters.dateRange.end) return
+    setLoading(true)
+
+    const load = async () => {
+      let query = supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', filters.dateRange.start)
+        .lte('date', filters.dateRange.end)
+        .order('date', { ascending: false })
+
+      if (filters.context === 'personal') query = query.eq('context', 'personal')
+
+      const { data, error } = await query
+      if (error) console.error(error)
+      setTransactions(data || [])
+      setLoading(false)
+    }
+
+    load()
+  }, [user?.id, filters])
+
+  const expensesByCategory = transactions
+    .filter(t => t.type === 'expense')
+    .reduce((acc: any, t: any) => {
+      const cat = t.category || 'Outros'
+      if (!acc[cat]) acc[cat] = { total: 0, count: 0, transactions: [] }
+      acc[cat].total += t.amount
+      acc[cat].count += 1
+      acc[cat].transactions.push(t)
+      return acc
+    }, {})
+
+  const categoryArray = Object.entries(expensesByCategory)
+    .map(([name, data]: any) => ({ name, ...data }))
+    .sort((a, b) => b.total - a.total)
+
+  const totalExpenses = categoryArray.reduce((sum, c) => sum + c.total, 0)
+
   return (
-    <ContextProvider>
-      <ReportsContent />
-    </ContextProvider>
+    <div className="flex-1">
+      {loading ? (
+        <div className="flex justify-center p-8"><div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>
+      ) : categoryArray.length === 0 ? (
+        <div className="text-center p-8 text-slate-500">Nenhuma despesa no período.</div>
+      ) : (
+        <div className="space-y-4">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-slate-500 mb-3">Distribuição de Gastos</h3>
+            <div className="space-y-2">
+              {categoryArray.map(cat => {
+                const percent = totalExpenses > 0 ? (cat.total / totalExpenses) * 100 : 0
+                return (
+                  <div key={cat.name} className="flex items-center">
+                    <div className="w-24 text-xs text-slate-600 truncate mr-2">{cat.name}</div>
+                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-4 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percent}%`, backgroundColor: CATEGORY_COLORS[cat.name] || '#95A5A6' }} />
+                    </div>
+                    <div className="w-20 text-xs text-right ml-2">
+                      <span className="font-medium">R$ {cat.total.toFixed(2)}</span>
+                      <span className="text-slate-500 ml-1">({percent.toFixed(1)}%)</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          {categoryArray.map(cat => (
+            <div key={cat.name} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: CATEGORY_COLORS[cat.name] || '#95A5A6' }} />
+                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">{cat.name}</h4>
+                </div>
+                <p className="text-sm font-bold text-red-600">R$ {cat.total.toFixed(2)}</p>
+              </div>
+              <p className="text-xs text-slate-500 mb-2">{cat.count} transação(es) {totalExpenses > 0 && `• ${((cat.total/totalExpenses)*100).toFixed(1)}% do total`}</p>
+              <div className="space-y-1">
+                {cat.transactions.slice(0,3).map((t: any) => (
+                  <div key={t.id} className="flex justify-between text-xs text-slate-600">
+                    <span className="truncate mr-2">{t.description}</span>
+                    <span>R$ {t.amount.toFixed(2)}</span>
+                  </div>
+                ))}
+                {cat.transactions.length > 3 && <p className="text-xs text-teal-600 mt-1">+ {cat.transactions.length - 3} outras</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
