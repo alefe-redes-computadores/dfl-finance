@@ -25,6 +25,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   target: Target, piggybank: PiggyBank
 }
 
+
 function GoalsContent() {
   const { user } = useAuth()
   const router = useRouter()
