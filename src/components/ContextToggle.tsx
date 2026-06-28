@@ -44,30 +44,30 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
+    useEffect(() => {
+    // Carrega do Supabase APENAS SE o localStorage estiver vazio
     async function loadInitialSettings() {
-      if (!user?.id) return
+      if (!user?.id || localStorage.getItem('dfl_app_mode')) return; 
+      
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('user_settings')
           .select('app_mode')
           .eq('user_id', user.id)
-          .single()
+          .single();
 
-        if (!error && data) {
-          const mode = data.app_mode || 'full'
-          setAppModeState(mode)
-          localStorage.setItem('dfl_app_mode', mode)
-          if (mode === 'personal_only') {
-            setContextState('personal')
-          }
+        if (data?.app_mode) {
+          setAppModeState(data.app_mode);
+          localStorage.setItem('dfl_app_mode', data.app_mode);
+          if (data.app_mode === 'personal_only') setContextState('personal');
         }
       } catch (err) {
-        console.error('Erro:', err)
+        console.error('Erro:', err);
       }
     }
-    loadInitialSettings()
-  }, [user?.id])
+    loadInitialSettings();
+  }, [user?.id]);
+
 
   function setContext(c: Context) {
     if (appMode === 'personal_only') return
