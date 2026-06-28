@@ -121,10 +121,9 @@ function ReportsContent() {
             <ReportFilters 
               onChange={setFilters} 
               initialPreset={filters.preset} 
-              context={context} 
-             />
+              context={context || 'dfl'} //Adicione isso: se context for undefined, usa 'dfl'
+            />
 
-            
             <div className="mt-4">
               {selectedItem.component ? (
                 <ErrorBoundary key={selectedReport}>
