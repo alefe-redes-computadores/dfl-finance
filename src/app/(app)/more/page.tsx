@@ -223,17 +223,18 @@ export default function MorePage() {
     showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
-  const toggleAppMode = async () => {
+    const toggleAppMode = async () => {
     if (!user?.id) return
     
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
     const oldMode = appMode
     
-    // Muda visualmente NA HORA e salva no cache
+    // 1. Muda visualmente NA HORA e salva no cache local para evitar o loop
     setAppMode(newMode)
     localStorage.setItem('dfl_app_mode', newMode)
 
     try {
+      // 2. Salva no Supabase definitivamente
       const { error } = await supabase
         .from('user_settings')
         .upsert({
@@ -244,17 +245,22 @@ export default function MorePage() {
 
       if (error) throw error
 
+      // 3. Feedback visual (Toast)
       showToast(
         newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 
         'success'
       )
     } catch (err: any) {
       console.error('Erro de Supabase:', err.message)
+      
+      // Se der erro no banco, reverte o estado para o valor anterior
       setAppMode(oldMode || 'full')
       localStorage.setItem('dfl_app_mode', oldMode || 'full')
+      
       showToast('Erro ao salvar preferência na nuvem.', 'error')
     }
   }
+
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
