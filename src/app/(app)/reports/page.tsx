@@ -108,7 +108,7 @@ function ReportsContent() {
           <div>
             {selectedItem.component ? (
               <ErrorBoundary key={selectedReport}>
-                <selectedItem.component />
+                <selectedItem.component filters={filters} />
               </ErrorBoundary>
             ) : (
               <div className="text-center py-20 text-gray-400 dark:text-gray-500">
