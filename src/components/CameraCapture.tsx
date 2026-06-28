@@ -12,22 +12,39 @@ interface CameraCaptureProps {
 export default function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [stream, setStream] = useState<MediaStream | null>(null)
+  // Guarda o stream em ref para o cleanup sempre ter acesso ao valor correto
+  const streamRef = useRef<MediaStream | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!isOpen) return
+
+    let cancelled = false
+
     const startCamera = async () => {
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        setStream(mediaStream)
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        })
+        if (cancelled) {
+          mediaStream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        streamRef.current = mediaStream
         if (videoRef.current) videoRef.current.srcObject = mediaStream
-      } catch (err) {
+      } catch {
         setError('Não foi possível acessar a câmera. Verifique as permissões.')
       }
     }
+
+    setError('')
     startCamera()
-    return () => { stream?.getTracks().forEach(track => track.stop()) }
+
+    return () => {
+      cancelled = true
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
   }, [isOpen])
 
   const handleCapture = () => {
@@ -51,17 +68,25 @@ export default function CameraCapture({ isOpen, onClose, onCapture }: CameraCapt
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col">
       <div className="flex justify-between items-center p-4 text-white">
-        <button onClick={onClose} className="p-2"><X size={24} /></button>
+        <button onClick={onClose} className="p-2">
+          <X size={24} />
+        </button>
         <span className="font-bold">Tirar foto</span>
         <div className="w-10" />
       </div>
+
       {error ? (
-        <div className="flex-1 flex items-center justify-center text-white p-4 text-center"><p>{error}</p></div>
+        <div className="flex-1 flex items-center justify-center text-white p-4 text-center">
+          <p>{error}</p>
+        </div>
       ) : (
         <>
           <video ref={videoRef} autoPlay playsInline className="flex-1 w-full object-cover" />
           <div className="p-6 flex justify-center">
-            <button onClick={handleCapture} className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+            <button
+              onClick={handleCapture}
+              className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg"
+            >
               <div className="w-14 h-14 rounded-full border-2 border-gray-800" />
             </button>
           </div>
