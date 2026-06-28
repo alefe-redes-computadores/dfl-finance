@@ -223,10 +223,36 @@ export default function MorePage() {
     showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
-  const toggleAppMode = () => {
+    const toggleAppMode = async () => {
+    if (!user?.id) return
+    
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
+    const oldMode = appMode // Guarda o valor antigo por segurança
+    
+    // 1. Muda visualmente NA HORA pelo contexto
     setAppMode(newMode)
+
+    try {
+      // 2. Salva no banco de dados (usando upsert para garantir que cria se não existir)
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          app_mode: newMode,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+
+      if (error) throw error
+
+      showToast(newMode === 'full' ? 'Modo Pessoa Jurídica ativado' : 'Modo apenas Pessoa Física ativado', 'success')
+    } catch (err: any) {
+      console.error('Erro de Supabase:', err.message)
+      // 3. Se o banco rejeitar (RLS), desfaz a animação do botão e mostra o erro!
+      setAppMode(oldMode || 'full')
+      showToast('Erro ao salvar. Verifique o RLS do Supabase.', 'error')
+    }
   }
+
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
