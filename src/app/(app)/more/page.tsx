@@ -167,7 +167,7 @@ function QuickSettingsModal({
               </div>
             </div>
             <button
-              onClick={q}
+              onClick={toggleAppMode}
               className={`w-14 h-8 rounded-full relative transition-colors shadow-inner ${
                 appMode === 'full' ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'
               }`}
@@ -223,7 +223,7 @@ export default function MorePage() {
     showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
-      const toggleAppMode = async () => {
+  const toggleAppMode = async () => {
     if (!user?.id) return
     
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
@@ -258,8 +258,6 @@ export default function MorePage() {
       showToast('Erro ao salvar preferência na nuvem.', 'error')
     }
   }
-
-
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
