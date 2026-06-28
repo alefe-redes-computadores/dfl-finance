@@ -19,11 +19,15 @@ import ComparePeriods from '@/components/reports/ComparePeriods'
 import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
 import FixedVsVariable from '@/components/reports/FixedVsVariable'
 import ExportData from '@/components/reports/ExportData'
-// ADICIONADO: Import dos filtros
 import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
-
-const reportItems = [
+const reportItems: {
+  id: string
+  title: string
+  description: string
+  icon: any
+  component: React.ComponentType<{ filters: ReportFilterValues }>
+}[] = [
   {
     id: 'category-result',
     title: 'Resultado por Categoria',
@@ -80,9 +84,8 @@ function ReportsContent() {
   const { context } = useContext_()
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
 
-  // ADICIONADO: Estado dos filtros para o compilador reconhecer
   const [filters, setFilters] = useState<ReportFilterValues>({
-    context,
+    context: context as string,
     dateRange: { start: '', end: '' },
     preset: 'thisMonth',
   })
@@ -117,13 +120,12 @@ function ReportsContent() {
       <div className="px-4 pt-4">
         {selectedReport && selectedItem ? (
           <div>
-            {/* ADICIONADO: O componente que faltava */}
             <ReportFilters 
               onChange={setFilters} 
               initialPreset={filters.preset} 
-              context={context || 'dfl'} //Adicione isso: se context for undefined, usa 'dfl'
+              context={context as string} 
             />
-
+            
             <div className="mt-4">
               {selectedItem.component ? (
                 <ErrorBoundary key={selectedReport}>
