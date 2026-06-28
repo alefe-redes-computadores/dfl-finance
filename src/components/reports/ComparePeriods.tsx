@@ -4,9 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useContext_ } from '@/components/ContextToggle'
-import { ReportFilterValues } from '@/components/reports/ReportFilters'
-import { format, parseISO, subMonths, startOfMonth, endOfMonth } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
+import { format, parseISO, subMonths } from 'date-fns'
 import { Loader2, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
 
 export default function ComparePeriods() {
@@ -22,7 +21,7 @@ export default function ComparePeriods() {
   })
 
   const loadData = useCallback(async (f: ReportFilterValues) => {
-    if (!user) return
+    if (!user || !f.dateRange.start || !f.dateRange.end) return
     setLoading(true)
 
     const { data: currentTx } = await supabase
@@ -39,10 +38,8 @@ export default function ComparePeriods() {
     )
     setCurrentTotal(currentSum)
 
-    // Calcula período anterior com mesma duração
     const start = parseISO(f.dateRange.start)
     const end = parseISO(f.dateRange.end)
-    const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
     const prevStart = format(subMonths(start, 1), 'yyyy-MM-dd')
     const prevEnd = format(subMonths(end, 1), 'yyyy-MM-dd')
 
@@ -69,40 +66,28 @@ export default function ComparePeriods() {
   const difference = currentTotal - previousTotal
   const percent = previousTotal > 0 ? ((difference / previousTotal) * 100) : 0
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="animate-spin text-teal-700" size={32} />
-      </div>
-    )
-  }
-
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-50 dark:border-slate-700">
-      <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Comparar Períodos</h3>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-500">Atual</p>
-            <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
-              R$ {currentTotal.toFixed(2)}
-            </p>
+    <div className="space-y-4">
+      <ReportFilters onChange={setFilters} initialPreset="thisMonth" />
+      
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-50 dark:border-slate-700">
+        <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Evolução Mensal</h3>
+        
+        {loading ? (
+           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div><p className="text-xs text-gray-500">Atual</p><p className="text-lg font-bold text-gray-800 dark:text-gray-200">R$ {currentTotal.toFixed(2)}</p></div>
+              <ArrowRight size={20} className="text-gray-400" />
+              <div><p className="text-xs text-gray-500">Anterior</p><p className="text-lg font-bold text-gray-800 dark:text-gray-200">R$ {previousTotal.toFixed(2)}</p></div>
+            </div>
+            <div className={`flex items-center gap-2 ${difference < 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {difference < 0 ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
+              <span className="text-sm font-bold">{difference < 0 ? '-' : '+'} R$ {Math.abs(difference).toFixed(2)} ({percent.toFixed(1)}%)</span>
+            </div>
           </div>
-          <ArrowRight size={20} className="text-gray-400" />
-          <div>
-            <p className="text-xs text-gray-500">Anterior</p>
-            <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
-              R$ {previousTotal.toFixed(2)}
-            </p>
-          </div>
-        </div>
-        <div className={`flex items-center gap-2 ${difference < 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-          {difference < 0 ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
-          <span className="text-sm font-bold">
-            {difference < 0 ? '-' : '+'} R$ {Math.abs(difference).toFixed(2)}
-            {' ('}{percent.toFixed(1)}%{')'}
-          </span>
-        </div>
+        )}
       </div>
     </div>
   )
