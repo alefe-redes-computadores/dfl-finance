@@ -20,7 +20,13 @@ import FixedVsVariable from '@/components/reports/FixedVsVariable'
 import ExportData from '@/components/reports/ExportData'
 import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 
-const reportItems = [
+// Definição tipada dos itens de relatório
+const reportItems: { 
+  id: string; 
+  title: string; 
+  icon: any; 
+  component: React.ComponentType<{ filters: ReportFilterValues }> 
+}[] = [
   { id: 'category-result', title: 'Resultado por Categoria', icon: TrendingUp, component: CategoryResult },
   { id: 'cash-flow', title: 'Fluxo de Caixa', icon: ArrowUpDown, component: CashFlow },
   { id: 'budget-vs-real', title: 'Orçamento vs Realizado', icon: BarChart3, component: BudgetVsReal },
@@ -41,6 +47,7 @@ export default function ReportsPage() {
   })
 
   const selectedItem = reportItems.find((item) => item.id === selectedReport)
+  const ComponentToRender = selectedItem?.component
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
@@ -56,7 +63,7 @@ export default function ReportsPage() {
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
             {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios'}
           </h1>
-          <div className="w-10" /> {/* Espaçador */}
+          <div className="w-10" />
         </div>
         {!selectedReport && <ContextToggle />}
       </div>
@@ -65,11 +72,14 @@ export default function ReportsPage() {
         {selectedReport && selectedItem ? (
           <div className="space-y-4">
             {/* Filtro único que controla todos os relatórios */}
-            <ReportFilters onChange={setFilters} initialPreset={filters.preset} context={context} />
+            <ReportFilters onChange={setFilters} initialPreset={filters.preset} />
 
             <div className="mt-4">
-              {/* Passando filters para o componente filho */}
-              <selectedItem.component filters={filters} />
+              {ComponentToRender ? (
+                <ComponentToRender filters={filters} />
+              ) : (
+                <div className="text-center py-20 text-gray-400">Em breve</div>
+              )}
             </div>
           </div>
         ) : (
