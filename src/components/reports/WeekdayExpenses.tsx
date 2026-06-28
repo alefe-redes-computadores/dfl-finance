@@ -1,86 +1,80 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { useContext_ } from '@/components/ContextToggle'
-import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Loader2 } from 'lucide-react'
+import { ReportFilterValues } from './ReportFilters'
 
-const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+const WEEKDAYS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
+const COLORS = ['#6C5CE7','#00B894','#0984E3','#FDCB6E','#E17055','#E84393','#636E72']
 
-export default function WeekdayExpenses() {
+interface WeekdayExpensesProps {
+  filters: ReportFilterValues
+}
+
+export default function WeekdayExpenses({ filters }: WeekdayExpensesProps) {
   const { user } = useAuth()
-  const { context } = useContext_()
-  const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState<ReportFilterValues>({
-    context,
-    dateRange: { start: '', end: '' },
-    preset: 'thisMonth',
-  })
-
-  const loadData = useCallback(async (f: ReportFilterValues) => {
-    if (!user || !f.dateRange.start || !f.dateRange.end) return
-    setLoading(true)
-
-    const { data: transactions } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('context', f.context)
-      .in('type', ['expense', 'sangria'])
-      .gte('date', f.dateRange.start)
-      .lte('date', f.dateRange.end)
-
-    const txs = Array.isArray(transactions) ? transactions : []
-
-    const totals: number[] = Array(7).fill(0)
-    txs.forEach((tx: any) => {
-      const dayOfWeek = new Date(tx.date + 'T00:00:00').getDay()
-      totals[dayOfWeek] += Number(tx.amount || 0)
-    })
-
-    const chartData = weekdays.map((name, index) => ({
-      name,
-      value: totals[index],
-    }))
-
-    setData(chartData)
-    setLoading(false)
-  }, [user])
+  const [transactions, setTransactions] = useState<any[]>([])
 
   useEffect(() => {
-    loadData(filters)
-  }, [filters, loadData])
+    if (!user?.id || !filters.dateRange.start || !filters.dateRange.end) return
+    setLoading(true)
+
+    const load = async () => {
+      let query = supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .gte('date', filters.dateRange.start)
+        .lte('date', filters.dateRange.end)
+
+      if (filters.context === 'personal') query = query.eq('context', 'personal')
+
+      const { data, error } = await query
+      if (error) console.error(error)
+      setTransactions(data || [])
+      setLoading(false)
+    }
+
+    load()
+  }, [user?.id, filters])
+
+  const weekdayTotals = transactions.reduce((acc: any, t: any) => {
+    const day = new Date(t.date).getDay()
+    if (!acc[day]) acc[day] = { total: 0, count: 0 }
+    acc[day].total += t.amount
+    acc[day].count += 1
+    return acc
+  }, {})
+
+  const data = WEEKDAYS.map((name, idx) => ({
+    name,
+    total: weekdayTotals[idx]?.total || 0,
+    count: weekdayTotals[idx]?.count || 0,
+  }))
+  const max = Math.max(...data.map(d => d.total), 1)
 
   return (
-    <div className="space-y-4">
-      <ReportFilters onChange={setFilters} initialPreset="thisMonth" />
-      
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-50 dark:border-slate-700">
-        <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-4">Gastos por Dia da Semana</h3>
-        
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="animate-spin text-teal-700" size={32} />
-          </div>
-        ) : data.reduce((acc, d) => acc + d.value, 0) === 0 ? (
-          <p className="text-center text-gray-400 text-sm py-10">Nenhuma despesa no período.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
-              <Legend />
-              <Bar dataKey="value" name="Despesas" fill="#f97316" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+    <div className="flex-1">
+      {loading ? (
+        <div className="flex justify-center p-8"><div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="space-y-4">
+          {data.map((d, i) => (
+            <div key={d.name} className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">{d.name}</span>
+                <span className="font-medium text-slate-800">R$ {d.total.toFixed(2)}{d.count > 0 && <span className="text-xs text-slate-500 ml-2">({d.count})</span>}</span>
+              </div>
+              <div className="bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(d.total / max) * 100}%`, backgroundColor: COLORS[i] }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
