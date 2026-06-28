@@ -224,10 +224,10 @@ export default function MorePage() {
   }
 
   const toggleAppMode = () => {
-  alert('Clicou!'); // DEBUG: aparecerá uma caixa de diálogo se o clique funcionar
-  const newMode = appMode === 'full' ? 'personal_only' : 'full';
-  setAppMode(newMode);
-}
+    alert('Clicou!'); // DEBUG: aparecerá uma caixa de diálogo se o clique funcionar
+    const newMode = appMode === 'full' ? 'personal_only' : 'full';
+    setAppMode(newMode);
+  }
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
 
@@ -315,6 +315,14 @@ export default function MorePage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 px-4 pt-8 font-sans transition-colors duration-300">
       
+      {/* BOTÃO DE TESTE - REMOVER DEPOIS */}
+      <button 
+        onClick={toggleAppMode}
+        className="w-full bg-red-500 text-white p-4 rounded-xl mb-4 font-bold text-lg"
+      >
+        TESTAR MODO PF/PJ (CLIQUE AQUI)
+      </button>
+
       {showCropModal && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white dark:bg-slate-800 p-6 rounded-[32px]">
