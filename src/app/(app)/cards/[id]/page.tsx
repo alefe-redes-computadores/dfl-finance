@@ -20,7 +20,6 @@ import {
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import InvoiceAlert from '@/components/InvoiceAlert'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
@@ -30,7 +29,6 @@ function CardDetailContent() {
   const params = useParams()
   const cardId = params?.id as string
   const { user } = useAuth()
-  const { context } = useContext_()
   const { showToast } = useToast()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [card, setCard] = useState<any>(null)
@@ -63,7 +61,7 @@ function CardDetailContent() {
     if (!user?.id || !cardId) return
     setLoading(true)
 
-    // 🔧 CORREÇÃO: busca o cartão SEM filtrar por context
+    // Busca o cartão sem depender de contexto global
     const { data: cardData } = await supabase
       .from('credit_cards')
       .select('*')
@@ -329,22 +327,19 @@ function CardDetailContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
-      {/* Header */}
+      {/* Header simplificado - sem ContextToggle */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.push('/cards')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
         </button>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push(`/cards/${cardId}/edit`)}
-            className="p-2 text-gray-500 dark:text-gray-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
-            title="Editar cartão"
-          >
-            <Edit3 size={20} />
-          </button>
-          <ContextToggle />
-        </div>
-        <div className="w-8" />
+        <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">{card.name}</h1>
+        <button
+          onClick={() => router.push(`/cards/${cardId}/edit`)}
+          className="p-2 -mr-2 text-gray-500 dark:text-gray-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+          title="Editar cartão"
+        >
+          <Edit3 size={20} />
+        </button>
       </div>
 
       {/* Card Info */}
@@ -357,7 +352,6 @@ function CardDetailContent() {
             <CreditCard size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-lg">{card.name}</h1>
             <p className="text-white/70 text-xs">
               {card.flag || 'Cartão'} {card.last_four ? `•••• ${card.last_four}` : ''}
             </p>
@@ -715,9 +709,6 @@ function CardDetailContent() {
 }
 
 export default function CardDetailPage() {
-  return (
-    <ContextProvider>
-      <CardDetailContent />
-    </ContextProvider>
-  )
+  // Não precisa mais de ContextProvider, pois não usamos o toggle de contexto
+  return <CardDetailContent />
 }
