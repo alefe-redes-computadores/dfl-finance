@@ -39,8 +39,9 @@ export default function TransactionsPage() {
       .select('*, categories(name, icon, color)')
       .eq('user_id', user.id)
       .eq('context', context)
-      // REMOVENDO order para não depender do Supabase
-      .limit(200)
+      .order('status', { ascending: true })   // pendentes primeiro
+      .order('date', { ascending: false })     // depois por data (mais recente primeiro)
+      .limit(100)
 
     if (dateRange !== 'all') {
       const days = parseInt(dateRange)
@@ -61,36 +62,12 @@ export default function TransactionsPage() {
     }
 
     const { data } = await query
-    let txs = Array.isArray(data) ? data : []
+    const txs = Array.isArray(data) ? data : []
 
-    // DEBUG: Verifica as datas no console
-    console.log('📊 Primeiras 3 transações (antes de ordenar):', 
-      txs.slice(0, 3).map(t => ({ desc: t.description?.substring(0,20), date: t.date, status: t.status }))
-    )
-
-    // 🔧 Ordenação FORÇADA: converte para timestamp e ordena decrescente
-    txs.sort((a, b) => {
-      const timeA = new Date(a.date).getTime()
-      const timeB = new Date(b.date).getTime()
-      // Se timeB > timeA, retorna positivo → B vem primeiro (mais recente)
-      return timeB - timeA
-    })
-
-    // DEBUG: Verifica após ordenar
-    console.log('📊 Primeiras 3 transações (depois de ordenar):', 
-      txs.slice(0, 3).map(t => ({ desc: t.description?.substring(0,20), date: t.date, status: t.status }))
-    )
-
-    // Separa pendentes e concluídas
-    const pending = txs.filter(t => t.status === 'pending')
-    const done = txs.filter(t => t.status !== 'pending')
-
-    // Pendentes primeiro, depois concluídas
-    const ordered = [...pending, ...done]
-
-    setTransactions(ordered)
+    setTransactions(txs)
     setLoading(false)
   }, [user?.id, context, filter, search, dateRange])
+
   useEffect(() => {
     loadTransactions()
   }, [loadTransactions])
@@ -251,7 +228,6 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -259,22 +235,10 @@ export default function TransactionsPage() {
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="p-2 text-gray-400 hover:text-teal-600 transition-colors rounded-full"
-              title="Exportar extrato"
-            >
+            <button onClick={() => setShowExportModal(true)} className="p-2 text-gray-400 hover:text-teal-600 transition-colors rounded-full" title="Exportar extrato">
               <Download size={20} />
             </button>
-            <button
-              onClick={() => setShowDateFilter(!showDateFilter)}
-              className={`p-2 rounded-full transition-colors ${
-                dateRange !== 'all'
-                  ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-              title="Filtrar por período"
-            >
+            <button onClick={() => setShowDateFilter(!showDateFilter)} className={`p-2 rounded-full transition-colors ${dateRange !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-400 hover:text-gray-600'}`} title="Filtrar por período">
               <Calendar size={20} />
             </button>
             <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
@@ -287,15 +251,7 @@ export default function TransactionsPage() {
         {showDateFilter && (
           <div className="flex gap-2 mt-3 overflow-x-auto pb-2 animate-in fade-in slide-in-from-top-2 duration-200">
             {dateRangeOptions.map(opt => (
-              <button
-                key={opt.id}
-                onClick={() => { setDateRange(opt.id as any); setShowDateFilter(false) }}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                  dateRange === opt.id
-                    ? 'bg-teal-100 dark:bg-teal-900/40 border border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-300'
-                    : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
+              <button key={opt.id} onClick={() => { setDateRange(opt.id as any); setShowDateFilter(false) }} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${dateRange === opt.id ? 'bg-teal-100 dark:bg-teal-900/40 border border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-300' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'}`}>
                 {opt.label}
               </button>
             ))}
@@ -304,31 +260,13 @@ export default function TransactionsPage() {
 
         <div className="relative mt-3">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar transações..."
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-              <X size={14} />
-            </button>
-          )}
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar transações..." className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300" />
+          {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={14} /></button>}
         </div>
 
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
           {filters.map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id as any)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                filter === f.id
-                  ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
-                  : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
-              }`}
-            >
+            <button key={f.id} onClick={() => setFilter(f.id as any)} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filter === f.id ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'}`}>
               {f.label}
             </button>
           ))}
@@ -337,54 +275,35 @@ export default function TransactionsPage() {
 
       <div className="px-4 pt-4">
         {loading ? (
-          <div className="space-y-3">
-            <Skeleton variant="rect" height="64px" count={5} className="mb-2" />
-          </div>
+          <div className="space-y-3"><Skeleton variant="rect" height="64px" count={5} className="mb-2" /></div>
         ) : transactions.length === 0 ? (
           <div className="text-center py-16">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Search size={24} className="text-gray-400" />
-            </div>
+            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4"><Search size={24} className="text-gray-400" /></div>
             <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma transação encontrada</p>
             <p className="text-gray-400 text-xs mt-1">Tente ajustar os filtros ou criar uma nova.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* 🔴 PENDENTES */}
             {pendingTransactions.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-xs font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <AlertCircle size={12} />
-                    Pendentes
-                  </h3>
-                  <span className="text-[10px] text-gray-400 font-medium">
-                    {pendingTransactions.length} transação{pendingTransactions.length > 1 ? 'ões' : ''}
-                  </span>
+                  <h3 className="text-xs font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1.5"><AlertCircle size={12} />Pendentes</h3>
+                  <span className="text-[10px] text-gray-400 font-medium">{pendingTransactions.length} transação{pendingTransactions.length > 1 ? 'ões' : ''}</span>
                 </div>
                 <div className="space-y-1">
-                  {pendingTransactions.map((tx, index) => (
-                    <TransactionCard key={tx.id} tx={tx} index={index} />
-                  ))}
+                  {pendingTransactions.map((tx, index) => (<TransactionCard key={tx.id} tx={tx} index={index} />))}
                 </div>
               </div>
             )}
 
-            {/* 🟢 CONCLUÍDAS POR DATA */}
             {groupedCompleted.map(([date, txs], groupIndex) => (
               <div key={date}>
                 <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                    {formatDateHeader(date)}
-                  </h3>
-                  <span className="text-[10px] text-gray-400 font-medium">
-                    {txs.length} transação{txs.length > 1 ? 'ões' : ''}
-                  </span>
+                  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{formatDateHeader(date)}</h3>
+                  <span className="text-[10px] text-gray-400 font-medium">{txs.length} transação{txs.length > 1 ? 'ões' : ''}</span>
                 </div>
                 <div className="space-y-1">
-                  {txs.map((tx, index) => (
-                    <TransactionCard key={tx.id} tx={tx} index={(groupIndex * 10) + index} />
-                  ))}
+                  {txs.map((tx, index) => (<TransactionCard key={tx.id} tx={tx} index={(groupIndex * 10) + index} />))}
                 </div>
               </div>
             ))}
@@ -392,57 +311,30 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* Modal de exportação */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Exportar Extrato</h3>
-              <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
-                <X size={20} />
-              </button>
+              <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
             </div>
-
             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Período</p>
             <div className="flex gap-2 mb-6">
               {dateRangeOptions.map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => setDateRange(opt.id as any)}
-                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${
-                    dateRange === opt.id
-                      ? 'bg-teal-700 text-white shadow-md'
-                      : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'
-                  }`}
-                >
+                <button key={opt.id} onClick={() => setDateRange(opt.id as any)} className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${dateRange === opt.id ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}>
                   {opt.label}
                 </button>
               ))}
             </div>
-
             <div className="space-y-3">
-              <button
-                onClick={() => handleExport('csv')}
-                disabled={exporting || transactions.length === 0}
-                className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-900/30 hover:bg-teal-100 transition-colors disabled:opacity-50"
-              >
-                <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
-                  <Download size={20} className="text-teal-700 dark:text-teal-400" />
-                </div>
+              <button onClick={() => handleExport('csv')} disabled={exporting || transactions.length === 0} className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-900/30 hover:bg-teal-100 transition-colors disabled:opacity-50">
+                <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm"><Download size={20} className="text-teal-700 dark:text-teal-400" /></div>
                 <div className="text-left flex-1">
                   <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Baixar CSV</p>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                    {transactions.length} transações • Planilha compatível com Excel
-                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{transactions.length} transações • Planilha compatível com Excel</p>
                 </div>
               </button>
             </div>
-
-            {transactions.length === 0 && (
-              <p className="text-center text-xs text-gray-400 mt-4">
-                Nenhuma transação no período selecionado.
-              </p>
-            )}
           </div>
         </div>
       )}
