@@ -9,22 +9,13 @@ import {
   ChevronRight,
   Loader2,
   CreditCard,
-  Calendar,
   RefreshCw,
   Download,
   PieChart,
-  PlusCircle,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
   ArrowDown,
-  ArrowUp,
   X,
-  Check,
   Edit3,
-  Receipt,
   Banknote,
-  Wallet,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -33,27 +24,6 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import InvoiceAlert from '@/components/InvoiceAlert'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
-
-async function calculateCardLimit(cardId: string, userId: string) {
-  const { data: card } = await supabase
-    .from('credit_cards')
-    .select('limit_amount')
-    .eq('id', cardId)
-    .single()
-
-  const { data: txs } = await supabase
-    .from('transactions')
-    .select('amount, type')
-    .eq('credit_card_id', cardId)
-    .eq('user_id', userId)
-
-  const totalGastos = (txs || []).reduce((acc, t) => {
-    return t.type === 'income' ? acc - Number(t.amount) : acc + Number(t.amount)
-  }, 0)
-
-  const novoLimite = Number(card?.limit_amount || 0) - totalGastos
-  return Math.max(0, novoLimite)
-}
 
 function CardDetailContent() {
   const router = useRouter()
@@ -72,18 +42,15 @@ function CardDetailContent() {
   const [availableLimit, setAvailableLimit] = useState(0)
   const [estornosTotal, setEstornosTotal] = useState(0)
 
-  // Modal de ajuste (estorno)
   const [showAdjustModal, setShowAdjustModal] = useState(false)
   const [adjustAmount, setAdjustAmount] = useState('0,00')
   const [adjustDescription, setAdjustDescription] = useState('')
   const [adjustSaving, setAdjustSaving] = useState(false)
 
-  // Modal de ajuste rápido de limite
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [newLimit, setNewLimit] = useState('')
   const [limitSaving, setLimitSaving] = useState(false)
 
-  // Modal de pagamento de fatura
   const [showPayModal, setShowPayModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
   const [payAccountId, setPayAccountId] = useState('')
@@ -96,10 +63,12 @@ function CardDetailContent() {
     if (!user?.id || !cardId) return
     setLoading(true)
 
+    // 🔧 CORREÇÃO: busca o cartão SEM filtrar por context
     const { data: cardData } = await supabase
       .from('credit_cards')
       .select('*')
-      .match({ id: cardId, user_id: user.id, context })
+      .eq('id', cardId)
+      .eq('user_id', user.id)
       .single()
 
     if (!cardData) {
@@ -115,7 +84,8 @@ function CardDetailContent() {
       supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
-        .match({ credit_card_id: cardId, user_id: user.id, context })
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user.id)
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: false }),
@@ -130,11 +100,11 @@ function CardDetailContent() {
         .from('accounts')
         .select('id, name, color')
         .eq('user_id', user.id)
+        .eq('context', cardData.context)
         .order('name'),
     ])
 
     const txs = Array.isArray(txsData) ? txsData : []
-
     const despesas = txs.filter(t => t.type !== 'income')
     const estornos = txs.filter(t => t.type === 'income')
     const totalDespesas = despesas.reduce((a, t) => a + Number(t.amount || 0), 0)
@@ -151,22 +121,17 @@ function CardDetailContent() {
     setAvailableLimit(limit - spent)
 
     setLoading(false)
-  }, [user, cardId, context, currentDate, router])
+  }, [user, cardId, currentDate, router])
 
   useEffect(() => {
     loadCardData()
   }, [loadCardData])
 
   const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev =>
-      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
-    )
+    setCurrentDate(prev => direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1))
   }
 
   const handleAdjustTotal = () => {
@@ -177,7 +142,6 @@ function CardDetailContent() {
 
   const handleSaveAdjust = async () => {
     if (!user?.id || !cardId) return
-
     const rawAmount = parseFloat(adjustAmount.replace(/\./g, '').replace(',', '.')) || 0
     if (rawAmount <= 0) {
       alert('Informe um valor válido para o estorno.')
@@ -193,7 +157,7 @@ function CardDetailContent() {
       date: format(new Date(), 'yyyy-MM-dd'),
       description: adjustDescription || 'Estorno / Ajuste',
       credit_card_id: cardId,
-      context: context,
+      context: card.context,
       category_id: null,
     }
 
@@ -250,15 +214,9 @@ function CardDetailContent() {
       return
     }
     const numValue = parseFloat(digits) / 100
-    setNewLimit(
-      numValue.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    )
+    setNewLimit(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
 
-  // ─── Pagamento de fatura ───
   const openPayModal = (invoice: any) => {
     setSelectedInvoice(invoice)
     const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount || 0)
@@ -306,7 +264,7 @@ function CardDetailContent() {
           account_id: payAccountId,
           date: new Date().toISOString().split('T')[0],
           status: 'done',
-          context: context,
+          context: card.context,
           category_id: null,
         })
 
@@ -412,12 +370,7 @@ function CardDetailContent() {
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                setNewLimit(
-                  (Number(card.limit_amount) || 0).toLocaleString('pt-BR', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
-                )
+                setNewLimit((Number(card.limit_amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
                 setShowLimitModal(true)
               }}
               className="text-white/60 text-[10px] underline hover:text-white mt-1"
@@ -445,7 +398,7 @@ function CardDetailContent() {
         <InvoiceAlert dueDay={card.due_day} closingDay={card.closing_day} />
       </div>
 
-      {/* ── NOVO: Seção de Faturas ── */}
+      {/* Seção de Faturas */}
       {invoices.length > 0 && (
         <div className="mb-4">
           <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-2">Faturas</h3>
