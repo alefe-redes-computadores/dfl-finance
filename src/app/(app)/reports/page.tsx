@@ -11,13 +11,13 @@ import {
   Target,
   DollarSign,
 } from 'lucide-react'
-import CashFlow from './CashFlow'
-import CategoryResult from './CategoryResult'
-import FixedVsVariable from './FixedVsVariable'
-import BudgetVsReal from './BudgetVsReal'
-import WeekdayExpenses from './WeekdayExpenses'
-import ComparePeriods from './ComparePeriods'
-import ExportData from './ExportData'
+import CashFlow from '@/components/reports/CashFlow'
+import CategoryResult from '@/components/reports/CategoryResult'
+import FixedVsVariable from '@/components/reports/FixedVsVariable'
+import BudgetVsReal from '@/components/reports/BudgetVsReal'
+import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
+import ComparePeriods from '@/components/reports/ComparePeriods'
+import ExportData from '@/components/reports/ExportData'
 import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 
