@@ -130,6 +130,13 @@ function NewTransactionContent() {
 
   const { isOnline, saveToQueue } = useOfflineQueue()
 
+  // 🆕 Feedback háptico
+  const vibrate = (pattern: number | number[]) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(pattern)
+    }
+  }
+
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -304,6 +311,34 @@ function NewTransactionContent() {
 
       setReceiptUrl(urlData.publicUrl)
       showToast('Comprovante anexado!', 'success')
+
+      // 🆕 OCR do comprovante
+      if (isImage) {
+        try {
+          const ocrResponse = await fetch('/api/ocr-receipt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: urlData.publicUrl }),
+          })
+          const ocrData = await ocrResponse.json()
+          if (ocrData.success && ocrData.data) {
+            if (ocrData.data.amount > 0) {
+              setAmountNum(ocrData.data.amount)
+              setAmountFormatted(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+            }
+            if (ocrData.data.date) setDate(ocrData.data.date)
+            if (ocrData.data.description) setDesc(ocrData.data.description)
+            if (ocrData.data.suggested_category) {
+              const matchedCat = categories.find((c: any) => c.name.toLowerCase() === ocrData.data.suggested_category.toLowerCase())
+              if (matchedCat) setCategoryId(matchedCat.id)
+            }
+            vibrate([50, 100, 50])
+            showToast('Dados do comprovante extraídos! Revise antes de salvar.', 'success')
+          }
+        } catch (ocrError) {
+          console.error('Erro ao extrair dados do comprovante:', ocrError)
+        }
+      }
     } catch (err: any) {
       console.error('Erro upload:', err)
       showToast(`Erro ao anexar: ${err.message}`, 'error')
@@ -517,7 +552,6 @@ function NewTransactionContent() {
       let invoiceId: string | null = null
 
       if (type === 'expense' && creditCardId && !isRefund) {
-        // Encontra ou cria fatura para o período da transação
         const txDate = new Date(date)
         const { data: cardData } = await supabase
           .from('credit_cards')
@@ -526,7 +560,6 @@ function NewTransactionContent() {
           .single()
 
         if (cardData) {
-          // Calcula as datas da fatura baseado no dia de fechamento
           let closingDate = new Date(txDate.getFullYear(), txDate.getMonth(), cardData.closing_day)
           if (txDate > closingDate) {
             closingDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, cardData.closing_day)
@@ -542,7 +575,6 @@ function NewTransactionContent() {
             dueDate.setMonth(dueDate.getMonth() + 1)
           }
 
-          // Busca fatura aberta para este cartão e período
           const { data: existingInvoice } = await supabase
             .from('credit_invoices')
             .select('id')
@@ -556,7 +588,6 @@ function NewTransactionContent() {
           if (existingInvoice) {
             invoiceId = existingInvoice.id
           } else {
-            // Cria nova fatura
             const { data: newInvoice, error: invoiceError } = await supabase
               .from('credit_invoices')
               .insert({
@@ -578,29 +609,26 @@ function NewTransactionContent() {
             invoiceId = newInvoice.id
           }
 
-          // Atualiza o total da fatura
-          // Atualiza o total da fatura
-if (invoiceId) {
-  const { data: currentInvoice } = await supabase
-    .from('credit_invoices')
-    .select('total_amount')
-    .eq('id', invoiceId)
-    .single()
+          if (invoiceId) {
+            const { data: currentInvoice } = await supabase
+              .from('credit_invoices')
+              .select('total_amount')
+              .eq('id', invoiceId)
+              .single()
 
-  const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
+            const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
 
-  await supabase
-    .from('credit_invoices')
-    .update({
-      total_amount: newTotal,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', invoiceId)
-}
+            await supabase
+              .from('credit_invoices')
+              .update({
+                total_amount: newTotal,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', invoiceId)
+          }
         }
       }
 
-      // Atualiza saldo da conta (se for débito normal)
       if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
         const { data: acc } = await supabase
           .from('accounts')
@@ -836,7 +864,6 @@ if (invoiceId) {
           )}
         </div>
 
-        {/* Seletor de Cartão de Crédito (apenas para despesas) */}
         {!isIncome && creditCards.length > 0 && (
           <button
             onClick={() => setShowCardModal(true)}
