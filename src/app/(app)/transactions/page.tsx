@@ -7,9 +7,9 @@ import { supabase } from '@/lib/supabase'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   ChevronLeft, Plus, Clock, Check, CreditCard,
-  Search, X, ArrowLeftRight
+  Search, X, ArrowLeftRight, Paperclip, Image as ImageIcon
 } from 'lucide-react'
-import { format, isToday, isYesterday, isThisYear } from 'date-fns'
+import { format, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
@@ -50,11 +50,11 @@ export default function TransactionsPage() {
     const { data } = await query
     let txs = Array.isArray(data) ? data : []
 
-    // Ordenação: pendentes primeiro, depois por data decrescente
+    // Ordenação: pendentes primeiro, depois mantém a ordem por data/hora do Supabase
     txs.sort((a, b) => {
       if (a.status === 'pending' && b.status !== 'pending') return -1
       if (a.status !== 'pending' && b.status === 'pending') return 1
-      return new Date(b.date).getTime() - new Date(a.date).getTime()
+      return 0 // mantém a ordem original do Supabase (por date DESC, que inclui hora)
     })
 
     setTransactions(txs)
@@ -73,6 +73,13 @@ export default function TransactionsPage() {
     if (isToday(date)) return 'Hoje'
     if (isYesterday(date)) return 'Ontem'
     return format(date, "dd 'de' MMMM", { locale: ptBR })
+  }
+
+  // Verifica se o comprovante é imagem ou PDF
+  const getReceiptIcon = (receiptUrl: string | null) => {
+    if (!receiptUrl) return null
+    const isPdf = receiptUrl.toLowerCase().endsWith('.pdf')
+    return isPdf ? 'pdf' : 'image'
   }
 
   // Agrupa transações por data
@@ -181,6 +188,7 @@ export default function TransactionsPage() {
                     const isIncome = tx.type === 'income'
                     const isTransfer = tx.type === 'transfer'
                     const IconComp = getDynamicIcon(tx.categories?.icon)
+                    const receiptType = getReceiptIcon(tx.receipt_url)
 
                     return (
                       <div
@@ -189,7 +197,7 @@ export default function TransactionsPage() {
                         className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl cursor-pointer hover:shadow-sm transition-all border border-gray-50 dark:border-slate-700 animate-in fade-in slide-in-from-bottom-2"
                         style={{ animationDelay: `${(groupIndex * 50) + (index * 30)}ms` }}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
                           {/* Ícone de status */}
                           {isPending ? (
                             <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center flex-shrink-0">
@@ -215,9 +223,18 @@ export default function TransactionsPage() {
 
                           {/* Descrição e categoria */}
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                              {tx.description || tx.categories?.name || (isTransfer ? 'Transferência' : 'Sem descrição')}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                                {tx.description || tx.categories?.name || (isTransfer ? 'Transferência' : 'Sem descrição')}
+                              </p>
+                              {/* Ícone de comprovante */}
+                              {receiptType === 'image' && (
+                                <ImageIcon size={12} className="text-teal-500 flex-shrink-0" />
+                              )}
+                              {receiptType === 'pdf' && (
+                                <Paperclip size={12} className="text-teal-500 flex-shrink-0" />
+                              )}
+                            </div>
                             <p className="text-[10px] text-gray-400 truncate">
                               {tx.categories?.name || 'Geral'}
                               {tx.credit_card_id && (
