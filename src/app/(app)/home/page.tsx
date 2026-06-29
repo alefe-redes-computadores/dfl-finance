@@ -9,7 +9,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle, Receipt, Banknote
+  PieChart, AlertTriangle, Upload, Receipt, Banknote
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -29,6 +29,7 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
+  { id: 'import-invoice', label: 'Importar Fatura' },
   { id: 'next-card', label: 'Próxima Fatura' },
   { id: 'invoices', label: 'Faturas de Cartão' },
   { id: 'pendings', label: 'Pendências' },
@@ -330,7 +331,7 @@ function HomeContent() {
       case 'balance':
         return (
           <div key="balance" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all">
+            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all hover:shadow-md">
               <div className="flex items-center justify-center gap-2 mb-3">
                 <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">Saldo total</span>
                 <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
@@ -360,6 +361,31 @@ function HomeContent() {
                 </div>
                 <span className="text-[12px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Despesas</span>
                 <p className="text-[16px] font-bold text-red-600">{hideBalance ? '••••' : formatCurrency(summary.expense)}</p>
+              </div>
+            </div>
+          </div>
+        )
+      case 'import-invoice':
+        if (cards.length === 0) return null
+        return (
+          <div key="import-invoice" className="mb-6">
+            <div
+              onClick={() => router.push('/import-invoice')}
+              className="bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-teal-100 dark:border-teal-800 rounded-[24px] p-5 cursor-pointer hover:shadow-md transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-[18px] bg-teal-100 dark:bg-teal-800 flex items-center justify-center">
+                  <Upload size={24} className="text-teal-600 dark:text-teal-300" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-bold text-teal-800 dark:text-teal-200">
+                    Importar Fatura
+                  </p>
+                  <p className="text-[12px] text-teal-600 dark:text-teal-400 mt-0.5">
+                    Leia PDF ou OFX com IA e importe em segundos
+                  </p>
+                </div>
+                <ChevronRight size={20} className="text-teal-400" />
               </div>
             </div>
           </div>
