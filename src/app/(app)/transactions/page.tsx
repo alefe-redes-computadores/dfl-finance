@@ -1,253 +1,181 @@
 'use client'
 
-import { useEffect, useState, useCallback, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { getDynamicIcon } from '@/lib/iconUtils'
 import {
-  ChevronLeft, ArrowDown, Clock, Check, Loader2, Search, X, Paperclip
+  ChevronLeft, Plus, Loader2, Clock, Check, CreditCard,
+  Search, Filter, ArrowUp, ArrowDown, X
 } from 'lucide-react'
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import { getDynamicIcon } from '@/lib/iconUtils'
+import FAB from '@/components/FAB'
+import Skeleton from '@/components/Skeleton'
 
-type FilterType = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
-
-function TransactionContent() {
-  const { user } = useAuth()
+export default function TransactionsPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const { user } = useAuth()
   const { context } = useContext_()
-  const currentContext = context || 'dfl'
-
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<FilterType>(
-    (searchParams.get('filter') as FilterType) || 'all'
-  )
-  const [searchQuery, setSearchQuery] = useState('')
-  const [currentDate] = useState(new Date())
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'income' | 'expense' | 'transfer' | 'pending'>('all')
+
+  const loadTransactions = useCallback(async () => {
+    if (!user?.id) return
+    setLoading(true)
+
+    let query = supabase
+      .from('transactions')
+      .select('*, categories(name, icon, color)')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .order('date', { ascending: false })
+      .limit(50)
+
+    if (filter !== 'all') {
+      if (filter === 'pending') {
+        query = query.eq('status', 'pending')
+      } else {
+        query = query.eq('type', filter)
+      }
+    }
+
+    if (search) {
+      query = query.or(`description.ilike.%${search}%,categories.name.ilike.%${search}%`)
+    }
+
+    const { data } = await query
+    setTransactions(Array.isArray(data) ? data : [])
+    setLoading(false)
+  }, [user?.id, context, filter, search])
+
+  useEffect(() => {
+    loadTransactions()
+  }, [loadTransactions])
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const loadTransactions = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
-
-    try {
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('context', currentContext)
-        .gte('date', start)
-        .lte('date', end)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false })
-
-      if (txError) throw txError
-
-      if (!txData || txData.length === 0) {
-        setTransactions([])
-        setLoading(false)
-        return
-      }
-
-      const [{ data: catData }, { data: accData }] = await Promise.all([
-        supabase.from('categories').select('id, name, icon, color').eq('user_id', user.id),
-        supabase.from('accounts').select('id, name, color').eq('user_id', user.id)
-      ])
-
-      let finalData = txData.map(tx => {
-        const category = (catData || []).find(c => c.id === tx.category_id)
-        const account = (accData || []).find(a => a.id === tx.account_id)
-        return { ...tx, categories: category || null, accounts: account || null }
-      })
-
-      if (filter === 'income') finalData = finalData.filter(t => t.type === 'income')
-      else if (filter === 'expense') finalData = finalData.filter(t => t.type === 'expense' || t.type === 'sangria')
-      else if (filter === 'transfer') finalData = finalData.filter(t => t.type === 'transfer')
-      else if (filter === 'pending') finalData = finalData.filter(t => t.status === 'pending')
-
-      setTransactions(finalData)
-    } catch (err) {
-      console.error('Erro inesperado:', err)
-      setTransactions([])
-    } finally {
-      setLoading(false)
-    }
-  }, [user, currentContext, filter, currentDate])
-
-  useEffect(() => { loadTransactions() }, [loadTransactions])
-
-  const filteredTransactions = searchQuery.trim()
-    ? transactions.filter(tx => {
-        const term = searchQuery.toLowerCase()
-        const desc = (tx.description || '').toLowerCase()
-        const cat = (tx.categories?.name || '').toLowerCase()
-        return desc.includes(term) || cat.includes(term)
-      })
-    : transactions
-
-  const pendentes = filteredTransactions.filter(t => t.status === 'pending')
-  const concluidas = filteredTransactions.filter(t => t.status !== 'pending')
-
-  const groupByDate = (txs: any[]) => {
-    const hoje = format(new Date(), 'yyyy-MM-dd')
-    const ontem = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
-    const grupos: Record<string, any[]> = {}
-    txs.forEach(tx => {
-      let chave = tx.date
-      if (tx.date === hoje) chave = 'HOJE'
-      else if (tx.date === ontem) chave = 'ONTEM'
-      else chave = format(parseISO(tx.date), "dd 'de' MMMM", { locale: ptBR }).toUpperCase()
-      if (!grupos[chave]) grupos[chave] = []
-      grupos[chave].push(tx)
-    })
-    return grupos
-  }
-
-  const gruposConcluidas = groupByDate(concluidas)
-
-  const filterButtons: { key: FilterType; label: string }[] = [
-    { key: 'all', label: 'Todas' },
-    { key: 'income', label: 'Receitas' },
-    { key: 'expense', label: 'Despesas' },
-    { key: 'transfer', label: 'Transferências' },
-    { key: 'pending', label: 'Pendentes' },
+  const filters = [
+    { id: 'all', label: 'Todas' },
+    { id: 'income', label: 'Receitas' },
+    { id: 'expense', label: 'Despesas' },
+    { id: 'transfer', label: 'Transferências' },
+    { id: 'pending', label: 'Pendentes' },
   ]
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Transações</h1>
-          <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 font-bold text-sm">
-            + Nova
+          <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
+            <Plus size={24} />
           </button>
         </div>
+        <ContextToggle />
 
-        <div className="mb-3">
-          <ContextToggle />
-        </div>
-
-        <div className="relative mb-3">
+        {/* Barra de pesquisa */}
+        <div className="relative mt-4">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por descrição ou categoria..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-teal-500 transition-colors"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar transações..."
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300"
           />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
               <X size={14} />
             </button>
           )}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {filterButtons.map(btn => (
+        {/* Filtros */}
+        <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+          {filters.map(f => (
             <button
-              key={btn.key}
-              onClick={() => setFilter(btn.key)}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                filter === btn.key ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+              key={f.id}
+              onClick={() => setFilter(f.id as any)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                filter === f.id
+                  ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
+                  : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
               }`}
             >
-              {btn.label}
+              {f.label}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Lista de transações */}
       <div className="px-4 pt-4">
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="animate-spin text-teal-700" size={40} />
+          <div className="space-y-3">
+            <Skeleton variant="rect" height="64px" count={5} className="mb-2" />
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Search size={24} className="text-gray-400" />
+            </div>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma transação encontrada</p>
+            <p className="text-gray-400 text-xs mt-1">Tente ajustar os filtros ou criar uma nova.</p>
           </div>
         ) : (
-          <>
-            {pendentes.length > 0 && (
-              <div className="mb-6">
-                {pendentes.map(tx => (
-                  <CardTransacao key={tx.id} tx={tx} router={router} formatCurrency={formatCurrency} />
-                ))}
-              </div>
-            )}
-            {concluidas.length > 0 && pendentes.length > 0 && (
-              <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">Concluídas</h3>
-            )}
-            {Object.entries(gruposConcluidas).map(([cabecalho, txs]) => (
-              <div key={cabecalho} className="mb-6">
-                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 mt-6">{cabecalho}</h3>
-                <div className="space-y-2">
-                  {txs.map(tx => (
-                    <CardTransacao key={tx.id} tx={tx} router={router} formatCurrency={formatCurrency} />
-                  ))}
+          <div className="space-y-1">
+            {transactions.map((tx) => {
+              const isPending = tx.status === 'pending'
+              const isIncome = tx.type === 'income'
+              const IconComp = getDynamicIcon(tx.categories?.icon)
+              return (
+                <div
+                  key={tx.id}
+                  onClick={() => router.push(`/transactions/${tx.id}`)}
+                  className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl cursor-pointer hover:shadow-sm transition-all border border-gray-50 dark:border-slate-700"
+                >
+                  <div className="flex items-center gap-3">
+                    {isPending ? (
+                      <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+                        <Clock size={14} className="text-orange-500" />
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                        <Check size={14} className="text-emerald-500" />
+                      </div>
+                    )}
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center"
+                      style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}
+                    >
+                      <IconComp size={16} />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{tx.description || tx.categories?.name || 'Sem descrição'}</p>
+                      <p className="text-[10px] text-gray-400">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
+                    </div>
+                  </div>
+                  <p className={`text-[14px] font-bold ${isIncome ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {isIncome ? '+' : '-'}{formatCurrency(Number(tx.amount) || 0)}
+                  </p>
                 </div>
-              </div>
-            ))}
-            {pendentes.length === 0 && concluidas.length === 0 && (
-              <div className="text-center py-20 text-gray-400 dark:text-gray-500">Nenhuma transação encontrada.</div>
-            )}
-          </>
+              )
+            })}
+          </div>
         )}
       </div>
+
+      <FAB onSave={() => loadTransactions()} />
     </div>
-  )
-}
-
-function CardTransacao({ tx, router, formatCurrency }: { tx: any; router: any; formatCurrency: (v: number) => string }) {
-  const IconComp = getDynamicIcon(tx.categories?.icon)
-  const bgColor = tx.categories?.color || '#64748b'
-  const isPending = tx.status === 'pending'
-  const isIncome = tx.type === 'income'
-  const isTransfer = tx.type === 'transfer'
-  const hasAttachment = tx.receipt_url && tx.receipt_url.trim() !== ''
-
-  return (
-    <div onClick={() => router.push(`/transactions/${tx.id}`)} className="flex items-center gap-3 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-slate-700 transition-colors relative">
-      <div className="flex-shrink-0 w-5 flex justify-center">
-        {isPending ? <Clock size={14} className="text-red-400" /> : <Check size={14} className="text-emerald-500" />}
-      </div>
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 relative" style={{ backgroundColor: `${bgColor}18`, color: bgColor }}>
-        {isTransfer ? <ArrowDown size={18} /> : <IconComp size={18} />}
-      </div>
-      <div className="flex-1 min-w-0 pr-2">
-        <div className="flex items-center gap-1.5">
-          <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">
-            {tx.description || tx.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
-          </p>
-          {hasAttachment && <Paperclip size={12} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />}
-        </div>
-        <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{tx.categories?.name || 'Geral'}{tx.accounts?.name ? ` • ${tx.accounts.name}` : ''}</p>
-      </div>
-      <div className="flex-shrink-0 text-right">
-        <p className="text-[10px] text-gray-400 dark:text-gray-500">{format(parseISO(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
-        <p className={`text-[14px] font-bold mt-0.5 ${isIncome || isTransfer ? 'text-emerald-600' : 'text-red-500'}`}>
-          {isIncome ? '+ ' : isTransfer ? '' : '- '}{formatCurrency(Number(tx.amount) || 0)}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-export default function TransactionsPage() {
-  return (
-    <ContextProvider>
-      <Suspense fallback={<div className="text-center py-20 text-gray-400">Carregando...</div>}>
-        <TransactionContent />
-      </Suspense>
-    </ContextProvider>
   )
 }
