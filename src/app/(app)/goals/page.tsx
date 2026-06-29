@@ -6,13 +6,14 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
-  ChevronLeft, Plus, Target, Loader2, Edit3, Trash2,
-  TrendingUp, Calendar, CheckCircle2, PauseCircle, AlertCircle
+  ChevronLeft, Plus, Target, Edit3, Trash2,
+  TrendingUp, Calendar, CheckCircle2, PauseCircle
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import Skeleton from '@/components/Skeleton'
 
 export default function GoalsPage() {
   const router = useRouter()
@@ -68,17 +69,8 @@ export default function GoalsPage() {
     return 'Manual'
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -95,15 +87,17 @@ export default function GoalsPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-3">
-        {goals.length === 0 ? (
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton variant="card" height="120px" count={3} />
+          </div>
+        ) : goals.length === 0 ? (
           <div className="text-center py-16">
             <Target size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhuma meta definida</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Crie metas para acompanhar seus objetivos financeiros.</p>
-            <button
-              onClick={() => router.push('/goals/new')}
-              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors"
-            >
+            <button onClick={() => router.push('/goals/new')}
+              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors">
               Criar primeira meta
             </button>
           </div>
@@ -115,18 +109,14 @@ export default function GoalsPage() {
             const isOverdue = daysLeft !== null && daysLeft < 0
 
             return (
-              <div
-                key={goal.id}
+              <div key={goal.id}
                 onClick={() => router.push(`/goals/${goal.id}`)}
                 className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all animate-in fade-in slide-in-from-bottom-4"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
+                style={{ animationDelay: `${index * 50}ms` }}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center"
-                      style={{ backgroundColor: `${goal.color}20`, color: goal.color }}
-                    >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                      style={{ backgroundColor: `${goal.color}20`, color: goal.color }}>
                       <IconComp size={20} />
                     </div>
                     <div>
@@ -136,45 +126,31 @@ export default function GoalsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {getStatusIcon(goal.status)}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); router.push(`/goals/${goal.id}`) }}
-                      className="p-1.5 text-gray-400 hover:text-teal-600 rounded-full transition-colors"
-                      title="Editar meta"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); router.push(`/goals/${goal.id}`) }}
+                      className="p-1.5 text-gray-400 hover:text-teal-600 rounded-full transition-colors" title="Editar meta">
                       <Edit3 size={14} />
                     </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(goal.id) }}
-                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-full transition-colors"
-                      title="Excluir meta"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(goal.id) }}
+                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-full transition-colors" title="Excluir meta">
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
 
-                {/* Barra de progresso */}
                 <div className="mb-2">
                   <div className="flex justify-between text-[10px] mb-1">
                     <span className="text-gray-500">{formatCurrency(Number(goal.current_amount))}</span>
                     <span className="font-bold text-gray-400">{formatCurrency(Number(goal.target_amount))}</span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        goal.status === 'completed' ? 'bg-emerald-500' :
-                        progress >= 80 ? 'bg-teal-500' :
-                        progress >= 50 ? 'bg-amber-500' : 'bg-blue-500'
-                      }`}
-                      style={{ width: `${progress}%` }}
-                    />
+                    <div className={`h-full rounded-full transition-all duration-500 ${
+                      goal.status === 'completed' ? 'bg-emerald-500' : progress >= 80 ? 'bg-teal-500' : progress >= 50 ? 'bg-amber-500' : 'bg-blue-500'
+                    }`} style={{ width: `${progress}%` }} />
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-bold" style={{ color: goal.color }}>
-                    {progress.toFixed(0)}% concluído
-                  </span>
+                  <span className="font-bold" style={{ color: goal.color }}>{progress.toFixed(0)}% concluído</span>
                   {goal.deadline && (
                     <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
                       <Calendar size={12} />
