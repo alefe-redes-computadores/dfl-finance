@@ -4,11 +4,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Plus, Loader2, Home, ChevronRight, Building, Calendar } from 'lucide-react'
+import { Plus, Building, Calendar, ChevronRight } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import Skeleton from '@/components/Skeleton'
 
 function FinancingsContent() {
   const { user } = useAuth()
@@ -35,7 +36,6 @@ function FinancingsContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // Resumo
   const totalFinanced = financings.reduce((a, f) => a + (Number(f.outstanding_balance) || 0), 0)
   const totalInstallments = financings.reduce((a, f) => a + f.total_installments, 0)
   const activeCount = financings.length
@@ -56,11 +56,13 @@ function FinancingsContent() {
       <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Financiamentos</h2>
 
       {loading ? (
-        <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
+        <div className="space-y-3">
+          <Skeleton variant="card" height="80px" count={4} />
+        </div>
       ) : financings.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Home size={40} className="text-gray-400 dark:text-gray-500" />
+            <Building size={40} className="text-gray-400 dark:text-gray-500" />
           </div>
           <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhum financiamento ativo</h3>
           <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
@@ -75,7 +77,6 @@ function FinancingsContent() {
         </div>
       ) : (
         <>
-          {/* Cards de Resumo */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
@@ -93,7 +94,6 @@ function FinancingsContent() {
             </div>
           </div>
 
-          {/* Lista de Financiamentos */}
           <div className="space-y-3">
             {financings.map(fin => {
               const IconComp = getDynamicIcon(fin.icon || 'home')
