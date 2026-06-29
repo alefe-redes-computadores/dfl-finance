@@ -6,13 +6,12 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
-  ChevronLeft, Plus, Loader2, Clock, Check, CreditCard,
-  Search, Filter, ArrowUp, ArrowDown, X
+  ChevronLeft, Plus, Clock, Check, CreditCard,
+  Search, X, ArrowLeftRight
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, isToday, isYesterday, isThisYear } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import FAB from '@/components/FAB'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 
 export default function TransactionsPage() {
@@ -34,7 +33,7 @@ export default function TransactionsPage() {
       .eq('user_id', user.id)
       .eq('context', context)
       .order('date', { ascending: false })
-      .limit(50)
+      .limit(100)
 
     if (filter !== 'all') {
       if (filter === 'pending') {
@@ -49,7 +48,16 @@ export default function TransactionsPage() {
     }
 
     const { data } = await query
-    setTransactions(Array.isArray(data) ? data : [])
+    let txs = Array.isArray(data) ? data : []
+
+    // Ordenação: pendentes primeiro, depois por data decrescente
+    txs.sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1
+      if (a.status !== 'pending' && b.status === 'pending') return 1
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
+
+    setTransactions(txs)
     setLoading(false)
   }, [user?.id, context, filter, search])
 
@@ -59,6 +67,26 @@ export default function TransactionsPage() {
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const formatDateHeader = (dateStr: string) => {
+    const date = new Date(dateStr + 'T12:00:00')
+    if (isToday(date)) return 'Hoje'
+    if (isYesterday(date)) return 'Ontem'
+    return format(date, "dd 'de' MMMM", { locale: ptBR })
+  }
+
+  // Agrupa transações por data
+  const groupByDate = (txs: any[]) => {
+    const groups: Record<string, any[]> = {}
+    txs.forEach(tx => {
+      const key = tx.date
+      if (!groups[key]) groups[key] = []
+      groups[key].push(tx)
+    })
+    return Object.entries(groups)
+  }
+
+  const groupedTransactions = groupByDate(transactions)
 
   const filters = [
     { id: 'all', label: 'Todas' },
@@ -133,49 +161,99 @@ export default function TransactionsPage() {
             <p className="text-gray-400 text-xs mt-1">Tente ajustar os filtros ou criar uma nova.</p>
           </div>
         ) : (
-          <div className="space-y-1">
-            {transactions.map((tx) => {
-              const isPending = tx.status === 'pending'
-              const isIncome = tx.type === 'income'
-              const IconComp = getDynamicIcon(tx.categories?.icon)
-              return (
-                <div
-                  key={tx.id}
-                  onClick={() => router.push(`/transactions/${tx.id}`)}
-                  className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl cursor-pointer hover:shadow-sm transition-all border border-gray-50 dark:border-slate-700"
-                >
-                  <div className="flex items-center gap-3">
-                    {isPending ? (
-                      <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
-                        <Clock size={14} className="text-orange-500" />
-                      </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                        <Check size={14} className="text-emerald-500" />
-                      </div>
-                    )}
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center"
-                      style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}
-                    >
-                      <IconComp size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{tx.description || tx.categories?.name || 'Sem descrição'}</p>
-                      <p className="text-[10px] text-gray-400">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
-                    </div>
-                  </div>
-                  <p className={`text-[14px] font-bold ${isIncome ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {isIncome ? '+' : '-'}{formatCurrency(Number(tx.amount) || 0)}
-                  </p>
+          <div className="space-y-4">
+            {groupedTransactions.map(([date, txs], groupIndex) => (
+              <div key={date}>
+                {/* Cabeçalho da data */}
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    {formatDateHeader(date)}
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    {txs.length} transação{txs.length > 1 ? 'ões' : ''}
+                  </span>
                 </div>
-              )
-            })}
+
+                {/* Cards de transação */}
+                <div className="space-y-1">
+                  {txs.map((tx, index) => {
+                    const isPending = tx.status === 'pending'
+                    const isIncome = tx.type === 'income'
+                    const isTransfer = tx.type === 'transfer'
+                    const IconComp = getDynamicIcon(tx.categories?.icon)
+
+                    return (
+                      <div
+                        key={tx.id}
+                        onClick={() => router.push(`/transactions/${tx.id}`)}
+                        className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl cursor-pointer hover:shadow-sm transition-all border border-gray-50 dark:border-slate-700 animate-in fade-in slide-in-from-bottom-2"
+                        style={{ animationDelay: `${(groupIndex * 50) + (index * 30)}ms` }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Ícone de status */}
+                          {isPending ? (
+                            <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                              <Clock size={14} className="text-orange-500" />
+                            </div>
+                          ) : isTransfer ? (
+                            <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                              <ArrowLeftRight size={14} className="text-blue-500" />
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                              <Check size={14} className="text-emerald-500" />
+                            </div>
+                          )}
+
+                          {/* Ícone da categoria */}
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}
+                          >
+                            <IconComp size={16} />
+                          </div>
+
+                          {/* Descrição e categoria */}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                              {tx.description || tx.categories?.name || (isTransfer ? 'Transferência' : 'Sem descrição')}
+                            </p>
+                            <p className="text-[10px] text-gray-400 truncate">
+                              {tx.categories?.name || 'Geral'}
+                              {tx.credit_card_id && (
+                                <span className="ml-1 text-orange-400">• Crédito</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Valor */}
+                        <p className={`text-[14px] font-bold whitespace-nowrap ml-2 ${
+                          isIncome ? 'text-emerald-600' :
+                          isTransfer ? 'text-blue-600' :
+                          'text-red-600'
+                        }`}>
+                          {isIncome ? '+' : isTransfer ? '↔' : '-'}{formatCurrency(Number(tx.amount) || 0)}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      <FAB onSave={() => loadTransactions()} />
+      {/* FAB para nova transação */}
+      <div className="fixed bottom-6 right-4 z-40">
+        <button
+          onClick={() => router.push('/transactions/new')}
+          className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-teal-800 transition-colors active:scale-95"
+        >
+          <Plus size={28} />
+        </button>
+      </div>
     </div>
   )
 }
