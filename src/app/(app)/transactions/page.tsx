@@ -63,11 +63,18 @@ export default function TransactionsPage() {
     const { data } = await query
     let txs = Array.isArray(data) ? data : []
 
-    txs.sort((a, b) => {
-      if (a.status === 'pending' && b.status !== 'pending') return -1
-      if (a.status !== 'pending' && b.status === 'pending') return 1
-      return 0
-    })
+    // 🔧 CORREÇÃO: Separa pendentes e concluídas, ordena cada grupo por data/hora
+    const pending = txs.filter(t => t.status === 'pending')
+    const done = txs.filter(t => t.status !== 'pending')
+
+    // Pendentes: mais recente primeiro
+    pending.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+    // Concluídas: mais recente primeiro
+    done.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+    // Pendentes primeiro, depois concluídas
+    txs = [...pending, ...done]
 
     setTransactions(txs)
     setLoading(false)
@@ -120,14 +127,12 @@ export default function TransactionsPage() {
     { id: 'all', label: 'Todo período' },
   ]
 
-  // Exportação
   const handleExport = async (exportFormat: 'csv' | 'pdf') => {
     if (!user?.id || transactions.length === 0) return
     setExporting(true)
 
     try {
       if (exportFormat === 'csv') {
-        // Gera CSV localmente
         const headers = ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status', 'Comprovante']
         const rows = transactions.map(tx => [
           tx.date,
@@ -150,7 +155,6 @@ export default function TransactionsPage() {
 
         showToast('Extrato CSV baixado!', 'success')
       } else {
-        // PDF via API
         const startDate = dateRange !== 'all' ? format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd') : ''
         window.open(
           `/api/export-pdf?userId=${user.id}&context=${context}&range=${dateRange}&startDate=${startDate}`,
@@ -175,7 +179,6 @@ export default function TransactionsPage() {
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-1">
-            {/* Botão de exportar */}
             <button
               onClick={() => setShowExportModal(true)}
               className="p-2 text-gray-400 hover:text-teal-600 transition-colors rounded-full"
@@ -183,7 +186,6 @@ export default function TransactionsPage() {
             >
               <Download size={20} />
             </button>
-            {/* Botão de filtro de data */}
             <button
               onClick={() => setShowDateFilter(!showDateFilter)}
               className={`p-2 rounded-full transition-colors ${
@@ -202,7 +204,6 @@ export default function TransactionsPage() {
         </div>
         <ContextToggle />
 
-        {/* Filtro de data (expansível) */}
         {showDateFilter && (
           <div className="flex gap-2 mt-3 overflow-x-auto pb-2 animate-in fade-in slide-in-from-top-2 duration-200">
             {dateRangeOptions.map(opt => (
@@ -221,7 +222,6 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        {/* Barra de pesquisa */}
         <div className="relative mt-3">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -238,7 +238,6 @@ export default function TransactionsPage() {
           )}
         </div>
 
-        {/* Filtros de tipo */}
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
           {filters.map(f => (
             <button
@@ -256,7 +255,6 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Lista de transações */}
       <div className="px-4 pt-4">
         {loading ? (
           <div className="space-y-3">
@@ -358,7 +356,6 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* Modal de exportação */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
