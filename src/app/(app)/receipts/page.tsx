@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Search, Trash2, Eye, Download, FileText,
-  Image as ImageIcon, Filter, X, AlertCircle, Loader2
+  Image as ImageIcon, X, AlertCircle
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -20,6 +20,8 @@ interface ReceiptFile {
   size: number
   isImage: boolean
   transaction_id?: string
+  transaction_desc?: string
+  transaction_date?: string
 }
 
 export default function ReceiptsPage() {
@@ -43,7 +45,6 @@ export default function ReceiptsPage() {
     setError('')
 
     try {
-      // Lista todos os arquivos no bucket receipts dentro da pasta do usuário
       const { data: files, error: listError } = await supabase
         .storage
         .from('receipts')
@@ -65,7 +66,6 @@ export default function ReceiptsPage() {
         return
       }
 
-      // Para cada arquivo, gera a URL pública
       const receiptsData: ReceiptFile[] = files.map(file => {
         const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.name)
         const { data: urlData } = supabase
@@ -76,13 +76,12 @@ export default function ReceiptsPage() {
         return {
           name: file.name,
           url: urlData.publicUrl,
-          created_at: file.created_at,
+          created_at: file.created_at || new Date().toISOString(),
           size: file.metadata?.size || 0,
           isImage,
         }
       })
 
-      // Busca transações vinculadas a esses comprovantes
       const { data: txs } = await supabase
         .from('transactions')
         .select('id, receipt_url, description, date')
@@ -91,7 +90,6 @@ export default function ReceiptsPage() {
         .order('date', { ascending: false })
         .limit(50)
 
-      // Vincula cada comprovante à sua transação
       const txMap = new Map<string, any>()
       if (txs) {
         txs.forEach(tx => {
@@ -132,7 +130,6 @@ export default function ReceiptsPage() {
 
       if (deleteError) throw deleteError
 
-      // Se houver transação vinculada, remove a URL do comprovante
       if (receipt.transaction_id) {
         await supabase
           .from('transactions')
@@ -157,7 +154,6 @@ export default function ReceiptsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // Filtros aplicados
   const filteredReceipts = receipts.filter(r => {
     const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
     const matchesFilter = filter === 'all' || (filter === 'image' ? r.isImage : !r.isImage)
@@ -167,7 +163,6 @@ export default function ReceiptsPage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
       
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -179,7 +174,6 @@ export default function ReceiptsPage() {
           <div className="w-10" />
         </div>
 
-        {/* Barra de pesquisa */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -196,7 +190,6 @@ export default function ReceiptsPage() {
           )}
         </div>
 
-        {/* Filtros */}
         <div className="flex gap-2 mt-3">
           {[
             { id: 'all', label: 'Todos' },
@@ -218,7 +211,6 @@ export default function ReceiptsPage() {
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div className="px-4 pt-4">
         {loading ? (
           <div className="space-y-3">
@@ -258,7 +250,6 @@ export default function ReceiptsPage() {
                 key={receipt.name}
                 className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all"
               >
-                {/* Thumbnail ou ícone */}
                 <div
                   className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer"
                   onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
@@ -272,7 +263,6 @@ export default function ReceiptsPage() {
                   )}
                 </div>
 
-                {/* Informações */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
                     {receipt.name}
@@ -289,7 +279,6 @@ export default function ReceiptsPage() {
                   )}
                 </div>
 
-                {/* Ações */}
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
@@ -319,7 +308,6 @@ export default function ReceiptsPage() {
         )}
       </div>
 
-      {/* Modal de preview */}
       {previewUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
