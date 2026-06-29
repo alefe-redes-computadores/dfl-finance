@@ -27,6 +27,7 @@ import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import SwipeableRow from '@/components/SwipeableRow'
+import PushNotificationManager from '@/components/PushNotificationManager'
 
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
@@ -871,6 +872,9 @@ function HomeContent() {
           onReadChange={(unread) => setUnreadNotifications(unread)}
         />
       )}
+
+      {/* 🆕 Gerenciador de Notificações Push */}
+      <PushNotificationManager userId={user?.id || ''} />
     </div>
   )
 }
