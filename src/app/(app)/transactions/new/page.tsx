@@ -130,7 +130,7 @@ function NewTransactionContent() {
 
   const { isOnline, saveToQueue } = useOfflineQueue()
 
-  // 🆕 Feedback háptico
+  // Feedback háptico
   const vibrate = (pattern: number | number[]) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(pattern)
@@ -322,6 +322,41 @@ function NewTransactionContent() {
           })
           const ocrData = await ocrResponse.json()
           if (ocrData.success && ocrData.data) {
+            // 🆕 Conciliação Inteligente
+            if (ocrData.data.amount > 0 && ocrData.data.date) {
+              const { data: similarTxs } = await supabase
+                .from('transactions')
+                .select('id, description, amount, date')
+                .eq('user_id', user.id)
+                .eq('status', 'pending')
+                .eq('type', 'expense')
+                .gte('amount', ocrData.data.amount - 1)
+                .lte('amount', ocrData.data.amount + 1)
+                .gte('date', ocrData.data.date)
+                .lte('date', ocrData.data.date)
+                .limit(3)
+
+              if (similarTxs && similarTxs.length > 0) {
+                const tx = similarTxs[0]
+                const confirmed = confirm(
+                  `🔍 Conciliação Inteligente\n\n` +
+                  `Encontramos uma despesa similar:\n` +
+                  `"${tx.description}" — ${formatCurrency(tx.amount)} em ${format(new Date(tx.date), "dd/MM")}\n\n` +
+                  `Deseja anexar este comprovante a essa transação existente?`
+                )
+                if (confirmed) {
+                  await supabase
+                    .from('transactions')
+                    .update({ receipt_url: urlData.publicUrl })
+                    .eq('id', tx.id)
+                  showToast('Comprovante vinculado à transação existente!', 'success')
+                  vibrate([50])
+                  return
+                }
+              }
+            }
+
+            // Se não encontrou similar, preenche o formulário
             if (ocrData.data.amount > 0) {
               setAmountNum(ocrData.data.amount)
               setAmountFormatted(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
