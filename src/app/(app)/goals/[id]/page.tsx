@@ -1,445 +1,269 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { getDynamicIcon } from '@/lib/iconUtils'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  Target, PiggyBank, TrendingUp as TrendingUpIcon
+  ChevronLeft, Edit3, Trash2, Loader2, Target,
+  TrendingUp, Calendar, CheckCircle2, PauseCircle, Plus, X, Check
 } from 'lucide-react'
-import { format, differenceInMonths, addMonths } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUpIcon, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal,
-  target: Target, piggybank: PiggyBank
-}
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function GoalDetailPage() {
-  const { id } = useParams()
   const router = useRouter()
+  const params = useParams()
   const { user } = useAuth()
-
+  const { context } = useContext_()
+  const { showToast } = useToast()
   const [goal, setGoal] = useState<any>(null)
-  const [deposits, setDeposits] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [showDepositModal, setShowDepositModal] = useState(false)
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [saving, setSaving] = useState(false)
 
-  // Depósito
-  const [depAmount, setDepAmount] = useState('0,00')
-  const [depAmountNum, setDepAmountNum] = useState(0)
-  const [depNote, setDepNote] = useState('')
-  const [depAccountId, setDepAccountId] = useState('')
-  const [depTransfer, setDepTransfer] = useState(false) // false = já está na conta, true = somar ao saldo
+  // Modal de ajuste manual
+  const [showAdjustModal, setShowAdjustModal] = useState(false)
+  const [adjustAmount, setAdjustAmount] = useState('')
+  const [adjustSaving, setAdjustSaving] = useState(false)
 
-  const [showAccModal, setShowAccModal] = useState(false)
+  useEffect(() => {
+    if (!user?.id || !params?.id) return
+    loadGoal()
+  }, [user?.id, params?.id])
 
-  const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
+  const loadGoal = async () => {
     setLoading(true)
-
-    // Carrega a meta
-    const { data: goalData } = await supabase
+    const { data } = await supabase
       .from('goals')
-      .select('*')
-      .match({ id: id, user_id: user.id })
+      .select('*, categories(name), tags(name), accounts(name)')
+      .eq('id', params.id)
       .single()
 
-    if (goalData) setGoal(goalData)
-
-    // Carrega depósitos
-    const { data: depData } = await supabase
-      .from('goal_deposits')
-      .select('*')
-      .eq('goal_id', id)
-      .order('date', { ascending: false })
-
-    setDeposits(Array.isArray(depData) ? depData : [])
-
-    // Carrega contas para o modal de depósito
-    const { data: accData } = await supabase
-      .from('accounts')
-      .select('id, name, color, balance')
-      .match({ user_id: user.id, context: goalData?.context || 'dfl' })
-
-    setAccounts(Array.isArray(accData) ? accData : [])
-
-    // Sincroniza current_amount
-    if (goalData) {
-      const totalDeposited = (depData || []).reduce((a, d) => a + (Number(d.amount) || 0), 0)
-      if (totalDeposited !== Number(goalData.current_amount)) {
-        await supabase.from('goals').update({ current_amount: totalDeposited }).eq('id', id)
-        setGoal({ ...goalData, current_amount: totalDeposited })
-      }
-    }
-
-    setLoading(false)
-  }, [id, user])
-
-  useEffect(() => { loadData() }, [loadData])
-
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  const handleDeleteGoal = async () => {
-    if (!confirm('Tem certeza que deseja excluir esta meta?')) return
-    await supabase.from('goals').delete().eq('id', id)
-    router.push('/goals')
-  }
-
-  const handleCompleteGoal = async () => {
-    if (!confirm('Marcar esta meta como concluída?')) return
-    await supabase.from('goals').update({ status: 'completed' }).eq('id', id)
-    router.push('/goals')
-  }
-
-  const handleDepAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    if (!digits) {
-      setDepAmount('0,00')
-      setDepAmountNum(0)
+    if (!data) {
+      router.push('/goals')
       return
     }
-    const num = parseFloat(digits) / 100
-    setDepAmountNum(num)
-    setDepAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+    setGoal(data)
+    setLoading(false)
   }
 
-  const handleDeposit = async () => {
-    if (!user?.id || depAmountNum <= 0) return
-    setSaving(true)
+  const handleDelete = async () => {
+    if (!confirm('Excluir esta meta?')) return
+    await supabase.from('goals').delete().eq('id', params.id)
+    showToast('Meta excluída.', 'info')
+    router.push('/goals')
+  }
 
-    try {
-      // Insere o depósito
-      const { error: depError } = await supabase.from('goal_deposits').insert({
-        goal_id: id,
-        amount: depAmountNum,
-        date: format(new Date(), 'yyyy-MM-dd'),
-        note: depNote || null,
-        account_origin_id: depAccountId || null
-      })
+  const handleToggleStatus = async () => {
+    const newStatus = goal.status === 'active' ? 'paused' : 'active'
+    await supabase.from('goals').update({ status: newStatus }).eq('id', params.id)
+    setGoal({ ...goal, status: newStatus })
+    showToast(newStatus === 'active' ? 'Meta reativada!' : 'Meta pausada.', 'info')
+  }
 
-      if (depError) throw depError
+  // Ajuste manual de valor
+  const openAdjustModal = () => {
+    setAdjustAmount('')
+    setShowAdjustModal(true)
+  }
 
-      // Se for transferência real (somar ao saldo)
-      if (depTransfer && depAccountId) {
-        const acc = accounts.find(a => a.id === depAccountId)
-        if (acc && goal?.account_id) {
-          // Subtrai da conta de origem
-          await supabase
-            .from('accounts')
-            .update({ balance: Number(acc.balance) - depAmountNum })
-            .eq('id', depAccountId)
-
-          // Se a meta tem conta vinculada, soma nela
-          const { data: goalAcc } = await supabase
-            .from('accounts')
-            .select('balance')
-            .eq('id', goal.account_id)
-            .single()
-
-          if (goalAcc) {
-            await supabase
-              .from('accounts')
-              .update({ balance: Number(goalAcc.balance) + depAmountNum })
-              .eq('id', goal.account_id)
-          }
-        }
-      }
-
-      // Atualiza current_amount da meta
-      const totalDeposited = deposits.reduce((a, d) => a + (Number(d.amount) || 0), 0) + depAmountNum
-      await supabase.from('goals').update({ current_amount: totalDeposited }).eq('id', id)
-
-      setShowDepositModal(false)
-      setDepAmount('0,00')
-      setDepAmountNum(0)
-      setDepNote('')
-      setDepAccountId('')
-      setDepTransfer(false)
-      loadData()
-    } catch (err: any) {
-      alert('Erro ao registrar depósito: ' + err.message)
-    } finally {
-      setSaving(false)
+  const handleSaveAdjust = async () => {
+    const rawAmount = parseFloat(adjustAmount.replace(',', '.'))
+    if (isNaN(rawAmount) || rawAmount <= 0) {
+      showToast('Informe um valor válido.', 'warning')
+      return
     }
+    setAdjustSaving(true)
+    const newCurrent = Number(goal.current_amount) + rawAmount
+    const newStatus = newCurrent >= Number(goal.target_amount) ? 'completed' : goal.status
+
+    await supabase
+      .from('goals')
+      .update({ current_amount: newCurrent, status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', params.id)
+
+    setGoal({ ...goal, current_amount: newCurrent, status: newStatus })
+    setShowAdjustModal(false)
+    showToast(`R$ ${formatCurrency(rawAmount)} adicionado à meta!`, 'success')
+    setAdjustSaving(false)
   }
 
-  const handleDeleteDeposit = async (depositId: string, amount: number) => {
-    if (!confirm('Excluir este depósito?')) return
-    await supabase.from('goal_deposits').delete().eq('id', depositId)
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-    // Recalcula o total
-    const totalDeposited = deposits
-      .filter(d => d.id !== depositId)
-      .reduce((a, d) => a + (Number(d.amount) || 0), 0)
-    await supabase.from('goals').update({ current_amount: totalDeposited }).eq('id', id)
-
-    loadData()
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+        <Loader2 className="animate-spin text-teal-700" size={40} />
+      </div>
+    )
   }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-      <Loader2 className="animate-spin text-teal-700" size={40} />
-    </div>
-  )
+  if (!goal) return null
 
-  if (!goal) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-      <p className="text-gray-500 dark:text-gray-400">Meta não encontrada.</p>
-    </div>
-  )
-
-  const IconComp = ICON_MAP[goal.icon] || ICON_MAP['target']
-  const percent = Number(goal.target_amount) > 0 ? ((Number(goal.current_amount) || 0) / Number(goal.target_amount)) * 100 : 0
-  const remaining = Number(goal.target_amount) - (Number(goal.current_amount) || 0)
-  const isCompleted = goal.status === 'completed'
-
-  // Previsão: média dos últimos 3 depósitos
-  const last3Deposits = deposits.slice(0, 3)
-  const avgDeposit = last3Deposits.length > 0
-    ? last3Deposits.reduce((a, d) => a + (Number(d.amount) || 0), 0) / last3Deposits.length
-    : 0
-  const monthsLeft = avgDeposit > 0 ? Math.ceil(remaining / avgDeposit) : null
-
-  const donutData = [
-    { name: 'Concluído', value: Number(goal.current_amount) || 0 },
-    { name: 'Restante', value: Math.max(remaining, 0) }
-  ]
-
-  const selectedAcc = accounts.find(a => a.id === depAccountId)
+  const progress = Math.min((Number(goal.current_amount) / Number(goal.target_amount)) * 100, 100)
+  const IconComp = getDynamicIcon(goal.icon || 'target')
+  const daysLeft = goal.deadline ? differenceInDays(new Date(goal.deadline), new Date()) : null
+  const isOverdue = daysLeft !== null && daysLeft < 0
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
-      
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/goals')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-          <ChevronLeft size={24} />
-        </button>
-        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{goal.name}</h2>
-        <div className="flex items-center gap-2">
-          <button onClick={() => router.push(`/goals/new?edit=${goal.id}`)} className="p-2 text-teal-700 dark:text-teal-400">
-            <Edit2 size={20} />
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.push('/goals')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+            <ChevronLeft size={24} />
           </button>
-          <button onClick={handleDeleteGoal} className="p-2 text-red-500">
-            <Trash2 size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* Gráfico Donut */}
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
-        <div className="h-48 relative flex items-center justify-center">
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Concluído</p>
-            <p className="text-[20px] font-bold text-gray-800 dark:text-gray-100">{percent.toFixed(1)}%</p>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 truncate">{goal.name}</h1>
+          <div className="flex items-center gap-2">
+            <button onClick={() => router.push(`/goals/${goal.id}/edit`)} className="p-2 text-gray-400 hover:text-teal-600">
+              <Edit3 size={18} />
+            </button>
+            <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-500">
+              <Trash2 size={18} />
+            </button>
           </div>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={donutData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={65}
-                outerRadius={85}
-                paddingAngle={2}
-                stroke="none"
-              >
-                <Cell fill={goal.color} />
-                <Cell fill="#e5e7eb" className="dark:opacity-20" />
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
         </div>
+        <ContextToggle />
       </div>
 
-      {/* Cards informativos */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Falta</p>
-          <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Math.max(remaining, 0))}</p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Previsão</p>
-          <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">
-            {monthsLeft !== null ? `${monthsLeft} mês(es)` : '—'}
-          </p>
-        </div>
-      </div>
-
-      {/* Botão Marcar como atingida */}
-      {!isCompleted && (
-        <button
-          onClick={handleCompleteGoal}
-          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm mb-6"
-        >
-          Marcar como atingida
-        </button>
-      )}
-
-      {/* Histórico de Depósitos */}
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Depósitos</h3>
-        {deposits.length === 0 ? (
-          <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">Nenhum depósito registrado.</p>
-        ) : (
-          <div className="space-y-2">
-            {deposits.map(dep => (
-              <div key={dep.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-sm text-emerald-600">+ {formatCurrency(Number(dep.amount) || 0)}</p>
-                    {dep.note && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">— {dep.note}</p>}
-                  </div>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                    {format(new Date(dep.date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
-                  </p>
-                </div>
-                <button onClick={() => handleDeleteDeposit(dep.id, Number(dep.amount))} className="p-2 text-red-400 hover:text-red-600">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Botão fixo Depositar */}
-      <div className="fixed bottom-6 left-0 w-full flex justify-center z-40 pointer-events-none">
-        <button
-          onClick={() => setShowDepositModal(true)}
-          className="pointer-events-auto bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 shadow-xl"
-        >
-          <Plus size={18} /> Depositar
-        </button>
-      </div>
-
-      {/* Modal Depósito */}
-      {showDepositModal && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowDepositModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Novo Depósito</h3>
-              <button onClick={() => setShowDepositModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+      <div className="px-4 pt-4 space-y-4">
+        {/* Card principal */}
+        <div className="rounded-2xl p-5 text-white shadow-lg" style={{ backgroundColor: goal.color || '#14b8a6' }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <Target size={24} />
             </div>
+            <div>
+              <h2 className="font-bold text-lg">{goal.name}</h2>
+              <p className="text-white/70 text-xs">
+                {goal.status === 'completed' ? 'Concluída 🎉' : goal.status === 'paused' ? 'Pausada' : 'Em progresso'}
+              </p>
+            </div>
+          </div>
 
-            <div className="space-y-4">
-              {/* Valor */}
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor</label>
-                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-                  <span className="text-gray-400 dark:text-gray-500 font-bold">R$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={depAmount}
-                    onChange={handleDepAmountChange}
-                    className="bg-transparent text-lg font-bold text-gray-800 dark:text-gray-200 outline-none w-full"
-                  />
-                </div>
-              </div>
+          <div className="mb-3">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-white/70">{formatCurrency(Number(goal.current_amount))}</span>
+              <span className="font-bold">{formatCurrency(Number(goal.target_amount))}</span>
+            </div>
+            <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden">
+              <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
 
-              {/* Observação */}
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Observação (opcional)</label>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-bold">{progress.toFixed(0)}%</span>
+            {goal.deadline && (
+              <span className="text-white/70">
+                {isOverdue ? `${Math.abs(daysLeft)} dias atrasado` : `${daysLeft} dias restantes`}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Ações */}
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={handleToggleStatus}
+            className={`py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
+              goal.status === 'paused'
+                ? 'bg-teal-700 text-white hover:bg-teal-800'
+                : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 border border-amber-200'
+            }`}
+          >
+            {goal.status === 'paused' ? <TrendingUp size={14} /> : <PauseCircle size={14} />}
+            {goal.status === 'paused' ? 'Reativar' : 'Pausar'}
+          </button>
+          <button
+            onClick={openAdjustModal}
+            className="py-3 bg-teal-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-teal-800 transition-colors"
+          >
+            <Plus size={14} />
+            Ajustar
+          </button>
+          <button
+            onClick={() => router.push('/transactions/new?type=income')}
+            className="py-3 bg-white dark:bg-slate-800 rounded-2xl font-bold text-xs border border-gray-100 dark:border-slate-700 flex items-center justify-center gap-1.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Plus size={14} />
+            Transação
+          </button>
+        </div>
+
+        {/* Informações */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 space-y-3">
+          <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200">Detalhes</h3>
+          {goal.categories?.name && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Categoria vinculada</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{goal.categories.name}</span>
+            </div>
+          )}
+          {goal.tags?.name && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Tag vinculada</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{goal.tags.name}</span>
+            </div>
+          )}
+          {goal.accounts?.name && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Conta vinculada</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{goal.accounts.name}</span>
+            </div>
+          )}
+          {goal.deadline && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Prazo</span>
+              <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                {format(new Date(goal.deadline), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              </span>
+            </div>
+          )}
+          {goal.notes && (
+            <div className="pt-2 border-t border-gray-50 dark:border-slate-700">
+              <p className="text-xs text-gray-400 mb-1">Observações</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{goal.notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal de ajuste manual */}
+      {showAdjustModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowAdjustModal(false)}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Ajustar valor</h3>
+              <button onClick={() => setShowAdjustModal(false)} className="p-1 text-gray-400"><X size={20} /></button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Adicione um valor manual ao progresso da meta.</p>
+            <div className="mb-4">
+              <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Valor</label>
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+                <span className="text-gray-400 font-bold mr-2">R$</span>
                 <input
                   type="text"
-                  value={depNote}
-                  onChange={e => setDepNote(e.target.value)}
-                  placeholder="Ex: Depósito do mês"
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  value={adjustAmount}
+                  onChange={(e) => setAdjustAmount(e.target.value)}
+                  className="bg-transparent w-full outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
+                  placeholder="0,00"
                 />
               </div>
-
-              {/* Conta de origem */}
-              <button
-                onClick={() => setShowAccModal(true)}
-                className="w-full flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-xl p-3"
-              >
-                <div className="flex items-center gap-2">
-                  <Wallet size={16} className="text-gray-400 dark:text-gray-500" />
-                  <span className={`text-sm ${selectedAcc ? 'text-gray-800 dark:text-gray-200 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {selectedAcc ? selectedAcc.name : 'Conta de origem (opcional)'}
-                  </span>
-                </div>
-                <ChevronLeft size={16} className="text-gray-300 dark:text-gray-600 rotate-180" />
-              </button>
-
-              {/* Toggle Somar ao saldo */}
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Somar ao saldo da conta</span>
-                <button
-                  onClick={() => setDepTransfer(!depTransfer)}
-                  className={`w-11 h-6 rounded-full relative transition-colors ${depTransfer ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${depTransfer ? 'right-1' : 'left-1'}`} />
-                </button>
-              </div>
-
-              <button
-                onClick={handleDeposit}
-                disabled={saving || depAmountNum <= 0}
-                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Confirmar Depósito'}
-              </button>
             </div>
+            <button
+              onClick={handleSaveAdjust}
+              disabled={adjustSaving || !adjustAmount}
+              className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {adjustSaving ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} />}
+              {adjustSaving ? 'Salvando...' : 'Confirmar'}
+            </button>
           </div>
         </div>
       )}
-
-      {/* Modal Contas */}
-      {showAccModal && (
-        <div className="fixed inset-0 z-[250] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Conta de origem</h3>
-              <button onClick={() => setShowAccModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              <button
-                onClick={() => { setDepAccountId(''); setShowAccModal(false) }}
-                className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!depAccountId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400">
-                  <Wallet size={20} />
-                </div>
-                <span className={`flex-1 text-left font-medium ${!depAccountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Nenhuma conta</span>
-                {!depAccountId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-              </button>
-              {accounts.map(acc => {
-                const isActive = acc.id === depAccountId
-                return (
-                  <button
-                    key={acc.id}
-                    onClick={() => { setDepAccountId(acc.id); setShowAccModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color || '#14b8a6' }}>{acc.name.substring(0, 2).toUpperCase()}</div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   )
-                  }
+}
