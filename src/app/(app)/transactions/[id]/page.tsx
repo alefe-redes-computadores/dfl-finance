@@ -79,6 +79,13 @@ export default function EditTransactionPage() {
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
 
+  // 🆕 Feedback háptico
+  const vibrate = (pattern: number | number[]) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(pattern)
+    }
+  }
+
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
     const selected = new Date(newDateStr + 'T12:00:00')
@@ -124,6 +131,33 @@ export default function EditTransactionPage() {
 
       setReceiptUrl(urlData.publicUrl)
       showToast('Comprovante anexado!', 'success')
+
+      // 🆕 OCR do comprovante
+      if (isImage) {
+        try {
+          const ocrResponse = await fetch('/api/ocr-receipt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: urlData.publicUrl }),
+          })
+          const ocrData = await ocrResponse.json()
+          if (ocrData.success && ocrData.data) {
+            if (ocrData.data.amount > 0) {
+              setAmountInput(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+            }
+            if (ocrData.data.date) setDate(ocrData.data.date)
+            if (ocrData.data.description) setDescription(ocrData.data.description)
+            if (ocrData.data.suggested_category) {
+              const matchedCat = categories.find((c: any) => c.name.toLowerCase() === ocrData.data.suggested_category.toLowerCase())
+              if (matchedCat) setCategoryId(matchedCat.id)
+            }
+            vibrate([50, 100, 50])
+            showToast('Dados do comprovante extraídos! Revise antes de salvar.', 'success')
+          }
+        } catch (ocrError) {
+          console.error('Erro ao extrair dados do comprovante:', ocrError)
+        }
+      }
     } catch (err: any) {
       console.error('Erro upload:', err)
       showToast(`Erro ao anexar: ${err.message}`, 'error')
