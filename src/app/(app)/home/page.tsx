@@ -9,7 +9,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle, Upload, Receipt, Banknote, Edit3, Trash2
+  PieChart, AlertTriangle, Upload, Receipt, Banknote, Edit3, Trash2, Target
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -32,6 +32,7 @@ const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
   { id: 'import-invoice', label: 'Importar Fatura' },
+  { id: 'goals', label: 'Metas Financeiras' },
   { id: 'next-card', label: 'Próxima Fatura' },
   { id: 'invoices', label: 'Faturas de Cartão' },
   { id: 'pendings', label: 'Pendências' },
@@ -58,6 +59,7 @@ function HomeContent() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
+  const [goals, setGoals] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
   const [budgets, setBudgets] = useState<any[]>([])
   const [subscriptions, setSubscriptions] = useState<any[]>([])
@@ -181,7 +183,7 @@ function HomeContent() {
       const start = getLocalDateString(startOfMonth(currentDate))
       const end = getLocalDateString(endOfMonth(currentDate))
 
-      const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }, { data: invoicesData }] = await Promise.all([
+      const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }, { data: invoicesData }, { data: goalsData }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -212,12 +214,21 @@ function HomeContent() {
           .in('status', ['open', 'closed', 'partial'])
           .order('due_date', { ascending: true })
           .limit(5),
+        supabase
+          .from('goals')
+          .select('*, categories(name), tags(name), accounts(name)')
+          .eq('user_id', user.id)
+          .eq('context', context)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(3),
       ])
 
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
       setFinancings(Array.isArray(financingsData) ? financingsData : [])
       setInvoices(Array.isArray(invoicesData) ? invoicesData : [])
+      setGoals(Array.isArray(goalsData) ? goalsData : [])
 
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
@@ -401,6 +412,61 @@ function HomeContent() {
                   </p>
                 </div>
                 <ChevronRight size={20} className="text-teal-400" />
+              </div>
+            </div>
+          </div>
+        )
+      case 'goals':
+        if (goals.length === 0) return null
+        return (
+          <div key="goals" className="mb-6">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/goals')}>
+                <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Metas Financeiras</h3>
+                <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+              </div>
+              <div className="px-2 pb-2">
+                {goals.slice(0, 3).map(goal => {
+                  const progress = Math.min((Number(goal.current_amount) / Number(goal.target_amount)) * 100, 100)
+                  const IconComp = getDynamicIcon(goal.icon || 'target')
+                  const daysLeft = goal.deadline ? differenceInDays(new Date(goal.deadline), today) : null
+                  const isOverdue = daysLeft !== null && daysLeft < 0
+
+                  return (
+                    <div
+                      key={goal.id}
+                      onClick={() => router.push(`/goals/${goal.id}`)}
+                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors"
+                    >
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `${goal.color}20`, color: goal.color }}
+                      >
+                        <IconComp size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center mb-1">
+                          <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">{goal.name}</p>
+                          <span className="text-[11px] font-bold" style={{ color: goal.color }}>{progress.toFixed(0)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${progress}%`,
+                              backgroundColor: goal.color || '#14b8a6',
+                            }}
+                          />
+                        </div>
+                        {goal.deadline && (
+                          <p className={`text-[10px] mt-1 ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
+                            {isOverdue ? `${Math.abs(daysLeft)} dias atrasado` : `${daysLeft} dias restantes`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
