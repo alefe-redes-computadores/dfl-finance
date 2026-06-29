@@ -9,7 +9,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle, Upload, Receipt, Banknote
+  PieChart, AlertTriangle, Upload, Receipt, Banknote, Edit3, Trash2
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -26,6 +26,7 @@ import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
+import SwipeableRow from '@/components/SwipeableRow'
 
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
@@ -322,21 +323,14 @@ function HomeContent() {
   if (authLoading || dataLoading || !layoutLoaded) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 px-4 pt-6 pb-28 transition-colors duration-300">
-        {/* Skeleton do Saldo Total */}
         <Skeleton variant="card" height="160px" className="mb-6" />
-        
-        {/* Skeleton Receitas/Despesas */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <Skeleton variant="card" height="100px" />
           <Skeleton variant="card" height="100px" />
         </div>
-        
-        {/* Skeleton de próximas faturas */}
         <Skeleton variant="text" width="120px" className="mb-3" />
         <Skeleton variant="card" height="80px" className="mb-3" />
         <Skeleton variant="card" height="80px" className="mb-3" />
-        
-        {/* Skeleton de transações recentes */}
         <Skeleton variant="text" width="150px" className="mt-6 mb-3" />
         <div className="space-y-3">
           <Skeleton variant="rect" height="48px" />
@@ -699,19 +693,40 @@ function HomeContent() {
                     const isPending = tx.status === 'pending'
                     const IconComp = getDynamicIcon(tx.categories?.icon)
                     return (
-                      <div key={tx.id} onClick={() => router.push(`/transactions/${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700/50' : ''}`}>
-                        {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
-                            <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
+                      <SwipeableRow
+                        key={tx.id}
+                        rightAction={{
+                          label: 'Editar',
+                          onAction: () => router.push(`/transactions/${tx.id}`),
+                          bgColor: '#10B981',
+                          icon: <Edit3 size={14} className="mr-1 inline" />,
+                        }}
+                        leftAction={{
+                          label: 'Excluir',
+                          onAction: async () => {
+                            if (confirm('Excluir esta transação?')) {
+                              await supabase.from('transactions').delete().eq('id', tx.id)
+                              loadData()
+                            }
+                          },
+                          bgColor: '#EF4444',
+                          icon: <Trash2 size={14} className="mr-1 inline" />,
+                        }}
+                      >
+                        <div className={`flex items-center justify-between p-3 cursor-pointer bg-white dark:bg-slate-800 ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700/50' : ''}`}>
+                          {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
+                              <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
+                            </div>
                           </div>
+                          <p className={`text-[15px] font-bold whitespace-nowrap shrink-0 ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {tx.type === 'income' ? '+' : '-'}{hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
+                          </p>
                         </div>
-                        <p className={`text-[15px] font-bold whitespace-nowrap shrink-0 ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {tx.type === 'income' ? '+' : '-'}{hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}
-                        </p>
-                      </div>
+                      </SwipeableRow>
                     )
                   })
                 )}
