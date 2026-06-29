@@ -4,11 +4,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Plus, Loader2, Users, Wallet } from 'lucide-react'
+import { Plus, Users, Wallet } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import Skeleton from '@/components/Skeleton'
 
 function DebtsContent() {
   const { user } = useAuth()
@@ -23,8 +24,6 @@ function DebtsContent() {
     if (!user?.id) return
     setLoading(true)
 
-    const statusFilter = filter === 'paid' ? 'paid' : ['pending', 'partial'].join(',')
-
     const { data: debtsData } = await supabase
       .from('debts')
       .select('*')
@@ -34,7 +33,6 @@ function DebtsContent() {
 
     const debtsArray = Array.isArray(debtsData) ? debtsData : []
 
-    // Calcular pagamentos para cada dívida
     const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
       const { data: payments } = await supabase
         .from('transactions')
@@ -72,7 +70,6 @@ function DebtsContent() {
 
       <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Quem me deve</h2>
 
-      {/* Cards de Resumo */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
           <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
@@ -90,7 +87,6 @@ function DebtsContent() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
         <button
           onClick={() => setFilter('active')}
@@ -107,7 +103,9 @@ function DebtsContent() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
+        <div className="space-y-3">
+          <Skeleton variant="card" height="80px" count={3} />
+        </div>
       ) : debts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
