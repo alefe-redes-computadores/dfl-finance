@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
-  Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
+  Plus, Clock, Check, CreditCard, Wallet, Settings2,
   PieChart, AlertTriangle, Upload, Receipt, Banknote
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
@@ -25,6 +25,7 @@ import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
+import Skeleton from '@/components/Skeleton'
 
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
@@ -320,8 +321,28 @@ function HomeContent() {
 
   if (authLoading || dataLoading || !layoutLoaded) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-teal-700 bg-gray-50 dark:bg-slate-900">
-        <Loader2 className="animate-spin" size={40} />
+      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 px-4 pt-6 pb-28 transition-colors duration-300">
+        {/* Skeleton do Saldo Total */}
+        <Skeleton variant="card" height="160px" className="mb-6" />
+        
+        {/* Skeleton Receitas/Despesas */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <Skeleton variant="card" height="100px" />
+          <Skeleton variant="card" height="100px" />
+        </div>
+        
+        {/* Skeleton de próximas faturas */}
+        <Skeleton variant="text" width="120px" className="mb-3" />
+        <Skeleton variant="card" height="80px" className="mb-3" />
+        <Skeleton variant="card" height="80px" className="mb-3" />
+        
+        {/* Skeleton de transações recentes */}
+        <Skeleton variant="text" width="150px" className="mt-6 mb-3" />
+        <div className="space-y-3">
+          <Skeleton variant="rect" height="48px" />
+          <Skeleton variant="rect" height="48px" />
+          <Skeleton variant="rect" height="48px" />
+        </div>
       </div>
     )
   }
