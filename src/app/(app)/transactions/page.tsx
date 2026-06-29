@@ -8,7 +8,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   ChevronLeft, Plus, Clock, Check, CreditCard,
   Search, X, ArrowLeftRight, Paperclip, Image as ImageIcon,
-  Calendar, Download
+  Calendar, Download, AlertCircle
 } from 'lucide-react'
 import { format, isToday, isYesterday, subDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -63,15 +63,14 @@ export default function TransactionsPage() {
     const { data } = await query
     let txs = Array.isArray(data) ? data : []
 
-    // 🔧 CORREÇÃO: Separa pendentes e concluídas, ordena cada grupo por data/hora
+    // 🔧 Separa pendentes e concluídas
     const pending = txs.filter(t => t.status === 'pending')
     const done = txs.filter(t => t.status !== 'pending')
 
-    // Pendentes: mais recente primeiro
-    pending.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-    // Concluídas: mais recente primeiro
-    done.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    // Ordena ambos os grupos por data/hora decrescente (mais recente primeiro)
+    const sortByDate = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    pending.sort(sortByDate)
+    done.sort(sortByDate)
 
     // Pendentes primeiro, depois concluídas
     txs = [...pending, ...done]
@@ -100,6 +99,7 @@ export default function TransactionsPage() {
     return isPdf ? 'pdf' : 'image'
   }
 
+  // Agrupa APENAS transações concluídas por data
   const groupByDate = (txs: any[]) => {
     const groups: Record<string, any[]> = {}
     txs.forEach(tx => {
@@ -110,7 +110,10 @@ export default function TransactionsPage() {
     return Object.entries(groups)
   }
 
-  const groupedTransactions = groupByDate(transactions)
+  // Separa pendentes do resto
+  const pendingTransactions = transactions.filter(t => t.status === 'pending')
+  const completedTransactions = transactions.filter(t => t.status !== 'pending')
+  const groupedCompleted = groupByDate(completedTransactions)
 
   const filters = [
     { id: 'all', label: 'Todas' },
@@ -167,6 +170,74 @@ export default function TransactionsPage() {
       setExporting(false)
       setShowExportModal(false)
     }
+  }
+
+  // Componente para renderizar um card de transação
+  const TransactionCard = ({ tx, index }: { tx: any; index: number }) => {
+    const isPending = tx.status === 'pending'
+    const isIncome = tx.type === 'income'
+    const isTransfer = tx.type === 'transfer'
+    const IconComp = getDynamicIcon(tx.categories?.icon)
+    const receiptType = getReceiptIcon(tx.receipt_url)
+
+    return (
+      <div
+        onClick={() => router.push(`/transactions/${tx.id}`)}
+        className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl cursor-pointer hover:shadow-sm transition-all border border-gray-50 dark:border-slate-700 animate-in fade-in slide-in-from-bottom-2"
+        style={{ animationDelay: `${index * 30}ms` }}
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {isPending ? (
+            <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+              <Clock size={14} className="text-orange-500" />
+            </div>
+          ) : isTransfer ? (
+            <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <ArrowLeftRight size={14} className="text-blue-500" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <Check size={14} className="text-emerald-500" />
+            </div>
+          )}
+
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}
+          >
+            <IconComp size={16} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                {tx.description || tx.categories?.name || (isTransfer ? 'Transferência' : 'Sem descrição')}
+              </p>
+              {receiptType === 'image' && (
+                <ImageIcon size={12} className="text-teal-500 flex-shrink-0" />
+              )}
+              {receiptType === 'pdf' && (
+                <Paperclip size={12} className="text-teal-500 flex-shrink-0" />
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 truncate">
+              {tx.categories?.name || 'Geral'}
+              {tx.credit_card_id && (
+                <span className="ml-1 text-orange-400">• Crédito</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <p className={`text-[14px] font-bold whitespace-nowrap ml-2 ${
+          isIncome ? 'text-emerald-600' :
+          isTransfer ? 'text-blue-600' :
+          'text-red-600'
+        }`}>
+          {isIncome ? '+' : isTransfer ? '↔' : '-'}{formatCurrency(Number(tx.amount) || 0)}
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -255,6 +326,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Lista de transações */}
       <div className="px-4 pt-4">
         {loading ? (
           <div className="space-y-3">
@@ -270,7 +342,28 @@ export default function TransactionsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {groupedTransactions.map(([date, txs], groupIndex) => (
+            {/* 🔴 CARD DE PENDENTES (separado) */}
+            {pendingTransactions.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <h3 className="text-xs font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertCircle size={12} />
+                    Pendentes
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    {pendingTransactions.length} transação{pendingTransactions.length > 1 ? 'ões' : ''}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {pendingTransactions.map((tx, index) => (
+                    <TransactionCard key={tx.id} tx={tx} index={index} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 🟢 TRANSAÇÕES CONCLUÍDAS (agrupadas por data) */}
+            {groupedCompleted.map(([date, txs], groupIndex) => (
               <div key={date}>
                 <div className="flex items-center justify-between mb-2 px-1">
                   <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -280,75 +373,10 @@ export default function TransactionsPage() {
                     {txs.length} transação{txs.length > 1 ? 'ões' : ''}
                   </span>
                 </div>
-
                 <div className="space-y-1">
-                  {txs.map((tx, index) => {
-                    const isPending = tx.status === 'pending'
-                    const isIncome = tx.type === 'income'
-                    const isTransfer = tx.type === 'transfer'
-                    const IconComp = getDynamicIcon(tx.categories?.icon)
-                    const receiptType = getReceiptIcon(tx.receipt_url)
-
-                    return (
-                      <div
-                        key={tx.id}
-                        onClick={() => router.push(`/transactions/${tx.id}`)}
-                        className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl cursor-pointer hover:shadow-sm transition-all border border-gray-50 dark:border-slate-700 animate-in fade-in slide-in-from-bottom-2"
-                        style={{ animationDelay: `${(groupIndex * 50) + (index * 30)}ms` }}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {isPending ? (
-                            <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-                              <Clock size={14} className="text-orange-500" />
-                            </div>
-                          ) : isTransfer ? (
-                            <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                              <ArrowLeftRight size={14} className="text-blue-500" />
-                            </div>
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                              <Check size={14} className="text-emerald-500" />
-                            </div>
-                          )}
-
-                          <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}
-                          >
-                            <IconComp size={16} />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                                {tx.description || tx.categories?.name || (isTransfer ? 'Transferência' : 'Sem descrição')}
-                              </p>
-                              {receiptType === 'image' && (
-                                <ImageIcon size={12} className="text-teal-500 flex-shrink-0" />
-                              )}
-                              {receiptType === 'pdf' && (
-                                <Paperclip size={12} className="text-teal-500 flex-shrink-0" />
-                              )}
-                            </div>
-                            <p className="text-[10px] text-gray-400 truncate">
-                              {tx.categories?.name || 'Geral'}
-                              {tx.credit_card_id && (
-                                <span className="ml-1 text-orange-400">• Crédito</span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-
-                        <p className={`text-[14px] font-bold whitespace-nowrap ml-2 ${
-                          isIncome ? 'text-emerald-600' :
-                          isTransfer ? 'text-blue-600' :
-                          'text-red-600'
-                        }`}>
-                          {isIncome ? '+' : isTransfer ? '↔' : '-'}{formatCurrency(Number(tx.amount) || 0)}
-                        </p>
-                      </div>
-                    )
-                  })}
+                  {txs.map((tx, index) => (
+                    <TransactionCard key={tx.id} tx={tx} index={(groupIndex * 10) + index} />
+                  ))}
                 </div>
               </div>
             ))}
@@ -356,6 +384,7 @@ export default function TransactionsPage() {
         )}
       </div>
 
+      {/* Modal de exportação */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
