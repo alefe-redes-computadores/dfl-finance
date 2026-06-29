@@ -19,6 +19,7 @@ import ModalEmprestimo from '@/components/ModalEmprestimo'
 import BankLogo from '@/components/BankLogo'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
+import Skeleton from '@/components/Skeleton'
 
 interface ExtractedTransaction {
   date: string
@@ -182,7 +183,7 @@ export default function ImportInvoicePage() {
         } else {
           // Cria nova fatura
           const today = new Date()
-          const closingDay = 10 // padrão, idealmente viria do cartão
+          const closingDay = 10 // padrão
           const dueDay = 15
 
           const closingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
@@ -291,9 +292,10 @@ export default function ImportInvoicePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#f8f9fa] dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-700" size={48} />
-        <p className="text-gray-500 dark:text-gray-400">Extraindo dados com IA...</p>
+      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6">
+        <Skeleton variant="card" height="80px" className="mb-4" />
+        <Skeleton variant="text" width="150px" className="mb-3" />
+        <Skeleton variant="rect" height="60px" count={5} className="mb-2" />
       </div>
     )
   }
