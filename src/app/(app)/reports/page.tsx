@@ -28,6 +28,7 @@ const reportsList = [
     description: 'Entradas e saídas do período',
     icon: TrendingUp,
     color: '#10B981',
+    component: CashFlow,
   },
   {
     id: 'category',
@@ -35,6 +36,7 @@ const reportsList = [
     description: 'Distribuição dos gastos',
     icon: PieChart,
     color: '#F59E0B',
+    component: CategoryResult,
   },
   {
     id: 'fixedvsvariable',
@@ -42,6 +44,7 @@ const reportsList = [
     description: 'Análise de recorrência',
     icon: BarChart3,
     color: '#3B82F6',
+    component: FixedVsVariable,
   },
   {
     id: 'budgetvsreal',
@@ -49,6 +52,7 @@ const reportsList = [
     description: 'Compare com seu planejamento',
     icon: Target,
     color: '#EF4444',
+    component: BudgetVsReal,
   },
   {
     id: 'weekday',
@@ -56,6 +60,7 @@ const reportsList = [
     description: 'Padrões de consumo semanal',
     icon: Calendar,
     color: '#8B5CF6',
+    component: WeekdayExpenses,
   },
   {
     id: 'compare',
@@ -63,6 +68,7 @@ const reportsList = [
     description: 'Evolução mês a mês',
     icon: ArrowLeftRight,
     color: '#EC4899',
+    component: ComparePeriods,
   },
   {
     id: 'export',
@@ -70,6 +76,7 @@ const reportsList = [
     description: 'CSV, JSON e planilhas',
     icon: Download,
     color: '#6366F1',
+    component: ExportData,
   },
 ]
 
