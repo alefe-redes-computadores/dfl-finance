@@ -34,27 +34,6 @@ import InvoiceAlert from '@/components/InvoiceAlert'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 
-async function calculateCardLimit(cardId: string, userId: string) {
-  const { data: card } = await supabase
-    .from('credit_cards')
-    .select('limit_amount')
-    .eq('id', cardId)
-    .single()
-
-  const { data: txs } = await supabase
-    .from('transactions')
-    .select('amount, type')
-    .eq('credit_card_id', cardId)
-    .eq('user_id', userId)
-
-  const totalGastos = (txs || []).reduce((acc, t) => {
-    return t.type === 'income' ? acc - Number(t.amount) : acc + Number(t.amount)
-  }, 0)
-
-  const novoLimite = Number(card?.limit_amount || 0) - totalGastos
-  return Math.max(0, novoLimite)
-}
-
 function CardDetailContent() {
   const router = useRouter()
   const params = useParams()
@@ -96,13 +75,12 @@ function CardDetailContent() {
     if (!user?.id || !cardId) return
     setLoading(true)
 
-    // 🔧 CORREÇÃO: busca o cartão SEM filtrar por context
-    // O cartão já tem um context cadastrado, mas a busca deve funcionar
-    // independente do toggle PF/PJ ativo no momento
+    // Busca o cartão sem filtrar por context (já é único por ID)
     const { data: cardData } = await supabase
       .from('credit_cards')
       .select('*')
-      .match({ id: cardId, user_id: user.id })
+      .eq('id', cardId)
+      .eq('user_id', user.id)
       .single()
 
     if (!cardData) {
@@ -114,11 +92,14 @@ function CardDetailContent() {
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
+    // 🔧 CORREÇÃO: busca transações sem filtrar por context
+    // O credit_card_id já garante que são as transações deste cartão
     const [{ data: txsData }, { data: invoicesData }, { data: accsData }] = await Promise.all([
       supabase
         .from('transactions')
         .select('*, categories(name, icon, color)')
-        .match({ credit_card_id: cardId, user_id: user.id, context: cardData.context })
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user.id)
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: false }),
@@ -133,6 +114,7 @@ function CardDetailContent() {
         .from('accounts')
         .select('id, name, color')
         .eq('user_id', user.id)
+        .eq('context', cardData.context)
         .order('name'),
     ])
 
