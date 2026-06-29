@@ -7,21 +7,28 @@ import { supabase } from '@/lib/supabase'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   ChevronLeft, Plus, Clock, Check, CreditCard,
-  Search, X, ArrowLeftRight, Paperclip, Image as ImageIcon
+  Search, X, ArrowLeftRight, Paperclip, Image as ImageIcon,
+  Calendar, Download
 } from 'lucide-react'
-import { format, isToday, isYesterday } from 'date-fns'
+import { format, isToday, isYesterday, subDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useToast } from '@/contexts/ToastContext'
 import Skeleton from '@/components/Skeleton'
 
 export default function TransactionsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
+  const { showToast } = useToast()
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'income' | 'expense' | 'transfer' | 'pending'>('all')
+  const [dateRange, setDateRange] = useState<'7' | '14' | '30' | 'all'>('all')
+  const [showDateFilter, setShowDateFilter] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const loadTransactions = useCallback(async () => {
     if (!user?.id) return
@@ -34,6 +41,12 @@ export default function TransactionsPage() {
       .eq('context', context)
       .order('date', { ascending: false })
       .limit(100)
+
+    if (dateRange !== 'all') {
+      const days = parseInt(dateRange)
+      const startDate = format(subDays(new Date(), days), 'yyyy-MM-dd')
+      query = query.gte('date', startDate)
+    }
 
     if (filter !== 'all') {
       if (filter === 'pending') {
@@ -50,16 +63,15 @@ export default function TransactionsPage() {
     const { data } = await query
     let txs = Array.isArray(data) ? data : []
 
-    // Ordenação: pendentes primeiro, depois mantém a ordem por data/hora do Supabase
     txs.sort((a, b) => {
       if (a.status === 'pending' && b.status !== 'pending') return -1
       if (a.status !== 'pending' && b.status === 'pending') return 1
-      return 0 // mantém a ordem original do Supabase (por date DESC, que inclui hora)
+      return 0
     })
 
     setTransactions(txs)
     setLoading(false)
-  }, [user?.id, context, filter, search])
+  }, [user?.id, context, filter, search, dateRange])
 
   useEffect(() => {
     loadTransactions()
@@ -75,14 +87,12 @@ export default function TransactionsPage() {
     return format(date, "dd 'de' MMMM", { locale: ptBR })
   }
 
-  // Verifica se o comprovante é imagem ou PDF
   const getReceiptIcon = (receiptUrl: string | null) => {
     if (!receiptUrl) return null
     const isPdf = receiptUrl.toLowerCase().endsWith('.pdf')
     return isPdf ? 'pdf' : 'image'
   }
 
-  // Agrupa transações por data
   const groupByDate = (txs: any[]) => {
     const groups: Record<string, any[]> = {}
     txs.forEach(tx => {
@@ -103,6 +113,58 @@ export default function TransactionsPage() {
     { id: 'pending', label: 'Pendentes' },
   ]
 
+  const dateRangeOptions = [
+    { id: '7', label: '7 dias' },
+    { id: '14', label: '14 dias' },
+    { id: '30', label: '30 dias' },
+    { id: 'all', label: 'Todo período' },
+  ]
+
+  // Exportação
+  const handleExport = async (exportFormat: 'csv' | 'pdf') => {
+    if (!user?.id || transactions.length === 0) return
+    setExporting(true)
+
+    try {
+      if (exportFormat === 'csv') {
+        // Gera CSV localmente
+        const headers = ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status', 'Comprovante']
+        const rows = transactions.map(tx => [
+          tx.date,
+          tx.description || tx.categories?.name || 'Sem descrição',
+          tx.categories?.name || 'Geral',
+          tx.type === 'income' ? 'Receita' : tx.type === 'transfer' ? 'Transferência' : 'Despesa',
+          Number(tx.amount).toFixed(2),
+          tx.status === 'done' ? 'Concluída' : 'Pendente',
+          tx.receipt_url ? 'Sim' : 'Não'
+        ])
+
+        const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `dfl-extrato-${dateRange}-dias.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+
+        showToast('Extrato CSV baixado!', 'success')
+      } else {
+        // PDF via API
+        const startDate = dateRange !== 'all' ? format(subDays(new Date(), parseInt(dateRange)), 'yyyy-MM-dd') : ''
+        window.open(
+          `/api/export-pdf?userId=${user.id}&context=${context}&range=${dateRange}&startDate=${startDate}`,
+          '_blank'
+        )
+      }
+    } catch (err: any) {
+      showToast('Erro ao exportar.', 'error')
+    } finally {
+      setExporting(false)
+      setShowExportModal(false)
+    }
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
       {/* Header */}
@@ -112,14 +174,55 @@ export default function TransactionsPage() {
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Transações</h1>
-          <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
-            <Plus size={24} />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Botão de exportar */}
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="p-2 text-gray-400 hover:text-teal-600 transition-colors rounded-full"
+              title="Exportar extrato"
+            >
+              <Download size={20} />
+            </button>
+            {/* Botão de filtro de data */}
+            <button
+              onClick={() => setShowDateFilter(!showDateFilter)}
+              className={`p-2 rounded-full transition-colors ${
+                dateRange !== 'all'
+                  ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+              title="Filtrar por período"
+            >
+              <Calendar size={20} />
+            </button>
+            <button onClick={() => router.push('/transactions/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
+              <Plus size={24} />
+            </button>
+          </div>
         </div>
         <ContextToggle />
 
+        {/* Filtro de data (expansível) */}
+        {showDateFilter && (
+          <div className="flex gap-2 mt-3 overflow-x-auto pb-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            {dateRangeOptions.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => { setDateRange(opt.id as any); setShowDateFilter(false) }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                  dateRange === opt.id
+                    ? 'bg-teal-100 dark:bg-teal-900/40 border border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-300'
+                    : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Barra de pesquisa */}
-        <div className="relative mt-4">
+        <div className="relative mt-3">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -135,7 +238,7 @@ export default function TransactionsPage() {
           )}
         </div>
 
-        {/* Filtros */}
+        {/* Filtros de tipo */}
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
           {filters.map(f => (
             <button
@@ -171,7 +274,6 @@ export default function TransactionsPage() {
           <div className="space-y-4">
             {groupedTransactions.map(([date, txs], groupIndex) => (
               <div key={date}>
-                {/* Cabeçalho da data */}
                 <div className="flex items-center justify-between mb-2 px-1">
                   <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                     {formatDateHeader(date)}
@@ -181,7 +283,6 @@ export default function TransactionsPage() {
                   </span>
                 </div>
 
-                {/* Cards de transação */}
                 <div className="space-y-1">
                   {txs.map((tx, index) => {
                     const isPending = tx.status === 'pending'
@@ -198,7 +299,6 @@ export default function TransactionsPage() {
                         style={{ animationDelay: `${(groupIndex * 50) + (index * 30)}ms` }}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {/* Ícone de status */}
                           {isPending ? (
                             <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center flex-shrink-0">
                               <Clock size={14} className="text-orange-500" />
@@ -213,7 +313,6 @@ export default function TransactionsPage() {
                             </div>
                           )}
 
-                          {/* Ícone da categoria */}
                           <div
                             className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                             style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}
@@ -221,13 +320,11 @@ export default function TransactionsPage() {
                             <IconComp size={16} />
                           </div>
 
-                          {/* Descrição e categoria */}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
                                 {tx.description || tx.categories?.name || (isTransfer ? 'Transferência' : 'Sem descrição')}
                               </p>
-                              {/* Ícone de comprovante */}
                               {receiptType === 'image' && (
                                 <ImageIcon size={12} className="text-teal-500 flex-shrink-0" />
                               )}
@@ -244,7 +341,6 @@ export default function TransactionsPage() {
                           </div>
                         </div>
 
-                        {/* Valor */}
                         <p className={`text-[14px] font-bold whitespace-nowrap ml-2 ${
                           isIncome ? 'text-emerald-600' :
                           isTransfer ? 'text-blue-600' :
@@ -262,15 +358,60 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* FAB para nova transação */}
-      <div className="fixed bottom-6 right-4 z-40">
-        <button
-          onClick={() => router.push('/transactions/new')}
-          className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-teal-800 transition-colors active:scale-95"
-        >
-          <Plus size={28} />
-        </button>
-      </div>
+      {/* Modal de exportação */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Exportar Extrato</h3>
+              <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Período</p>
+            <div className="flex gap-2 mb-6">
+              {dateRangeOptions.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setDateRange(opt.id as any)}
+                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${
+                    dateRange === opt.id
+                      ? 'bg-teal-700 text-white shadow-md'
+                      : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => handleExport('csv')}
+                disabled={exporting || transactions.length === 0}
+                className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-900/30 hover:bg-teal-100 transition-colors disabled:opacity-50"
+              >
+                <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
+                  <Download size={20} className="text-teal-700 dark:text-teal-400" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Baixar CSV</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                    {transactions.length} transações • Planilha compatível com Excel
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {transactions.length === 0 && (
+              <p className="text-center text-xs text-gray-400 mt-4">
+                Nenhuma transação no período selecionado.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
