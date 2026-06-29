@@ -39,8 +39,8 @@ export default function TransactionsPage() {
       .select('*, categories(name, icon, color)')
       .eq('user_id', user.id)
       .eq('context', context)
-      .order('date', { ascending: false })
-      .limit(100)
+      // REMOVENDO order para não depender do Supabase
+      .limit(200)
 
     if (dateRange !== 'all') {
       const days = parseInt(dateRange)
@@ -63,24 +63,34 @@ export default function TransactionsPage() {
     const { data } = await query
     let txs = Array.isArray(data) ? data : []
 
-    // 🔧 Ordenação local FORÇADA: mais recente primeiro (inclui hora/minuto/segundo)
+    // DEBUG: Verifica as datas no console
+    console.log('📊 Primeiras 3 transações (antes de ordenar):', 
+      txs.slice(0, 3).map(t => ({ desc: t.description?.substring(0,20), date: t.date, status: t.status }))
+    )
+
+    // 🔧 Ordenação FORÇADA: converte para timestamp e ordena decrescente
     txs.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
-      return dateB - dateA
+      const timeA = new Date(a.date).getTime()
+      const timeB = new Date(b.date).getTime()
+      // Se timeB > timeA, retorna positivo → B vem primeiro (mais recente)
+      return timeB - timeA
     })
 
-    // Separa pendentes e concluídas (já ordenados)
+    // DEBUG: Verifica após ordenar
+    console.log('📊 Primeiras 3 transações (depois de ordenar):', 
+      txs.slice(0, 3).map(t => ({ desc: t.description?.substring(0,20), date: t.date, status: t.status }))
+    )
+
+    // Separa pendentes e concluídas
     const pending = txs.filter(t => t.status === 'pending')
     const done = txs.filter(t => t.status !== 'pending')
 
     // Pendentes primeiro, depois concluídas
-    txs = [...pending, ...done]
+    const ordered = [...pending, ...done]
 
-    setTransactions(txs)
+    setTransactions(ordered)
     setLoading(false)
   }, [user?.id, context, filter, search, dateRange])
-
   useEffect(() => {
     loadTransactions()
   }, [loadTransactions])
