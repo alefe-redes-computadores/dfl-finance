@@ -1,173 +1,145 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState } from 'react'
 import {
-  BarChart3, TrendingUp, DollarSign, Calendar,
-  ArrowUpDown, Download, ChevronLeft,
+  TrendingUp,
+  Calendar,
+  PieChart,
+  ArrowLeftRight,
+  Download,
+  BarChart3,
+  Target,
+  DollarSign,
 } from 'lucide-react'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import CategoryResult from '@/components/reports/CategoryResult'
-import CashFlow from '@/components/reports/CashFlow'
-import BudgetVsReal from '@/components/reports/BudgetVsReal'
-import ComparePeriods from '@/components/reports/ComparePeriods'
-import WeekdayExpenses from '@/components/reports/WeekdayExpenses'
-import FixedVsVariable from '@/components/reports/FixedVsVariable'
-import ExportData from '@/components/reports/ExportData'
+import CashFlow from './CashFlow'
+import CategoryResult from './CategoryResult'
+import FixedVsVariable from './FixedVsVariable'
+import BudgetVsReal from './BudgetVsReal'
+import WeekdayExpenses from './WeekdayExpenses'
+import ComparePeriods from './ComparePeriods'
+import ExportData from './ExportData'
 import ReportFilters, { ReportFilterValues } from '@/components/reports/ReportFilters'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 
-const reportItems: {
-  id: string
-  title: string
-  description: string
-  icon: any
-  component: React.ComponentType<{ filters: ReportFilterValues }>
-}[] = [
+const reportsList = [
   {
-    id: 'category-result',
-    title: 'Resultado por Categoria',
-    description: 'Receitas e despesas agrupadas por categoria no período',
-    icon: TrendingUp,
-    component: CategoryResult,
-  },
-  {
-    id: 'cash-flow',
+    id: 'cashflow',
     title: 'Fluxo de Caixa',
-    description: 'Entradas e saídas diárias no período',
-    icon: ArrowUpDown,
-    component: CashFlow,
+    description: 'Entradas e saídas do período',
+    icon: TrendingUp,
+    color: '#10B981',
   },
   {
-    id: 'budget-vs-real',
-    title: 'Orçamento vs Realizado',
-    description: 'Compare seus orçamentos com os gastos reais',
+    id: 'category',
+    title: 'Despesas por Categoria',
+    description: 'Distribuição dos gastos',
+    icon: PieChart,
+    color: '#F59E0B',
+  },
+  {
+    id: 'fixedvsvariable',
+    title: 'Despesas Fixas vs Variáveis',
+    description: 'Análise de recorrência',
     icon: BarChart3,
-    component: BudgetVsReal,
+    color: '#3B82F6',
   },
   {
-    id: 'compare-periods',
+    id: 'budgetvsreal',
+    title: 'Orçamento vs Realizado',
+    description: 'Compare com seu planejamento',
+    icon: Target,
+    color: '#EF4444',
+  },
+  {
+    id: 'weekday',
+    title: 'Despesas por Dia da Semana',
+    description: 'Padrões de consumo semanal',
+    icon: Calendar,
+    color: '#8B5CF6',
+  },
+  {
+    id: 'compare',
     title: 'Comparar Períodos',
-    description: 'Veja a evolução em relação ao período anterior',
-    icon: Calendar,
-    component: ComparePeriods,
+    description: 'Evolução mês a mês',
+    icon: ArrowLeftRight,
+    color: '#EC4899',
   },
   {
-    id: 'fixed-vs-variable',
-    title: 'Fixos vs Variáveis',
-    description: 'Análise dos gastos recorrentes e variáveis',
-    icon: DollarSign,
-    component: FixedVsVariable,
-  },
-  {
-    id: 'weekday-expenses',
-    title: 'Gastos por Dia da Semana',
-    description: 'Descubra em quais dias você gasta mais',
-    icon: Calendar,
-    component: WeekdayExpenses,
-  },
-  {
-    id: 'export-data',
+    id: 'export',
     title: 'Exportar Dados',
-    description: 'Baixe suas transações em CSV ou PDF',
+    description: 'CSV, JSON e planilhas',
     icon: Download,
-    component: ExportData,
+    color: '#6366F1',
   },
 ]
 
-function ReportsContent() {
-  const router = useRouter()
+type ReportType =
+  | 'cashflow'
+  | 'category'
+  | 'fixedvsvariable'
+  | 'budgetvsreal'
+  | 'weekday'
+  | 'compare'
+  | 'export'
+  | null
+
+export default function ReportsPage() {
   const { context } = useContext_()
-  const [selectedReport, setSelectedReport] = useState<string | null>(null)
+  const [selectedReport, setSelectedReport] = useState<ReportType>(null)
+
   const [filters, setFilters] = useState<ReportFilterValues>({
-    context: context as string,
+    context,
     dateRange: { start: '', end: '' },
     preset: 'thisMonth',
   })
 
-  // Mantém filters.context sincronizado com o ContextToggle
-  useEffect(() => {
-    setFilters(prev => ({ ...prev, context: context as string }))
-  }, [context])
-
-  const handleBack = () => {
-    if (selectedReport) {
-      setSelectedReport(null)
-    } else {
-      router.back()
-    }
-  }
-
-  const handleSelectReport = (id: string) => {
-    // Reseta os filtros ao abrir um novo relatório para evitar cascata
-    setFilters({
-      context: context as string,
-      dateRange: { start: '', end: '' },
-      preset: 'thisMonth',
-    })
-    setSelectedReport(id)
-  }
-
-  const selectedItem = reportItems.find(item => item.id === selectedReport)
-  const ReportComponent = selectedItem?.component ?? null
+  const selectedItem = reportsList.find((item) => item.id === selectedReport)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-            <ChevronLeft size={24} />
+          <button
+            onClick={() => (selectedReport ? setSelectedReport(null) : window.history.back())}
+            className="p-2 -ml-2 text-gray-800 dark:text-gray-200"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            {selectedReport ? selectedItem?.title ?? 'Relatório' : 'Relatórios Avançados'}
+            {selectedReport ? selectedItem?.title || 'Relatório' : 'Relatórios'}
           </h1>
           <div className="w-10" />
         </div>
         {!selectedReport && <ContextToggle />}
       </div>
 
-      {/* Conteúdo */}
       <div className="px-4 pt-4">
-        {selectedReport && selectedItem && ReportComponent ? (
-          <div>
-            {/* key no ReportFilters garante remount limpo a cada relatório */}
-            <ReportFilters
-              key={selectedReport}
-              onChange={setFilters}
-              initialPreset="thisMonth"
-              context={context as string}
-            />
+        {selectedReport && selectedItem ? (
+          <div className="space-y-4">
+            <ReportFilters onChange={setFilters} initialPreset={filters.preset} context={context} />
 
             <div className="mt-4">
-              <ErrorBoundary key={`${selectedReport}-${filters.dateRange.start}`}>
-                {/* Só renderiza o componente depois que os filtros tiverem datas */}
-                {filters.dateRange.start && filters.dateRange.end ? (
-                  <ReportComponent filters={filters} />
-                ) : (
-                  <div className="flex justify-center p-8">
-                    <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-              </ErrorBoundary>
+              <selectedItem.component filters={filters} />
             </div>
           </div>
         ) : (
+          /* Lista de relatórios */
           <div className="space-y-2">
-            {reportItems.map(item => {
+            {reportsList.map((item) => {
               const Icon = item.icon
               return (
                 <button
                   key={item.id}
-                  onClick={() => handleSelectReport(item.id)}
+                  onClick={() => setSelectedReport(item.id as ReportType)}
                   className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 flex items-center gap-3 active:bg-gray-50 dark:active:bg-slate-700 transition-colors text-left shadow-sm border border-gray-50 dark:border-slate-700"
                 >
                   <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
                     <Icon size={20} className="text-teal-700 dark:text-teal-400" />
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.description}</p>
-                  </div>
+                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.title}</p>
                 </button>
               )
             })}
@@ -175,42 +147,5 @@ function ReportsContent() {
         )}
       </div>
     </div>
-  )
-}
-
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: any) {
-    super(props)
-    this.state = { hasError: false }
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true }
-  }
-  componentDidUpdate(prevProps: any) {
-    // Reseta o erro quando os filhos mudarem (ex: novo relatório)
-    if (prevProps.children !== this.props.children && this.state.hasError) {
-      this.setState({ hasError: false })
-    }
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-          Erro ao carregar relatório. Tente novamente.
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
-
-export default function ReportsPage() {
-  return (
-    <ContextProvider>
-      <ReportsContent />
-    </ContextProvider>
   )
 }
