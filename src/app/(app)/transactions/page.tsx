@@ -63,14 +63,16 @@ export default function TransactionsPage() {
     const { data } = await query
     let txs = Array.isArray(data) ? data : []
 
-    // 🔧 Separa pendentes e concluídas
+    // 🔧 Ordenação local FORÇADA: mais recente primeiro (inclui hora/minuto/segundo)
+    txs.sort((a, b) => {
+      const dateA = new Date(a.date).getTime()
+      const dateB = new Date(b.date).getTime()
+      return dateB - dateA
+    })
+
+    // Separa pendentes e concluídas (já ordenados)
     const pending = txs.filter(t => t.status === 'pending')
     const done = txs.filter(t => t.status !== 'pending')
-
-    // Ordena ambos os grupos por data/hora decrescente (mais recente primeiro)
-    const sortByDate = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    pending.sort(sortByDate)
-    done.sort(sortByDate)
 
     // Pendentes primeiro, depois concluídas
     txs = [...pending, ...done]
@@ -99,7 +101,6 @@ export default function TransactionsPage() {
     return isPdf ? 'pdf' : 'image'
   }
 
-  // Agrupa APENAS transações concluídas por data
   const groupByDate = (txs: any[]) => {
     const groups: Record<string, any[]> = {}
     txs.forEach(tx => {
@@ -110,7 +111,6 @@ export default function TransactionsPage() {
     return Object.entries(groups)
   }
 
-  // Separa pendentes do resto
   const pendingTransactions = transactions.filter(t => t.status === 'pending')
   const completedTransactions = transactions.filter(t => t.status !== 'pending')
   const groupedCompleted = groupByDate(completedTransactions)
@@ -172,7 +172,6 @@ export default function TransactionsPage() {
     }
   }
 
-  // Componente para renderizar um card de transação
   const TransactionCard = ({ tx, index }: { tx: any; index: number }) => {
     const isPending = tx.status === 'pending'
     const isIncome = tx.type === 'income'
@@ -326,7 +325,6 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Lista de transações */}
       <div className="px-4 pt-4">
         {loading ? (
           <div className="space-y-3">
@@ -342,7 +340,7 @@ export default function TransactionsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* 🔴 CARD DE PENDENTES (separado) */}
+            {/* 🔴 PENDENTES */}
             {pendingTransactions.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2 px-1">
@@ -362,7 +360,7 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {/* 🟢 TRANSAÇÕES CONCLUÍDAS (agrupadas por data) */}
+            {/* 🟢 CONCLUÍDAS POR DATA */}
             {groupedCompleted.map(([date, txs], groupIndex) => (
               <div key={date}>
                 <div className="flex items-center justify-between mb-2 px-1">
