@@ -1,358 +1,342 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Loader2, Search, X, Download, Share2, ZoomIn,
-  Calendar, Filter, Tag, Wallet, ArrowUp, ArrowDown, Maximize2
+  ChevronLeft, Search, Trash2, Eye, Download, FileText,
+  Image as ImageIcon, Filter, X, AlertCircle, Loader2
 } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import Skeleton from '@/components/Skeleton'
 
-interface Receipt {
-  id: string
-  date: string
-  amount: number
-  type: string
-  description: string
-  receipt_url: string
-  category_name: string
-  category_color: string
-  category_icon: string
-  account_name: string
-  account_color: string
+interface ReceiptFile {
+  name: string
+  url: string
+  created_at: string
+  size: number
+  isImage: boolean
+  transaction_id?: string
 }
 
 export default function ReceiptsPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
   const { showToast } = useToast()
-
-  const [receipts, setReceipts] = useState<Receipt[]>([])
+  const [receipts, setReceipts] = useState<ReceiptFile[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
-  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
-  const [dateFilter, setDateFilter] = useState('all')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const loaderRef = useRef<HTMLDivElement>(null)
-
-  const loadReceipts = useCallback(async (pageNum: number, append = false) => {
-    if (!user) return
-    if (pageNum === 0) setLoading(true)
-    else setLoadingMore(true)
-
-    const pageSize = 20
-    const from = pageNum * pageSize
-    const to = from + pageSize - 1
-
-    let query = supabase
-      .from('transactions')
-      .select(`
-        id, date, amount, type, description, receipt_url,
-        categories(name, color, icon),
-        accounts(name, color)
-      `)
-      .match({ user_id: user.id, context })
-      .not('receipt_url', 'is', null)
-      .order('date', { ascending: sortOrder === 'asc' })
-      .range(from, to)
-
-    // Filtro de data
-    const now = new Date()
-    if (dateFilter === 'this-month') {
-      query = query.gte('date', format(startOfMonth(now), 'yyyy-MM-dd')).lte('date', format(endOfMonth(now), 'yyyy-MM-dd'))
-    } else if (dateFilter === 'last-month') {
-      const lastMonth = subMonths(now, 1)
-      query = query.gte('date', format(startOfMonth(lastMonth), 'yyyy-MM-dd')).lte('date', format(endOfMonth(lastMonth), 'yyyy-MM-dd'))
-    } else if (dateFilter === 'last-3') {
-      query = query.gte('date', format(subMonths(now, 3), 'yyyy-MM-dd'))
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      showToast('Erro ao carregar comprovantes', 'error')
-      setLoading(false)
-      setLoadingMore(false)
-      return
-    }
-
-    const mapped: Receipt[] = (data || []).map((tx: any) => ({
-      id: tx.id,
-      date: tx.date,
-      amount: Number(tx.amount),
-      type: tx.type,
-      description: tx.description || '',
-      receipt_url: tx.receipt_url,
-      category_name: tx.categories?.name || 'Geral',
-      category_color: tx.categories?.color || '#64748b',
-      category_icon: tx.categories?.icon || 'tag',
-      account_name: tx.accounts?.name || '',
-      account_color: tx.accounts?.color || '#64748b',
-    }))
-
-    if (append) {
-      setReceipts(prev => [...prev, ...mapped])
-    } else {
-      setReceipts(mapped)
-    }
-
-    setHasMore(data?.length === pageSize)
-    setLoading(false)
-    setLoadingMore(false)
-  }, [user, context, dateFilter, sortOrder])
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'image' | 'pdf'>('all')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    setPage(0)
-    loadReceipts(0)
-  }, [loadReceipts])
+    if (!user?.id) return
+    loadReceipts()
+  }, [user?.id])
 
-  // Scroll infinito
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          const nextPage = page + 1
-          setPage(nextPage)
-          loadReceipts(nextPage, true)
-        }
-      },
-      { threshold: 0.1 }
-    )
+  const loadReceipts = async () => {
+    setLoading(true)
+    setError('')
 
-    if (loaderRef.current) observer.observe(loaderRef.current)
-    return () => observer.disconnect()
-  }, [hasMore, loadingMore, page, loadReceipts])
-
-  const handleDownload = async (url: string) => {
     try {
-      const response = await fetch(url)
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = 'comprovante.jpg'
-      a.click()
-      URL.revokeObjectURL(blobUrl)
-      showToast('Download iniciado!', 'success')
-    } catch {
-      showToast('Erro ao baixar', 'error')
-    }
-  }
-
-  const handleShare = async (url: string, description: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Comprovante DFL Finance',
-          text: description,
-          url: url
+      // Lista todos os arquivos no bucket receipts dentro da pasta do usuário
+      const { data: files, error: listError } = await supabase
+        .storage
+        .from('receipts')
+        .list(user.id, {
+          limit: 50,
+          sortBy: { column: 'created_at', order: 'desc' },
         })
-      } catch {}
-    } else {
-      // Fallback: copiar link
-      navigator.clipboard.writeText(url)
-      showToast('Link copiado!', 'success')
+
+      if (listError) {
+        setError('Erro ao carregar comprovantes. Verifique as permissões do bucket.')
+        setReceipts([])
+        setLoading(false)
+        return
+      }
+
+      if (!files || files.length === 0) {
+        setReceipts([])
+        setLoading(false)
+        return
+      }
+
+      // Para cada arquivo, gera a URL pública
+      const receiptsData: ReceiptFile[] = files.map(file => {
+        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.name)
+        const { data: urlData } = supabase
+          .storage
+          .from('receipts')
+          .getPublicUrl(`${user.id}/${file.name}`)
+
+        return {
+          name: file.name,
+          url: urlData.publicUrl,
+          created_at: file.created_at,
+          size: file.metadata?.size || 0,
+          isImage,
+        }
+      })
+
+      // Busca transações vinculadas a esses comprovantes
+      const { data: txs } = await supabase
+        .from('transactions')
+        .select('id, receipt_url, description, date')
+        .eq('user_id', user.id)
+        .not('receipt_url', 'is', null)
+        .order('date', { ascending: false })
+        .limit(50)
+
+      // Vincula cada comprovante à sua transação
+      const txMap = new Map<string, any>()
+      if (txs) {
+        txs.forEach(tx => {
+          if (tx.receipt_url) {
+            txMap.set(tx.receipt_url, tx)
+          }
+        })
+      }
+
+      const enrichedReceipts = receiptsData.map(r => {
+        const tx = txMap.get(r.url)
+        return {
+          ...r,
+          transaction_id: tx?.id,
+          transaction_desc: tx?.description,
+          transaction_date: tx?.date,
+        }
+      })
+
+      setReceipts(enrichedReceipts)
+    } catch (err: any) {
+      console.error('Erro ao carregar comprovantes:', err)
+      setError('Erro inesperado ao carregar comprovantes.')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const formatCurrency = (val: number) =>
-    `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const handleDelete = async (receipt: ReceiptFile) => {
+    if (!confirm(`Excluir o comprovante "${receipt.name}"?`)) return
 
-  if (loading && receipts.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
-      </div>
-    )
+    try {
+      const path = `${user.id}/${receipt.name}`
+      const { error: deleteError } = await supabase
+        .storage
+        .from('receipts')
+        .remove([path])
+
+      if (deleteError) throw deleteError
+
+      // Se houver transação vinculada, remove a URL do comprovante
+      if (receipt.transaction_id) {
+        await supabase
+          .from('transactions')
+          .update({ receipt_url: null })
+          .eq('id', receipt.transaction_id)
+      }
+
+      showToast('Comprovante excluído.', 'success')
+      loadReceipts()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
   }
+
+  const handleDownload = (receipt: ReceiptFile) => {
+    window.open(receipt.url, '_blank')
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  // Filtros aplicados
+  const filteredReceipts = receipts.filter(r => {
+    const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
+    const matchesFilter = filter === 'all' || (filter === 'image' ? r.isImage : !r.isImage)
+    return matchesSearch && matchesFilter
+  })
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      
       {/* Header */}
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 sticky top-0 z-10 shadow-sm border-b border-gray-50 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Comprovantes</h1>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-full transition-colors ${showFilters ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}`}
-          >
-            <Filter size={20} />
-          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+            Comprovantes {!loading && receipts.length > 0 && `(${filteredReceipts.length})`}
+          </h1>
+          <div className="w-10" />
+        </div>
+
+        {/* Barra de pesquisa */}
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome do arquivo..."
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Filtros */}
-        {showFilters && (
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {[
-              { key: 'all', label: 'Todos' },
-              { key: 'this-month', label: 'Este mês' },
-              { key: 'last-month', label: 'Mês passado' },
-              { key: 'last-3', label: 'Últimos 3 meses' },
-            ].map(f => (
-              <button
-                key={f.key}
-                onClick={() => setDateFilter(f.key)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                  dateFilter === f.key
-                    ? 'bg-teal-700 text-white'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+        <div className="flex gap-2 mt-3">
+          {[
+            { id: 'all', label: 'Todos' },
+            { id: 'image', label: 'Imagens' },
+            { id: 'pdf', label: 'PDFs' },
+          ].map(f => (
             <button
-              onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-              className="flex items-center gap-1 px-4 py-1.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400"
+              key={f.id}
+              onClick={() => setFilter(f.id as any)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                filter === f.id
+                  ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
+                  : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
+              }`}
             >
-              {sortOrder === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-              {sortOrder === 'desc' ? 'Recentes' : 'Antigos'}
+              {f.label}
             </button>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
-      {/* Grid de Comprovantes */}
+      {/* Conteúdo */}
       <div className="px-4 pt-4">
-        {receipts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center mb-3">
-              <Search size={28} className="text-gray-400 dark:text-gray-500" />
-            </div>
-            <p className="font-bold text-gray-800 dark:text-gray-200">Nenhum comprovante</p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-              Os comprovantes anexados às transações aparecerão aqui.
-            </p>
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton variant="card" height="80px" count={4} />
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
+            <button
+              onClick={loadReceipts}
+              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : filteredReceipts.length === 0 ? (
+          <div className="text-center py-16">
+            <ImageIcon size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+            {receipts.length === 0 ? (
+              <>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhum comprovante</h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">
+                  Os comprovantes que você anexar nas transações aparecerão aqui.
+                </p>
+              </>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400">
+                Nenhum resultado para "{search}".
+              </p>
+            )}
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              {receipts.map(receipt => (
-                <button
-                  key={receipt.id}
-                  onClick={() => setSelectedReceipt(receipt)}
-                  className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-50 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow text-left"
+          <div className="space-y-2">
+            {filteredReceipts.map(receipt => (
+              <div
+                key={receipt.name}
+                className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all"
+              >
+                {/* Thumbnail ou ícone */}
+                <div
+                  className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer"
+                  onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
                 >
-                  {/* Miniatura */}
-                  <div className="aspect-[4/3] bg-gray-100 dark:bg-slate-700 relative overflow-hidden">
-                    <img
-                      src={receipt.receipt_url}
-                      alt={receipt.description}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    <div className="absolute top-2 right-2 bg-black/50 rounded-full p-1">
-                      <ZoomIn size={14} className="text-white" />
+                  {receipt.isImage ? (
+                    <img src={receipt.url} alt={receipt.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <FileText size={24} className="text-gray-400" />
                     </div>
-                  </div>
-                  {/* Informações */}
-                  <div className="p-3">
-                    <p className="text-[11px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                      {receipt.description || (receipt.type === 'income' ? 'Receita' : 'Despesa')}
-                    </p>
-                    <p className={`text-[13px] font-bold mt-1 ${receipt.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {receipt.type === 'income' ? '+' : '-'} {formatCurrency(receipt.amount)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Calendar size={12} className="text-gray-400" />
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                        {format(new Date(receipt.date + 'T12:00:00'), "dd/MM/yy", { locale: ptBR })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: receipt.category_color }} />
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{receipt.category_name}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  )}
+                </div>
 
-            {/* Loader para scroll infinito */}
-            {hasMore && (
-              <div ref={loaderRef} className="flex justify-center py-8">
-                <Loader2 className="animate-spin text-teal-700" size={24} />
+                {/* Informações */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                    {receipt.name}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    {' • '}
+                    {formatFileSize(receipt.size)}
+                  </p>
+                  {receipt.transaction_desc && (
+                    <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 truncate">
+                      Vinculado a: {receipt.transaction_desc}
+                    </p>
+                  )}
+                </div>
+
+                {/* Ações */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
+                    className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                    title="Visualizar"
+                  >
+                    <Eye size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDownload(receipt)}
+                    className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                    title="Download"
+                  >
+                    <Download size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(receipt)}
+                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Modal de Visualização em Tela Cheia */}
-      {selectedReceipt && (
+      {/* Modal de preview */}
+      {previewUrl && (
         <div
-          className="fixed inset-0 z-[100] bg-black flex flex-col"
-          onClick={() => setSelectedReceipt(null)}
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setPreviewUrl(null)}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 text-white">
-            <button onClick={() => setSelectedReceipt(null)} className="p-2">
-              <X size={24} />
-            </button>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleDownload(selectedReceipt.receipt_url)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              >
-                <Download size={20} />
-              </button>
-              <button
-                onClick={() => handleShare(selectedReceipt.receipt_url, selectedReceipt.description)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              >
-                <Share2 size={20} />
-              </button>
-            </div>
-          </div>
-
-          {/* Imagem */}
-          <div className="flex-1 flex items-center justify-center p-4">
-            <img
-              src={selectedReceipt.receipt_url}
-              alt={selectedReceipt.description}
-              className="max-w-full max-h-full object-contain"
-            />
-          </div>
-
-          {/* Informações */}
-          <div className="bg-white dark:bg-slate-800 rounded-t-3xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-bold text-lg text-gray-800 dark:text-gray-100">
-                {selectedReceipt.description || (selectedReceipt.type === 'income' ? 'Receita' : 'Despesa')}
-              </p>
-              <p className={`font-bold text-lg ${selectedReceipt.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                {selectedReceipt.type === 'income' ? '+' : '-'} {formatCurrency(selectedReceipt.amount)}
-              </p>
-            </div>
-            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-              <div className="flex items-center gap-1">
-                <Calendar size={14} />
-                {format(new Date(selectedReceipt.date + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-              </div>
-              <div className="flex items-center gap-1">
-                <Tag size={14} />
-                {selectedReceipt.category_name}
-              </div>
-              {selectedReceipt.account_name && (
-                <div className="flex items-center gap-1">
-                  <Wallet size={14} />
-                  {selectedReceipt.account_name}
-                </div>
-              )}
-            </div>
-          </div>
+          <button
+            onClick={() => setPreviewUrl(null)}
+            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-full transition-colors"
+          >
+            <X size={28} />
+          </button>
+          <img
+            src={previewUrl}
+            alt="Preview"
+            className="max-w-full max-h-[85vh] object-contain rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
