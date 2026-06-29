@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, ChevronRight, Trash2, X, Loader2 } from 'lucide-react'
+import Skeleton from '@/components/Skeleton'
 
 const TAG_COLORS = [
   '#264653', '#2a9d8f', '#1d3557', '#e76f51', '#2ecc71', 
@@ -47,9 +48,7 @@ export default function TagsPage() {
   }, [user?.id, context])
 
   useEffect(() => {
-    if (user?.id) {
-      loadTags()
-    }
+    if (user?.id) { loadTags() }
   }, [loadTags])
 
   function openEdit(tag: any) {
@@ -70,12 +69,7 @@ export default function TagsPage() {
     if (!name.trim() || !user?.id) return
     setSaving(true)
 
-    const payload = {
-      user_id: user.id,
-      context,
-      name: name.trim(),
-      color
-    }
+    const payload = { user_id: user.id, context, name: name.trim(), color }
 
     try {
       if (editingTag) {
@@ -85,7 +79,6 @@ export default function TagsPage() {
         const { error } = await supabase.from('tags').insert([payload])
         if (error) throw error
       }
-
       setShowForm(false)
       loadTags()
     } catch (err: any) {
@@ -99,7 +92,6 @@ export default function TagsPage() {
   async function handleDelete(id: string) {
     if (!confirm('Deseja realmente excluir esta tag?')) return
     setSaving(true)
-    
     try {
       const { error } = await supabase.from('tags').delete().eq('id', id)
       if (error) throw error
@@ -129,13 +121,7 @@ export default function TagsPage() {
 
         <div className="flex bg-white dark:bg-slate-800 rounded-full p-1 border border-gray-100 dark:border-slate-700 max-w-[220px] mx-auto shadow-sm">
           {(['dfl', 'personal'] as const).map(c => (
-            <button
-              key={c}
-              onClick={() => setContext(c)}
-              className={`flex-1 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 ${
-                context === c ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-800 dark:text-gray-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'
-              }`}
-            >
+            <button key={c} onClick={() => setContext(c)} className={`flex-1 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 ${context === c ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-800 dark:text-gray-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>
               {c === 'dfl' ? 'DFL' : 'Pessoal'}
             </button>
           ))}
@@ -144,21 +130,18 @@ export default function TagsPage() {
 
       <div className="px-4 mt-6">
         {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
+          <div className="space-y-2">
+            <Skeleton variant="rect" height="48px" count={6} />
+          </div>
         ) : tags.length === 0 ? (
           <div className="text-center py-20 text-gray-400 dark:text-gray-500 text-[14px]">Nenhuma tag cadastrada.</div>
         ) : (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden">
             {tags.map((tag, index) => (
-              <div 
-                key={tag.id} 
-                className={`flex items-center justify-between px-5 py-4 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${index !== tags.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
-              >
+              <div key={tag.id} className={`flex items-center justify-between px-5 py-4 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${index !== tags.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
                 <div className="flex items-center gap-4">
                   <div className="w-6 h-6 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: tag.color }}></div>
-                  <div>
-                    <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{tag.name}</p>
-                  </div>
+                  <div><p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{tag.name}</p></div>
                 </div>
                 <div className="flex items-center gap-4 text-gray-300 dark:text-gray-600">
                   <button onClick={(e) => { e.stopPropagation(); openEdit(tag); }} className="p-2 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">
@@ -193,29 +176,14 @@ export default function TagsPage() {
 
               <div className="mb-8">
                 <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 block">Nome</label>
-                <input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Ex: viagem, reembolso, ifood"
-                  className="w-full bg-transparent border-b-2 border-gray-100 dark:border-slate-600 py-3 text-[16px] outline-none focus:border-teal-600 font-bold text-gray-800 dark:text-gray-200 transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-500 placeholder:font-normal"
-                />
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: viagem, reembolso, ifood" className="w-full bg-transparent border-b-2 border-gray-100 dark:border-slate-600 py-3 text-[16px] outline-none focus:border-teal-600 font-bold text-gray-800 dark:text-gray-200 transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-500 placeholder:font-normal" />
               </div>
 
               <div className="mb-8">
                 <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 block">Cor da Tag</label>
                 <div className="grid grid-cols-5 gap-4">
                   {TAG_COLORS.map(c => (
-                    <button
-                      key={c}
-                      onClick={() => setColor(c)}
-                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm"
-                      style={{ 
-                        backgroundColor: c,
-                        transform: color === c ? 'scale(1.15)' : 'scale(1)',
-                        boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none'
-                      }}
-                    >
-                    </button>
+                    <button key={c} onClick={() => setColor(c)} className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm" style={{ backgroundColor: c, transform: color === c ? 'scale(1.15)' : 'scale(1)', boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }} />
                   ))}
                 </div>
               </div>
@@ -227,19 +195,13 @@ export default function TagsPage() {
                   </button>
                 </div>
               )}
-
             </div>
 
             <div className="p-6 bg-white dark:bg-slate-800 border-t border-gray-50 dark:border-slate-700 pb-8">
-              <button 
-                onClick={handleSave} 
-                disabled={saving || !name.trim()} 
-                className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[20px] font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center h-14"
-              >
+              <button onClick={handleSave} disabled={saving || !name.trim()} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[20px] font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center h-14">
                 {saving ? <Loader2 className="animate-spin" size={24} /> : (editingTag ? 'Salvar Alterações' : 'Criar Tag')}
               </button>
             </div>
-
           </div>
         </div>
       )}
