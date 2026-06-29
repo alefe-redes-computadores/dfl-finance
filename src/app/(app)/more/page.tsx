@@ -13,6 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
+import Skeleton from '@/components/Skeleton'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -190,7 +191,6 @@ export default function MorePage() {
   const { showToast } = useToast()
   const { appMode, setAppMode } = useContext_()
 
-  const [modalOpen, setModalOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [exportRange, setExportRange] = useState('30')
@@ -198,6 +198,7 @@ export default function MorePage() {
   const [name, setName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(true)
 
   const [showCropModal, setShowCropModal] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
@@ -209,6 +210,15 @@ export default function MorePage() {
     const saved = localStorage.getItem('dfl_notifications_enabled')
     setNotificationsEnabled(saved !== 'false')
   }, [])
+
+  useEffect(() => {
+    if (user?.id) {
+      setName(user.user_metadata?.full_name || '')
+      // Pequeno delay para transição suave do skeleton
+      const timer = setTimeout(() => setProfileLoading(false), 400)
+      return () => clearTimeout(timer)
+    }
+  }, [user?.id, user?.user_metadata?.full_name])
 
   const toggleTheme = () => {
     toggleThemeOriginal()
@@ -223,18 +233,15 @@ export default function MorePage() {
     showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
   }
 
-     
-    const toggleAppMode = async () => {
+  const toggleAppMode = async () => {
     if (!user?.id) return
     
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
     
-    // 1. Muda visualmente NA HORA e salva no cache local para evitar o loop
     setAppMode(newMode)
     localStorage.setItem('dfl_app_mode', newMode)
 
     try {
-      // 2. Salva no Supabase definitivamente
       const { error } = await supabase
         .from('user_settings')
         .upsert({
@@ -245,27 +252,17 @@ export default function MorePage() {
 
       if (error) throw error
 
-      // 3. Feedback visual (Toast)
       showToast(
         newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 
         'success'
       )
     } catch (err: any) {
       console.error('Erro de Supabase:', err.message)
-      
-      // APAGAMOS a parte que revertia o estado!
-      // Agora a chave vai ficar parada onde você clicou, mesmo se o banco der erro.
-      
       showToast('Erro ao salvar na nuvem, mas salvo no celular!', 'error')
     }
   }
 
-
   const isGoogleLogin = user?.app_metadata?.provider === 'google'
-
-  useEffect(() => {
-    if (user?.id) setName(user.user_metadata?.full_name || '')
-  }, [user?.id, user?.user_metadata?.full_name])
 
   const saveName = async () => {
     if (!name.trim()) return
@@ -340,9 +337,7 @@ export default function MorePage() {
   const handleExport = (type: string) => {
     if (!user) return
     const endpoint = type === 'transactions' ? 'export-transactions' : 'export-analysis'
-    
     const finalContext = appMode === 'personal_only' ? 'personal' : exportContext
-    
     window.open(`/api/${endpoint}?userId=${user.id}&context=${finalContext}&range=${exportRange}`, '_blank')
     setShowExportModal(false)
   }
@@ -450,36 +445,47 @@ export default function MorePage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50">
-        <div className="relative w-16 h-16 shrink-0">
-          <img
-            src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'}
-            className={`w-full h-full rounded-[20px] object-cover shadow-sm ${uploading ? 'opacity-50' : 'opacity-100'}`}
-            alt="Perfil"
-          />
-          <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[20px] cursor-pointer opacity-0 hover:opacity-100 transition-opacity backdrop-blur-[2px]">
-            <Camera size={20} className="text-white" />
-            <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
-          </label>
+      {/* Perfil com Skeleton Loader */}
+      {profileLoading ? (
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <Skeleton variant="circle" width="64px" height="64px" />
+          <div className="flex-1 space-y-2">
+            <Skeleton variant="text" width="140px" />
+            <Skeleton variant="text" width="200px" />
+          </div>
         </div>
+      ) : (
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <div className="relative w-16 h-16 shrink-0">
+            <img
+              src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'}
+              className={`w-full h-full rounded-[20px] object-cover shadow-sm ${uploading ? 'opacity-50' : 'opacity-100'}`}
+              alt="Perfil"
+            />
+            <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[20px] cursor-pointer opacity-0 hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+              <Camera size={20} className="text-white" />
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
+            </label>
+          </div>
 
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="flex items-center gap-2 mb-1">
-              <input value={name} onChange={(e) => setName(e.target.value)} className="bg-gray-100 dark:bg-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl text-[15px] w-full outline-none font-bold focus:ring-2 focus:ring-teal-500/20" autoFocus />
-              <button onClick={saveName} className="bg-teal-700 text-white p-2.5 rounded-xl shadow-md"><Check size={18} /></button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 mb-0.5">
-              <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 truncate tracking-tight">{name || 'Usuário'}</h2>
-              {!isGoogleLogin && (
-                <button onClick={() => setIsEditing(true)} className="text-gray-400 dark:text-gray-500 hover:text-teal-700 transition-colors flex-shrink-0 p-1"><Edit2 size={14} /></button>
-              )}
-            </div>
-          )}
-          <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <div className="flex items-center gap-2 mb-1">
+                <input value={name} onChange={(e) => setName(e.target.value)} className="bg-gray-100 dark:bg-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl text-[15px] w-full outline-none font-bold focus:ring-2 focus:ring-teal-500/20" autoFocus />
+                <button onClick={saveName} className="bg-teal-700 text-white p-2.5 rounded-xl shadow-md"><Check size={18} /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 mb-0.5">
+                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 truncate tracking-tight">{name || 'Usuário'}</h2>
+                {!isGoogleLogin && (
+                  <button onClick={() => setIsEditing(true)} className="text-gray-400 dark:text-gray-500 hover:text-teal-700 transition-colors flex-shrink-0 p-1"><Edit2 size={14} /></button>
+                )}
+              </div>
+            )}
+            <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="space-y-6">
         
