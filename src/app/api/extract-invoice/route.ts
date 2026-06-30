@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase';
+import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Se pdf-parse não estiver instalado, execute: npm install pdf-parse
-// ou remova a funcionalidade de PDF e use apenas OFX.
-// Deixei um try/catch dinâmico para importar apenas se necessário.
-const { XMLParser } = require('fast-xml-parser');
+import { XMLParser } from 'fast-xml-parser';
 
 interface ExtractedTransaction {
   date: string;
@@ -72,22 +68,21 @@ export async function POST(request: NextRequest) {
 
   try {
     if (file.name.endsWith('.pdf')) {
-      // Tenta importar pdf-parse dinamicamente (se instalado)
       let pdfParse: any;
       try {
         pdfParse = require('pdf-parse');
       } catch {
-        return NextResponse.json({ error: 'pdf-parse não instalado. Execute npm install pdf-parse' }, { status: 500 });
+        return NextResponse.json({ error: 'pdf-parse não instalado' }, { status: 500 });
       }
 
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const pdfData = await pdfParse.default ? pdfParse.default(buffer) : pdfParse(buffer);
+      const pdfData = pdfParse.default ? pdfParse.default(buffer) : pdfParse(buffer);
       const text = pdfData.text;
 
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const prompt = `Extraia transações financeiras... (seu prompt aqui) Texto: ${text.substring(0, 30000)}`;
+      const prompt = `Extraia transações financeiras do seguinte texto de fatura. Retorne APENAS um JSON array com objetos: { "date": "YYYY-MM-DD", "description": "string", "amount": number, "type": "income" | "expense" }. Ignore cabeçalhos e resumos. Texto: ${text.substring(0, 30000)}`;
       const result = await model.generateContent(prompt);
       const responseText = result.response.text();
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
