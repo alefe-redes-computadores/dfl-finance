@@ -123,7 +123,7 @@ export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
               fileName={`fixas-vs-variaveis-${Date.now()}.pdf`}
               className="w-full mt-4 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2"
             >
-              {({ loading: pdfLoading }: { loading: boolean }) => (
+              {({ loading: pdfLoading }: any) => (
                 <>
                   <Download size={16} />
                   {pdfLoading ? 'Gerando PDF...' : 'Exportar PDF'}
