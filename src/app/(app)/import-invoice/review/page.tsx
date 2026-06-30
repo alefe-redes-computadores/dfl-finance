@@ -16,7 +16,6 @@ interface ExtractedTransaction {
   type: 'income' | 'expense';
 }
 
-
 interface ReviewItem {
   imported: ExtractedTransaction;
   matched: {
@@ -64,7 +63,6 @@ export default function ReviewImportPage() {
       }
     });
 
-    // Obtém o usuário UMA VEZ, antes do map
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast({ title: 'Erro', description: 'Não autenticado.', variant: 'destructive' });
@@ -81,7 +79,7 @@ export default function ReviewImportPage() {
           description: t.description,
           date: t.date,
           type: t.type,
-          context: 'pf', // ajustar conforme necessário
+          context: 'pf',
           source: 'ofx_import',
           affects_balance: true,
         }));
