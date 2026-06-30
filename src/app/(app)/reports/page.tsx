@@ -98,6 +98,9 @@ export default function ReportsPage() {
     context,
     dateRange: { start: '', end: '' },
     preset: 'thisMonth',
+    tags: [],
+    accounts: [],
+    creditCards: [],
   })
 
   const selectedItem = reportsList.find((item) => item.id === selectedReport)
