@@ -1,6 +1,6 @@
 {
   "name": "dfl-finance",
-  "version": "5.0.0",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -24,7 +24,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "html5-qrcode": "^2.3.8",
     "@google/generative-ai": "^0.21.0",
-    "fast-xml-parser": "^4.5.0"
+    "fast-xml-parser": "^4.5.0",
+    "@react-pdf/renderer": "^3.4.4"
   },
   "devDependencies": {
     "typescript": "^5",
