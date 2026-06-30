@@ -15,6 +15,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import Skeleton from '@/components/Skeleton'
 
+
 export default function ContactsPage() {
   const router = useRouter()
   const { user } = useAuth()
