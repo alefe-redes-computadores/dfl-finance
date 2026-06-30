@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ReportFilterValues } from './ReportFilters'
 import { Download } from 'lucide-react'
-import { PDFDownloadLink } from '@react-pdf/renderer'
+import { BlobProvider } from '@react-pdf/renderer'
 import ReportPDF from '@/components/reports/ReportPDF'
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -39,7 +39,6 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
 
       if (filters.context === 'personal') query = query.eq('context', 'personal')
 
-      // 🆕 Filtros cruzados
       if (filters.tags && filters.tags.length > 0) {
         query = query.overlaps('tag_ids', filters.tags)
       }
@@ -128,7 +127,7 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
 
           {/* Botão Exportar PDF */}
           {transactions.length > 0 && (
-            <PDFDownloadLink
+            <BlobProvider
               document={
                 <ReportPDF
                   title="Despesas por Categoria"
@@ -139,16 +138,18 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
                   transactions={transactions.filter(t => t.type === 'expense')}
                 />
               }
-              fileName={`despesas-por-categoria-${Date.now()}.pdf`}
-              className="w-full mt-4 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2"
             >
-              {({ loading: pdfLoading }: any) => (
-                <>
+              {({ url, loading: pdfLoading }: any) => (
+                <button
+                  onClick={() => url && window.open(url, '_blank')}
+                  disabled={pdfLoading}
+                  className="w-full mt-4 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
                   <Download size={16} />
                   {pdfLoading ? 'Gerando PDF...' : 'Exportar PDF'}
-                </>
+                </button>
               )}
-            </PDFDownloadLink>
+            </BlobProvider>
           )}
         </div>
       )}
