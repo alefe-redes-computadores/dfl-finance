@@ -37,6 +37,18 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
         .gte('date', currentStart)
         .lte('date', currentEnd)
       if (filters.context === 'personal') queryCurr = queryCurr.eq('context', 'personal')
+
+      // 🆕 Filtros cruzados (período atual)
+      if (filters.tags && filters.tags.length > 0) {
+        queryCurr = queryCurr.overlaps('tag_ids', filters.tags)
+      }
+      if (filters.accounts && filters.accounts.length > 0) {
+        queryCurr = queryCurr.in('account_id', filters.accounts)
+      }
+      if (filters.creditCards && filters.creditCards.length > 0) {
+        queryCurr = queryCurr.in('credit_card_id', filters.creditCards)
+      }
+
       const { data: currData } = await queryCurr
 
       let queryPrev = supabase
@@ -46,6 +58,18 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
         .gte('date', prevStart.toISOString())
         .lte('date', prevEnd.toISOString())
       if (filters.context === 'personal') queryPrev = queryPrev.eq('context', 'personal')
+
+      // 🆕 Filtros cruzados (período anterior)
+      if (filters.tags && filters.tags.length > 0) {
+        queryPrev = queryPrev.overlaps('tag_ids', filters.tags)
+      }
+      if (filters.accounts && filters.accounts.length > 0) {
+        queryPrev = queryPrev.in('account_id', filters.accounts)
+      }
+      if (filters.creditCards && filters.creditCards.length > 0) {
+        queryPrev = queryPrev.in('credit_card_id', filters.creditCards)
+      }
+
       const { data: prevData } = await queryPrev
 
       setCurrentPeriod(currData || [])
@@ -104,7 +128,7 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
             </div>
           </div>
 
-          {/* 🆕 Botão Exportar PDF */}
+          {/* Botão Exportar PDF */}
           {allTransactions.length > 0 && (
             <PDFDownloadLink
               document={
