@@ -35,6 +35,17 @@ export default function WeekdayExpenses({ filters }: WeekdayExpensesProps) {
 
       if (filters.context === 'personal') query = query.eq('context', 'personal')
 
+      // 🆕 Filtros cruzados
+      if (filters.tags && filters.tags.length > 0) {
+        query = query.overlaps('tag_ids', filters.tags)
+      }
+      if (filters.accounts && filters.accounts.length > 0) {
+        query = query.in('account_id', filters.accounts)
+      }
+      if (filters.creditCards && filters.creditCards.length > 0) {
+        query = query.in('credit_card_id', filters.creditCards)
+      }
+
       const { data, error } = await query
       if (error) console.error(error)
       setTransactions(data || [])
@@ -80,7 +91,7 @@ export default function WeekdayExpenses({ filters }: WeekdayExpensesProps) {
             ))}
           </div>
 
-          {/* 🆕 Botão Exportar PDF */}
+          {/* Botão Exportar PDF */}
           {transactions.length > 0 && (
             <PDFDownloadLink
               document={
