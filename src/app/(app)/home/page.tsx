@@ -28,6 +28,7 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import SwipeableRow from '@/components/SwipeableRow'
 import PushNotificationManager from '@/components/PushNotificationManager'
+import InstallBanner from '@/components/InstallBanner'
 
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
@@ -875,6 +876,9 @@ function HomeContent() {
 
       {/* 🆕 Gerenciador de Notificações Push */}
       <PushNotificationManager userId={user?.id || ''} />
+      
+      {/* 🆕 Banner de Instalação para iPhone */}
+      <InstallBanner />
     </div>
   )
 }
