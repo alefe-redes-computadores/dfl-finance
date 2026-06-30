@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/utils/supabase/client'
 
+
 interface ExtractedTransaction {
   date: string
   description: string
