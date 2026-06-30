@@ -1,7 +1,6 @@
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
 
-// Registra fontes (opcional, mas deixa o PDF mais bonito)
 Font.register({
   family: 'Inter',
   src: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtM.ttf',
@@ -142,13 +141,11 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Cabeçalho */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{title}</Text>
           <Text style={styles.headerSubtitle}>{period}</Text>
         </View>
 
-        {/* Resumo */}
         <View style={styles.summary}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Receitas</Text>
@@ -170,10 +167,8 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
           </View>
         </View>
 
-        {/* Lista de Transações */}
         <Text style={styles.sectionTitle}>Transações do Período</Text>
         <View style={styles.table}>
-          {/* Cabeçalho da tabela */}
           <View style={styles.tableHeader}>
             <Text style={styles.cellDate}>DATA</Text>
             <Text style={styles.cellDesc}>DESCRIÇÃO</Text>
@@ -181,7 +176,6 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
             <Text style={styles.cellAmount}>VALOR</Text>
           </View>
 
-          {/* Linhas da tabela */}
           {transactions.map((tx, index) => (
             <View key={index} style={styles.tableRow}>
               <Text style={styles.cellDate}>{formatDate(tx.date)}</Text>
@@ -195,7 +189,6 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
           ))}
         </View>
 
-        {/* Rodapé */}
         <Text style={styles.footer}>
           Gerado por DFL Finance em {new Date().toLocaleDateString('pt-BR')}
         </Text>
