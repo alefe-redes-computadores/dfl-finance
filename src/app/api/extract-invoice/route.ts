@@ -3,54 +3,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-interface ExtractedTransaction {
-  date: string
-  description: string
-  amount: number
-  type: 'income' | 'expense'
-}
-
-interface ReviewSuggestion {
-  imported: ExtractedTransaction
-  matched: {
-    id: string
-    description: string
-    amount: number
-    date: string
-    similarity: number
-  }
-  score: number
-}
-
-function similarity(a: string, b: string): number {
-  const aLower = a.toLowerCase().replace(/[^a-z0-9 ]/g, '')
-  const bLower = b.toLowerCase().replace(/[^a-z0-9 ]/g, '')
-
-  if (aLower === bLower) return 1.0
-
-  const maxLen = Math.max(aLower.length, bLower.length)
-  if (maxLen === 0) return 1.0
-
-  const dp: number[][] = Array(aLower.length + 1)
-    .fill(null)
-    .map(() => Array(bLower.length + 1).fill(0))
-
-  for (let i = 0; i <= aLower.length; i++) dp[i][0] = i
-  for (let j = 0; j <= bLower.length; j++) dp[0][j] = j
-
-  for (let i = 1; i <= aLower.length; i++) {
-    for (let j = 1; j <= bLower.length; j++) {
-      dp[i][j] =
-        aLower[i - 1] === bLower[j - 1]
-          ? dp[i - 1][j - 1]
-          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
-    }
-  }
-
-  const distance = dp[aLower.length][bLower.length]
-  return 1 - distance / maxLen
-}
-
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -64,13 +16,13 @@ export async function POST(request: NextRequest) {
     }
 
     const fileType = file.name.toLowerCase().endsWith('.ofx') ? 'ofx' : 'pdf'
-    let transactions: ExtractedTransaction[] = []
+    let transactions: any[] = []
 
+    // Extração
     if (fileType === 'ofx') {
       const ofxText = await file.text()
       transactions = parseOFX(ofxText)
     } else {
-      // PDF: usar buffer base64 para Gemini
       const buffer = Buffer.from(await file.arrayBuffer())
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
       
@@ -103,17 +55,27 @@ IMPORTANTE: Retorne apenas o JSON puro, sem marcação de código.`
       }
     }
 
-    // --- ETAPA DE CONCILIAÇÃO ---
-    // Busca transações existentes do usuário
-    let existingTransactions: any[] = []
+    // Conciliação via função SQL
+    let reconciliationResult = { new: transactions, review: [], duplicates: [] }
 
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && transactions.length > 0) {
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       )
-      
+
+      // Chama a função de conciliação
+      const { data, error } = await supabase.rpc('reconcile_imported_transactions', {
+        p_user_id: userId,
+        p_context: context,
+        p_imported_json: JSON.stringify(transactions),
+      })
+
+      if (!error && data) {
+        reconciliationResult = data as any
+      }
+
       // Registra a importação
       await supabase.from('invoice_imports').insert({
         user_id: userId,
@@ -121,67 +83,13 @@ IMPORTANTE: Retorne apenas o JSON puro, sem marcação de código.`
         file_name: file.name,
         file_type: fileType,
         transactions_imported: transactions.length,
-        raw_response: JSON.stringify(transactions),
+        raw_response: JSON.stringify(reconciliationResult),
       })
-
-      // Busca transações existentes para conciliação
-      const { data } = await supabase
-        .from('transactions')
-        .select('id, amount, date, description')
-        .eq('user_id', userId)
-        .eq('context', context)
-      existingTransactions = data || []
-    }
-
-    const newTrans: ExtractedTransaction[] = []
-    const review: ReviewSuggestion[] = []
-    const duplicates: ExtractedTransaction[] = []
-
-    for (const imported of transactions) {
-      let bestMatch: any = null
-      let bestScore = 0
-
-      for (const existing of existingTransactions) {
-        if (Math.abs(existing.amount - imported.amount) > 0.01) continue
-
-        const importedDate = new Date(imported.date)
-        const existingDate = new Date(existing.date)
-        const diffDays = Math.abs(importedDate.getTime() - existingDate.getTime()) / (1000 * 60 * 60 * 24)
-        if (diffDays > 2) continue
-
-        const textSimilarity = similarity(imported.description, existing.description)
-        const totalScore = 0.5 + Math.max(0, 1 - diffDays / 2) * 0.3 + textSimilarity * 0.2
-
-        if (totalScore > bestScore) {
-          bestScore = totalScore
-          bestMatch = existing
-        }
-      }
-
-      if (bestMatch && bestScore >= 0.95) {
-        duplicates.push(imported)
-      } else if (bestMatch && bestScore >= 0.8) {
-        review.push({
-          imported,
-          matched: {
-            id: bestMatch.id,
-            description: bestMatch.description,
-            amount: bestMatch.amount,
-            date: bestMatch.date,
-            similarity: bestScore,
-          },
-          score: bestScore,
-        })
-      } else {
-        newTrans.push(imported)
-      }
     }
 
     return NextResponse.json({
       success: true,
-      new: newTrans,
-      review,
-      duplicates,
+      ...reconciliationResult,
       file_name: file.name,
       file_type: fileType,
     })
@@ -194,8 +102,8 @@ IMPORTANTE: Retorne apenas o JSON puro, sem marcação de código.`
   }
 }
 
-function parseOFX(ofxText: string): ExtractedTransaction[] {
-  const transactions: ExtractedTransaction[] = []
+function parseOFX(ofxText: string): any[] {
+  const transactions: any[] = []
   const stmttrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/g
   let match
 
