@@ -214,7 +214,6 @@ export default function MorePage() {
   useEffect(() => {
     if (user?.id) {
       setName(user.user_metadata?.full_name || '')
-      // Pequeno delay para transição suave do skeleton
       const timer = setTimeout(() => setProfileLoading(false), 400)
       return () => clearTimeout(timer)
     }
@@ -514,6 +513,8 @@ export default function MorePage() {
             <MenuItem iconName="repeat" label="Assinaturas" href="/subscriptions" />
             <MenuItem iconName="file-text" label="Financiamentos" href="/financings" />
             <MenuItem iconName="users" label="Quem me deve" href="/debts" />
+            {/* 🆕 Contatos adicionado abaixo de Quem me deve */}
+            <MenuItem iconName="users" label="Contatos" href="/contacts" />
           </div>
         </div>
 
