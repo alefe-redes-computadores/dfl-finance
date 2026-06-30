@@ -9,7 +9,7 @@ import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight, Trash2, Loader2, Paperclip,
-  Image as ImageIcon, CreditCard, Calendar, RefreshCw,
+  Image as ImageIcon, CreditCard, Calendar, RefreshCw, Users,
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -23,6 +23,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ModalFinancing from '@/components/ModalFinancing'
 import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { getDynamicIcon } from '@/lib/iconUtils'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -33,12 +34,6 @@ const CATEGORY_COLORS = [
   '#22c55e', '#ef4444', '#f97316', '#06b6d4',
   '#8b5cf6', '#eab308', '#94a3b8', '#ec4899', '#14b8a6',
 ]
-
-const getDynamicIcon = (iconName: string) => {
-  if (!iconName) return Icons.Tag
-  const formatted = iconName.charAt(0).toUpperCase() + iconName.slice(1)
-  return (Icons as any)[formatted] || Icons.Tag
-}
 
 function createLocalDate(dateString: string): Date {
   return new Date(dateString + 'T12:00:00')
@@ -66,6 +61,7 @@ function NewTransactionContent() {
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
+  const [contactId, setContactId] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -74,6 +70,7 @@ function NewTransactionContent() {
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [accounts, setAccounts] = useState<any[]>([])
   const [creditCards, setCreditCards] = useState<any[]>([])
+  const [contacts, setContacts] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
@@ -108,6 +105,7 @@ function NewTransactionContent() {
   const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showCardModal, setShowCardModal] = useState(false)
+  const [showContactModal, setShowContactModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
@@ -163,6 +161,7 @@ function NewTransactionContent() {
       .find((s: any) => s.id === categoryId)
   const selectedAcc = accounts.find((a) => a.id === accountId)
   const selectedCard = creditCards.find((c) => c.id === creditCardId)
+  const selectedContact = contacts.find((c) => c.id === contactId)
 
   const toggleTag = (id: string) => {
     setSelectedTags((prev) => {
@@ -176,7 +175,7 @@ function NewTransactionContent() {
     if (!user?.id) return
     const catType = type === 'income' ? 'income' : 'expense'
 
-    const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }, { data: cardsData }] =
+    const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }, { data: cardsData }, { data: contactsData }] =
       await Promise.all([
         supabase
           .from('categories')
@@ -207,6 +206,12 @@ function NewTransactionContent() {
           .eq('context', context)
           .eq('is_archived', false)
           .order('name'),
+        supabase
+          .from('contacts')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('context', context)
+          .order('name'),
       ])
 
     const allCats = Array.isArray(cats) ? cats : []
@@ -222,6 +227,7 @@ function NewTransactionContent() {
     setSubcategories(subsMap)
     setAccounts(Array.isArray(accs) ? accs : [])
     setCreditCards(Array.isArray(cardsData) ? cardsData : [])
+    setContacts(Array.isArray(contactsData) ? contactsData : [])
     setTags(Array.isArray(tgs) ? tgs : [])
     setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
   }, [user, context, type])
@@ -715,6 +721,7 @@ function NewTransactionContent() {
           category_id: categoryId || null,
           account_id: creditCardId ? null : (accountId || null),
           credit_card_id: creditCardId || null,
+          contact_id: contactId || null,
           invoice_id: invoiceId,
           tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
@@ -746,7 +753,6 @@ function NewTransactionContent() {
 
         if (insertError) throw insertError
 
-        // 🆕 Cria transação de reembolso no outro contexto
         if (i === 0 && isReimbursable && savedTx) {
           linkedTransactionId = savedTx.id
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
@@ -770,7 +776,6 @@ function NewTransactionContent() {
             .single()
 
           if (!reimbError && reimbTx) {
-            // Atualiza a transação original com o link
             await supabase
               .from('transactions')
               .update({ linked_transaction_id: reimbTx.id })
@@ -956,6 +961,21 @@ function NewTransactionContent() {
             </div>
           </button>
         )}
+
+        {/* 🆕 Seletor de Contato */}
+        {contacts.length > 0 && (
+          <button onClick={() => setShowContactModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
+            <div className="flex items-center gap-4">
+              <Users size={20} className="text-gray-400 dark:text-gray-500" />
+              <span className={`text-sm font-medium ${selectedContact ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                {selectedContact ? selectedContact.name : 'Fornecedor / Cliente (opcional)'}
+              </span>
+            </div>
+            {selectedContact && (
+              <div onClick={(e) => { e.stopPropagation(); setContactId('') }} className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"><X size={16} /></div>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Mais detalhes */}
@@ -1013,7 +1033,6 @@ function NewTransactionContent() {
 
             {!isIncome && (
               <div className="p-5 space-y-5">
-                {/* 🆕 Reembolso */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <RefreshCw size={20} className="text-gray-400 dark:text-gray-500" />
@@ -1057,7 +1076,44 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modais (mantidos originais) */}
+      {/* Modal Contatos */}
+      {showContactModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowContactModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contatos</h3>
+              <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {contacts.map((contact) => {
+                const isActive = contact.id === contactId
+                const IconComp = getDynamicIcon(contact.icon || 'user')
+                return (
+                  <button key={contact.id} onClick={() => { setContactId(contact.id); setShowContactModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}>
+                      <IconComp size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {contact.name}
+                    </span>
+                    <span className="text-xs text-gray-400">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {contacts.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">Nenhum contato cadastrado.</p>
+                  <button onClick={() => { setShowContactModal(false); router.push('/contacts/new') }} className="text-teal-600 text-sm font-bold mt-2">Criar contato</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Demais modais (mantidos originais) */}
       {showCardModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
