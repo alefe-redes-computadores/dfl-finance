@@ -1,75 +1,87 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Check, GitMerge, X } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { createClient } from '@/utils/supabase/client';
+import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ArrowLeft, Check, GitMerge, X } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { useToast } from '@/hooks/use-toast'
+import { createClient } from '@/utils/supabase/client'
 
 interface ExtractedTransaction {
-  date: string;
-  description: string;
-  amount: number;
-  type: 'income' | 'expense';
+  date: string
+  description: string
+  amount: number
+  type: 'income' | 'expense'
 }
 
 interface ReviewItem {
-  imported: ExtractedTransaction;
+  imported: ExtractedTransaction
   matched: {
-    id: string;
-    description: string;
-    amount: number;
-    date: string;
-    similarity: number;
-  };
-  score: number;
+    id: string
+    description: string
+    amount: number
+    date: string
+    similarity: number
+  }
+  score: number
 }
 
 export default function ReviewImportPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { toast } = useToast();
-  const supabase = createClient();
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+  const supabase = createClient()
 
   const [newTrans] = useState<ExtractedTransaction[]>(() => {
-    const data = searchParams.get('new');
-    return data ? JSON.parse(atob(data)) : [];
-  });
+    try {
+      const data = searchParams.get('new')
+      return data ? JSON.parse(atob(data)) : []
+    } catch {
+      return []
+    }
+  })
   const [review] = useState<ReviewItem[]>(() => {
-    const data = searchParams.get('review');
-    return data ? JSON.parse(atob(data)) : [];
-  });
+    try {
+      const data = searchParams.get('review')
+      return data ? JSON.parse(atob(data)) : []
+    } catch {
+      return []
+    }
+  })
   const [duplicates] = useState<ExtractedTransaction[]>(() => {
-    const data = searchParams.get('duplicates');
-    return data ? JSON.parse(atob(data)) : [];
-  });
+    try {
+      const data = searchParams.get('duplicates')
+      return data ? JSON.parse(atob(data)) : []
+    } catch {
+      return []
+    }
+  })
 
-  const [selectedNew, setSelectedNew] = useState<boolean[]>(newTrans.map(() => true));
-  const [reviewDecisions, setReviewDecisions] = useState<('merge' | 'keep' | null)[]>(review.map(() => null));
+  const [selectedNew, setSelectedNew] = useState<boolean[]>(newTrans.map(() => true))
+  const [reviewDecisions, setReviewDecisions] = useState<('merge' | 'keep' | null)[]>(review.map(() => null))
 
   const handleConfirm = async () => {
-    const confirmedNew = newTrans.filter((_, i) => selectedNew[i]);
-    const mergedIds: string[] = [];
-    const keepTransactions: ExtractedTransaction[] = [];
+    const confirmedNew = newTrans.filter((_, i) => selectedNew[i])
+    const mergedIds: string[] = []
+    const keepTransactions: ExtractedTransaction[] = []
 
     review.forEach((item, i) => {
       if (reviewDecisions[i] === 'merge') {
-        mergedIds.push(item.matched.id);
+        mergedIds.push(item.matched.id)
       } else if (reviewDecisions[i] === 'keep') {
-        keepTransactions.push(item.imported);
+        keepTransactions.push(item.imported)
       }
-    });
+    })
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      toast({ title: 'Erro', description: 'Não autenticado.', variant: 'destructive' });
-      return;
+      toast({ title: 'Erro', description: 'Não autenticado.', variant: 'destructive' })
+      return
     }
 
-    const toInsert = [...confirmedNew, ...keepTransactions];
+    const toInsert = [...confirmedNew, ...keepTransactions]
 
     try {
       if (toInsert.length > 0) {
@@ -82,29 +94,40 @@ export default function ReviewImportPage() {
           context: 'pf',
           source: 'ofx_import',
           affects_balance: true,
-        }));
+        }))
 
-        const { error } = await supabase.from('transactions').insert(insertData);
-        if (error) throw error;
+        const { error } = await supabase.from('transactions').insert(insertData)
+        if (error) throw error
       }
 
       if (mergedIds.length > 0) {
         const { error } = await supabase
           .from('transactions')
           .update({ source: 'ofx_merged' })
-          .in('id', mergedIds);
-        if (error) throw error;
+          .in('id', mergedIds)
+        if (error) throw error
       }
 
       toast({
         title: 'Importação concluída',
         description: `${confirmedNew.length + keepTransactions.length} adicionadas, ${mergedIds.length} mescladas, ${duplicates.length} ignoradas.`,
-      });
-      router.push('/home');
+      })
+      router.push('/home')
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' })
     }
-  };
+  }
+
+  if (newTrans.length === 0 && review.length === 0 && duplicates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <p className="text-muted-foreground">Nenhum dado de importação encontrado.</p>
+        <Button onClick={() => router.push('/home')} className="mt-4">
+          Voltar para Home
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6 p-4 max-w-2xl mx-auto">
@@ -131,9 +154,9 @@ export default function ReviewImportPage() {
                     type="checkbox"
                     checked={selectedNew[i]}
                     onChange={(e) => {
-                      const updated = [...selectedNew];
-                      updated[i] = e.target.checked;
-                      setSelectedNew(updated);
+                      const updated = [...selectedNew]
+                      updated[i] = e.target.checked
+                      setSelectedNew(updated)
                     }}
                     className="rounded"
                   />
@@ -175,9 +198,9 @@ export default function ReviewImportPage() {
                       size="sm"
                       variant={reviewDecisions[i] === 'merge' ? 'default' : 'outline'}
                       onClick={() => {
-                        const updated = [...reviewDecisions];
-                        updated[i] = 'merge';
-                        setReviewDecisions(updated);
+                        const updated = [...reviewDecisions]
+                        updated[i] = 'merge'
+                        setReviewDecisions(updated)
                       }}
                     >
                       <GitMerge className="w-4 h-4 mr-1" /> Mesclar
@@ -186,9 +209,9 @@ export default function ReviewImportPage() {
                       size="sm"
                       variant={reviewDecisions[i] === 'keep' ? 'default' : 'outline'}
                       onClick={() => {
-                        const updated = [...reviewDecisions];
-                        updated[i] = 'keep';
-                        setReviewDecisions(updated);
+                        const updated = [...reviewDecisions]
+                        updated[i] = 'keep'
+                        setReviewDecisions(updated)
                       }}
                     >
                       <X className="w-4 h-4 mr-1" /> Manter Separadas
@@ -225,5 +248,5 @@ export default function ReviewImportPage() {
         Confirmar Importação
       </Button>
     </div>
-  );
+  )
 }
