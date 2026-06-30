@@ -16,6 +16,8 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import Skeleton from '@/components/Skeleton'
 
+const PAGE_SIZE = 20
+
 export default function TransactionsPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -23,6 +25,9 @@ export default function TransactionsPage() {
   const { showToast } = useToast()
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'income' | 'expense' | 'transfer' | 'pending'>('all')
   const [dateRange, setDateRange] = useState<'7' | '14' | '30' | 'all'>('all')
@@ -30,18 +35,23 @@ export default function TransactionsPage() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  const loadTransactions = useCallback(async () => {
+  const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
     if (!user?.id) return
-    setLoading(true)
+    
+    if (pageNum === 0) setLoading(true)
+    else setLoadingMore(true)
+
+    const from = pageNum * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
 
     let query = supabase
       .from('transactions')
-      .select('*, categories(name, icon, color)')
+      .select('*, categories(name, icon, color)', { count: 'exact' })
       .eq('user_id', user.id)
       .eq('context', context)
-      .order('status', { ascending: true })   // pendentes primeiro
-      .order('date', { ascending: false })     // depois por data (mais recente primeiro)
-      .limit(100)
+      .order('status', { ascending: true })
+      .order('date', { ascending: false })
+      .range(from, to)
 
     if (dateRange !== 'all') {
       const days = parseInt(dateRange)
@@ -61,16 +71,57 @@ export default function TransactionsPage() {
       query = query.or(`description.ilike.%${search}%,categories.name.ilike.%${search}%`)
     }
 
-    const { data } = await query
+    const { data, count, error } = await query
+
+    if (error) {
+      console.error('Erro ao carregar transações:', error)
+      setLoading(false)
+      setLoadingMore(false)
+      return
+    }
+
     const txs = Array.isArray(data) ? data : []
 
-    setTransactions(txs)
+    if (append) {
+      setTransactions(prev => [...prev, ...txs])
+    } else {
+      setTransactions(txs)
+    }
+
+    // Verifica se há mais transações para carregar
+    const totalLoaded = append ? (pageNum + 1) * PAGE_SIZE : txs.length
+    setHasMore(count ? totalLoaded < count : txs.length === PAGE_SIZE)
     setLoading(false)
+    setLoadingMore(false)
   }, [user?.id, context, filter, search, dateRange])
 
+  // Carrega a primeira página quando os filtros mudam
   useEffect(() => {
-    loadTransactions()
+    setPage(0)
+    setHasMore(true)
+    loadTransactions(0)
   }, [loadTransactions])
+
+  // Detecta scroll para carregar mais (Infinite Scroll)
+  const handleScroll = useCallback(() => {
+    if (loadingMore || !hasMore || loading) return
+    
+    const scrollY = window.scrollY
+    const windowHeight = window.innerHeight
+    const documentHeight = document.documentElement.scrollHeight
+    
+    // Carrega mais quando estiver a 200px do final da página
+    if (scrollY + windowHeight >= documentHeight - 200) {
+      const nextPage = page + 1
+      setPage(nextPage)
+      loadTransactions(nextPage, true)
+    }
+  }, [page, hasMore, loadingMore, loading, loadTransactions])
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [handleScroll])
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -228,6 +279,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -273,9 +325,12 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Lista de transações */}
       <div className="px-4 pt-4">
         {loading ? (
-          <div className="space-y-3"><Skeleton variant="rect" height="64px" count={5} className="mb-2" /></div>
+          <div className="space-y-3">
+            <Skeleton variant="rect" height="64px" count={5} className="mb-2" />
+          </div>
         ) : transactions.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4"><Search size={24} className="text-gray-400" /></div>
@@ -283,34 +338,53 @@ export default function TransactionsPage() {
             <p className="text-gray-400 text-xs mt-1">Tente ajustar os filtros ou criar uma nova.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {pendingTransactions.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-xs font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1.5"><AlertCircle size={12} />Pendentes</h3>
-                  <span className="text-[10px] text-gray-400 font-medium">{pendingTransactions.length} transação{pendingTransactions.length > 1 ? 'ões' : ''}</span>
+          <>
+            <div className="space-y-4">
+              {/* 🔴 PENDENTES */}
+              {pendingTransactions.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <h3 className="text-xs font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1.5"><AlertCircle size={12} />Pendentes</h3>
+                    <span className="text-[10px] text-gray-400 font-medium">{pendingTransactions.length} transação{pendingTransactions.length > 1 ? 'ões' : ''}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {pendingTransactions.map((tx, index) => (<TransactionCard key={tx.id} tx={tx} index={index} />))}
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  {pendingTransactions.map((tx, index) => (<TransactionCard key={tx.id} tx={tx} index={index} />))}
+              )}
+
+              {/* 🟢 CONCLUÍDAS POR DATA */}
+              {groupedCompleted.map(([date, txs], groupIndex) => (
+                <div key={date}>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{formatDateHeader(date)}</h3>
+                    <span className="text-[10px] text-gray-400 font-medium">{txs.length} transação{txs.length > 1 ? 'ões' : ''}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {txs.map((tx, index) => (<TransactionCard key={tx.id} tx={tx} index={(groupIndex * 10) + index} />))}
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Indicador de carregamento (Infinite Scroll) */}
+            {loadingMore && (
+              <div className="flex justify-center py-4">
+                <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
 
-            {groupedCompleted.map(([date, txs], groupIndex) => (
-              <div key={date}>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{formatDateHeader(date)}</h3>
-                  <span className="text-[10px] text-gray-400 font-medium">{txs.length} transação{txs.length > 1 ? 'ões' : ''}</span>
-                </div>
-                <div className="space-y-1">
-                  {txs.map((tx, index) => (<TransactionCard key={tx.id} tx={tx} index={(groupIndex * 10) + index} />))}
-                </div>
-              </div>
-            ))}
-          </div>
+            {/* Mensagem de fim da lista */}
+            {!hasMore && transactions.length > 0 && (
+              <p className="text-center text-xs text-gray-400 py-4">
+                Todas as transações carregadas
+              </p>
+            )}
+          </>
         )}
       </div>
 
+      {/* Modal de exportação */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
