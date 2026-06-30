@@ -8,7 +8,7 @@ import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
   ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
-  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown,
+  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -19,12 +19,7 @@ import ModalEmprestimo from '@/components/ModalEmprestimo'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-
-const getDynamicIcon = (iconName: string) => {
-  if (!iconName) return Icons.Tag
-  const f = iconName.charAt(0).toUpperCase() + iconName.slice(1)
-  return (Icons as any)[f] || Icons.Tag
-}
+import { getDynamicIcon } from '@/lib/iconUtils'
 
 export default function EditTransactionPage() {
   const { id } = useParams()
@@ -47,6 +42,7 @@ export default function EditTransactionPage() {
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [tags, setTags] = useState<any[]>([])
   const [creditCards, setCreditCards] = useState<any[]>([])
+  const [contacts, setContacts] = useState<any[]>([])
 
   const [amountInput, setAmountInput] = useState('')
   const [isPaid, setIsPaid] = useState(false)
@@ -55,6 +51,7 @@ export default function EditTransactionPage() {
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
+  const [contactId, setContactId] = useState('')
   const [txType, setTxType] = useState<'income' | 'expense'>('expense')
 
   const [showDetails, setShowDetails] = useState(false)
@@ -77,6 +74,7 @@ export default function EditTransactionPage() {
   const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showCardModal, setShowCardModal] = useState(false)
+  const [showContactModal, setShowContactModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
@@ -248,15 +246,17 @@ export default function EditTransactionPage() {
 
     try {
       const catType = txType === 'income' ? 'income' : 'expense'
-      const [{ data: accData }, { data: catData }, { data: tagData }, { data: cardsData }] = await Promise.all([
+      const [{ data: accData }, { data: catData }, { data: tagData }, { data: cardsData }, { data: contactsData }] = await Promise.all([
         supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
         supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
         supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name'),
         supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_archived', false).order('name'),
+        supabase.from('contacts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
       ])
 
       setAccounts(Array.isArray(accData) ? accData : [])
       setCreditCards(Array.isArray(cardsData) ? cardsData : [])
+      setContacts(Array.isArray(contactsData) ? contactsData : [])
       const allCats = Array.isArray(catData) ? catData : []
       const mainCats = allCats.filter((c) => !c.parent_id)
       const subCats = allCats.filter((c) => c.parent_id)
@@ -287,6 +287,7 @@ export default function EditTransactionPage() {
           setCategoryId(txData.category_id || '')
           setAccountId(txData.account_id || '')
           setCreditCardId(txData.credit_card_id || '')
+          setContactId(txData.contact_id || '')
           setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
           setNotes(txData.notes || '')
           setIsReimbursable(txData.is_reimbursable || false)
@@ -318,7 +319,7 @@ export default function EditTransactionPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, user, txType, searchParams])
+  }, [id, user, txType, searchParams, context])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -365,6 +366,7 @@ export default function EditTransactionPage() {
       category_id: categoryId || null,
       account_id: creditCardId ? null : (accountId || null),
       credit_card_id: creditCardId || null,
+      contact_id: contactId || null,
       tag_ids: selectedTags.length > 0 ? selectedTags : null,
       notes: finalNotes || null,
       type: txType,
@@ -419,7 +421,6 @@ export default function EditTransactionPage() {
         const { data: savedTx, error } = await supabase.from('transactions').insert([payload]).select().single()
         if (error) throw error
 
-        // 🆕 Cria reembolso se marcado
         if (isReimbursable && savedTx) {
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
           const { data: reimbTx } = await supabase
@@ -450,7 +451,6 @@ export default function EditTransactionPage() {
         const { error } = await supabase.from('transactions').update(payload).match({ id, user_id: user.id })
         if (error) throw error
 
-        // 🆕 Se marcou reembolso e não tinha antes, cria
         if (isReimbursable && !tx?.is_reimbursable) {
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
           const { data: reimbTx } = await supabase
@@ -534,6 +534,7 @@ export default function EditTransactionPage() {
     Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
   const selectedAcc = accounts.find((a) => a.id === accountId)
   const selectedCard = creditCards.find((c) => c.id === creditCardId)
+  const selectedContact = contacts.find((c) => c.id === contactId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
@@ -606,7 +607,7 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* Categoria com ícone (design premium igual Nova Transação) */}
+        {/* Categoria */}
         <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Tag size={20} className="text-gray-400" />
@@ -627,7 +628,7 @@ export default function EditTransactionPage() {
           </div>
         </button>
 
-        {/* Conta com BankLogo (design premium) */}
+        {/* Conta */}
         {!creditCardId && (
           <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -640,6 +641,21 @@ export default function EditTransactionPage() {
               {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
               <ChevronRight size={18} className="text-gray-300" />
             </div>
+          </button>
+        )}
+
+        {/* 🆕 Seletor de Contato */}
+        {contacts.length > 0 && (
+          <button onClick={() => setShowContactModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users size={20} className="text-gray-400" />
+              <span className={`text-sm font-medium ${selectedContact ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
+                {selectedContact ? selectedContact.name : 'Fornecedor / Cliente (opcional)'}
+              </span>
+            </div>
+            {selectedContact && (
+              <div onClick={(e) => { e.stopPropagation(); setContactId('') }} className="p-2 text-gray-400 hover:text-red-500"><X size={16} /></div>
+            )}
           </button>
         )}
 
@@ -763,7 +779,44 @@ export default function EditTransactionPage() {
         </button>
       </div>
 
-      {/* Modais (mantidos originais) */}
+      {/* Modal Contatos */}
+      {showContactModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowContactModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contatos</h3>
+              <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {contacts.map((contact) => {
+                const isActive = contact.id === contactId
+                const IconComp = getDynamicIcon(contact.icon || 'user')
+                return (
+                  <button key={contact.id} onClick={() => { setContactId(contact.id); setShowContactModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}>
+                      <IconComp size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {contact.name}
+                    </span>
+                    <span className="text-xs text-gray-400">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {contacts.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">Nenhum contato cadastrado.</p>
+                  <button onClick={() => { setShowContactModal(false); router.push('/contacts/new') }} className="text-teal-600 text-sm font-bold mt-2">Criar contato</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Demais modais */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
