@@ -1,21 +1,62 @@
 {
   "name": "DFL Finance",
   "short_name": "DFL",
-  "description": "Gestão inteligente do seu dinheiro",
-  "start_url": "/home",
+  "description": "Controle financeiro pessoal e empresarial",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#14b8a6",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova Despesa",
+      "short_name": "Despesa",
+      "description": "Registrar uma nova despesa",
+      "url": "/transactions/new?type=expense",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Nova Receita",
+      "short_name": "Receita",
+      "description": "Registrar uma nova receita",
+      "url": "/transactions/new?type=income",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Importar Fatura",
+      "short_name": "Importar",
+      "description": "Ler fatura com IA",
+      "url": "/import-invoice",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
