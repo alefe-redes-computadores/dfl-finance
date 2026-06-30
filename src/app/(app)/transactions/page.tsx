@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -50,6 +50,33 @@ function dateLabel(dateStr: string) {
   return format(d, "dd 'DE' MMMM", { locale: ptBR }).toUpperCase()
 }
 
+// Componente visual para simular o carregamento (Skeleton)
+const TransactionsSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    {[1, 2].map((group) => (
+      <div key={group}>
+        <div className="h-3 bg-gray-200 dark:bg-slate-700/50 rounded w-24 mb-3 ml-1"></div>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-50 dark:border-slate-700 overflow-hidden">
+          {[1, 2, 3].map((item, idx) => (
+            <div key={item} className={`px-4 py-4 flex items-center gap-3 ${idx !== 2 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
+              <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700/50"></div>
+              <div className="w-10 h-10 rounded-[12px] bg-gray-100 dark:bg-slate-700/50"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-3.5 bg-gray-100 dark:bg-slate-700/50 rounded w-3/4"></div>
+                <div className="h-2.5 bg-gray-100 dark:bg-slate-700/50 rounded w-1/2"></div>
+              </div>
+              <div className="flex flex-col items-end space-y-2">
+                <div className="h-2.5 bg-gray-100 dark:bg-slate-700/50 rounded w-12"></div>
+                <div className="h-3.5 bg-gray-100 dark:bg-slate-700/50 rounded w-20"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+)
+
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -57,14 +84,34 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  
+  // Referências para detectar o clique fora dos modais
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+  const statusMenuRef = useRef<HTMLDivElement>(null)
+
   const [search, setSearch] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+
+  // Lógica para fechar os modais ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false)
+      }
+      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target as Node)) {
+        setShowStatusMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -96,7 +143,7 @@ export default function TransactionsPage() {
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
-      .range(from, to)
+      .order('created_at', { ascending: false }) // Garante que a transação adicionada por último fique no topo
 
     if (filter !== 'all') query = query.eq('type', filter)
     
@@ -185,10 +232,12 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
-            <div className="relative">
+            
+            {/* Menu de Exportação com Ref para detectar clique fora */}
+            <div className="relative" ref={exportMenuRef}>
               <button 
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
+                className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center transition-colors hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 <Download size={18} className="text-gray-700 dark:text-gray-300" />
               </button>
@@ -201,6 +250,7 @@ export default function TransactionsPage() {
                 </div>
               )}
             </div>
+
             <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
               <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
               <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-24 text-center">{monthLabel}</span>
@@ -225,21 +275,24 @@ export default function TransactionsPage() {
               className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
           </div>
           
-          <button 
-            onClick={() => setShowStatusMenu(!showStatusMenu)} 
-            className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-          >
-            <SlidersHorizontal size={20} />
-          </button>
+          {/* Menu de Status com Ref para detectar clique fora */}
+          <div className="relative" ref={statusMenuRef}>
+            <button 
+              onClick={() => setShowStatusMenu(!showStatusMenu)} 
+              className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+            >
+              <SlidersHorizontal size={20} />
+            </button>
 
-          {showStatusMenu && (
-            <div className="absolute right-0 top-[54px] w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
-              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Filtrar por Status</p>
-              <button onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
-              <button onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
-              <button onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
-            </div>
-          )}
+            {showStatusMenu && (
+              <div className="absolute right-0 top-[54px] w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Filtrar por Status</p>
+                <button onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
+                <button onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
+                <button onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -254,16 +307,16 @@ export default function TransactionsPage() {
 
       <div className="px-4">
         {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-700" size={32} /></div>
+          <TransactionsSkeleton />
         ) : filtered.length === 0 && !loadingMore ? (
-          <div className="flex flex-col items-center py-20 text-gray-400 dark:text-gray-500">
+          <div className="flex flex-col items-center py-20 text-gray-400 dark:text-gray-500 animate-in fade-in duration-300">
             <ReceiptText size={48} className="mb-4 opacity-20" />
             <p className="text-[15px] font-bold text-gray-500 dark:text-gray-400">Nenhuma transação</p>
             <p className="text-[13px] mt-1">Nenhum resultado encontrado.</p>
           </div>
         ) : (
           <>
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-300">
               {sortedDates.map(date => (
                 <div key={date}>
                   <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 mb-3 px-1 tracking-wide">{dateLabel(date)}</p>
@@ -319,12 +372,12 @@ export default function TransactionsPage() {
 
             {/* Indicador de Infinite Scroll */}
             {loadingMore && (
-              <div className="flex justify-center py-4">
+              <div className="flex justify-center py-6">
                 <Loader2 className="animate-spin text-teal-700" size={24} />
               </div>
             )}
             {!hasMore && filtered.length > 0 && (
-              <p className="text-center text-xs text-gray-400 py-4">Todas as transações carregadas</p>
+              <p className="text-center text-xs font-medium text-gray-400 py-6">Todas as transações carregadas</p>
             )}
           </>
         )}
