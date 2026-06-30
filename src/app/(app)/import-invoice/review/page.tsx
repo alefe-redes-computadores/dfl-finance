@@ -16,6 +16,7 @@ interface ExtractedTransaction {
   type: 'income' | 'expense';
 }
 
+
 interface ReviewItem {
   imported: ExtractedTransaction;
   matched: {
