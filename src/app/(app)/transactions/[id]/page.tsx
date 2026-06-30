@@ -16,7 +16,9 @@ import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import ModalFinancing from '@/components/ModalFinancing'
 import ModalEmprestimo from '@/components/ModalEmprestimo'
+import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 
 const getDynamicIcon = (iconName: string) => {
   if (!iconName) return Icons.Tag
@@ -29,6 +31,7 @@ export default function EditTransactionPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
+  const { context } = useContext_()
   const { showToast } = useToast()
 
   const galeriaInputRef = useRef<HTMLInputElement>(null)
@@ -58,6 +61,7 @@ export default function EditTransactionPage() {
   const [notes, setNotes] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isRefund, setIsRefund] = useState(false)
+  const [isReimbursable, setIsReimbursable] = useState(false)
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
@@ -79,7 +83,6 @@ export default function EditTransactionPage() {
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
 
-  // 🆕 Feedback háptico
   const vibrate = (pattern: number | number[]) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(pattern)
@@ -132,7 +135,6 @@ export default function EditTransactionPage() {
       setReceiptUrl(urlData.publicUrl)
       showToast('Comprovante anexado!', 'success')
 
-      // 🆕 OCR do comprovante
       if (isImage) {
         try {
           const ocrResponse = await fetch('/api/ocr-receipt', {
@@ -142,7 +144,6 @@ export default function EditTransactionPage() {
           })
           const ocrData = await ocrResponse.json()
           if (ocrData.success && ocrData.data) {
-            // 🆕 Conciliação Inteligente
             if (ocrData.data.amount > 0 && ocrData.data.date) {
               const { data: similarTxs } = await supabase
                 .from('transactions')
@@ -157,18 +158,18 @@ export default function EditTransactionPage() {
                 .limit(3)
 
               if (similarTxs && similarTxs.length > 0) {
-                const similarTx = similarTxs[0]
+                const tx = similarTxs[0]
                 const confirmed = confirm(
                   `🔍 Conciliação Inteligente\n\n` +
                   `Encontramos uma despesa similar:\n` +
-                  `"${similarTx.description}" — ${formatCurrency(similarTx.amount)} em ${format(new Date(similarTx.date), "dd/MM")}\n\n` +
+                  `"${tx.description}" — ${formatCurrency(tx.amount)} em ${format(new Date(tx.date), "dd/MM")}\n\n` +
                   `Deseja anexar este comprovante a essa transação existente?`
                 )
                 if (confirmed) {
                   await supabase
                     .from('transactions')
                     .update({ receipt_url: urlData.publicUrl })
-                    .eq('id', similarTx.id)
+                    .eq('id', tx.id)
                   showToast('Comprovante vinculado à transação existente!', 'success')
                   vibrate([50])
                   return
@@ -176,7 +177,6 @@ export default function EditTransactionPage() {
               }
             }
 
-            // Se não encontrou similar, preenche o formulário
             if (ocrData.data.amount > 0) {
               setAmountInput(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
             }
@@ -225,13 +225,11 @@ export default function EditTransactionPage() {
       setTimeout(() => setShowCamera(true), 150)
       return
     }
-
     if (option === 'galeria') {
       galeriaInputRef.current?.click()
       setTimeout(() => setShowReceiptModal(false), 200)
       return
     }
-
     if (option === 'pdf') {
       pdfInputRef.current?.click()
       setTimeout(() => setShowReceiptModal(false), 200)
@@ -291,6 +289,7 @@ export default function EditTransactionPage() {
           setCreditCardId(txData.credit_card_id || '')
           setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
           setNotes(txData.notes || '')
+          setIsReimbursable(txData.is_reimbursable || false)
           const amountSafe = Number(txData.amount) || 0
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
@@ -372,6 +371,7 @@ export default function EditTransactionPage() {
       receipt_url: receiptUrl,
       financing_id: financingId,
       debt_id: debtId,
+      is_reimbursable: isReimbursable,
     }
 
     try {
@@ -416,11 +416,67 @@ export default function EditTransactionPage() {
       }
 
       if (isNew) {
-        const { error } = await supabase.from('transactions').insert([payload])
+        const { data: savedTx, error } = await supabase.from('transactions').insert([payload]).select().single()
         if (error) throw error
+
+        // 🆕 Cria reembolso se marcado
+        if (isReimbursable && savedTx) {
+          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
+          const { data: reimbTx } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: user.id,
+              type: txType === 'expense' ? 'income' : 'expense',
+              amount: rawAmount,
+              description: `Reembolso: ${description || 'Transação'}`,
+              date,
+              status: 'pending',
+              context: otherContext,
+              category_id: null,
+              linked_transaction_id: savedTx.id,
+              is_reimbursable: true,
+            })
+            .select()
+            .single()
+
+          if (reimbTx) {
+            await supabase
+              .from('transactions')
+              .update({ linked_transaction_id: reimbTx.id })
+              .eq('id', savedTx.id)
+          }
+        }
       } else {
         const { error } = await supabase.from('transactions').update(payload).match({ id, user_id: user.id })
         if (error) throw error
+
+        // 🆕 Se marcou reembolso e não tinha antes, cria
+        if (isReimbursable && !tx?.is_reimbursable) {
+          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
+          const { data: reimbTx } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: user.id,
+              type: txType === 'expense' ? 'income' : 'expense',
+              amount: rawAmount,
+              description: `Reembolso: ${description || 'Transação'}`,
+              date,
+              status: 'pending',
+              context: otherContext,
+              category_id: null,
+              linked_transaction_id: id,
+              is_reimbursable: true,
+            })
+            .select()
+            .single()
+
+          if (reimbTx) {
+            await supabase
+              .from('transactions')
+              .update({ linked_transaction_id: reimbTx.id })
+              .eq('id', id)
+          }
+        }
       }
 
       showToast('Transação salva!', 'success')
@@ -482,278 +538,232 @@ export default function EditTransactionPage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
 
-      <input
-        ref={galeriaInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
-      />
-      <input
-        ref={pdfInputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
-      />
+      <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
+      <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
 
-      {/* ── Header ── */}
-      <div className="flex justify-between items-center p-4">
-        <button onClick={() => router.back()} className="text-gray-800 dark:text-gray-200 p-2 -ml-2">
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 capitalize">
-          {isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}
-        </h1>
-        <div className="flex items-center gap-4 text-teal-700 dark:text-teal-400">
-          {!isNew && <button><Copy size={20} /></button>}
-          {!isNew && <button onClick={handleDelete} className="text-red-500"><Trash2 size={20} /></button>}
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
+            {isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}
+          </h1>
+          <div className="flex items-center gap-2">
+            {!isNew && <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={20} /></button>}
+          </div>
         </div>
+        <ContextToggle />
       </div>
 
-      {/* ── Valor ── */}
-      <div className="px-6 py-4 mb-4">
-        <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mb-2 capitalize">
-          Valor da {typeLabel}
-        </p>
-        <div className="flex items-center gap-2">
-          <span className="text-3xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={amountInput}
-            onChange={handleAmountChange}
-            className={`text-4xl font-light bg-transparent outline-none w-full ${colorClass}`}
-            placeholder="0,00"
-          />
+      <div className="px-4 pt-4 space-y-4">
+        {/* Valor */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Valor</label>
+          <div className="flex items-center gap-1 text-3xl font-bold">
+            <span className="text-gray-400">R$</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={amountInput}
+              onChange={handleAmountChange}
+              className={`bg-transparent outline-none w-full ${colorClass}`}
+              placeholder="0,00"
+            />
+          </div>
         </div>
-      </div>
 
-      {/* ── Card principal ── */}
-      <div className="bg-white dark:bg-slate-800 rounded-t-[32px] px-6 py-6 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] dark:shadow-none space-y-6 transition-colors duration-300">
-
-        {/* Pago/Recebido ou Cartão */}
-        <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
-          <div className="flex items-center gap-4">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isPaid || creditCardId ? 'bg-gray-800 dark:bg-gray-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-              <Check size={14} />
+        {/* Pago/Recebido */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isPaid ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
+              <Check size={16} className={isPaid ? 'text-emerald-600' : 'text-gray-400'} />
             </div>
-            <span className="font-bold text-[15px] text-gray-800 dark:text-gray-200">
+            <span className="font-bold text-sm text-gray-800 dark:text-gray-200">
               {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
             </span>
           </div>
           {!creditCardId && (
-            <button
-              onClick={() => setIsPaid(!isPaid)}
-              className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}
-            >
+            <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}>
               <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
             </button>
           )}
         </div>
 
-        {/* Seletor de Cartão (apenas despesas) */}
+        {/* Cartão de Crédito */}
         {!isIncome && creditCards.length > 0 && (
-          <button
-            onClick={() => setShowCardModal(true)}
-            className="w-full flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5"
-          >
-            <div className="flex items-center gap-4">
-              <CreditCard size={22} className="text-gray-400 dark:text-gray-500" />
-              <div className="flex-1 flex flex-col text-left">
-                <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Cartão</span>
-                <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  {selectedCard ? selectedCard.name : 'Selecione...'}
-                </span>
-              </div>
+          <button onClick={() => setShowCardModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CreditCard size={20} className="text-gray-400" />
+              <span className={`text-sm font-medium ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
+                {selectedCard ? selectedCard.name : 'Cartão de crédito (opcional)'}
+              </span>
             </div>
             {selectedCard && (
-              <div
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCreditCardId('')
-                }}
-                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <X size={16} />
-              </div>
+              <div onClick={(e) => { e.stopPropagation(); setCreditCardId('') }} className="p-2 text-gray-400 hover:text-red-500"><X size={16} /></div>
             )}
           </button>
         )}
 
+        {/* Categoria com ícone (design premium igual Nova Transação) */}
+        <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Tag size={20} className="text-gray-400" />
+            <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
+              {selectedCat ? selectedCat.name : 'Categoria'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedCat && (() => {
+              const IconComp = getDynamicIcon(selectedCat.icon)
+              return (
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}>
+                  <IconComp size={20} />
+                </div>
+              )
+            })()}
+            <ChevronRight size={18} className="text-gray-300" />
+          </div>
+        </button>
+
+        {/* Conta com BankLogo (design premium) */}
+        {!creditCardId && (
+          <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Wallet size={20} className="text-gray-400" />
+              <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
+                {selectedAcc ? selectedAcc.name : 'Conta'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
+              <ChevronRight size={18} className="text-gray-300" />
+            </div>
+          </button>
+        )}
+
+        {/* Data */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+          <Calendar size={20} className="text-gray-400" />
+          <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="flex-1 text-sm font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200" />
+        </div>
+
+        {/* Descrição */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+          <Edit3 size={20} className="text-gray-400" />
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200" />
+        </div>
+
         {/* Comprovante */}
         {uploading ? (
-          <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
             <Loader2 size={20} className="animate-spin text-teal-700" />
             <span className="text-sm text-gray-500">Enviando comprovante...</span>
           </div>
         ) : receiptUrl ? (
-          <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/30 rounded-xl p-3">
-            {receiptPreview ? (
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
-                <img src={receiptPreview} alt="Comprovante" className="w-full h-full object-cover" />
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+            <div className="flex items-center gap-3">
+              {receiptPreview ? (
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
+                  <img src={receiptPreview} alt="Comprovante" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                  {receiptType === 'pdf' ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" /> : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{receiptName || 'Comprovante'}</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Comprovante anexado</p>
               </div>
-            ) : (
-              <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                {receiptType === 'pdf'
-                  ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" />
-                  : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />
-                }
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{receiptName || 'Comprovante'}</p>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Comprovante anexado</p>
+              <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button>
             </div>
-            <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-              <Trash2 size={18} />
-            </button>
           </div>
         ) : (
-          <button
-            onClick={() => setShowReceiptModal(true)}
-            className="w-full flex items-center gap-3 py-2 text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-          >
+          <button onClick={() => setShowReceiptModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 text-gray-500">
             <Camera size={20} />
             <span className="text-sm font-medium">Anexar comprovante</span>
           </button>
         )}
 
-        {/* Data */}
-        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
-          <Calendar size={22} className="text-gray-400 dark:text-gray-500" />
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => handleDateChange(e.target.value)}
-            className="flex-1 text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none bg-transparent"
-          />
-        </div>
-
-        {/* Descrição */}
-        <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
-          <Edit3 size={22} className="text-gray-400 dark:text-gray-500" />
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Descrição"
-            className="flex-1 text-[15px] text-gray-800 dark:text-gray-200 outline-none bg-transparent placeholder:text-gray-300 dark:placeholder-gray-500"
-          />
-        </div>
-
-        {/* Categoria */}
-        <button
-          onClick={() => setShowCatModal(true)}
-          className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5"
-        >
-          <Tag size={22} className="text-gray-400 dark:text-gray-500" />
-          <div className="flex-1 flex flex-col text-left">
-            <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Categoria</span>
-            <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
-              {selectedCat ? selectedCat.name : 'Selecione...'}
-            </span>
-          </div>
-          <ChevronRight size={18} className="text-gray-300" />
+        {/* Mais detalhes */}
+        <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
+          {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
+          {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
 
-        {/* Conta (se não for cartão) */}
-        {!creditCardId && (
-          <button
-            onClick={() => setShowAccModal(true)}
-            className="w-full flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5"
-          >
-            <Wallet size={22} className="text-gray-400 dark:text-gray-500" />
-            <div className="flex-1 flex flex-col text-left">
-              <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Conta</span>
-              <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
-                {selectedAcc ? selectedAcc.name : 'Selecione...'}
-              </span>
-            </div>
-            <ChevronRight size={18} className="text-gray-300" />
-          </button>
-        )}
-
-        <div className="flex justify-center pt-2 pb-2">
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="text-[14px] font-bold text-teal-700 dark:text-teal-400"
-          >
-            {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
-          </button>
-        </div>
-
         {showDetails && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            {!isIncome && (
-              <>
-                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5">
-                  <div className="flex items-center gap-4">
-                    <ArrowRightLeft size={22} className="text-gray-400 dark:text-gray-500" />
-                    <div className="flex flex-col">
-                      <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
-                      <span className="text-[11px] text-gray-400">Abate o gasto da categoria no relatório</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setIsRefund(!isRefund)}
-                    className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5 cursor-pointer" onClick={() => setShowFinancingModal(true)}>
-                  <div className="flex items-center gap-4">
-                    <Building size={22} className="text-gray-400 dark:text-gray-500" />
-                    <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Financiamento</span>
-                  </div>
-                  <button className={`w-11 h-6 rounded-full relative transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${financingId ? 'right-1' : 'left-1'}`} />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-5 cursor-pointer" onClick={() => setShowLoanModal(true)}>
-                  <div className="flex items-center gap-4">
-                    <HandCoins size={22} className="text-gray-400 dark:text-gray-500" />
-                    <div className="flex flex-col">
-                      <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Empréstimo a alguém</span>
-                      <span className="text-[11px] text-gray-400">Vira saldo a receber em "Quem me deve"</span>
-                    </div>
-                  </div>
-                  <button className={`w-11 h-6 rounded-full relative transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${debtId ? 'right-1' : 'left-1'}`} />
-                  </button>
-                </div>
-              </>
-            )}
-
-            <div className="flex items-center gap-4 border-b border-gray-100 dark:border-slate-700 pb-5">
-              <Edit3 size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Observações"
-                className="flex-1 text-[14px] text-gray-800 dark:text-gray-200 outline-none bg-transparent placeholder:text-gray-300 dark:placeholder-gray-500"
-              />
-            </div>
-
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-4 pb-2">
-              <Tag size={22} className="text-gray-400 dark:text-gray-500 opacity-50" />
-              <div className="flex-1 flex flex-col text-left">
-                <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Tags</span>
-                <span className="text-[14px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Nenhuma tag'}
+          <div className="space-y-3">
+            {/* Tags */}
+            <button onClick={() => setShowTagModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Tag size={20} className="text-gray-400" />
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                  {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
                 </span>
               </div>
               <ChevronRight size={18} className="text-gray-300" />
             </button>
+
+            {/* Observações */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+              <Edit3 size={20} className="text-gray-400 opacity-50" />
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações" className="flex-1 text-sm bg-transparent outline-none text-gray-800 dark:text-gray-200" />
+            </div>
+
+            {!isIncome && (
+              <>
+                {/* Reembolso */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw size={20} className="text-gray-400" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É um reembolso</span>
+                      <span className="text-[11px] text-gray-400">Pago com recurso do outro contexto (PF/PJ)</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsReimbursable(!isReimbursable)} className={`w-12 h-6 rounded-full transition-colors ${isReimbursable ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isReimbursable ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                {/* Devolução/Estorno */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <ArrowRightLeft size={20} className="text-gray-400" />
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
+                  </div>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                {/* Financiamento */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between cursor-pointer" onClick={() => setShowFinancingModal(true)}>
+                  <div className="flex items-center gap-3"><Building size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span></div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${financingId ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                </div>
+
+                {/* Empréstimo */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between cursor-pointer" onClick={() => setShowLoanModal(true)}>
+                  <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span></div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${debtId ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── Modais ── */}
+      {/* Botão salvar */}
+      <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
+        <button onClick={handleSave} disabled={saving} className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-teal-800 transition-colors">
+          {saving ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
+        </button>
+      </div>
+
+      {/* Modais (mantidos originais) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -768,8 +778,7 @@ export default function EditTransactionPage() {
                 const isActive = cat.id === categoryId
                 return (
                   <button key={cat.id} onClick={() => { setCategoryId(cat.id); setSelectedParentCat(cat); subCount > 0 ? setShowSubCatModal(true) : setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={20} /></div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
                     {subCount > 0 && <span className="text-xs text-gray-400 mr-2">{subCount}</span>}
@@ -789,10 +798,7 @@ export default function EditTransactionPage() {
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2"><ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" /></button>
-              <div>
-                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3>
-                <p className="text-xs text-gray-500">{selectedParentCat.name}</p>
-              </div>
+              <div><h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3><p className="text-xs text-gray-500">{selectedParentCat.name}</p></div>
             </div>
             <div className="space-y-2">
               {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
@@ -800,8 +806,7 @@ export default function EditTransactionPage() {
                 const isActive = sub.id === categoryId
                 return (
                   <button key={sub.id} onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}><SubIcon size={20} /></div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
                     {isActive && <Check size={20} className="text-teal-700" />}
@@ -828,8 +833,7 @@ export default function EditTransactionPage() {
                 const isActive = acc.id === accountId
                 return (
                   <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color }}>{acc.name.substring(0, 2).toUpperCase()}</div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700" />}
@@ -854,21 +858,14 @@ export default function EditTransactionPage() {
                 const isActive = card.id === creditCardId
                 return (
                   <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}>
-                      <CreditCard size={20} />
-                    </div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                      {card.name}
-                    </span>
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
-              {creditCards.length === 0 && (
-                <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>
-              )}
+              {creditCards.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>}
             </div>
           </div>
         </div>
@@ -886,8 +883,7 @@ export default function EditTransactionPage() {
                 const isActive = selectedTags.includes(tag.id)
                 return (
                   <button key={tag.id} onClick={() => toggleTag(tag.id)}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
                     {isActive && <Check size={20} className="text-teal-700" />}
@@ -900,37 +896,10 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      <ReceiptModal
-        isOpen={showReceiptModal}
-        onClose={() => setShowReceiptModal(false)}
-        onOptionSelect={handleReceiptOption}
-      />
-      <CameraCapture
-        isOpen={showCamera}
-        onClose={() => setShowCamera(false)}
-        onCapture={handleCameraCapture}
-      />
-      <ModalFinancing
-        isOpen={showFinancingModal}
-        onClose={() => setShowFinancingModal(false)}
-        onSave={(id) => setFinancingId(id)}
-      />
-      <ModalEmprestimo
-        isOpen={showLoanModal}
-        onClose={() => setShowLoanModal(false)}
-        onSave={(id) => { setDebtId(id) }}
-      />
-
-      {/* ── Botão salvar ── */}
-      <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-teal-800 transition-colors"
-        >
-          {saving ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
-        </button>
-      </div>
+      <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />
+      <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
+      <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />
+      <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => { setDebtId(id) }} />
     </div>
   )
 }
