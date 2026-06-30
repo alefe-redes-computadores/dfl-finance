@@ -35,6 +35,18 @@ export default function BudgetVsReal({ filters }: BudgetVsRealProps) {
         .gte('date', filters.dateRange.start)
         .lte('date', filters.dateRange.end)
       if (filters.context === 'personal') expQuery = expQuery.eq('context', 'personal')
+
+      // 🆕 Filtros cruzados
+      if (filters.tags && filters.tags.length > 0) {
+        expQuery = expQuery.overlaps('tag_ids', filters.tags)
+      }
+      if (filters.accounts && filters.accounts.length > 0) {
+        expQuery = expQuery.in('account_id', filters.accounts)
+      }
+      if (filters.creditCards && filters.creditCards.length > 0) {
+        expQuery = expQuery.in('credit_card_id', filters.creditCards)
+      }
+
       const { data: expData } = await expQuery
 
       setBudgets(budgData || [])
@@ -106,7 +118,7 @@ export default function BudgetVsReal({ filters }: BudgetVsRealProps) {
             </div>
           )}
 
-          {/* 🆕 Botão Exportar PDF */}
+          {/* Botão Exportar PDF */}
           {expenses.length > 0 && (
             <PDFDownloadLink
               document={
