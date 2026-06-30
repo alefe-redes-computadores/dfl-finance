@@ -34,16 +34,15 @@ export default function ReviewImportPage() {
   const { toast } = useToast();
   const supabase = createClient();
 
-  // Dados passados via URL state (codificados em base64) ou via sessionStorage
-  const [newTrans, setNewTrans] = useState<ExtractedTransaction[]>(() => {
+  const [newTrans] = useState<ExtractedTransaction[]>(() => {
     const data = searchParams.get('new');
     return data ? JSON.parse(atob(data)) : [];
   });
-  const [review, setReview] = useState<ReviewItem[]>(() => {
+  const [review] = useState<ReviewItem[]>(() => {
     const data = searchParams.get('review');
     return data ? JSON.parse(atob(data)) : [];
   });
-  const [duplicates, setDuplicates] = useState<ExtractedTransaction[]>(() => {
+  const [duplicates] = useState<ExtractedTransaction[]>(() => {
     const data = searchParams.get('duplicates');
     return data ? JSON.parse(atob(data)) : [];
   });
@@ -52,41 +51,44 @@ export default function ReviewImportPage() {
   const [reviewDecisions, setReviewDecisions] = useState<('merge' | 'keep' | null)[]>(review.map(() => null));
 
   const handleConfirm = async () => {
-    // Filtra novas selecionadas
     const confirmedNew = newTrans.filter((_, i) => selectedNew[i]);
-
-    // Revisão: merge ou keep
     const mergedIds: string[] = [];
     const keepTransactions: ExtractedTransaction[] = [];
+
     review.forEach((item, i) => {
       if (reviewDecisions[i] === 'merge') {
         mergedIds.push(item.matched.id);
-        // A transação manual absorve dados; faremos update depois
       } else if (reviewDecisions[i] === 'keep') {
         keepTransactions.push(item.imported);
       }
     });
 
+    // Obtém o usuário UMA VEZ, antes do map
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({ title: 'Erro', description: 'Não autenticado.', variant: 'destructive' });
+      return;
+    }
+
+    const toInsert = [...confirmedNew, ...keepTransactions];
+
     try {
-      // Insere novas e keep
-      const toInsert = [...confirmedNew, ...keepTransactions];
       if (toInsert.length > 0) {
-        const { error } = await supabase.from('transactions').insert(
-          toInsert.map((t) => ({
-            user_id: (await supabase.auth.getUser()).data.user?.id,
-            amount: t.amount,
-            description: t.description,
-            date: t.date,
-            type: t.type,
-            context: 'pf', // ajustar conforme necessário
-            source: 'ofx_import',
-            affects_balance: true,
-          }))
-        );
+        const insertData = toInsert.map((t) => ({
+          user_id: user.id,
+          amount: t.amount,
+          description: t.description,
+          date: t.date,
+          type: t.type,
+          context: 'pf', // ajustar conforme necessário
+          source: 'ofx_import',
+          affects_balance: true,
+        }));
+
+        const { error } = await supabase.from('transactions').insert(insertData);
         if (error) throw error;
       }
 
-      // Para mesclagens: atualiza transações existentes com source e receipt_url (se houver)
       if (mergedIds.length > 0) {
         const { error } = await supabase
           .from('transactions')
@@ -97,21 +99,16 @@ export default function ReviewImportPage() {
 
       toast({
         title: 'Importação concluída',
-        description: `${confirmedNew.length + keepTransactions.length} transações adicionadas, ${mergedIds.length} mescladas, ${duplicates.length} ignoradas.`,
+        description: `${confirmedNew.length + keepTransactions.length} adicionadas, ${mergedIds.length} mescladas, ${duplicates.length} ignoradas.`,
       });
       router.push('/home');
     } catch (err: any) {
-      toast({
-        title: 'Erro',
-        description: err.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     }
   };
 
   return (
     <div className="flex flex-col gap-6 p-4 max-w-2xl mx-auto">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
@@ -119,7 +116,7 @@ export default function ReviewImportPage() {
         <h1 className="text-2xl font-semibold">Revisar Importação</h1>
       </div>
 
-      {/* Seção Novas */}
+      {/* Novas */}
       <Card className="border-l-4 border-l-emerald-500">
         <CardContent className="p-4">
           <h2 className="text-lg font-medium text-emerald-600 flex items-center gap-2">
@@ -151,7 +148,7 @@ export default function ReviewImportPage() {
         </CardContent>
       </Card>
 
-      {/* Seção Revisão */}
+      {/* Revisão */}
       <Card className="border-l-4 border-l-amber-500">
         <CardContent className="p-4">
           <h2 className="text-lg font-medium text-amber-600 flex items-center gap-2">
@@ -205,7 +202,7 @@ export default function ReviewImportPage() {
         </CardContent>
       </Card>
 
-      {/* Seção Duplicatas */}
+      {/* Duplicatas */}
       <Card className="border-l-4 border-l-red-500">
         <CardContent className="p-4">
           <h2 className="text-lg font-medium text-red-600 flex items-center gap-2">
@@ -225,7 +222,6 @@ export default function ReviewImportPage() {
         </CardContent>
       </Card>
 
-      {/* Botão Confirmar */}
       <Button onClick={handleConfirm} className="w-full py-3 text-base">
         Confirmar Importação
       </Button>
