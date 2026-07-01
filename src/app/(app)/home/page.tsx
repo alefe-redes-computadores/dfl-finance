@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -10,7 +10,7 @@ import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
   PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
-  Sun, Moon, Sunrise, Sunset
+  Sun, Moon, Sunrise, Sunset, RefreshCw
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -116,6 +116,7 @@ function HomeContent() {
   const { showToast } = useToast()
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [refreshing, setRefreshing] = useState(false)
 
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [previousBalance, setPreviousBalance] = useState(0)
@@ -146,6 +147,48 @@ function HomeContent() {
 
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
+
+  // Extrai o primeiro nome para a saudação
+  const fullName = user?.user_metadata?.name || 'Álefe'
+  const firstName = fullName.split(' ')[0]
+
+  // Pull to refresh
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || dataLoading) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current || refreshing) return
+    const pullDistance = e.touches[0].clientY - pullStartY.current
+    if (pullDistance > 60) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadData().finally(() => setRefreshing(false))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [dataLoading, refreshing])
 
   const getBalanceStyle = (val: number) => {
     if (val > 0) return 'text-emerald-600 font-bold'
@@ -612,7 +655,7 @@ function HomeContent() {
           <div key="receivables" className="mb-6">
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/debts')}>
-                <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">A Receber (Dívidas)</h3>
+                <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">A Receber</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
@@ -621,20 +664,46 @@ function HomeContent() {
                   const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
                   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), today) : null
                   const isOverdue = daysUntilDue !== null && daysUntilDue < 0
+                  const percent = Math.min(debt.percent, 100)
                   return (
-                    <div key={debt.id} onClick={() => router.push(`/debts/${debt.id}`)} className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}><IconComp size={20} /></div>
-                        <div>
-                          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100">{debt.person_name}</p>
-                          <p className={`text-[12px] font-medium mt-0.5 ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-                            {isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)` : debt.due_date ? `Vence ${format(new Date(debt.due_date), "dd/MM")}` : 'Sem prazo'}
-                          </p>
-                        </div>
+                    <div
+                      key={debt.id}
+                      onClick={() => router.push(`/debts/${debt.id}`)}
+                      className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors"
+                    >
+                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}>
+                        <IconComp size={20} />
                       </div>
-                      <div className="text-right">
-                        <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(remaining)}</p>
-                        <div className="w-16 bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mt-1.5 ml-auto"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(debt.percent, 100)}%` }} /></div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start mb-1">
+                          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 truncate">{debt.person_name}</p>
+                          <p className="text-[15px] font-bold text-emerald-600 ml-2 shrink-0">{formatCurrency(remaining)}</p>
+                        </div>
+
+                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              isOverdue ? 'bg-red-500' : remaining <= 0 ? 'bg-emerald-500' : 'bg-teal-500'
+                            }`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className={`text-[11px] font-medium ${
+                            isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
+                          }`}>
+                            {isOverdue
+                              ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)`
+                              : debt.due_date
+                                ? `Vence ${format(new Date(debt.due_date), "dd/MM")}`
+                                : 'Sem prazo'}
+                          </span>
+                          <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                            {percent.toFixed(0)}% pago
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )
@@ -825,7 +894,17 @@ function HomeContent() {
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
+      {/* Pull to refresh indicator */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} isSyncing={isSyncing} />
 
       {cards.length > 0 && (
@@ -848,7 +927,7 @@ function HomeContent() {
         <div className="flex-1 min-w-0 mr-3">
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             {greeting.icon}
-            <span className="text-sm font-medium truncate">{greeting.text}, {user?.user_metadata?.name || 'Álefe'}</span>
+            <span className="text-sm font-medium truncate">{greeting.text}, {firstName}</span>
           </div>
           <ContextToggle />
         </div>
