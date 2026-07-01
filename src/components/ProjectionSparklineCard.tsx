@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import { ResponsiveContainer, LineChart, Line } from 'recharts'
-import { createClient } from '@/utils/supabase/client'
 
 interface ProjectionData {
   projection_date: string
@@ -16,23 +15,36 @@ export default function ProjectionSparklineCard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
-  const supabase = createClient()
-
   useEffect(() => {
     async function fetchProjection() {
       try {
-        const { data: projection, error } = await supabase
-          .from('projected_daily_balance')
-          .select('projection_date, projected_balance')
-          .order('projection_date', { ascending: true })
-          .limit(30)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-        if (error) {
-          console.error('Erro ao buscar projeção:', error)
+        if (!supabaseUrl || !supabaseAnonKey) {
+          setError(true)
+          setLoading(false)
+          return
+        }
+
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/projected_daily_balance?select=projection_date,projected_balance&order=projection_date.asc&limit=30`,
+          {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+
+        if (!response.ok) {
+          console.error('Erro ao buscar projeção:', response.status)
           setError(true)
           return
         }
 
+        const projection = await response.json()
         setData(projection || [])
       } catch (err) {
         console.error('Erro:', err)
@@ -45,17 +57,13 @@ export default function ProjectionSparklineCard() {
     fetchProjection()
   }, [])
 
-  // Valor projetado no 30º dia (ou último disponível)
   const finalBalance = data.length > 0 ? data[data.length - 1].projected_balance : 0
   const isPositive = finalBalance >= 0
 
-  // Cor dinâmica
-  const accentColor = isPositive ? '#10b981' : '#ef4444' // emerald-500 : red-500
-  const bgAccentLight = isPositive ? 'bg-emerald-50 dark:bg-emerald-950' : 'bg-red-50 dark:bg-red-950'
-  const textAccent = isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+  const accentColor = isPositive ? '#10b981' : '#ef4444'
   const borderAccent = isPositive ? 'border-emerald-200 dark:border-emerald-800' : 'border-red-200 dark:border-red-800'
+  const textAccent = isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
 
-  // Formatador de moeda
   const formatBRL = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
@@ -92,11 +100,9 @@ export default function ProjectionSparklineCard() {
       <div
         className={`relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-sm border ${borderAccent} p-4 hover:shadow-md transition-all cursor-pointer active:scale-[0.98]`}
       >
-        {/* Fundo com leve degradê */}
         <div className={`absolute inset-0 opacity-5 ${isPositive ? 'bg-emerald-500' : 'bg-red-500'}`} />
 
         <div className="relative z-10">
-          {/* Título */}
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
               Projeção (30 dias)
@@ -108,17 +114,14 @@ export default function ProjectionSparklineCard() {
             )}
           </div>
 
-          {/* Valor projetado */}
           <p className={`text-xl font-bold ${textAccent}`}>
             {formatBRL(finalBalance)}
           </p>
 
-          {/* Indicador textual */}
           <p className={`text-xs ${textAccent} opacity-80 mt-0.5`}>
             {isPositive ? 'Saldo positivo projetado' : 'Atenção: saldo negativo projetado'}
           </p>
 
-          {/* Sparkline */}
           <div className="mt-3 h-12 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data}>
