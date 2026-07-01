@@ -1,20 +1,45 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   ChevronLeft, Plus, Users, Loader2, Edit3, Trash2,
-  Building, User, Phone, Mail
+  Building, User, Phone, Mail, RefreshCw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
-import Skeleton from '@/components/Skeleton'
 
+// ============================================================
+// SKELETON LOADER
+// ============================================================
+const ContactsSkeleton = () => (
+  <div className="space-y-2 animate-pulse">
+    {[1, 2, 3, 4, 5].map((i) => (
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-slate-700" />
+            <div className="space-y-2">
+              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
+              <div className="h-4 w-16 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-gray-200 dark:bg-slate-700 rounded" />
+            <div className="w-4 h-4 bg-gray-200 dark:bg-slate-700 rounded" />
+            <div className="w-7 h-7 bg-gray-200 dark:bg-slate-700 rounded-full" />
+            <div className="w-7 h-7 bg-gray-200 dark:bg-slate-700 rounded-full" />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)
 
 export default function ContactsPage() {
   const router = useRouter()
@@ -23,6 +48,45 @@ export default function ContactsPage() {
   const { showToast } = useToast()
   const [contacts, setContacts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Pull to refresh
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || loading) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current || refreshing) return
+    const pullDistance = e.touches[0].clientY - pullStartY.current
+    if (pullDistance > 60) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadContacts().finally(() => setRefreshing(false))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [loading, refreshing])
 
   useEffect(() => {
     if (!user?.id) return
@@ -68,17 +132,27 @@ export default function ContactsPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      {/* Pull to refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
             Contatos {contacts.length > 0 && `(${contacts.length})`}
           </h1>
-          <button onClick={() => router.push('/contacts/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
+          <button onClick={() => router.push('/contacts/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:text-teal-800 transition-colors active:scale-90">
             <Plus size={24} />
           </button>
         </div>
@@ -87,11 +161,9 @@ export default function ContactsPage() {
 
       <div className="px-4 pt-4">
         {loading ? (
-          <div className="space-y-3">
-            <Skeleton variant="card" height="72px" count={5} />
-          </div>
+          <ContactsSkeleton />
         ) : contacts.length === 0 ? (
-          <div className="text-center py-16">
+          <div className="text-center py-16 animate-in fade-in duration-300">
             <Users size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhum contato</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
@@ -105,14 +177,14 @@ export default function ContactsPage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 animate-in fade-in duration-300">
             {contacts.map(contact => {
               const IconComp = getDynamicIcon(contact.icon || 'user')
               return (
                 <div
                   key={contact.id}
                   onClick={() => router.push(`/contacts/${contact.id}`)}
-                  className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all"
+                  className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
