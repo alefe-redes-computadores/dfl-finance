@@ -44,6 +44,7 @@ import { ContextToggle } from '@/components/ContextToggle'
 import { InstallBanner } from '@/components/InstallBanner'
 import ProjectionSparklineCard from '@/components/ProjectionSparklineCard'
 
+
 // FUNÇÕES E TIPOS
 import { cn, formatCurrency } from '@/lib/utils'
 
