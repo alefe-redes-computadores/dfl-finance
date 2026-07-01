@@ -1,4 +1,3 @@
-
 'use client'
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +63,6 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
 // ============================================================
 const HomeSkeleton = () => (
   <div className="space-y-6 animate-pulse">
-    {/* Saldo Total */}
     <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50">
       <div className="flex flex-col items-center gap-3">
         <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" />
@@ -73,7 +71,6 @@ const HomeSkeleton = () => (
       </div>
     </div>
 
-    {/* Receitas / Despesas */}
     <div className="grid grid-cols-2 gap-4">
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 flex flex-col items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-700" />
@@ -87,7 +84,6 @@ const HomeSkeleton = () => (
       </div>
     </div>
 
-    {/* Transações Recentes (simplificado) */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
       <div className="flex justify-between items-center px-5 py-4">
         <div className="h-4 w-36 bg-gray-200 dark:bg-slate-700 rounded" />
@@ -137,6 +133,8 @@ function HomeContent() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [criticalCount, setCriticalCount] = useState(0)
 
   const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_SECTION_ORDER)
   const [layoutLoaded, setLayoutLoaded] = useState(false)
@@ -253,7 +251,7 @@ function HomeContent() {
       const prevStart = getLocalDateString(startOfMonth(prevMonthDate))
       const prevEnd = getLocalDateString(endOfMonth(prevMonthDate))
 
-      const [{ data: transactions }, { data: prevTransactions }, { data: subsData }, { data: debtsData }, { data: financingsData }] = await Promise.all([
+      const [{ data: transactions }, { data: prevTransactions }, { data: subsData }, { data: debtsData }, { data: financingsData }, { data: budgetsData }, { data: creditCards }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -282,19 +280,23 @@ function HomeContent() {
           .from('financings')
           .select('*')
           .match({ user_id: user.id, context: context, status: 'active' })
-          .order('next_due_date', { ascending: true })
+          .order('next_due_date', { ascending: true }),
+        supabase
+          .from('budgets')
+          .select('*, categories(name, icon, color)')
+          .match({ user_id: user.id, context: context }),
+        supabase
+          .from('credit_cards')
+          .select('*')
+          .match({ user_id: user.id, context: context, is_archived: false })
+          .order('created_at', { ascending: false })
       ])
 
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
       setFinancings(Array.isArray(financingsData) ? financingsData : [])
 
-      const prevTxs = Array.isArray(prevTransactions) ? prevTransactions : []
-      const prevInc = prevTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      const prevExp = prevTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      const prevBal = prevInc - prevExp
-      setPreviousBalance(prevBal)
-
+      // Dívidas com progresso
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
         const { data: payments } = await supabase
@@ -306,14 +308,19 @@ function HomeContent() {
         const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
         return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
       }))
-
       setDebts(debtsWithProgress)
       setTotalToReceive(debtsWithProgress.reduce((a, d) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
 
+      // Resumo financeiro
       const income = txs.filter((t) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const balance = income - expense
 
+      const prevTxs = Array.isArray(prevTransactions) ? prevTransactions : []
+      const prevInc = prevTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+      const prevExp = prevTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+      const prevBal = prevInc - prevExp
+      setPreviousBalance(prevBal)
       if (prevBal !== 0) {
         setBalanceVariation(((balance - prevBal) / Math.abs(prevBal)) * 100)
       } else {
@@ -326,6 +333,7 @@ function HomeContent() {
       setSummary({ income, expense, balance })
       setRecentTransactions(txs.slice(0, 5))
 
+      // Contas
       const { data: accsData } = await supabase.from('accounts').select('*').match({ user_id: user.id, context: context }).order('name')
       const accsWithPrevisto = (Array.isArray(accsData) ? accsData : []).map((acc) => {
         const accTxs = txs.filter((t) => t.account_id === acc.id && t.status === 'pending')
@@ -336,8 +344,9 @@ function HomeContent() {
       })
       setAccounts(accsWithPrevisto)
 
-      const { data: creditCards } = await supabase.from('credit_cards').select('*').match({ user_id: user.id, context: context, is_archived: false }).order('created_at', { ascending: false })
-      const cardsWithInvoice = (Array.isArray(creditCards) ? creditCards : []).map((card) => {
+      // Cartões de crédito
+      const cardsArray = Array.isArray(creditCards) ? creditCards : []
+      const cardsWithInvoice = cardsArray.map((card) => {
         const cardTxs = txs.filter((t) => t.credit_card_id === card.id)
         const faturaAtual = cardTxs.reduce((acc, t) => acc + (Number(t.amount) || 0), 0)
         return { ...card, faturaAtual }
@@ -345,14 +354,101 @@ function HomeContent() {
       setCards(cardsWithInvoice)
       setPendings({ toPay, toReceive, faturas: cardsWithInvoice.reduce((acc, c) => acc + c.faturaAtual, 0) })
 
-      const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context: context }).order('created_at', { ascending: false })
-      const budgetsWithSpent = (budgetsData || []).map((budget) => {
+      // Orçamentos
+      const budgetsArray = Array.isArray(budgetsData) ? budgetsData : []
+      const budgetsWithSpent = budgetsArray.map((budget) => {
         const spent = txs.filter((t) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
         const remaining = Number(budget.amount) - spent
         const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
         return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
       })
       setBudgets(budgetsWithSpent.sort((a, b) => b.percent - a.percent).slice(0, 3))
+
+      // ============================================================
+      // GERAÇÃO DE NOTIFICAÇÕES (COMPLETA, IGUAL À CENTRAL)
+      // ============================================================
+      const today = new Date()
+      const todayDay = today.getDate()
+
+      const { data: reads } = await supabase
+        .from('notification_reads')
+        .select('notification_id')
+        .eq('user_id', user.id)
+      const readSet = new Set(reads?.map(r => r.notification_id) || [])
+
+      const notifs: any[] = []
+
+      // Cartões de crédito
+      cardsWithInvoice.forEach(card => {
+        const days = (card.due_day || 1) - todayDay
+        if (days < 0) {
+          notifs.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day}`, cardId: card.id, severity: 'critical', isRead: readSet.has(`invoice-overdue-${card.id}`) })
+        } else if (days <= 3) {
+          notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
+        }
+      })
+
+      // Assinaturas
+      const subs = Array.isArray(subsData) ? subsData : []
+      subs.forEach((sub: any) => {
+        const days = (sub.due_day || 1) - todayDay
+        if (days < 0) {
+          notifs.push({ id: `sub-overdue-${sub.id}`, type: 'subscription_overdue', title: `Assinatura vencida: ${sub.name}`, subtitle: `Venceu dia ${sub.due_day}`, subId: sub.id, severity: 'critical', isRead: readSet.has(`sub-overdue-${sub.id}`) })
+        } else if (days <= 5) {
+          notifs.push({ id: `sub-soon-${sub.id}`, type: 'subscription_soon', title: `Assinatura próxima: ${sub.name}`, subtitle: `Vence em ${days} dia(s)`, subId: sub.id, severity: 'warning', isRead: readSet.has(`sub-soon-${sub.id}`) })
+        }
+      })
+
+      // Financiamentos
+      const fins = Array.isArray(financingsData) ? financingsData : []
+      fins.forEach((fin: any) => {
+        if (!fin.next_due_date) return
+        const daysUntilDue = differenceInDays(new Date(fin.next_due_date), today)
+        if (daysUntilDue < 0) {
+          notifs.push({ id: `financing-overdue-${fin.id}`, type: 'financing_overdue', title: `Parcela vencida: ${fin.name}`, subtitle: `Venceu ${format(new Date(fin.next_due_date), "dd/MM")}`, financingId: fin.id, severity: 'critical', isRead: readSet.has(`financing-overdue-${fin.id}`) })
+        } else if (daysUntilDue <= 3) {
+          notifs.push({ id: `financing-soon-${fin.id}`, type: 'financing_soon', title: `Parcela próxima: ${fin.name}`, subtitle: `Vence em ${daysUntilDue} dia(s)`, financingId: fin.id, severity: 'warning', isRead: readSet.has(`financing-soon-${fin.id}`) })
+        }
+      })
+
+      // Dívidas
+      debtsWithProgress.forEach((debt: any) => {
+        if (!debt.due_date) return
+        const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
+        const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
+        if (daysUntilDue < 0) {
+          notifs.push({ id: `debt-overdue-${debt.id}`, type: 'debt_overdue', title: `Dívida vencida: ${debt.person_name}`, subtitle: `Venceu ${format(new Date(debt.due_date), "dd/MM")} — R$ ${remaining.toFixed(2)}`, debtId: debt.id, severity: 'critical', isRead: readSet.has(`debt-overdue-${debt.id}`) })
+        } else if (daysUntilDue <= 3) {
+          notifs.push({ id: `debt-soon-${debt.id}`, type: 'debt_soon', title: `Dívida próxima: ${debt.person_name}`, subtitle: `Vence em ${daysUntilDue} dia(s) — R$ ${remaining.toFixed(2)}`, debtId: debt.id, severity: 'warning', isRead: readSet.has(`debt-soon-${debt.id}`) })
+        }
+      })
+
+      // Orçamentos
+      budgetsWithSpent.forEach((budget: any) => {
+        const spent = budget.spent
+        const remaining = budget.remaining
+        if (remaining < 0) {
+          notifs.push({ id: `budget-over-${budget.id}`, type: 'budget_over', title: `Orçamento estourado: ${budget.name || budget.categories?.name}`, subtitle: `Gasto R$ ${spent.toFixed(2)} de R$ ${Number(budget.amount).toFixed(2)}`, budgetId: budget.id, severity: 'critical', isRead: readSet.has(`budget-over-${budget.id}`) })
+        } else if (Number(budget.amount) > 0 && (spent / Number(budget.amount)) * 100 >= 80) {
+          notifs.push({ id: `budget-warn-${budget.id}`, type: 'budget_warning', title: `Orçamento quase lá: ${budget.name || budget.categories?.name}`, subtitle: `${((spent / Number(budget.amount)) * 100).toFixed(0)}% utilizado`, budgetId: budget.id, severity: 'warning', isRead: readSet.has(`budget-warn-${budget.id}`) })
+        }
+      })
+
+      // Pendências gerais
+      const pendingExpenses = txs.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
+      if (pendingExpenses.length > 0) {
+        notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
+      }
+
+      const pendingIncomes = txs.filter(t => t.status === 'pending' && t.type === 'income')
+      if (pendingIncomes.length > 0) {
+        notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending', severity: 'success', isRead: readSet.has('pending-incomes') })
+      }
+
+      setNotifications(notifs)
+      setUnreadNotifications(notifs.filter(n => !n.isRead).length)
+      setCriticalCount(notifs.filter(n => n.severity === 'critical' && !n.isRead).length)
+
     } catch (err) {
       console.error('Erro na Home:', err)
     } finally {
@@ -383,34 +479,6 @@ function HomeContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  const notifications: any[] = []
-  cards.forEach(card => {
-    const days = card.due_day - todayDay
-    if (days < 0) notifications.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day} — ${formatCurrency(card.faturaAtual || 0)}`, cardId: card.id, severity: 'critical' })
-    else if (days <= 3) notifications.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s) — ${formatCurrency(card.faturaAtual || 0)}`, cardId: card.id, severity: 'warning' })
-  })
-  subscriptions.forEach(sub => {
-    const days = sub.due_day - todayDay
-    if (days < 0) notifications.push({ id: `sub-overdue-${sub.id}`, type: 'subscription_overdue', title: `Assinatura vencida: ${sub.name}`, subtitle: `Venceu dia ${sub.due_day}`, subId: sub.id, severity: 'critical' })
-    else if (days <= 5) notifications.push({ id: `sub-soon-${sub.id}`, type: 'subscription_soon', title: `Assinatura próxima: ${sub.name}`, subtitle: `Vence em ${days} dia(s)`, subId: sub.id, severity: 'warning' })
-  })
-  const criticalCount = notifications.filter(n => n.severity === 'critical').length
-
-  useEffect(() => {
-    if (!user) return
-    const loadUnreadCount = async () => {
-      const { data } = await supabase
-        .from('notification_reads')
-        .select('notification_id')
-        .eq('user_id', user.id)
-      const readIds = new Set(data?.map(d => d.notification_id) || [])
-      const unread = notifications.filter(n => !readIds.has(n.id)).length
-      setUnreadNotifications(unread)
-    }
-    loadUnreadCount()
-  }, [notifications, user])
-
-  // Loading state com Skeleton
   if (authLoading || dataLoading || !layoutLoaded) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans px-4 pt-6 pb-28">
@@ -760,7 +828,6 @@ function HomeContent() {
     <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
       <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} isSyncing={isSyncing} />
 
-      {/* Alertas Faturas */}
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
           {cards.map(card => (
@@ -769,7 +836,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Alertas Dívidas */}
       {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
         <div className="mb-4 space-y-2">
           {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map(debt => (
@@ -778,7 +844,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Saudação + Header (CORRIGIDO) */}
       <div className="flex justify-between items-center mb-8">
         <div className="flex-1 min-w-0 mr-3">
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
@@ -800,10 +865,8 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* CARDS NA ORDEM PERSONALIZADA (INCLUI PROJEÇÃO) */}
       {enabledSections.map(sectionId => renderSection(sectionId))}
 
-      {/* BOTÃO PERSONALIZAR TELA (ESTILO PÍLULA) */}
       <button
         onClick={openPersonalize}
         className="w-full mt-2 flex items-center justify-center gap-2 py-4 rounded-[24px] bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-100 dark:border-slate-700 shadow-sm transition-all"
