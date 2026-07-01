@@ -10,8 +10,6 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts'
-import { createClient } from '@/utils/supabase/client'
-import { Skeleton } from '@/components/ui/skeleton'
 
 interface ProjectionData {
   projection_date: string
@@ -23,23 +21,36 @@ export default function DetailedProjectionChart() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
-  const supabase = createClient()
-
   useEffect(() => {
     async function fetchProjection() {
       try {
-        const { data: projection, error } = await supabase
-          .from('projected_daily_balance')
-          .select('projection_date, projected_balance')
-          .order('projection_date', { ascending: true })
-          .limit(30)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-        if (error) {
-          console.error('Erro ao buscar projeção:', error)
+        if (!supabaseUrl || !supabaseAnonKey) {
+          setError(true)
+          setLoading(false)
+          return
+        }
+
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/projected_daily_balance?select=projection_date,projected_balance&order=projection_date.asc&limit=30`,
+          {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+
+        if (!response.ok) {
+          console.error('Erro ao buscar projeção:', response.status)
           setError(true)
           return
         }
 
+        const projection = await response.json()
         setData(projection || [])
       } catch (err) {
         console.error('Erro:', err)
@@ -52,7 +63,6 @@ export default function DetailedProjectionChart() {
     fetchProjection()
   }, [])
 
-  // Formatadores
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-')
     return `${day}/${month}`
@@ -68,23 +78,17 @@ export default function DetailedProjectionChart() {
     return value.toString()
   }
 
-  // Encontra valores mínimo e máximo para o gradiente
-  const balances = data.map((d) => d.projected_balance)
-  const minBalance = Math.min(...balances, 0)
-  const maxBalance = Math.max(...balances, 0)
   const isPositiveTrend = data.length > 0 && data[data.length - 1].projected_balance >= 0
 
-  // Skeleton Loader
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-        <Skeleton className="h-6 w-48 mb-6 bg-slate-200 dark:bg-slate-700" />
-        <Skeleton className="h-64 w-full bg-slate-200 dark:bg-slate-700 rounded-lg" />
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 animate-pulse">
+        <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 rounded mb-6" />
+        <div className="h-64 w-full bg-slate-200 dark:bg-slate-700 rounded-lg" />
       </div>
     )
   }
 
-  // Estado de erro
   if (error || data.length === 0) {
     return (
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 text-center">
@@ -208,7 +212,6 @@ export default function DetailedProjectionChart() {
         </ResponsiveContainer>
       </div>
 
-      {/* Legenda simples */}
       <div className="flex items-center gap-4 mt-4 text-xs text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-1">
           <div className="w-3 h-0.5 bg-emerald-500 rounded-full" />
