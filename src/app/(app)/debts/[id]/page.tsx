@@ -1,15 +1,71 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle
+  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle,
+  RefreshCw, AlertTriangle, Clock, ArrowUp, TrendingUp
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDynamicIcon } from '@/lib/iconUtils'
+
+// ============================================================
+// SKELETON LOADER
+// ============================================================
+const DebtDetailSkeleton = () => (
+  <div className="animate-pulse px-4 pt-6">
+    {/* Header */}
+    <div className="flex items-center justify-between mb-6">
+      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
+      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
+        <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
+        <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
+      </div>
+    </div>
+
+    {/* Card Principal */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
+        <div className="space-y-2">
+          <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-40 bg-gray-100 dark:bg-slate-700/50 rounded" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700">
+            <div className="h-3 w-12 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
+            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
+          </div>
+        ))}
+      </div>
+      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
+        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-1/2" />
+      </div>
+      <div className="h-3 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
+    </div>
+
+    {/* Histórico */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      {[1, 2].map((i) => (
+        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl mb-2">
+          <div className="space-y-2">
+            <div className="h-4 w-24 bg-gray-200 dark:bg-slate-600 rounded" />
+            <div className="h-3 w-32 bg-gray-100 dark:bg-slate-600/50 rounded" />
+          </div>
+          <div className="w-6 h-6 bg-gray-200 dark:bg-slate-600 rounded" />
+        </div>
+      ))}
+    </div>
+  </div>
+)
 
 export default function DebtDetailPage() {
   const { id } = useParams()
@@ -19,6 +75,7 @@ export default function DebtDetailPage() {
   const [debt, setDebt] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
   const [accounts, setAccounts] = useState<any[]>([])
@@ -37,6 +94,44 @@ export default function DebtDetailPage() {
   const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   const [showAccModal, setShowAccModal] = useState(false)
+
+  // Pull to refresh
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || loading) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current || refreshing) return
+    const pullDistance = e.touches[0].clientY - pullStartY.current
+    if (pullDistance > 60) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadData().finally(() => setRefreshing(false))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [loading, refreshing])
 
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
@@ -83,16 +178,13 @@ export default function DebtDetailPage() {
   const handleDeletePayment = async (paymentId: string, amount: number) => {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
-    // Excluir a transação
     await supabase.from('transactions').delete().eq('id', paymentId)
 
-    // Recalcular total pago
     const updatedPayments = payments.filter(p => p.id !== paymentId)
     const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
     const newStatus = totalPaid >= Number(debt.total_amount) ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
     await supabase.from('debts').update({ status: newStatus }).eq('id', id)
 
-    // Se havia conta vinculada, reverter saldo (subtrair o valor)
     const deletedPayment = payments.find(p => p.id === paymentId)
     if (deletedPayment?.account_id) {
       const { data: acc } = await supabase
@@ -201,9 +293,10 @@ export default function DebtDetailPage() {
     setShowWhatsAppModal(false)
   }
 
+  // Skeleton enquanto carrega
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-      <Loader2 className="animate-spin text-teal-700" size={40} />
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans transition-colors duration-300">
+      <DebtDetailSkeleton />
     </div>
   )
 
@@ -220,33 +313,49 @@ export default function DebtDetailPage() {
   const isPaid = debt.status === 'paid'
   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
   const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
+  const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
 
   const selectedAcc = accounts.find(a => a.id === payAccountId)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
       
+      {/* Pull to refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+        <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
           <ChevronLeft size={24} />
         </button>
-        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{debt.person_name}</h2>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowWhatsAppModal(true)} className="p-2 text-emerald-600 dark:text-emerald-400" title="Cobrar via WhatsApp">
+          {isPaid && <Check size={18} className="text-emerald-500" />}
+          {isOverdue && <AlertTriangle size={18} className="text-red-500" />}
+          {isNearDue && <Clock size={18} className="text-orange-500" />}
+          <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{debt.person_name}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowWhatsAppModal(true)} className="p-2 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors" title="Cobrar via WhatsApp">
             <MessageCircle size={20} />
           </button>
-          <button onClick={() => router.push(`/debts/new?edit=${debt.id}`)} className="p-2 text-teal-700 dark:text-teal-400">
+          <button onClick={() => router.push(`/debts/new?edit=${debt.id}`)} className="p-2 text-teal-700 dark:text-teal-400 hover:text-teal-800 transition-colors">
             <Edit2 size={20} />
           </button>
-          <button onClick={handleDeleteDebt} className="p-2 text-red-500">
+          <button onClick={handleDeleteDebt} className="p-2 text-red-500 hover:text-red-600 transition-colors">
             <Trash2 size={20} />
           </button>
         </div>
       </div>
 
       {/* Card Principal */}
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4 animate-in fade-in duration-300">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}>
             <IconComp size={24} />
@@ -277,13 +386,16 @@ export default function DebtDetailPage() {
 
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
           <div
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'}`}
+            className={`h-full rounded-full transition-all duration-1000 ease-out ${
+              isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : isNearDue ? 'bg-orange-500' : 'bg-teal-500'
+            }`}
             style={{ width: `${Math.min(percent, 100)}%` }}
           />
         </div>
         <div className="flex justify-between text-[11px]">
           <span className="text-gray-400 dark:text-gray-500 font-medium">{percent.toFixed(0)}% pago</span>
           {isOverdue && <span className="text-red-500 font-bold">Atrasado {Math.abs(daysUntilDue)} dia(s)</span>}
+          {isNearDue && <span className="text-orange-500 font-bold">Vence em {daysUntilDue} dia(s)</span>}
         </div>
       </div>
 
@@ -292,40 +404,46 @@ export default function DebtDetailPage() {
         {!isPaid && (
           <button
             onClick={() => setShowPaymentModal(true)}
-            className="bg-teal-700 text-white py-3 rounded-full font-bold text-sm"
+            className="bg-teal-700 text-white py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors active:scale-95"
           >
-            Registrar Pagamento
+            <div className="flex items-center justify-center gap-2">
+              <ArrowUp size={16} />
+              Registrar Pagamento
+            </div>
           </button>
         )}
         <button
           onClick={() => setShowWhatsAppModal(true)}
-          className={`${isPaid ? 'col-span-2' : ''} bg-emerald-600 text-white py-3 rounded-full font-bold text-sm flex items-center justify-center gap-2`}
+          className={`${isPaid ? 'col-span-2' : ''} bg-emerald-600 text-white py-3 rounded-full font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors active:scale-95`}
         >
           <MessageCircle size={18} /> Cobrar via WhatsApp
         </button>
       </div>
 
       {/* Histórico de Pagamentos */}
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Pagamentos</h3>
         {payments.length === 0 ? (
           <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">Nenhum pagamento registrado.</p>
         ) : (
           <div className="space-y-2">
             {payments.map(pay => (
-              <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl group">
+              <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl group hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                      <Check size={12} className="text-emerald-600" />
+                    </div>
                     <p className="font-bold text-sm text-emerald-600">+ {formatCurrency(Number(pay.amount) || 0)}</p>
                     {pay.description && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">— {pay.description}</p>}
                   </div>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 ml-7">
                     {format(new Date(pay.date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
                   </p>
                 </div>
                 <button
                   onClick={() => handleDeletePayment(pay.id, Number(pay.amount))}
-                  className="p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
                   title="Excluir pagamento"
                 >
                   <Trash2 size={16} />
@@ -336,7 +454,7 @@ export default function DebtDetailPage() {
         )}
       </div>
 
-      {/* Modal Pagamento */}
+      {/* Modal Pagamento (mantido igual) */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
@@ -411,7 +529,7 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Modal WhatsApp */}
+      {/* Modal WhatsApp (mantido igual) */}
       {showWhatsAppModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowWhatsAppModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
@@ -454,7 +572,7 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Modal Contas */}
+      {/* Modal Contas (mantido igual) */}
       {showAccModal && (
         <div className="fixed inset-0 z-[250] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
