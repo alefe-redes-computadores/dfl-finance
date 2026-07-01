@@ -31,7 +31,6 @@ export const useContext_ = () => useContext(ContextCtx)
 
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  // Controla se o sync inicial já foi feito nesta sessão de browser
   const hasSynced = useRef(false)
 
   const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(() => {
@@ -50,20 +49,15 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   })
 
   useEffect(() => {
-    // Só busca do Supabase UMA VEZ por sessão de browser
-    // e apenas se não houver valor em cache (primeiro acesso / dispositivo novo)
     if (!user?.id) return
     if (hasSynced.current) return
 
     const cached = localStorage.getItem('dfl_app_mode')
-
-    // Se já tem cache local, confia nele — não vai ao banco
     if (cached === 'personal_only' || cached === 'full') {
       hasSynced.current = true
       return
     }
 
-    // Sem cache: busca do Supabase para saber a preferência salva
     async function fetchFromSupabase() {
       try {
         const { data } = await supabase
@@ -77,14 +71,12 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('dfl_app_mode', data.app_mode)
           setContextState(data.app_mode === 'personal_only' ? 'personal' : 'dfl')
         } else {
-          // Sem registro no banco → padrão 'full'
           setAppModeState('full')
           localStorage.setItem('dfl_app_mode', 'full')
           setContextState('dfl')
         }
       } catch (err) {
         console.error('Erro na sincronização:', err)
-        // Fallback seguro
         setAppModeState('full')
         setContextState('dfl')
       } finally {
@@ -123,27 +115,27 @@ export default function ContextToggle() {
   if (appMode !== 'full') return null
 
   return (
-    <div className="flex justify-center my-2">
-      <div className={`flex bg-gray-200 dark:bg-slate-700 p-1 rounded-full ${montserrat.className}`}>
+    <div className="inline-flex mt-1">
+      <div className={`flex bg-gray-100 dark:bg-slate-700 p-0.5 rounded-full ${montserrat.className}`}>
         <button
           onClick={() => setContext('dfl')}
-          className={`px-5 py-1.5 rounded-full text-[11px] font-extralight uppercase tracking-tighter transition-all duration-300 ${
+          className={`px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
             context === 'dfl'
-              ? 'bg-white dark:bg-slate-600 shadow-[0_2px_10px_rgba(0,0,0,0.1)] scale-[1.02] text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 dark:text-gray-400'
+              ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-900 dark:text-gray-100'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
-          Pessoa Jurídica
+          PJ
         </button>
         <button
           onClick={() => setContext('personal')}
-          className={`px-5 py-1.5 rounded-full text-[11px] font-extralight uppercase tracking-tighter transition-all duration-300 ${
+          className={`px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
             context === 'personal'
-              ? 'bg-white dark:bg-slate-600 shadow-[0_2px_10px_rgba(0,0,0,0.1)] scale-[1.02] text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 dark:text-gray-400'
+              ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-900 dark:text-gray-100'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
-          Pessoa Física
+          PF
         </button>
       </div>
     </div>
