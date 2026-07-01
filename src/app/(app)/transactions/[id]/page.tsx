@@ -8,7 +8,7 @@ import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
   ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
-  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users,
+  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, Layers,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -34,6 +34,7 @@ export default function EditTransactionPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [tx, setTx] = useState<any>(null)
   const [isNew, setIsNew] = useState(false)
 
@@ -80,6 +81,10 @@ export default function EditTransactionPage() {
   const [showCamera, setShowCamera] = useState(false)
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
+
+  // Modal de exclusão inteligente
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteMode, setDeleteMode] = useState<'single' | 'future' | 'all' | null>(null)
 
   const vibrate = (pattern: number | number[]) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -479,9 +484,13 @@ export default function EditTransactionPage() {
         }
       }
 
+      vibrate([50])
+      setSaved(true)
       showToast('Transação salva!', 'success')
-      router.refresh()
-      router.back()
+      setTimeout(() => {
+        router.refresh()
+        router.back()
+      }, 800)
     } catch (err: any) {
       console.error('Erro ao salvar:', err)
       showToast('Erro ao salvar transação.', 'error')
@@ -490,30 +499,72 @@ export default function EditTransactionPage() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!user?.id) return
-    if (!confirm('Tem certeza que deseja excluir esta transação?')) return
-    setSaving(true)
+  // ============================================================
+  // EXCLUSÃO INTELIGENTE (PARCELAS/RECORRENTES)
+  // ============================================================
+  const hasInstallments = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
 
-    if (tx?.status === 'done' && tx?.account_id) {
-      const { data: accData } = await supabase
-        .from('accounts')
-        .select('balance')
-        .match({ id: tx.account_id, user_id: user.id })
-        .single()
-      if (accData) {
-        const newBalance =
-          tx.type === 'income'
-            ? Number(accData.balance) - Number(tx.amount)
-            : Number(accData.balance) + Number(tx.amount)
-        await supabase.from('accounts').update({ balance: newBalance }).match({ id: tx.account_id, user_id: user.id })
-      }
+  const handleDeleteClick = () => {
+    if (hasInstallments) {
+      setShowDeleteModal(true)
+    } else {
+      confirmDelete('single')
     }
+  }
 
-    await supabase.from('transactions').delete().match({ id, user_id: user.id })
-    showToast('Transação excluída.', 'info')
-    router.refresh()
-    router.back()
+  const confirmDelete = async (mode: 'single' | 'future' | 'all') => {
+    if (!user?.id) return
+    setSaving(true)
+    setShowDeleteModal(false)
+
+    try {
+      if (tx?.status === 'done' && tx?.account_id) {
+        const { data: accData } = await supabase
+          .from('accounts')
+          .select('balance')
+          .match({ id: tx.account_id, user_id: user.id })
+          .single()
+        if (accData) {
+          const newBalance =
+            tx.type === 'income'
+              ? Number(accData.balance) - Number(tx.amount)
+              : Number(accData.balance) + Number(tx.amount)
+          await supabase.from('accounts').update({ balance: newBalance }).match({ id: tx.account_id, user_id: user.id })
+        }
+      }
+
+      if (mode === 'single' || !hasInstallments) {
+        // Exclui apenas esta transação
+        await supabase.from('transactions').delete().match({ id, user_id: user.id })
+      } else if (mode === 'future' && tx?.recurring_group_id) {
+        // Exclui esta e as próximas (date >= tx.date)
+        await supabase
+          .from('transactions')
+          .delete()
+          .match({ user_id: user.id, recurring_group_id: tx.recurring_group_id })
+          .gte('date', tx.date)
+      } else if (mode === 'all' && tx?.recurring_group_id) {
+        // Exclui todas do grupo
+        await supabase
+          .from('transactions')
+          .delete()
+          .match({ user_id: user.id, recurring_group_id: tx.recurring_group_id })
+      }
+
+      showToast(
+        mode === 'single' ? 'Transação excluída.' :
+        mode === 'future' ? 'Transações futuras excluídas.' :
+        'Todas as parcelas excluídas.',
+        'info'
+      )
+      router.refresh()
+      router.back()
+    } catch (err: any) {
+      console.error('Erro ao excluir:', err)
+      showToast('Erro ao excluir transação.', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
@@ -526,8 +577,15 @@ export default function EditTransactionPage() {
 
   const isIncome = txType === 'income'
   const typeLabel = isIncome ? 'receita' : 'despesa'
-  const colorClass = isIncome ? 'text-emerald-600' : 'text-gray-800 dark:text-gray-200'
+  const colorClass = isIncome ? 'text-emerald-600' : 'text-red-500'
+  const headerGradient = isIncome
+    ? 'bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950 dark:to-slate-800'
+    : 'bg-gradient-to-br from-red-50 to-white dark:from-red-950 dark:to-slate-800'
+  const valueShadow = isIncome
+    ? 'shadow-[0_4px_20px_rgba(16,185,129,0.15)]'
+    : 'shadow-[0_4px_20px_rgba(239,68,68,0.15)]'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-600' : 'bg-teal-700') : 'bg-gray-300 dark:bg-gray-600'
+  const toggleTracks = isPaid ? 'translate-x-6' : 'translate-x-1'
 
   const selectedCat =
     categories.find((c) => c.id === categoryId) ||
@@ -536,31 +594,41 @@ export default function EditTransactionPage() {
   const selectedCard = creditCards.find((c) => c.id === creditCardId)
   const selectedContact = contacts.find((c) => c.id === contactId)
 
+  const isParcelado = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
+  const parcelaLabel = isParcelado ? `${tx.installment_index || 1}/${tx.total_installments}` : null
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
 
       <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
       <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
 
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+      {/* Header com gradiente dinâmico */}
+      <div className={`${headerGradient} px-4 pt-6 pb-4 shadow-sm border-b border-gray-100 dark:border-slate-700 sticky top-0 z-10 transition-all duration-300`}>
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
-            {isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}
-          </h1>
+          <div className="text-center">
+            <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
+              {isNew ? `Nova ${typeLabel}` : `Editar ${typeLabel}`}
+            </h1>
+            {parcelaLabel && (
+              <span className="text-xs font-bold bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full mt-1 inline-block">
+                Parcela {parcelaLabel}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
-            {!isNew && <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={20} /></button>}
+            {!isNew && <button onClick={handleDeleteClick} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"><Trash2 size={20} /></button>}
           </div>
         </div>
         <ContextToggle />
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        {/* Valor */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+        {/* Valor com sombra colorida */}
+        <div className={`bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 ${valueShadow} transition-shadow duration-300`}>
           <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Valor</label>
           <div className="flex items-center gap-1 text-3xl font-bold">
             <span className="text-gray-400">R$</span>
@@ -575,19 +643,22 @@ export default function EditTransactionPage() {
           </div>
         </div>
 
-        {/* Pago/Recebido */}
+        {/* Pago/Recebido com animação melhorada */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isPaid ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
-              <Check size={16} className={isPaid ? 'text-emerald-600' : 'text-gray-400'} />
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${isPaid ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
+              <Check size={16} className={`transition-colors duration-300 ${isPaid ? 'text-emerald-600' : 'text-gray-400'}`} />
             </div>
             <span className="font-bold text-sm text-gray-800 dark:text-gray-200">
               {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
             </span>
           </div>
           {!creditCardId && (
-            <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-7 rounded-full relative transition-colors duration-300 ${toggleBgClass}`}>
-              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 ${isPaid ? 'right-1' : 'left-1'}`} />
+            <button
+              onClick={() => { setIsPaid(!isPaid); vibrate(10) }}
+              className={`w-12 h-7 rounded-full relative transition-all duration-300 ${toggleBgClass} active:scale-95`}
+            >
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-sm ${toggleTracks}`} />
             </button>
           )}
         </div>
@@ -644,7 +715,7 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* 🆕 Seletor de Contato */}
+        {/* Seletor de Contato */}
         {contacts.length > 0 && (
           <button onClick={() => setShowContactModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -659,10 +730,18 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* Data */}
+        {/* Data com ícone melhorado */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
-          <Calendar size={20} className="text-gray-400" />
+          <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+            <Calendar size={16} className="text-gray-500" />
+          </div>
           <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="flex-1 text-sm font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200" />
+          {parcelaLabel && (
+            <span className="text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-full flex items-center gap-1">
+              <Layers size={10} />
+              {parcelaLabel}
+            </span>
+          )}
         </div>
 
         {/* Descrição */}
@@ -671,7 +750,7 @@ export default function EditTransactionPage() {
           <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200" />
         </div>
 
-        {/* Comprovante */}
+        {/* Comprovante com ícone destacado */}
         {uploading ? (
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
             <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -681,12 +760,12 @@ export default function EditTransactionPage() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
             <div className="flex items-center gap-3">
               {receiptPreview ? (
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0 ring-2 ring-blue-100 dark:ring-blue-900">
                   <img src={receiptPreview} alt="Comprovante" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
-                  {receiptType === 'pdf' ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" /> : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />}
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ring-2 ${receiptType === 'pdf' ? 'bg-red-50 dark:bg-red-900/30 ring-red-100 dark:ring-red-900' : 'bg-blue-50 dark:bg-blue-900/30 ring-blue-100 dark:ring-blue-900'}`}>
+                  {receiptType === 'pdf' ? <Paperclip size={22} className="text-red-500" /> : <ImageIcon size={22} className="text-blue-500" />}
                 </div>
               )}
               <div className="flex-1 min-w-0">
@@ -697,20 +776,25 @@ export default function EditTransactionPage() {
             </div>
           </div>
         ) : (
-          <button onClick={() => setShowReceiptModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 text-gray-500">
+          <button onClick={() => setShowReceiptModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 text-gray-500 hover:border-teal-200 hover:text-teal-600 transition-colors">
             <Camera size={20} />
             <span className="text-sm font-medium">Anexar comprovante</span>
           </button>
         )}
 
-        {/* Mais detalhes */}
-        <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
+        {/* Mais detalhes com animação */}
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2 hover:scale-105 transition-transform"
+        >
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
 
-        {showDetails && (
-          <div className="space-y-3">
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}
+        >
+          <div className="space-y-3 pt-1">
             {/* Tags */}
             <button onClick={() => setShowTagModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -730,54 +814,140 @@ export default function EditTransactionPage() {
 
             {!isIncome && (
               <>
-                {/* Reembolso */}
+                {/* Reembolso com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <RefreshCw size={20} className="text-gray-400" />
+                    <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                      <RefreshCw size={16} className="text-orange-500" />
+                    </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É um reembolso</span>
                       <span className="text-[11px] text-gray-400">Pago com recurso do outro contexto (PF/PJ)</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsReimbursable(!isReimbursable)} className={`w-12 h-6 rounded-full transition-colors ${isReimbursable ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isReimbursable ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <button onClick={() => setIsReimbursable(!isReimbursable)} className={`w-12 h-6 rounded-full transition-colors ${isReimbursable ? 'bg-orange-500' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${isReimbursable ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                {/* Devolução/Estorno */}
+                {/* Devolução/Estorno com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <ArrowRightLeft size={20} className="text-gray-400" />
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <ArrowRightLeft size={16} className="text-blue-500" />
+                    </div>
                     <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
                   </div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                {/* Financiamento */}
+                {/* Financiamento com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between cursor-pointer" onClick={() => setShowFinancingModal(true)}>
-                  <div className="flex items-center gap-3"><Building size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span></div>
-                  <button className={`w-12 h-6 rounded-full transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${financingId ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                      <Building size={16} className="text-purple-500" />
+                    </div>
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span>
+                  </div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${financingId ? 'bg-purple-500' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${financingId ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
 
-                {/* Empréstimo */}
+                {/* Empréstimo com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between cursor-pointer" onClick={() => setShowLoanModal(true)}>
-                  <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span></div>
-                  <button className={`w-12 h-6 rounded-full transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}><div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${debtId ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                      <HandCoins size={16} className="text-amber-500" />
+                    </div>
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span>
+                  </div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${debtId ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${debtId ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
               </>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Botão salvar */}
+      {/* Botão salvar com efeito de confirmação */}
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
-        <button onClick={handleSave} disabled={saving} className="w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto hover:bg-teal-800 transition-colors">
-          {saving ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
+        <button
+          onClick={handleSave}
+          disabled={saving || saved}
+          className={`w-14 h-14 rounded-full flex items-center justify-center text-white shadow-xl pointer-events-auto transition-all duration-300 ${
+            saved
+              ? 'bg-emerald-500 scale-110'
+              : 'bg-teal-700 hover:bg-teal-800 active:scale-95'
+          }`}
+        >
+          {saving ? (
+            <Loader2 className="animate-spin" size={24} />
+          ) : saved ? (
+            <Check size={28} className="animate-in zoom-in duration-300" />
+          ) : (
+            <Check size={28} />
+          )}
         </button>
       </div>
+
+      {/* ============================================================ */}
+      {/* MODAL DE EXCLUSÃO INTELIGENTE */}
+      {/* ============================================================ */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Excluir transação</h3>
+              <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Esta transação faz parte de um grupo de <strong>{tx?.total_installments} parcelas</strong>.
+              Como deseja prosseguir?
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => confirmDelete('single')}
+                className="w-full p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-left hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+              >
+                <p className="font-bold text-gray-800 dark:text-gray-200">Apenas esta parcela</p>
+                <p className="text-xs text-gray-400 mt-1">Exclui somente a parcela atual. As demais continuam.</p>
+              </button>
+
+              <button
+                onClick={() => confirmDelete('future')}
+                className="w-full p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-left hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+              >
+                <p className="font-bold text-amber-600 dark:text-amber-400">Esta e as próximas</p>
+                <p className="text-xs text-gray-400 mt-1">Exclui a parcela atual e todas as futuras deste grupo.</p>
+              </button>
+
+              <button
+                onClick={() => confirmDelete('all')}
+                className="w-full p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-left hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <p className="font-bold text-red-600 dark:text-red-400">Todas as parcelas</p>
+                <p className="text-xs text-gray-400 mt-1">Exclui completamente todas as parcelas deste grupo (passadas e futuras).</p>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="w-full mt-4 py-3 text-gray-500 font-medium text-sm hover:text-gray-700 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal Contatos */}
       {showContactModal && (
@@ -816,7 +986,7 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Demais modais */}
+      {/* Demais modais mantidos sem alteração */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
