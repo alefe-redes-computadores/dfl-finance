@@ -28,11 +28,12 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 import ProjectionSparklineCard from '@/components/ProjectionSparklineCard'
 
 // ============================================================
-// SEÇÕES DISPONÍVEIS (para personalização)
+// SEÇÕES DISPONÍVEIS (para personalização) - ADICIONADA PROJEÇÃO
 // ============================================================
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
+  { id: 'projection', label: 'Projeção de Saldo' }, // NOVA SEÇÃO
   { id: 'next-card', label: 'Próxima Fatura' },
   { id: 'pendings', label: 'Pendências' },
   { id: 'receivables', label: 'A Receber' },
@@ -372,6 +373,12 @@ function HomeContent() {
             </div>
           </div>
         )
+      case 'projection':
+        return (
+          <div key="projection" className="mb-6">
+            <ProjectionSparklineCard />
+          </div>
+        )
       case 'next-card':
         if (!nextCard) return null
         return (
@@ -669,13 +676,8 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* CARDS NA ORDEM PERSONALIZADA */}
+      {/* CARDS NA ORDEM PERSONALIZADA (INCLUI PROJEÇÃO) */}
       {enabledSections.map(sectionId => renderSection(sectionId))}
-
-      {/* PROJEÇÃO DE SALDO (SPARKLINE) */}
-      <div className="mb-6">
-        <ProjectionSparklineCard />
-      </div>
 
       {/* BOTÃO PERSONALIZAR TELA (ESTILO PÍLULA) */}
       <button
