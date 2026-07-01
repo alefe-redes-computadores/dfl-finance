@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Loader2,
   TrendingUp,
+  TrendingDown,
   Sparkles,
   ArrowUp,
   ArrowDown,
@@ -16,7 +17,9 @@ import {
   SlidersHorizontal,
   X,
   Download,
-  FileText
+  FileText,
+  RefreshCw,
+  Filter
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -38,16 +41,60 @@ import {
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import DetailedProjectionChart from '@/components/DetailedProjectionChart'
 
+// ============================================================
+// SKELETON LOADER PARA ANÁLISES
+// ============================================================
+const AnalysisSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    {/* Cards de resumo */}
+    <div className="grid grid-cols-3 gap-3">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700" />
+            <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded" />
+            <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Gráfico de pizza */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      <div className="flex justify-center">
+        <div className="w-44 h-44 rounded-full bg-gray-100 dark:bg-slate-700" />
+      </div>
+      <div className="flex justify-center gap-3 mt-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-gray-200 dark:bg-slate-700" />
+            <div className="h-3 w-12 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Gráfico de barras */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="h-5 w-36 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      <div className="h-48 bg-gray-100 dark:bg-slate-700/50 rounded-lg" />
+    </div>
+  </div>
+)
+
 function AnalysisContent() {
   const { user } = useAuth()
   const { context } = useContext_()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
+  const [previousSummary, setPreviousSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [byCategory, setByCategory] = useState<any[]>([])
   const [monthlyFlow, setMonthlyFlow] = useState<any[]>([])
   const [patrimony, setPatrimony] = useState<any[]>([])
   const [patrimonyGrowth, setPatrimonyGrowth] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<'month' | 'new'>('month')
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -65,6 +112,45 @@ function AnalysisContent() {
   const [filterCategory, setFilterCategory] = useState('')
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  const hasActiveFilters = filterAccount || filterCategory
+
+  // Pull to refresh
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || loading) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current || refreshing) return
+    const pullDistance = e.touches[0].clientY - pullStartY.current
+    if (pullDistance > 60) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadData().finally(() => setRefreshing(false))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [loading, refreshing])
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -107,6 +193,18 @@ function AnalysisContent() {
       .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
       .reduce((a, t) => a + Number(t.amount || 0), 0)
     setSummary({ income, expense, balance: income - expense })
+
+    // Mês anterior para variação
+    const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+    const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+    const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
+    const prevIncome = prevTxs
+      .filter(t => t.type === 'income' && t.status === 'done')
+      .reduce((a, t) => a + Number(t.amount || 0), 0)
+    const prevExpense = prevTxs
+      .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+      .reduce((a, t) => a + Number(t.amount || 0), 0)
+    setPreviousSummary({ income: prevIncome, expense: prevExpense, balance: prevIncome - prevExpense })
 
     const catMap: Record<
       string,
@@ -192,13 +290,10 @@ function AnalysisContent() {
     const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
     setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
 
-    const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-    const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-    const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
-
-    const prevCategories = new Set(prevTxs.map(t => t.category_id).filter(Boolean))
+    // Novos gastos
+    const prevCatIds = new Set(prevTxs.map(t => t.category_id).filter(Boolean))
     const newOnes = currentTxs.filter(
-      t => t.category_id && !prevCategories.has(t.category_id)
+      t => t.category_id && !prevCatIds.has(t.category_id)
     )
 
     const newCatMap: Record<
@@ -255,6 +350,15 @@ function AnalysisContent() {
       maximumFractionDigits: 2
     })}`
 
+  const calcVariation = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? 100 : current < 0 ? -100 : 0
+    return ((current - previous) / Math.abs(previous)) * 100
+  }
+
+  const incomeVariation = calcVariation(summary.income, previousSummary.income)
+  const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
+  const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
+
   const handleExport = (range: string) => {
     setShowExportMenu(false)
     if (!user) return
@@ -278,8 +382,24 @@ function AnalysisContent() {
     loadData()
   }
 
+  const handleClearFilters = () => {
+    setFilterAccount('')
+    setFilterCategory('')
+    setShowFilterDrawer(false)
+  }
+
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+      {/* Pull to refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
@@ -350,12 +470,35 @@ function AnalysisContent() {
 
           <button
             onClick={() => setShowFilterDrawer(true)}
-            className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
+            className={`w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border rounded-full flex items-center justify-center relative transition-colors ${
+              hasActiveFilters
+                ? 'border-teal-300 dark:border-teal-700 text-teal-600 dark:text-teal-400'
+                : 'border-gray-50 dark:border-slate-700 text-gray-700 dark:text-gray-300'
+            }`}
           >
-            <SlidersHorizontal size={18} className="text-gray-700 dark:text-gray-300" />
+            <SlidersHorizontal size={18} />
+            {hasActiveFilters && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-teal-500 rounded-full border-2 border-white dark:border-slate-800" />
+            )}
           </button>
         </div>
       </div>
+
+      {/* Indicador de filtros ativos */}
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 mb-4 px-1">
+          <Filter size={14} className="text-teal-600 dark:text-teal-400" />
+          <span className="text-xs font-medium text-teal-600 dark:text-teal-400">
+            Filtros ativos
+          </span>
+          <button
+            onClick={handleClearFilters}
+            className="text-xs font-bold text-red-500 hover:text-red-600 ml-auto"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      )}
 
       <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">
         Análise
@@ -386,12 +529,10 @@ function AnalysisContent() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-10">
-          <Loader2 className="animate-spin text-teal-700" size={32} />
-        </div>
+        <AnalysisSkeleton />
       ) : activeTab === 'new' ? (
         /* ===== ABA NOVOS GASTOS ===== */
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-300">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-50 dark:border-slate-700">
               <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
@@ -523,7 +664,8 @@ function AnalysisContent() {
         </div>
       ) : (
         /* ===== ABA NO MÊS ===== */
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Cards de resumo com variação */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
@@ -535,6 +677,14 @@ function AnalysisContent() {
               <p className="text-[15px] font-bold text-emerald-600">
                 {formatCurrency(summary.income)}
               </p>
+              {previousSummary.income > 0 && (
+                <div className={`inline-flex items-center gap-0.5 mt-1 text-[10px] font-bold ${
+                  incomeVariation >= 0 ? 'text-emerald-500' : 'text-red-500'
+                }`}>
+                  {incomeVariation >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                  {incomeVariation >= 0 ? '+' : ''}{incomeVariation.toFixed(1)}%
+                </div>
+              )}
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-2">
@@ -546,6 +696,14 @@ function AnalysisContent() {
               <p className="text-[15px] font-bold text-red-500">
                 {formatCurrency(summary.expense)}
               </p>
+              {previousSummary.expense > 0 && (
+                <div className={`inline-flex items-center gap-0.5 mt-1 text-[10px] font-bold ${
+                  expenseVariation <= 0 ? 'text-emerald-500' : 'text-red-500'
+                }`}>
+                  {expenseVariation <= 0 ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
+                  {expenseVariation > 0 ? '+' : ''}{expenseVariation.toFixed(1)}%
+                </div>
+              )}
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
@@ -561,6 +719,14 @@ function AnalysisContent() {
               >
                 {formatCurrency(summary.balance)}
               </p>
+              {previousSummary.balance !== 0 && (
+                <div className={`inline-flex items-center gap-0.5 mt-1 text-[10px] font-bold ${
+                  balanceVariation >= 0 ? 'text-emerald-500' : 'text-red-500'
+                }`}>
+                  {balanceVariation >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                  {balanceVariation >= 0 ? '+' : ''}{balanceVariation.toFixed(1)}%
+                </div>
+              )}
             </div>
           </div>
 
@@ -789,12 +955,20 @@ function AnalysisContent() {
                   ))}
                 </select>
               </div>
-              <button
-                onClick={handleApplyFilters}
-                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold"
-              >
-                Aplicar Filtros
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleClearFilters}
+                  className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-3 rounded-xl font-bold text-sm"
+                >
+                  Limpar
+                </button>
+                <button
+                  onClick={handleApplyFilters}
+                  className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm"
+                >
+                  Aplicar Filtros
+                </button>
+              </div>
             </div>
           </div>
         </div>
