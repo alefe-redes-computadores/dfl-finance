@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
-  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building
+  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building,
+  RefreshCw
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -51,9 +52,9 @@ function MenuItem({
   }
 
   const content = (
-    <div className={`flex items-center group w-full transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30'}`}>
+    <div className={`flex items-center group w-full transition-all active:scale-[0.98] ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30'}`}>
       <div className="pl-4 py-3">
-        <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 transition-colors">
+        <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 transition-colors group-hover:scale-110">
           <IconComp size={20} />
         </div>
       </div>
@@ -63,14 +64,14 @@ function MenuItem({
         </span>
         <div className="flex items-center gap-3">
           {badge && (
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 flex-shrink-0">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 flex-shrink-0 animate-pulse">
               {badge}
             </span>
           )}
           {disabled ? (
             <Lock size={16} className="text-gray-300 dark:text-gray-600" />
           ) : (
-            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500" />
+            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500 group-hover:translate-x-1 transition-transform" />
           )}
         </div>
       </div>
@@ -111,7 +112,7 @@ function QuickSettingsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-[20px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
@@ -125,7 +126,7 @@ function QuickSettingsModal({
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700">
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                 {theme === 'dark' ? <Moon size={20} className="text-indigo-500" /> : <Sun size={20} className="text-amber-500" />}
@@ -140,7 +141,7 @@ function QuickSettingsModal({
             </button>
           </div>
 
-          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700">
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                 {notificationsEnabled ? <Bell size={20} className="text-rose-500" /> : <BellOff size={20} className="text-gray-400" />}
@@ -155,7 +156,7 @@ function QuickSettingsModal({
             </button>
           </div>
 
-          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700">
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                 <Building size={20} className="text-teal-500" />
@@ -346,14 +347,17 @@ export default function MorePage() {
       
       {showCropModal && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white dark:bg-slate-800 p-6 rounded-[32px]">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-800 p-6 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
             <h3 className="font-bold text-xl mb-6 text-center text-gray-800 dark:text-gray-100">Ajuste a foto</h3>
             <div className="relative w-full aspect-square bg-gray-100 dark:bg-slate-700 overflow-hidden rounded-[24px] shadow-inner border border-gray-200 dark:border-slate-600">
               {selectedImage && <img src={selectedImage} alt="Crop" className="w-full h-full object-cover" />}
             </div>
             <div className="flex gap-4 mt-6">
-              <button onClick={() => setShowCropModal(false)} className="flex-1 py-4 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-[20px] font-bold transition-colors hover:bg-gray-200 dark:hover:bg-slate-600">Cancelar</button>
-              <button onClick={handleCropAndUpload} className="flex-1 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 hover:bg-teal-800 transition-colors">Salvar Foto</button>
+              <button onClick={() => setShowCropModal(false)} className="flex-1 py-4 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-[20px] font-bold transition-colors hover:bg-gray-200 dark:hover:bg-slate-600 active:scale-95">Cancelar</button>
+              <button onClick={handleCropAndUpload} className="flex-1 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 hover:bg-teal-800 transition-colors active:scale-95 flex items-center justify-center gap-2">
+                {uploading ? <RefreshCw size={18} className="animate-spin" /> : null}
+                Salvar Foto
+              </button>
             </div>
             <canvas ref={canvasRef} className="hidden" />
           </div>
@@ -362,7 +366,7 @@ export default function MorePage() {
 
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
                <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Exportar Dados</h3>
                <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20}/></button>
@@ -376,7 +380,7 @@ export default function MorePage() {
                     <button
                       key={c}
                       onClick={() => setExportContext(c)}
-                      className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all ${exportContext === c ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
+                      className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all active:scale-95 ${exportContext === c ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
                     >
                       {c === 'dfl' ? 'PJ' : 'PF'}
                     </button>
@@ -391,7 +395,7 @@ export default function MorePage() {
                 <button
                   key={opt.key}
                   onClick={() => setExportRange(opt.key)}
-                  className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all ${exportRange === opt.key ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
+                  className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all active:scale-95 ${exportRange === opt.key ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
                 >
                   {opt.label}
                 </button>
@@ -399,7 +403,7 @@ export default function MorePage() {
             </div>
 
             <div className="space-y-3">
-              <button onClick={() => handleExport('transactions')} className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-900/30 hover:bg-teal-100 transition-colors">
+              <button onClick={() => handleExport('transactions')} className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors active:scale-[0.98]">
                 <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                    <ReceiptText size={20} className="text-teal-700 dark:text-teal-400" />
                 </div>
@@ -426,7 +430,7 @@ export default function MorePage() {
 
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-[28px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">Mais</h1>
-        <button onClick={() => setShowSettingsModal(true)} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:text-teal-700 transition-colors">
+        <button onClick={() => setShowSettingsModal(true)} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:text-teal-700 dark:hover:text-teal-400 transition-colors active:scale-90">
           <Settings size={20} />
         </button>
       </div>
@@ -446,7 +450,7 @@ export default function MorePage() {
 
       {/* Perfil com Skeleton Loader */}
       {profileLoading ? (
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-pulse">
           <Skeleton variant="circle" width="64px" height="64px" />
           <div className="flex-1 space-y-2">
             <Skeleton variant="text" width="140px" />
@@ -454,14 +458,14 @@ export default function MorePage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <div className="relative w-16 h-16 shrink-0">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-in fade-in duration-300">
+          <div className="relative w-16 h-16 shrink-0 group">
             <img
               src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'}
-              className={`w-full h-full rounded-[20px] object-cover shadow-sm ${uploading ? 'opacity-50' : 'opacity-100'}`}
+              className={`w-full h-full rounded-[20px] object-cover shadow-sm transition-all ${uploading ? 'opacity-50' : 'opacity-100 group-hover:scale-105'}`}
               alt="Perfil"
             />
-            <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[20px] cursor-pointer opacity-0 hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+            <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[20px] cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
               <Camera size={20} className="text-white" />
               <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
             </label>
@@ -471,7 +475,7 @@ export default function MorePage() {
             {isEditing ? (
               <div className="flex items-center gap-2 mb-1">
                 <input value={name} onChange={(e) => setName(e.target.value)} className="bg-gray-100 dark:bg-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl text-[15px] w-full outline-none font-bold focus:ring-2 focus:ring-teal-500/20" autoFocus />
-                <button onClick={saveName} className="bg-teal-700 text-white p-2.5 rounded-xl shadow-md"><Check size={18} /></button>
+                <button onClick={saveName} className="bg-teal-700 text-white p-2.5 rounded-xl shadow-md active:scale-90 transition-transform"><Check size={18} /></button>
               </div>
             ) : (
               <div className="flex items-center gap-3 mb-0.5">
@@ -486,7 +490,7 @@ export default function MorePage() {
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-6 animate-in fade-in duration-300">
         
         <div>
           <SectionTitle>Organizar</SectionTitle>
@@ -539,7 +543,7 @@ export default function MorePage() {
       </div>
       <button
         onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
-        className="w-full mt-10 mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px]"
+        className="w-full mt-10 mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px] active:scale-[0.98]"
       >
         <LogOut size={20} /> Encerrar Sessão
       </button>
