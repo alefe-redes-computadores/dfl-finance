@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, Bot, Key, Settings, Sparkles, TrendingUp,
   PieChart, Target, Lightbulb, MessageSquare, ArrowRight,
-  Coins, Wallet, BarChart3, Zap, Shield, CreditCard, X
+  Coins, Wallet, BarChart3, Zap, Shield, CreditCard, X,
+  Loader2
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 
@@ -14,24 +15,16 @@ export default function AssistantPage() {
   const { showToast } = useToast()
   
   const [apiKey, setApiKey] = useState('')
-  const [showSettings, setShowSettings] = useState(false)
-  const [tempKey, setTempKey] = useState('')
-  const [showTutorial, setShowTutorial] = useState(false)
+  const [loading, setLoading] = useState(true) // Skeleton inicial
 
   useEffect(() => {
+    // Simula carregamento da chave (localStorage é síncrono, mas fica visual)
     const saved = localStorage.getItem('dfl_assistant_api_key')
     if (saved) {
       setApiKey(saved)
-      setTempKey(saved)
     }
+    setLoading(false)
   }, [])
-
-  const saveApiKey = () => {
-    localStorage.setItem('dfl_assistant_api_key', tempKey)
-    setApiKey(tempKey)
-    setShowSettings(false)
-    showToast('Chave de API salva!', 'success')
-  }
 
   const handleAnalysisClick = (prompt: string) => {
     if (!apiKey) {
@@ -103,13 +96,35 @@ export default function AssistantPage() {
     },
   ]
 
+  // Skeleton enquanto carrega
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
+          <div className="flex items-center justify-between mb-2 animate-pulse">
+            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
+            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
+          </div>
+          <div className="flex flex-col items-center py-6 animate-pulse">
+            <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 mb-4" />
+            <div className="h-7 w-48 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
+            <div className="h-4 w-32 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          </div>
+        </div>
+        <div className="px-4 mt-6 animate-pulse">
+          <div className="h-20 bg-gray-200 dark:bg-slate-700 rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans transition-colors duration-300">
       
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-2">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
           <div className="flex items-center gap-2">
@@ -123,9 +138,10 @@ export default function AssistantPage() {
           </div>
         </div>
         
-        {/* Banner principal */}
-        <div className="flex flex-col items-center py-6">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center mb-4 shadow-lg">
+        {/* Banner principal com gradiente */}
+        <div className="flex flex-col items-center py-6 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-teal-50/50 to-transparent dark:from-teal-950/20 dark:to-transparent rounded-3xl -z-10" />
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center mb-4 shadow-lg shadow-teal-500/20">
             <Bot size={40} className="text-white" />
           </div>
           <h1 className="font-bold text-2xl text-gray-800 dark:text-gray-100 mb-2">Assistente Financeiro IA</h1>
@@ -136,10 +152,10 @@ export default function AssistantPage() {
           </p>
           <button
             onClick={() => router.push('/assistant/settings')}
-            className={`mt-3 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${
+            className={`mt-3 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all hover:scale-105 ${
               apiKey 
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' 
-                : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800'
             }`}
           >
             <Key size={14} />
@@ -152,10 +168,10 @@ export default function AssistantPage() {
       <div className="px-4 mt-6">
         <button
           onClick={handleChatClick}
-          className="w-full bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all flex items-center justify-between group"
+          className="w-full bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all flex items-center justify-between group active:scale-[0.98]"
         >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
               <MessageSquare size={24} />
             </div>
             <div className="text-left">
@@ -182,7 +198,7 @@ export default function AssistantPage() {
               <button
                 key={index}
                 onClick={() => handleAnalysisClick(action.prompt)}
-                className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-4 hover:shadow-md transition-all text-left group"
+                className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-4 hover:shadow-md transition-all text-left group active:scale-[0.98]"
               >
                 <div className={`w-12 h-12 rounded-xl ${action.bg} flex items-center justify-center flex-shrink-0`}>
                   <IconComp size={22} className={action.color} />
@@ -205,7 +221,7 @@ export default function AssistantPage() {
             <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-800/50 flex items-center justify-center">
               <Lightbulb size={20} className="text-amber-600 dark:text-amber-400" />
             </div>
-            <h3 className="font-bold text-sm text-amber-800 dark:text-amber-200">Dica</h3>
+            <h3 className="font-bold text-sm text-amber-800 dark:text-amber-200">Dica de Segurança</h3>
           </div>
           <p className="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
             Sua chave de API é salva apenas no seu dispositivo e enviada diretamente para o Google Gemini. 
@@ -213,63 +229,6 @@ export default function AssistantPage() {
           </p>
         </div>
       </div>
-
-      {/* Modal de Configuração da API */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] w-full max-w-md p-6 shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-                  <Key size={20} className="text-teal-700 dark:text-teal-400" />
-                </div>
-                <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100">Chave da API</h2>
-              </div>
-              <button onClick={() => setShowSettings(false)} className="text-gray-400 dark:text-gray-500 p-2">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-              Sua chave é salva apenas no seu dispositivo (localStorage) e enviada diretamente para a API do Google Gemini. 
-              Obtenha sua chave gratuita em: <span className="font-bold text-teal-600 dark:text-teal-400">aistudio.google.com</span>
-            </p>
-            
-            {/* Botão do tutorial */}
-            <button
-              onClick={() => setShowTutorial(!showTutorial)}
-              className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-4 flex items-center gap-1"
-            >
-              <Lightbulb size={14} />
-              {showTutorial ? 'Ocultar tutorial' : 'Como obter sua chave?'}
-            </button>
-
-            {showTutorial && (
-              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 mb-4 text-xs text-gray-600 dark:text-gray-300 space-y-2">
-                <p className="font-bold">1. Acesse: <span className="text-teal-600 dark:text-teal-400">aistudio.google.com</span></p>
-                <p>2. Faça login com sua conta Google.</p>
-                <p>3. Clique em <strong>"Get API Key"</strong> no menu lateral.</p>
-                <p>4. Crie uma nova chave (ou use a padrão).</p>
-                <p>5. Copie a chave e cole no campo acima.</p>
-              </div>
-            )}
-
-            <input
-              type="password"
-              value={tempKey}
-              onChange={e => setTempKey(e.target.value)}
-              placeholder="Cole sua chave Gemini API aqui..."
-              className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:border-teal-500 transition-colors mb-4 text-gray-800 dark:text-gray-200"
-            />
-            <button
-              onClick={saveApiKey}
-              disabled={!tempKey.trim()}
-              className="w-full bg-teal-700 hover:bg-teal-800 text-white py-3 rounded-xl font-bold disabled:opacity-50 transition-colors"
-            >
-              Salvar Chave
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
