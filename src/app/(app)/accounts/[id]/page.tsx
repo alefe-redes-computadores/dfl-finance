@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -9,13 +9,15 @@ import {
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
   Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
   Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  ArrowLeftRight as ArrowLeftRightIcon, Wallet, Search, Building, Trash2
+  ArrowLeftRight as ArrowLeftRightIcon, Wallet, Search, Building, Trash2,
+  RefreshCw, TrendingDown, ArrowUp, ArrowDown, Image, Paperclip
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import BankLogo from '@/components/BankLogo'
 import { BANK_LIST } from '@/lib/BankIcons'
 import { useToast } from '@/contexts/ToastContext'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 
 const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
 
@@ -28,21 +30,64 @@ const ICON_MAP: Record<string, React.ElementType> = {
   receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
 }
 
+// ============================================================
+// SKELETON LOADER
+// ============================================================
+const AccountDetailSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-sm border-b border-gray-50 dark:border-slate-700 mb-6">
+      <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 mb-4" />
+      <div className="h-3 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
+      <div className="h-9 w-48 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      <div className="h-8 w-40 bg-gray-100 dark:bg-slate-700/50 rounded-full mb-4" />
+      <div className="flex gap-10">
+        <div className="flex flex-col items-center gap-1">
+          <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+        </div>
+        <div className="w-[1px] bg-gray-100 dark:bg-slate-600" />
+        <div className="flex flex-col items-center gap-1">
+          <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+        </div>
+      </div>
+    </div>
+    <div className="px-4 space-y-2">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+          <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700" />
+          <div className="w-10 h-10 rounded-[12px] bg-gray-100 dark:bg-slate-700" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 w-3/4 bg-gray-100 dark:bg-slate-700 rounded" />
+            <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700 rounded" />
+          </div>
+          <div className="h-4 w-20 bg-gray-100 dark:bg-slate-700 rounded" />
+        </div>
+      ))}
+    </div>
+  </div>
+)
+
 export default function AccountStatementPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { context } = useContext_()
   const { showToast } = useToast()
+
+  // Detecta se é modo de criação
+  const isNew = id === 'new'
   
   const [account, setAccount] = useState<any>(null)
   const [allAccounts, setAllAccounts] = useState<any[]>([]) 
   const [transactions, setTransactions] = useState<any[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0 })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!isNew)
   const [actionLoading, setActionLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useState(isNew)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showBalanceModal, setShowBalanceModal] = useState(false)
   const [showDestAccModal, setShowDestAccModal] = useState(false)
@@ -64,10 +109,48 @@ export default function AccountStatementPage() {
   const [transferDate, setTransferDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [transferDesc, setTransferDesc] = useState('')
 
+  // Pull to refresh
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || loading || isNew) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current || refreshing) return
+    const pullDistance = e.touches[0].clientY - pullStartY.current
+    if (pullDistance > 60) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadData().finally(() => setRefreshing(false))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [loading, refreshing, isNew])
+
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
   const loadData = useCallback(async () => {
-    if (!id || !user) return
+    if (!id || !user || isNew) return
     setLoading(true)
 
     try {
@@ -111,9 +194,12 @@ export default function AccountStatementPage() {
     } finally {
       setLoading(false)
     }
-  }, [id, currentDate, user])
+  }, [id, currentDate, user, isNew])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { 
+    if (!isNew) loadData() 
+    else setLoading(false)
+  }, [loadData, isNew])
 
   const formatMoneyInput = (value: string) => {
     const rawValue = value.replace(/\D/g, '')
@@ -157,9 +243,44 @@ export default function AccountStatementPage() {
     setShowBankDropdown(false)
   }
 
+  // ============================================================
+  // CRIAÇÃO DE CONTA (NOVO)
+  // ============================================================
+  const handleCreateAccount = async () => {
+    if (!name.trim() || !user) {
+      showToast('Informe o nome da conta.', 'warning')
+      return
+    }
+    setActionLoading(true)
+
+    const { error } = await supabase.from('accounts').insert({
+      user_id: user.id,
+      name: name.trim(),
+      color,
+      balance: balanceNum || 0,
+      allow_negative: allowNegative,
+      context: context,
+    })
+
+    if (error) {
+      showToast('Erro ao criar conta.', 'error')
+    } else {
+      showToast('Conta criada com sucesso!', 'success')
+      router.push('/accounts')
+    }
+
+    setActionLoading(false)
+  }
+
   const handleSaveAccountInfo = async () => {
     if (!name.trim() || !user) return
     setActionLoading(true)
+
+    if (isNew) {
+      await handleCreateAccount()
+      return
+    }
+
     const { error } = await supabase.from('accounts').update({ 
       name: name.trim(), 
       color,
@@ -253,10 +374,10 @@ export default function AccountStatementPage() {
   }
 
   const openEditModal = () => {
-    if (!account) return
-    setName(account.name)
-    setColor(account.color)
-    setAllowNegative(account.allow_negative || false)
+    if (!account && !isNew) return
+    setName(account?.name || '')
+    setColor(account?.color || DEFAULT_COLORS[0])
+    setAllowNegative(account?.allow_negative || false)
     setSelectedBank(null)
     setBankSearch('')
     setFilteredBanks([])
@@ -265,27 +386,156 @@ export default function AccountStatementPage() {
   }
 
   const openBalanceModal = () => {
+    if (!account) return
     const safeBalance = Number(account.balance) || 0
     setAdjustBalanceDisplay(safeBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
     setShowBalanceModal(true)
   }
 
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+  }
+
   const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+  // ============================================================
+  // TELA DE CRIAÇÃO
+  // ============================================================
+  if (isNew) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
+        <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Nova Conta</h1>
+          <div className="w-10" />
+        </div>
+
+        <div className="px-4 pt-6">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-slate-700">
+            <div className="flex items-center gap-4 mb-6">
+              <BankLogo color={color} name={name || 'Nova'} size="lg" />
+              <div>
+                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Criar Conta</h2>
+                <p className="text-xs text-gray-400 dark:text-gray-500">Adicione uma nova conta bancária</p>
+              </div>
+            </div>
+
+            <div className="relative mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Buscar banco</label>
+              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-100 dark:border-slate-600 overflow-hidden">
+                <Search size={16} className="ml-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                <input
+                  value={bankSearch}
+                  onChange={e => handleBankSearch(e.target.value)}
+                  onFocus={() => { if (filteredBanks.length > 0) setShowBankDropdown(true) }}
+                  placeholder="Digite o nome do banco..."
+                  className="w-full bg-transparent py-3 px-3 text-sm outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
+                />
+                {bankSearch && (
+                  <button onClick={() => { setBankSearch(''); setFilteredBanks([]); setShowBankDropdown(false) }} className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {showBankDropdown && filteredBanks.length > 0 && (
+                <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl mt-1 shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {filteredBanks.map(bank => (
+                    <button key={bank.key} onClick={() => selectBank(bank)} className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0">
+                      <BankLogo color={bank.color} name={bank.name} size="sm" />
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{bank.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Nome da conta</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Minha Conta Principal" className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors" />
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Saldo inicial</label>
+              <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-xl flex items-center gap-2 border border-gray-100 dark:border-slate-600">
+                <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
+                <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="0,00" className="w-full bg-transparent text-2xl font-light text-gray-800 dark:text-gray-200 outline-none" />
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
+              <div className="flex flex-wrap gap-3">
+                {DEFAULT_COLORS.map(c => (
+                  <button key={c} onClick={() => setColor(c)} className="w-9 h-9 rounded-full transition-all duration-200" style={{ backgroundColor: c, transform: color === c ? 'scale(1.2)' : 'scale(1)', boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }} />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
+              <div>
+                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">Limite / Cheque especial</p>
+              </div>
+              <button onClick={() => setAllowNegative(!allowNegative)} className={`w-12 h-7 rounded-full relative transition-colors ${allowNegative ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${allowNegative ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <button onClick={handleSaveAccountInfo} disabled={actionLoading || !name.trim()} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center">
+              {actionLoading ? <Loader2 className="animate-spin" size={24} /> : 'Criar Conta'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================
+  // LOADING / ERRO
+  // ============================================================
   if (loading && !account) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
-      <Loader2 className="animate-spin text-teal-600" size={40} />
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20">
+      <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200"><ChevronLeft size={24} /></button>
+        <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Detalhes da Conta</h1>
+        <div className="w-10" />
+      </div>
+      <AccountDetailSkeleton />
     </div>
   )
 
-  if (!account) return <div className="p-6 text-center text-gray-500 dark:text-gray-400">Conta não encontrada.</div>
+  if (!account) return (
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 flex items-center justify-center p-6">
+      <div className="text-center">
+        <Wallet size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+        <p className="text-gray-500 dark:text-gray-400 mb-4">Conta não encontrada.</p>
+        <button onClick={() => router.push('/accounts')} className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold">
+          Ver todas as contas
+        </button>
+      </div>
+    </div>
+  )
 
   const safeBalance = Number(account.balance) || 0
   const selectedDestAcc = allAccounts.find(a => a.id === destAccountId)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
-      
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
+      {/* Pull to refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 dark:hover:text-gray-400 transition-colors"><ChevronLeft size={24} /></button>
         <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Detalhes da Conta</h1>
@@ -299,7 +549,27 @@ export default function AccountStatementPage() {
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-sm border-b border-gray-50 dark:border-slate-700 mb-6">
         <BankLogo color={account.color || '#f97316'} name={account.name} size="lg" />
         <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-4">{account.name}</p>
-        <p className="text-[32px] font-light text-gray-800 dark:text-gray-100 mb-6">{formatCurrency(safeBalance)}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-[32px] font-light text-gray-800 dark:text-gray-100 mb-6">{formatCurrency(safeBalance)}</p>
+        </div>
+        {safeBalance > 0 && (
+          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold mb-4">
+            <TrendingUp size={12} />
+            Saldo positivo
+          </div>
+        )}
+        {safeBalance < 0 && (
+          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold mb-4">
+            <TrendingDown size={12} />
+            Saldo negativo
+          </div>
+        )}
+        {safeBalance === 0 && (
+          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-xs font-bold mb-4">
+            <Wallet size={12} />
+            Saldo zerado
+          </div>
+        )}
 
         <div className="flex items-center justify-between w-full max-w-[240px] bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 shadow-sm rounded-full p-1.5 mb-8">
           <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={16} /></button>
@@ -322,7 +592,21 @@ export default function AccountStatementPage() {
 
       <div className="px-4">
         <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-3 px-1">Extrato do Mês</h3>
-        {transactions.length === 0 ? (
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 animate-pulse">
+                <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700" />
+                <div className="w-10 h-10 rounded-[12px] bg-gray-100 dark:bg-slate-700" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-3/4 bg-gray-100 dark:bg-slate-700 rounded" />
+                  <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700 rounded" />
+                </div>
+                <div className="h-4 w-20 bg-gray-100 dark:bg-slate-700 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : transactions.length === 0 ? (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-50 dark:border-slate-700 p-10 text-center shadow-sm">
              <p className="text-sm text-gray-400 dark:text-gray-500">Nenhuma movimentação neste mês.</p>
           </div>
@@ -333,12 +617,13 @@ export default function AccountStatementPage() {
                const isIncomeVisual = tx.type === 'income' || isTransferIn;
                const isPending = tx.status === 'pending';
                const IconComp = tx.type === 'transfer' ? ArrowLeftRightIcon : (ICON_MAP[tx.categories?.icon] || ICON_MAP['other'])
+               const attachmentIcon = getAttachmentIcon(tx.receipt_url)
 
                return (
                 <div 
                   key={tx.id} 
                   onClick={() => router.push(`/transactions/${tx.id}`)}
-                  className={`flex items-center justify-between px-4 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors gap-3 ${index !== transactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
+                  className={`flex items-center justify-between px-4 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== transactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
                 >
                   {isPending ? (
                     <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
@@ -355,7 +640,10 @@ export default function AccountStatementPage() {
                       <IconComp size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 uppercase tracking-tight truncate">{tx.description || tx.categories?.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 uppercase tracking-tight truncate">{tx.description || tx.categories?.name}</p>
+                        {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
+                      </div>
                       <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
                     </div>
                   </div>
@@ -372,7 +660,7 @@ export default function AccountStatementPage() {
         )}
       </div>
 
-      {/* MODAL 1: EDITAR CONTA */}
+      {/* MODAL 1: EDITAR CONTA (mantido igual) */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -452,7 +740,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* MODAL 2: BALANÇA */}
+      {/* MODAL 2: BALANÇA (mantido igual) */}
       {showBalanceModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowBalanceModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
@@ -474,7 +762,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* MODAL 3: TRANSFERÊNCIA */}
+      {/* MODAL 3: TRANSFERÊNCIA (mantido igual) */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowTransferModal(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
@@ -513,7 +801,7 @@ export default function AccountStatementPage() {
         </div>
       )}
 
-      {/* Modal de seleção de conta destino */}
+      {/* Modal de seleção de conta destino (mantido igual) */}
       {showDestAccModal && (
         <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowDestAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -537,7 +825,6 @@ export default function AccountStatementPage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
