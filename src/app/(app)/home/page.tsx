@@ -9,7 +9,8 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle, Image, Paperclip
+  PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
+  Sun, Moon, Sunrise, Sunset
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -28,7 +29,7 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 import ProjectionSparklineCard from '@/components/ProjectionSparklineCard'
 
 // ============================================================
-// SEÇÕES DISPONÍVEIS (para personalização) - ADICIONADA PROJEÇÃO
+// SEÇÕES DISPONÍVEIS (para personalização)
 // ============================================================
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
@@ -47,6 +48,17 @@ const ALL_SECTIONS = [
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 
 // ============================================================
+// SAUDAÇÃO DINÂMICA
+// ============================================================
+function getGreeting(): { text: string; icon: React.ReactNode } {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12) return { text: 'Bom dia', icon: <Sunrise size={18} className="text-amber-500" /> }
+  if (hour >= 12 && hour < 18) return { text: 'Boa tarde', icon: <Sun size={18} className="text-amber-500" /> }
+  if (hour >= 18 && hour < 22) return { text: 'Boa noite', icon: <Sunset size={18} className="text-indigo-400" /> }
+  return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400" /> }
+}
+
+// ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
 function HomeContent() {
@@ -58,6 +70,8 @@ function HomeContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
+  const [previousBalance, setPreviousBalance] = useState(0)
+  const [balanceVariation, setBalanceVariation] = useState(0)
   const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0, faturas: 0 })
   const [accounts, setAccounts] = useState<any[]>([])
   const [cards, setCards] = useState<any[]>([])
@@ -72,7 +86,6 @@ function HomeContent() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
-  // Layout personalizado
   const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_SECTION_ORDER)
   const [layoutLoaded, setLayoutLoaded] = useState(false)
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
@@ -82,6 +95,7 @@ function HomeContent() {
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
+  const greeting = getGreeting()
 
   const getBalanceStyle = (val: number) => {
     if (val > 0) return 'text-emerald-600 font-bold'
@@ -134,9 +148,6 @@ function HomeContent() {
       }, { onConflict: 'user_id,context' })
   }
 
-  // ============================================================
-  // MODAL DE PERSONALIZAÇÃO (funções)
-  // ============================================================
   const toggleSection = (id: string) => {
     setPersonalizeEnabled(prev => {
       const next = new Set(prev)
@@ -150,10 +161,8 @@ function HomeContent() {
     setPersonalizeOrder((prev) => {
       const currentIndex = prev.findIndex((item) => item.id === id)
       if (currentIndex === -1) return prev
-
       const newOrder = [...prev]
       const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-
       if (targetIndex >= 0 && targetIndex < newOrder.length) {
         [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]]
       }
@@ -180,9 +189,6 @@ function HomeContent() {
     setShowPersonalizeModal(true)
   }
 
-  // ============================================================
-  // LOAD DATA (COMPLETO)
-  // ============================================================
   const loadData = useCallback(async () => {
     if (!user) return
     setDataLoading(true)
@@ -191,7 +197,12 @@ function HomeContent() {
       const start = getLocalDateString(startOfMonth(currentDate))
       const end = getLocalDateString(endOfMonth(currentDate))
 
-      const [{ data: transactions }, { data: subsData }, { data: debtsData }, { data: financingsData }] = await Promise.all([
+      // Mês anterior para variação
+      const prevMonthDate = subMonths(currentDate, 1)
+      const prevStart = getLocalDateString(startOfMonth(prevMonthDate))
+      const prevEnd = getLocalDateString(endOfMonth(prevMonthDate))
+
+      const [{ data: transactions }, { data: prevTransactions }, { data: subsData }, { data: debtsData }, { data: financingsData }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -199,6 +210,12 @@ function HomeContent() {
           .gte('date', start)
           .lte('date', end)
           .order('date', { ascending: false }),
+        supabase
+          .from('transactions')
+          .select('amount, type')
+          .match({ user_id: user.id, context: context, status: 'done' })
+          .gte('date', prevStart)
+          .lte('date', prevEnd),
         supabase
           .from('subscriptions')
           .select('*, categories(name, icon, color), accounts(name)')
@@ -221,6 +238,13 @@ function HomeContent() {
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
       setFinancings(Array.isArray(financingsData) ? financingsData : [])
 
+      // Variação mensal
+      const prevTxs = Array.isArray(prevTransactions) ? prevTransactions : []
+      const prevInc = prevTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+      const prevExp = prevTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+      const prevBal = prevInc - prevExp
+      setPreviousBalance(prevBal)
+
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
         const { data: payments } = await supabase
@@ -228,7 +252,6 @@ function HomeContent() {
           .select('amount')
           .eq('debt_id', debt.id)
           .eq('type', 'income')
-
         const paidAmount = (payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
         const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
         return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
@@ -239,11 +262,19 @@ function HomeContent() {
 
       const income = txs.filter((t) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
+      const balance = income - expense
+
+      // Calcula variação
+      if (prevBal !== 0) {
+        setBalanceVariation(((balance - prevBal) / Math.abs(prevBal)) * 100)
+      } else {
+        setBalanceVariation(balance > 0 ? 100 : balance < 0 ? -100 : 0)
+      }
 
       const toPay = txs.filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id).reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const toReceive = txs.filter((t) => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + (Number(t.amount) || 0), 0)
 
-      setSummary({ income, expense, balance: income - expense })
+      setSummary({ income, expense, balance })
       setRecentTransactions(txs.slice(0, 5))
 
       const { data: accsData } = await supabase.from('accounts').select('*').match({ user_id: user.id, context: context }).order('name')
@@ -294,10 +325,8 @@ function HomeContent() {
     return aDue - bDue
   })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
+  const allCardsPaid = cards.length > 0 && cards.every((c) => (c.faturaAtual || 0) === 0)
 
-  // ============================================================
-  // FUNÇÃO AUXILIAR: Verifica tipo de anexo pelo receipt_url
-  // ============================================================
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -341,9 +370,6 @@ function HomeContent() {
     )
   }
 
-  // ============================================================
-  // RENDERIZAÇÃO POR SEÇÃO (DESIGN PREMIUM)
-  // ============================================================
   const renderSection = (sectionId: string) => {
     switch (sectionId) {
       case 'balance':
@@ -359,6 +385,17 @@ function HomeContent() {
               <h1 className={`text-[36px] font-light text-gray-800 dark:text-gray-100 tracking-tight ${hideBalance ? 'tracking-widest' : ''}`}>
                 {hideBalance ? '••••••' : formatCurrency(totalAccountsBalance)}
               </h1>
+              {/* Variação mensal */}
+              {!hideBalance && previousBalance !== 0 && (
+                <div className={`inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold ${
+                  balanceVariation >= 0
+                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                }`}>
+                  {balanceVariation >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                  {balanceVariation >= 0 ? '+' : ''}{balanceVariation.toFixed(1)}% vs. mês anterior
+                </div>
+              )}
             </div>
           </div>
         )
@@ -390,26 +427,36 @@ function HomeContent() {
           </div>
         )
       case 'next-card':
-        if (!nextCard) return null
+        if (!nextCard && !allCardsPaid) return null
         return (
           <div key="next-card" className="mb-6">
-            <div onClick={() => router.push(`/cards/${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-[18px] bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500">
-                  <CreditCard size={24} />
+            {nextCard ? (
+              <div onClick={() => router.push(`/cards/${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-[18px] bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500">
+                    <CreditCard size={24} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Próxima Fatura</p>
+                    <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{nextCard.name}</p>
+                    <p className="text-[12px] text-gray-400 dark:text-gray-500 font-medium">Vence dia {nextCard.due_day}</p>
+                  </div>
                 </div>
-                <div>
-                   <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Próxima Fatura</p>
-                   <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{nextCard.name}</p>
-                   <p className="text-[12px] text-gray-400 dark:text-gray-500 font-medium">Vence dia {nextCard.due_day}</p>
+                <div className="text-right">
+                  <p className={`text-[16px] font-bold ${(nextCard.faturaAtual || 0) > 0 ? 'text-orange-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                    {hideBalance ? '••••' : formatCurrency(nextCard.faturaAtual || 0)}
+                  </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`text-[16px] font-bold ${(nextCard.faturaAtual || 0) > 0 ? 'text-orange-500' : 'text-gray-800 dark:text-gray-200'}`}>
-                  {hideBalance ? '••••' : formatCurrency(nextCard.faturaAtual || 0)}
-                </p>
+            ) : allCardsPaid ? (
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-emerald-100 dark:border-emerald-900 text-center">
+                <div className="flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <Check size={20} />
+                  <span className="font-bold text-sm">Tudo em dia!</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Todas as faturas estão pagas.</p>
               </div>
-            </div>
+            ) : null}
           </div>
         )
       case 'pendings':
@@ -420,21 +467,21 @@ function HomeContent() {
               <div className="grid grid-cols-3 gap-3">
                 <div onClick={() => router.push('/transactions?filter=expense')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
                   <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mx-auto mb-2 text-red-500">
-                     <ArrowDown size={18} />
+                    <ArrowDown size={18} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">A Pagar</p>
                   <p className="text-[14px] font-bold text-red-500">{hideBalance ? '•••' : formatCurrency(pendings.toPay)}</p>
                 </div>
                 <div onClick={() => router.push('/transactions?filter=income')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
                   <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-2 text-emerald-500">
-                     <ArrowUp size={18} />
+                    <ArrowUp size={18} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Receber</p>
                   <p className="text-[14px] font-bold text-emerald-600">{hideBalance ? '•••' : formatCurrency(pendings.toReceive)}</p>
                 </div>
                 <div onClick={() => router.push('/cards')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
                   <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center mx-auto mb-2 text-orange-500">
-                     <CreditCard size={18} />
+                    <CreditCard size={18} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Faturas</p>
                   <p className="text-[14px] font-bold text-orange-500">{hideBalance ? '•••' : formatCurrency(pendings.faturas)}</p>
@@ -523,15 +570,24 @@ function HomeContent() {
               <div className="px-2 pb-2">
                 {budgets.map(budget => {
                   const IconComp = getDynamicIcon(budget.icon)
+                  const isWarning = budget.percent >= 80 && budget.remaining >= 0
+                  const isDanger = budget.remaining < 0
                   return (
                     <div key={budget.id} onClick={() => router.push(`/budgets/${budget.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors border-b border-gray-50 dark:border-slate-700/50 last:border-0">
                       <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${budget.color}15`, color: budget.color }}><IconComp size={20} /></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1.5">
                           <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 truncate">{budget.name}</p>
-                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${budget.remaining < 0 ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' : budget.percent >= 80 ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'}`}>{budget.remaining < 0 ? 'Estourado' : budget.percent >= 80 ? 'Atenção' : 'Seguro'}</span>
+                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                            isDanger ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
+                            isWarning ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' :
+                            'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                          }`}>
+                            {isDanger && <AlertTriangle size={10} />}
+                            {isDanger ? 'Estourado' : isWarning ? 'Atenção' : 'Seguro'}
+                          </span>
                         </div>
-                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1.5"><div className={`h-full rounded-full transition-all duration-500 ${budget.remaining < 0 ? 'bg-red-500' : budget.percent >= 80 ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(budget.percent, 100)}%` }} /></div>
+                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1.5"><div className={`h-full rounded-full transition-all duration-500 ${isDanger ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(budget.percent, 100)}%` }} /></div>
                         <div className="flex justify-between text-[11px] font-medium text-gray-400 dark:text-gray-500"><span>Usado: {formatCurrency(budget.spent)}</span><span>Limite: {formatCurrency(Number(budget.amount))}</span></div>
                       </div>
                     </div>
@@ -626,16 +682,14 @@ function HomeContent() {
                     const IconComp = getDynamicIcon(tx.categories?.icon)
                     const attachmentIcon = getAttachmentIcon(tx.receipt_url)
                     return (
-                      <div key={tx.id} onClick={() => router.push(`/transactions/${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700/50' : ''}`}>
+                      <div key={tx.id} onClick={() => router.push(`/transactions/${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
                         {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
                         <div className="flex items-center gap-4 flex-1 min-w-0">
                           <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
-                              {attachmentIcon && (
-                                <span className="shrink-0">{attachmentIcon}</span>
-                              )}
+                              {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
                             </div>
                             <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
                           </div>
@@ -676,9 +730,15 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Header Fixo: Navegação de Meses e Contexto */}
+      {/* Saudação + Header */}
       <div className="flex justify-between items-center mb-8">
-        <ContextToggle />
+        <div>
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            {greeting.icon}
+            <span className="text-sm font-medium">{greeting.text}, {user?.user_metadata?.name || 'Álefe'}</span>
+          </div>
+          <ContextToggle />
+        </div>
         <div className="flex items-center gap-3">
           <SyncButton pendingCount={pendingCount} isSyncing={isSyncing} onSync={syncQueue} />
           {notificationsEnabled && (
@@ -704,10 +764,7 @@ function HomeContent() {
         <span className="font-bold text-[15px]">Personalizar Dashboard</span>
       </button>
 
-      {/* FAB (COMPONENTE SEPARADO) */}
       <FAB onSave={() => loadData()} />
-
-      {/* MODAL DE PERSONALIZAÇÃO (COMPONENTE SEPARADO) */}
       <PersonalizeModal
         isOpen={showPersonalizeModal}
         onClose={() => setShowPersonalizeModal(false)}
