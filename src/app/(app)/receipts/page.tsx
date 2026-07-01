@@ -1,17 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Search, Trash2, Eye, Download, FileText,
-  Image as ImageIcon, X, AlertCircle
+  Image as ImageIcon, X, AlertCircle, RefreshCw, Paperclip,
+  Calendar, HardDrive
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
-import Skeleton from '@/components/Skeleton'
 
 interface ReceiptFile {
   name: string
@@ -24,16 +24,78 @@ interface ReceiptFile {
   transaction_date?: string
 }
 
+// ============================================================
+// SKELETON LOADER
+// ============================================================
+const ReceiptsSkeleton = () => (
+  <div className="space-y-2 animate-pulse">
+    {[1, 2, 3, 4].map((i) => (
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="w-14 h-14 rounded-xl bg-gray-200 dark:bg-slate-700 flex-shrink-0" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="h-3.5 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-2.5 w-28 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          <div className="h-2.5 w-32 bg-teal-100 dark:bg-teal-900/20 rounded" />
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+        </div>
+      </div>
+    ))}
+  </div>
+)
+
 export default function ReceiptsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
   const [receipts, setReceipts] = useState<ReceiptFile[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'image' | 'pdf'>('all')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  // Pull to refresh
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || loading) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current || refreshing) return
+    const pullDistance = e.touches[0].clientY - pullStartY.current
+    if (pullDistance > 60) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadReceipts().finally(() => setRefreshing(false))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [loading, refreshing])
 
   useEffect(() => {
     if (!user?.id) return
@@ -161,11 +223,21 @@ export default function ReceiptsPage() {
   })
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
       
+      {/* Pull to refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
@@ -181,10 +253,10 @@ export default function ReceiptsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome do arquivo..."
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300"
+            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300 focus:border-teal-500 transition-colors"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
               <X size={14} />
             </button>
           )}
@@ -192,19 +264,20 @@ export default function ReceiptsPage() {
 
         <div className="flex gap-2 mt-3">
           {[
-            { id: 'all', label: 'Todos' },
-            { id: 'image', label: 'Imagens' },
-            { id: 'pdf', label: 'PDFs' },
+            { id: 'all', label: 'Todos', icon: null },
+            { id: 'image', label: 'Imagens', icon: <ImageIcon size={12} /> },
+            { id: 'pdf', label: 'PDFs', icon: <FileText size={12} /> },
           ].map(f => (
             <button
               key={f.id}
               onClick={() => setFilter(f.id as any)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
                 filter === f.id
-                  ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
-                  : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
+                  ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 shadow-sm'
+                  : 'bg-gray-50 dark:bg-slate-700 border border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600'
               }`}
             >
+              {f.icon}
               {f.label}
             </button>
           ))}
@@ -213,23 +286,23 @@ export default function ReceiptsPage() {
 
       <div className="px-4 pt-4">
         {loading ? (
-          <div className="space-y-3">
-            <Skeleton variant="card" height="80px" count={4} />
-          </div>
+          <ReceiptsSkeleton />
         ) : error ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12 animate-in fade-in duration-300">
             <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
             <button
               onClick={loadReceipts}
-              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors"
+              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors active:scale-95"
             >
               Tentar novamente
             </button>
           </div>
         ) : filteredReceipts.length === 0 ? (
-          <div className="text-center py-16">
-            <ImageIcon size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <div className="text-center py-16 animate-in fade-in duration-300">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ImageIcon size={40} className="text-gray-300 dark:text-gray-600" />
+            </div>
             {receipts.length === 0 ? (
               <>
                 <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhum comprovante</h2>
@@ -244,36 +317,54 @@ export default function ReceiptsPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 animate-in fade-in duration-300">
             {filteredReceipts.map(receipt => (
               <div
                 key={receipt.name}
-                className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all"
+                className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all active:scale-[0.98]"
               >
                 <div
-                  className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer"
+                  className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer relative group"
                   onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
                 >
                   {receipt.isImage ? (
                     <img src={receipt.url} alt={receipt.name} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <FileText size={24} className="text-gray-400" />
+                    <div className="w-full h-full flex items-center justify-center bg-red-50 dark:bg-red-900/20">
+                      <FileText size={24} className="text-red-400" />
                     </div>
                   )}
+                  {/* Overlay de hover */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <Eye size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                    {receipt.name}
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                    {' • '}
-                    {formatFileSize(receipt.size)}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    {receipt.isImage ? (
+                      <ImageIcon size={12} className="text-blue-500 flex-shrink-0" />
+                    ) : (
+                      <Paperclip size={12} className="text-red-500 flex-shrink-0" />
+                    )}
+                    <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                      {receipt.name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <Calendar size={10} className="text-gray-400 flex-shrink-0" />
+                    <p className="text-[10px] text-gray-400">
+                      {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <HardDrive size={10} className="text-gray-400 flex-shrink-0" />
+                    <p className="text-[10px] text-gray-400">
+                      {formatFileSize(receipt.size)}
+                    </p>
+                  </div>
                   {receipt.transaction_desc && (
-                    <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 truncate">
+                    <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 truncate flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-teal-400 flex-shrink-0" />
                       Vinculado a: {receipt.transaction_desc}
                     </p>
                   )}
@@ -282,21 +373,21 @@ export default function ReceiptsPage() {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
-                    className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-full transition-colors"
                     title="Visualizar"
                   >
                     <Eye size={16} />
                   </button>
                   <button
                     onClick={() => handleDownload(receipt)}
-                    className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-full transition-colors"
                     title="Download"
                   >
                     <Download size={16} />
                   </button>
                   <button
                     onClick={() => handleDelete(receipt)}
-                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
                     title="Excluir"
                   >
                     <Trash2 size={16} />
@@ -308,9 +399,10 @@ export default function ReceiptsPage() {
         )}
       </div>
 
+      {/* Preview Modal */}
       {previewUrl && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setPreviewUrl(null)}
         >
           <button
@@ -322,7 +414,7 @@ export default function ReceiptsPage() {
           <img
             src={previewUrl}
             alt="Preview"
-            className="max-w-full max-h-[85vh] object-contain rounded-2xl"
+            className="max-w-full max-h-[85vh] object-contain rounded-2xl animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
