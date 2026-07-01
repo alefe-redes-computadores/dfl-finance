@@ -1,3 +1,4 @@
+
 'use client'
 export const dynamic = 'force-dynamic'
 
@@ -52,11 +53,62 @@ const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 // ============================================================
 function getGreeting(): { text: string; icon: React.ReactNode } {
   const hour = new Date().getHours()
-  if (hour >= 5 && hour < 12) return { text: 'Bom dia', icon: <Sunrise size={18} className="text-amber-500" /> }
-  if (hour >= 12 && hour < 18) return { text: 'Boa tarde', icon: <Sun size={18} className="text-amber-500" /> }
-  if (hour >= 18 && hour < 22) return { text: 'Boa noite', icon: <Sunset size={18} className="text-indigo-400" /> }
-  return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400" /> }
+  if (hour >= 5 && hour < 12) return { text: 'Bom dia', icon: <Sunrise size={18} className="text-amber-500 shrink-0" /> }
+  if (hour >= 12 && hour < 18) return { text: 'Boa tarde', icon: <Sun size={18} className="text-amber-500 shrink-0" /> }
+  if (hour >= 18 && hour < 22) return { text: 'Boa noite', icon: <Sunset size={18} className="text-indigo-400 shrink-0" /> }
+  return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400 shrink-0" /> }
 }
+
+// ============================================================
+// SKELETON LOADER DA HOME
+// ============================================================
+const HomeSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    {/* Saldo Total */}
+    <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" />
+        <div className="h-9 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" />
+        <div className="h-5 w-32 bg-gray-100 dark:bg-slate-700/50 rounded-full mt-1" />
+      </div>
+    </div>
+
+    {/* Receitas / Despesas */}
+    <div className="grid grid-cols-2 gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 flex flex-col items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-700" />
+        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
+      </div>
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 flex flex-col items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-700" />
+        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
+      </div>
+    </div>
+
+    {/* Transações Recentes (simplificado) */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+      <div className="flex justify-between items-center px-5 py-4">
+        <div className="h-4 w-36 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="h-4 w-16 bg-gray-100 dark:bg-slate-700/50 rounded" />
+      </div>
+      <div className="px-2 pb-2 space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-3 p-3">
+            <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700" />
+            <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 w-3/4 bg-gray-100 dark:bg-slate-700 rounded" />
+              <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700 rounded" />
+            </div>
+            <div className="h-4 w-16 bg-gray-100 dark:bg-slate-700 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)
 
 // ============================================================
 // COMPONENTE PRINCIPAL
@@ -197,7 +249,6 @@ function HomeContent() {
       const start = getLocalDateString(startOfMonth(currentDate))
       const end = getLocalDateString(endOfMonth(currentDate))
 
-      // Mês anterior para variação
       const prevMonthDate = subMonths(currentDate, 1)
       const prevStart = getLocalDateString(startOfMonth(prevMonthDate))
       const prevEnd = getLocalDateString(endOfMonth(prevMonthDate))
@@ -238,7 +289,6 @@ function HomeContent() {
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
       setFinancings(Array.isArray(financingsData) ? financingsData : [])
 
-      // Variação mensal
       const prevTxs = Array.isArray(prevTransactions) ? prevTransactions : []
       const prevInc = prevTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
       const prevExp = prevTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
@@ -264,7 +314,6 @@ function HomeContent() {
       const expense = txs.filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const balance = income - expense
 
-      // Calcula variação
       if (prevBal !== 0) {
         setBalanceVariation(((balance - prevBal) / Math.abs(prevBal)) * 100)
       } else {
@@ -334,7 +383,6 @@ function HomeContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  // Notificações
   const notifications: any[] = []
   cards.forEach(card => {
     const days = card.due_day - todayDay
@@ -362,10 +410,11 @@ function HomeContent() {
     loadUnreadCount()
   }, [notifications, user])
 
+  // Loading state com Skeleton
   if (authLoading || dataLoading || !layoutLoaded) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-teal-700 bg-gray-50 dark:bg-slate-900">
-        <Loader2 className="animate-spin" size={40} />
+      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans px-4 pt-6 pb-28">
+        <HomeSkeleton />
       </div>
     )
   }
@@ -385,7 +434,6 @@ function HomeContent() {
               <h1 className={`text-[36px] font-light text-gray-800 dark:text-gray-100 tracking-tight ${hideBalance ? 'tracking-widest' : ''}`}>
                 {hideBalance ? '••••••' : formatCurrency(totalAccountsBalance)}
               </h1>
-              {/* Variação mensal */}
               {!hideBalance && previousBalance !== 0 && (
                 <div className={`inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold ${
                   balanceVariation >= 0
@@ -730,16 +778,16 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Saudação + Header */}
+      {/* Saudação + Header (CORRIGIDO) */}
       <div className="flex justify-between items-center mb-8">
-        <div>
+        <div className="flex-1 min-w-0 mr-3">
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             {greeting.icon}
-            <span className="text-sm font-medium">{greeting.text}, {user?.user_metadata?.name || 'Álefe'}</span>
+            <span className="text-sm font-medium truncate">{greeting.text}, {user?.user_metadata?.name || 'Álefe'}</span>
           </div>
           <ContextToggle />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <SyncButton pendingCount={pendingCount} isSyncing={isSyncing} onSync={syncQueue} />
           {notificationsEnabled && (
             <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
