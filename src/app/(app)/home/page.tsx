@@ -9,7 +9,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle
+  PieChart, AlertTriangle, Image, Paperclip
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -33,7 +33,7 @@ import ProjectionSparklineCard from '@/components/ProjectionSparklineCard'
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
-  { id: 'projection', label: 'Projeção de Saldo' }, // NOVA SEÇÃO
+  { id: 'projection', label: 'Projeção de Saldo' },
   { id: 'next-card', label: 'Próxima Fatura' },
   { id: 'pendings', label: 'Pendências' },
   { id: 'receivables', label: 'A Receber' },
@@ -294,6 +294,16 @@ function HomeContent() {
     return aDue - bDue
   })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
+
+  // ============================================================
+  // FUNÇÃO AUXILIAR: Verifica tipo de anexo pelo receipt_url
+  // ============================================================
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+  }
 
   // Notificações
   const notifications: any[] = []
@@ -614,13 +624,19 @@ function HomeContent() {
                   recentTransactions.map((tx, index) => {
                     const isPending = tx.status === 'pending'
                     const IconComp = getDynamicIcon(tx.categories?.icon)
+                    const attachmentIcon = getAttachmentIcon(tx.receipt_url)
                     return (
                       <div key={tx.id} onClick={() => router.push(`/transactions/${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700/50' : ''}`}>
                         {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
                         <div className="flex items-center gap-4 flex-1 min-w-0">
                           <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
+                              {attachmentIcon && (
+                                <span className="shrink-0">{attachmentIcon}</span>
+                              )}
+                            </div>
                             <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
                           </div>
                         </div>
