@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import { 
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check,
-  ArrowLeftRight, Download
+  ArrowLeftRight, Download, Image, Paperclip, ArrowDown, ArrowUp, Layers, RefreshCw
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -30,6 +30,16 @@ const safeNum = (val: any) => {
   if (typeof val === 'number') return val;
   const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g,""));
   return isNaN(parsed) ? 0 : parsed;
+}
+
+// ============================================================
+// FUNÇÃO AUXILIAR: Verifica tipo de anexo pelo receipt_url
+// ============================================================
+const getAttachmentIcon = (url: string | null) => {
+  if (!url) return null
+  const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+  if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+  return <Paperclip size={12} className="text-gray-500 shrink-0" />
 }
 
 function groupByDate(transactions: any[]) {
@@ -99,6 +109,53 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
+  const [refreshing, setRefreshing] = useState(false)
+  const pullStartY = useRef(0)
+  const pullCurrentY = useRef(0)
+  const pullDistance = useRef(0)
+  const isPulling = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY > 10 || loading) return
+    pullStartY.current = e.touches[0].clientY
+    pullCurrentY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling.current) return
+    pullCurrentY.current = e.touches[0].clientY
+    pullDistance.current = Math.max(0, pullCurrentY.current - pullStartY.current)
+    if (pullDistance.current > 20 && !refreshing) {
+      setRefreshing(true)
+      isPulling.current = false
+      loadTransactions(0)
+      setTimeout(() => setRefreshing(false), 1500)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+    pullDistance.current = 0
+  }
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: true })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [loading, refreshing])
+
   // Lógica para fechar os modais ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -143,7 +200,7 @@ export default function TransactionsPage() {
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
-      .order('created_at', { ascending: false }) // Garante que a transação adicionada por último fique no topo
+      .order('created_at', { ascending: false })
 
     if (filter !== 'all') query = query.eq('type', filter)
     
@@ -213,11 +270,11 @@ export default function TransactionsPage() {
   const grouped = groupByDate(filtered)
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
 
-  const filters: { key: Filter; label: string }[] = [
-    { key: 'all', label: 'Todas' },
-    { key: 'income', label: 'Receitas' },
-    { key: 'expense', label: 'Despesas' },
-    { key: 'transfer', label: 'Transferências' },
+  const filters: { key: Filter; label: string; icon: React.ReactNode }[] = [
+    { key: 'all', label: 'Todas', icon: <Layers size={14} /> },
+    { key: 'income', label: 'Receitas', icon: <ArrowUp size={14} /> },
+    { key: 'expense', label: 'Despesas', icon: <ArrowDown size={14} /> },
+    { key: 'transfer', label: 'Transferências', icon: <ArrowLeftRight size={14} /> },
   ]
 
   const handleExport = (range: string) => {
@@ -227,7 +284,17 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
+      {/* Indicador de Pull to Refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 pt-6 pb-4 bg-[#f8f9fa] dark:bg-slate-900 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
@@ -295,10 +362,12 @@ export default function TransactionsPage() {
           </div>
         </div>
 
+        {/* FILTROS COM ÍCONES */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {filters.map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)}
-              className={`px-5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border ${filter === f.key ? 'bg-teal-700 text-white border-teal-700 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+              className={`px-5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${filter === f.key ? 'bg-teal-700 text-white border-teal-700 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+              {f.icon}
               {f.label}
             </button>
           ))}
@@ -327,6 +396,13 @@ export default function TransactionsPage() {
                       const isPending = t.status === 'pending';
                       
                       const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
+                      const attachmentIcon = getAttachmentIcon(t.receipt_url)
+                      
+                      // Badge de parcelas
+                      const hasInstallments = t.total_installments && t.total_installments > 1
+                      const installmentBadge = hasInstallments 
+                        ? `${t.installment_index || 1}/${t.total_installments}` 
+                        : null
                       
                       return (
                         <div 
@@ -350,14 +426,26 @@ export default function TransactionsPage() {
                           </div>
                           
                           <div className="flex-1 min-w-0 pr-2">
-                            <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">{t.description ?? t.categories?.name ?? 'Sem descrição'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">{t.description ?? t.categories?.name ?? 'Sem descrição'}</p>
+                              {attachmentIcon && (
+                                <span className="shrink-0">{attachmentIcon}</span>
+                              )}
+                            </div>
                             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{t.categories?.name ?? 'Geral'} • {t.accounts?.name ?? ''}</p>
                           </div>
 
                           <div className="text-right flex-shrink-0">
-                            <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600 mb-1">
-                              {format(new Date(t.date), "dd 'de' MMM", { locale: ptBR })}
-                            </p>
+                            <div className="flex items-center gap-1 justify-end mb-1">
+                              {installmentBadge && (
+                                <span className="text-[9px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-md">
+                                  {installmentBadge}
+                                </span>
+                              )}
+                              <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600">
+                                {format(new Date(t.date), "dd 'de' MMM", { locale: ptBR })}
+                              </p>
+                            </div>
                             <p className={`text-[14px] font-bold whitespace-nowrap ${isIncomeVisual ? 'text-emerald-600' : 'text-red-500'}`}>
                               {isIncomeVisual ? '+' : '-'} R$ {safeNum(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </p>
