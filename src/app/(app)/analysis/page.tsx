@@ -94,6 +94,7 @@ function AnalysisContent() {
   const [patrimony, setPatrimony] = useState<any[]>([])
   const [patrimonyGrowth, setPatrimonyGrowth] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<'month' | 'new'>('month')
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
@@ -155,6 +156,7 @@ function AnalysisContent() {
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
     const [{ data: accData }, { data: catData }] = await Promise.all([
       supabase.from('accounts').select('id, name').match({ user_id: user.id, context }),
@@ -328,6 +330,7 @@ function AnalysisContent() {
     })
 
     setLoading(false)
+    setLoadingPulse(false)
   }, [user, context, currentDate, filterAccount, filterCategory])
 
   useEffect(() => {
@@ -374,6 +377,13 @@ function AnalysisContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
