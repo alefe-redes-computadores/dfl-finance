@@ -48,6 +48,7 @@ export default function ContactsPage() {
   const { showToast } = useToast()
   const [contacts, setContacts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   // Pull to refresh
@@ -95,6 +96,7 @@ export default function ContactsPage() {
 
   const loadContacts = async () => {
     setLoading(true)
+    setLoadingPulse(true)
     const { data } = await supabase
       .from('contacts')
       .select('*')
@@ -104,6 +106,7 @@ export default function ContactsPage() {
 
     setContacts(Array.isArray(data) ? data : [])
     setLoading(false)
+    setLoadingPulse(false)
   }
 
   const handleDelete = async (id: string) => {
@@ -133,6 +136,13 @@ export default function ContactsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
