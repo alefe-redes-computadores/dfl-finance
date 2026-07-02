@@ -1,69 +1,91 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Plus, Building, Calendar, ChevronRight, RefreshCw, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react'
+import {
+  ChevronLeft, Loader2, Check, Trash2, X, Calendar, RefreshCw,
+  TrendingUp, TrendingDown, ArrowRightLeft, Building2, User,
+  Wallet, Clock, AlertTriangle, CheckCircle2, Edit3
+} from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import { useToast } from '@/contexts/ToastContext'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { formatCurrency } from '@/lib/utils'
 
 // ============================================================
-// SKELETON LOADER
+// SKELETON LOADER (COM CORES SUAVES)
 // ============================================================
-const FinancingsSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
-    {/* Cards de resumo */}
-    <div className="grid grid-cols-2 gap-3">
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-24 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+const FinancingDetailSkeleton = () => (
+  <div className="animate-pulse px-4 pt-6 space-y-4">
+    {/* Card principal */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
+        <div className="space-y-2 flex-1">
+          <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-28 bg-gray-100 dark:bg-slate-700/50 rounded" />
+        </div>
+        <div className="h-7 w-24 bg-gray-200 dark:bg-slate-700 rounded-full" />
       </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-12 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-10 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700 text-center">
+          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
+          <div className="h-6 w-24 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
+        </div>
+        <div className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700 text-center">
+          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
+          <div className="h-6 w-24 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
+        </div>
       </div>
+      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
+        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-1/2" />
+      </div>
+      <div className="h-3 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
     </div>
 
-    {/* Cards de financiamento */}
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-slate-700" />
-            <div className="space-y-2">
-              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-            </div>
+    {/* Histórico */}
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl mb-2">
+          <div className="space-y-2">
+            <div className="h-4 w-24 bg-gray-200 dark:bg-slate-600 rounded" />
+            <div className="h-3 w-32 bg-gray-100 dark:bg-slate-600/50 rounded" />
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-700 rounded-full" />
-            <div className="w-4 h-4 bg-gray-200 dark:bg-slate-700 rounded" />
-          </div>
+          <div className="w-6 h-6 bg-gray-200 dark:bg-slate-600 rounded" />
         </div>
-        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
-          <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
-        </div>
-        <div className="flex justify-between">
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-      </div>
-    ))}
+      ))}
+    </div>
   </div>
 )
 
-function FinancingsContent() {
-  const { user } = useAuth()
+export default function FinancingDetailPage() {
+  const { id } = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const { context } = useContext_()
-  const [financings, setFinancings] = useState<any[]>([])
+  const { showToast } = useToast()
+
+  const [financing, setFinancing] = useState<any>(null)
+  const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Modal de pagamento
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [payAmount, setPayAmount] = useState('0,00')
+  const [payAmountNum, setPayAmountNum] = useState(0)
+  const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [payNote, setPayNote] = useState('')
+
+  // Modal de exclusão
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
@@ -82,7 +104,7 @@ function FinancingsContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadFinancings().finally(() => setRefreshing(false))
+      loadData().finally(() => setRefreshing(false))
     }
   }
 
@@ -103,30 +125,158 @@ function FinancingsContent() {
     }
   }, [loading, refreshing])
 
-  const loadFinancings = useCallback(async () => {
-    if (!user?.id) return
+  const loadData = useCallback(async () => {
+    if (!id || !user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
-    const { data } = await supabase
+    const { data: finData } = await supabase
       .from('financings')
-      .select('*, accounts(name, color), categories(name, icon, color)')
-      .match({ user_id: user.id, context: context, status: 'active' })
-      .order('created_at', { ascending: false })
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
 
-    setFinancings(Array.isArray(data) ? data : [])
+    if (!finData) {
+      router.push('/financings')
+      return
+    }
+
+    setFinancing(finData)
+
+    const { data: payData } = await supabase
+      .from('financing_payments')
+      .select('*')
+      .eq('financing_id', id)
+      .order('payment_date', { ascending: false })
+
+    setPayments(Array.isArray(payData) ? payData : [])
     setLoading(false)
-  }, [user, context])
+    setLoadingPulse(false)
+  }, [id, user])
 
-  useEffect(() => { loadFinancings() }, [loadFinancings])
+  useEffect(() => { loadData() }, [loadData])
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const handlePayAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '')
+    if (!digits) {
+      setPayAmount('0,00')
+      setPayAmountNum(0)
+      return
+    }
+    const num = parseFloat(digits) / 100
+    setPayAmountNum(num)
+    setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+  }
 
-  const totalFinanced = financings.reduce((a, f) => a + (Number(f.outstanding_balance) || 0), 0)
-  const activeCount = financings.length
+  const handlePayment = async () => {
+    if (!user?.id || payAmountNum <= 0) return
+    const remaining = Number(financing.total_amount) - Number(financing.paid_amount || 0)
+    if (payAmountNum > remaining) {
+      showToast('Valor excede o saldo devedor.', 'warning')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      // Registrar pagamento
+      const { error: payError } = await supabase
+        .from('financing_payments')
+        .insert({
+          financing_id: id,
+          amount: payAmountNum,
+          payment_date: payDate,
+          note: payNote || null,
+        })
+
+      if (payError) throw payError
+
+      // Atualizar financiamento
+      const newPaid = Number(financing.paid_amount || 0) + payAmountNum
+      const newStatus = newPaid >= Number(financing.total_amount) ? 'paid' : 'active'
+
+      await supabase
+        .from('financings')
+        .update({
+          paid_amount: newPaid,
+          installments_paid: (financing.installments_paid || 0) + 1,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+
+      showToast('Pagamento registrado com sucesso!', 'success')
+      setShowPaymentModal(false)
+      setPayAmount('0,00')
+      setPayAmountNum(0)
+      setPayNote('')
+      loadData()
+    } catch (err: any) {
+      showToast(`Erro ao registrar pagamento: ${err.message}`, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!id) return
+    setSaving(true)
+    try {
+      await supabase.from('financings').delete().eq('id', id)
+      showToast('Financiamento excluído.', 'info')
+      router.push('/financings')
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    } finally {
+      setSaving(false)
+      setShowDeleteModal(false)
+    }
+  }
+
+  const getStatusConfig = (status: string, dueDate: string) => {
+    if (status === 'paid') return { label: 'Quitado', icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' }
+    if (status === 'cancelled') return { label: 'Cancelado', icon: AlertTriangle, color: 'text-gray-500 bg-gray-100 dark:bg-slate-700' }
+    const daysUntilDue = differenceInDays(new Date(dueDate), new Date())
+    if (daysUntilDue < 0) return { label: `Atrasado ${Math.abs(daysUntilDue)}d`, icon: AlertTriangle, color: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400' }
+    if (daysUntilDue <= 7) return { label: `Vence em ${daysUntilDue}d`, icon: Clock, color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400' }
+    return { label: 'Em dia', icon: CheckCircle2, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' }
+  }
+
+  // Skeleton enquanto carrega
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
+        {/* Header simplificado */}
+        <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
+          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+          <div className="w-10" />
+        </div>
+        <FinancingDetailSkeleton />
+      </div>
+    )
+  }
+
+  if (!financing) return null
+
+  const IconComp = getDynamicIcon(financing.icon || 'building')
+  const progress = Number(financing.total_amount) > 0
+    ? ((Number(financing.paid_amount || 0) / Number(financing.total_amount)) * 100)
+    : 0
+  const statusConfig = getStatusConfig(financing.status, financing.due_date)
+  const isActive = financing.status === 'active'
+  const remaining = Number(financing.total_amount) - Number(financing.paid_amount || 0)
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -137,117 +287,237 @@ function FinancingsContent() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <ContextToggle />
-        <button
-          onClick={() => router.push('/financings/new')}
-          className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
-        >
-          <Plus size={20} className="text-white" />
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
+        <button onClick={() => router.push('/financings')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+          <ChevronLeft size={24} />
         </button>
-      </div>
-
-      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Financiamentos</h2>
-
-      {loading ? (
-        <FinancingsSkeleton />
-      ) : financings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Building size={40} className="text-gray-400 dark:text-gray-500" />
-          </div>
-          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhum financiamento ativo</h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
-            Cadastre seus financiamentos para acompanhar parcelas e saldo devedor.
-          </p>
+        <div className="flex items-center gap-2">
+          <statusConfig.icon size={18} className={statusConfig.color.split(' ')[0]} />
+          <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100 truncate max-w-[180px]">
+            {financing.name || 'Financiamento'}
+          </h1>
+        </div>
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => router.push('/financings/new')}
-            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
+            onClick={() => router.push(`/financings/${id}/edit`)}
+            className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
           >
-            Novo financiamento
+            <Edit3 size={18} />
+          </button>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={18} />
           </button>
         </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
-                <Building size={16} className="text-orange-600 dark:text-orange-400" />
-              </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Saldo total</p>
-              <p className="text-[15px] font-bold text-orange-600">{formatCurrency(totalFinanced)}</p>
+      </div>
+
+      <div className="px-4 pt-4 space-y-4 animate-in fade-in duration-300">
+        {/* Card Principal */}
+        <div className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border ${
+          financing.status === 'paid' ? 'border-emerald-200 dark:border-emerald-800' :
+          financing.status === 'cancelled' ? 'border-gray-200 dark:border-gray-700' :
+          'border-gray-50 dark:border-slate-700'
+        }`}>
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${financing.color || '#14b8a6'}20`, color: financing.color || '#14b8a6' }}>
+              <IconComp size={24} />
             </div>
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
-                <Calendar size={16} className="text-teal-700 dark:text-teal-400" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-[17px] text-gray-800 dark:text-gray-200 truncate">
+                  {financing.name}
+                </h2>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap ${statusConfig.color}`}>
+                  <statusConfig.icon size={12} />
+                  {statusConfig.label}
+                </span>
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Ativos</p>
-              <p className="text-[15px] font-bold text-teal-700 dark:text-teal-400">{activeCount}</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                {financing.installments_paid || 0}/{financing.total_installments || 0} parcelas
+                {' • '}
+                {format(new Date(financing.due_date), "dd 'de' MMM yyyy", { locale: ptBR })}
+              </p>
             </div>
           </div>
 
-          <div className="space-y-3 animate-in fade-in duration-300">
-            {financings.map(fin => {
-              const IconComp = getDynamicIcon(fin.icon || 'home')
-              const remaining = fin.total_installments - fin.current_installment + 1
-              const progress = (fin.current_installment / fin.total_installments) * 100
-              const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), new Date()) < 0
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Total</p>
+              <p className="text-[18px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(financing.total_amount))}</p>
+            </div>
+            <div className={`text-center rounded-xl p-3 ${
+              remaining <= 0 ? 'bg-emerald-50 dark:bg-emerald-900/20' :
+              financing.status === 'cancelled' ? 'bg-gray-50 dark:bg-slate-700' :
+              'bg-orange-50 dark:bg-orange-900/20'
+            }`}>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Saldo devedor</p>
+              <p className={`text-[18px] font-bold ${
+                remaining <= 0 ? 'text-emerald-600' :
+                financing.status === 'cancelled' ? 'text-gray-500' :
+                'text-orange-600'
+              }`}>{formatCurrency(Math.max(remaining, 0))}</p>
+            </div>
+          </div>
 
-              return (
-                <div
-                  key={fin.id}
-                  onClick={() => router.push(`/financings/${fin.id}`)}
-                  className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${
-                    isOverdue ? 'border-red-200 dark:border-red-800' : 'border-gray-50 dark:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${fin.color}20`, color: fin.color }}>
-                        <IconComp size={18} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{fin.name}</p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{fin.institution || 'Financiamento'}</p>
-                      </div>
+          <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
+            <div className={`h-full rounded-full transition-all duration-700 ${
+              financing.status === 'paid' ? 'bg-emerald-500' :
+              financing.status === 'cancelled' ? 'bg-gray-400' :
+              'bg-teal-500'
+            }`} style={{ width: `${Math.min(progress, 100)}%` }} />
+          </div>
+
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-400 dark:text-gray-500 font-medium">{progress.toFixed(0)}% pago</span>
+            <span className="text-gray-400 dark:text-gray-500 font-medium">
+              {formatCurrency(Number(financing.paid_amount || 0))} / {formatCurrency(Number(financing.total_amount))}
+            </span>
+          </div>
+        </div>
+
+        {/* Botão de pagamento (se ativo) */}
+        {isActive && remaining > 0 && (
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20"
+          >
+            <Check size={16} />
+            Registrar Pagamento
+          </button>
+        )}
+
+        {/* Histórico de pagamentos */}
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+          <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Clock size={18} className="text-gray-400" />
+            Histórico de Pagamentos
+          </h3>
+          {payments.length === 0 ? (
+            <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-6">
+              Nenhum pagamento registrado.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {payments.map(pay => (
+                <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                      <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                        isOverdue 
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' 
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                      }`}>
-                        {isOverdue ? <AlertTriangle size={10} /> : <CheckCircle size={10} />}
-                        {isOverdue ? 'Atrasado' : 'Em dia'}
-                      </span>
-                      <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
+                    <div>
+                      <p className="text-[13px] font-bold text-emerald-600">
+                        + {formatCurrency(Number(pay.amount) || 0)}
+                      </p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                        {format(new Date(pay.payment_date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
-                    <div className={`h-full rounded-full transition-all duration-700 ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
-                  </div>
-
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">{formatCurrency(Number(fin.installment_value))}/mês</span>
-                    <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {remaining} parcela(s) restantes
+                  {pay.note && (
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 max-w-[120px] truncate">
+                      {pay.note}
                     </span>
-                  </div>
+                  )}
                 </div>
-              )
-            })}
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal de Pagamento */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Registrar Pagamento</h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 p-2 hover:text-gray-600 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor pago</label>
+                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+                  <span className="text-gray-400 dark:text-gray-500 font-bold">R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={payAmount}
+                    onChange={handlePayAmountChange}
+                    className="bg-transparent text-lg font-bold text-gray-800 dark:text-gray-200 outline-none w-full"
+                    placeholder="0,00"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Saldo devedor: {formatCurrency(Math.max(remaining, 0))}</p>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Data do pagamento</label>
+                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+                  <Calendar size={16} className="text-gray-400" />
+                  <input
+                    type="date"
+                    value={payDate}
+                    onChange={e => setPayDate(e.target.value)}
+                    className="bg-transparent text-sm font-bold text-gray-800 dark:text-gray-200 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Observação (opcional)</label>
+                <input
+                  type="text"
+                  value={payNote}
+                  onChange={e => setPayNote(e.target.value)}
+                  placeholder="Ex: Pagamento da parcela 3"
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                />
+              </div>
+
+              <button
+                onClick={handlePayment}
+                disabled={saving || payAmountNum <= 0}
+                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+              >
+                {saving ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Confirmar Pagamento'}
+              </button>
+            </div>
           </div>
-        </>
+        </div>
+      )}
+
+      {/* Modal de Exclusão */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2 text-center">Excluir Financiamento?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+              Essa ação não pode ser desfeita. Todos os pagamentos vinculados também serão removidos.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 size={18} className="animate-spin" /> : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
-  )
-}
-
-export default function FinancingsPage() {
-  return (
-    <ContextProvider>
-      <FinancingsContent />
-    </ContextProvider>
   )
 }
