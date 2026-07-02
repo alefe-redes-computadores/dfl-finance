@@ -520,7 +520,15 @@ function HomeContent() {
 
       const pendingIncomes = txs.filter(t => t.status === 'pending' && t.type === 'income')
       if (pendingIncomes.length > 0) {
-        notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending`, severity: 'info', isRead: readSet.has('pending-incomes') })
+        notifs.push({ 
+          id: 'pending-incomes', 
+          type: 'pending_income', 
+          title: `${pendingIncomes.length} receita(s) a receber`, 
+          subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`,
+          route: '/transactions?filter=income&status=pending',
+          severity: 'info', 
+          isRead: readSet.has('pending-incomes') 
+        })
       }
 
       setNotifications(notifs)
