@@ -238,15 +238,12 @@ function NewTransactionContent() {
     loadData()
   }, [loadData])
 
-  // 🆕 Budget alert com useMemo
   const budgetAlertMemo = useMemo(() => {
     if (!categoryId || amountNum <= 0 || type !== 'expense') {
       return null
     }
     const budget = budgets.find((b) => b.category_id === categoryId)
     if (!budget) return null
-    // A query pode ser assíncrona, então mantemos o useEffect
-    // Este useMemo é apenas para sinalizar que o valor depende de budgets e categoryId
     return budget
   }, [categoryId, amountNum, type, budgets])
 
@@ -866,7 +863,7 @@ function NewTransactionContent() {
             <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
           <button onClick={() => !receiptUrl && setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
-            <AttachmentIcon />
+            {AttachmentIcon}
           </button>
         </div>
       </div>
