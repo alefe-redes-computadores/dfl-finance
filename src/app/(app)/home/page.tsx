@@ -10,7 +10,8 @@ import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
   PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
-  Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User
+  Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
+  Sparkles, Calendar
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -35,7 +36,7 @@ const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
   { id: 'projection', label: 'Projeção de Saldo' },
-  { id: 'loans', label: 'Empréstimos entre Contextos' }, // NOVA SEÇÃO
+  { id: 'loans', label: 'Empréstimos entre Contextos' },
   { id: 'next-card', label: 'Próxima Fatura' },
   { id: 'pendings', label: 'Pendências' },
   { id: 'receivables', label: 'A Receber' },
@@ -113,7 +114,7 @@ const HomeSkeleton = () => (
 function HomeContent() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
-  const { context } = useContext_()
+  const { context, appMode } = useContext_()
   const { showToast } = useToast()
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -130,9 +131,10 @@ function HomeContent() {
   const [subscriptions, setSubscriptions] = useState<any[]>([])
   const [debts, setDebts] = useState<any[]>([])
   const [financings, setFinancings] = useState<any[]>([])
-  const [loans, setLoans] = useState<any[]>([]) // NOVO
+  const [loans, setLoans] = useState<any[]>([])
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -286,6 +288,7 @@ function HomeContent() {
   const loadData = useCallback(async () => {
     if (!user) return
     setDataLoading(true)
+    setLoadingPulse(true)
 
     try {
       const start = getLocalDateString(startOfMonth(currentDate))
@@ -411,7 +414,7 @@ function HomeContent() {
       setBudgets(budgetsWithSpent.sort((a, b) => b.percent - a.percent).slice(0, 3))
 
       // ============================================================
-      // GERAÇÃO DE NOTIFICAÇÕES (COMPLETA, IGUAL À CENTRAL)
+      // GERAÇÃO DE NOTIFICAÇÕES (COMPLETA)
       // ============================================================
       const today = new Date()
       const todayDay = today.getDate()
@@ -424,6 +427,7 @@ function HomeContent() {
 
       const notifs: any[] = []
 
+      // Cartões de crédito - alertas de vencimento
       cardsWithInvoice.forEach(card => {
         const days = (card.due_day || 1) - todayDay
         if (days < 0) {
@@ -431,8 +435,38 @@ function HomeContent() {
         } else if (days <= 3) {
           notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
         }
+        
+        // 🆕 NOTIFICAÇÃO: Melhor dia de compra (1 dia após fechamento)
+        const closingDay = card.closing_day || 1
+        const nextClosingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
+        // Ajusta para o próximo mês se a data de fechamento já passou
+        if (today > nextClosingDate) {
+          nextClosingDate.setMonth(nextClosingDate.getMonth() + 1)
+        }
+        const daysAfterClosing = differenceInDays(today, nextClosingDate)
+        // Se hoje é exatamente 1 dia após o fechamento
+        if (daysAfterClosing === 1) {
+          // Calcula o mês de vencimento da compra feita hoje
+          const purchaseMonth = nextClosingDate.getMonth() + 2 // Fecha no próximo mês, vence no mês seguinte
+          const purchaseYear = nextClosingDate.getFullYear()
+          const adjustedMonth = purchaseMonth > 12 ? purchaseMonth - 12 : purchaseMonth
+          const adjustedYear = purchaseMonth > 12 ? purchaseYear + 1 : purchaseYear
+          const monthNames = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+          const dueMonth = monthNames[adjustedMonth - 1]
+          
+          notifs.push({
+            id: `best-buy-day-${card.id}-${today.toISOString().split('T')[0]}`,
+            type: 'best_buy_day',
+            title: `✨ Melhor dia para comprar: ${card.name}`,
+            subtitle: `Tudo que comprar hoje vencerá em ${dueMonth} de ${adjustedYear}. Aproveite!`,
+            cardId: card.id,
+            severity: 'info',
+            isRead: readSet.has(`best-buy-day-${card.id}-${today.toISOString().split('T')[0]}`)
+          })
+        }
       })
 
+      // Assinaturas
       const subs = Array.isArray(subsData) ? subsData : []
       subs.forEach((sub: any) => {
         const days = (sub.due_day || 1) - todayDay
@@ -443,6 +477,7 @@ function HomeContent() {
         }
       })
 
+      // Financiamentos
       const fins = Array.isArray(financingsData) ? financingsData : []
       fins.forEach((fin: any) => {
         if (!fin.next_due_date) return
@@ -454,6 +489,7 @@ function HomeContent() {
         }
       })
 
+      // Dívidas
       debtsWithProgress.forEach((debt: any) => {
         if (!debt.due_date) return
         const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
@@ -465,6 +501,7 @@ function HomeContent() {
         }
       })
 
+      // Orçamentos
       budgetsWithSpent.forEach((budget: any) => {
         const spent = budget.spent
         const remaining = budget.remaining
@@ -475,6 +512,7 @@ function HomeContent() {
         }
       })
 
+      // Pendências gerais
       const pendingExpenses = txs.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
       if (pendingExpenses.length > 0) {
         notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
@@ -482,7 +520,7 @@ function HomeContent() {
 
       const pendingIncomes = txs.filter(t => t.status === 'pending' && t.type === 'income')
       if (pendingIncomes.length > 0) {
-        notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending', severity: 'info', isRead: readSet.has('pending-incomes') })
+        notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending`, severity: 'info', isRead: readSet.has('pending-incomes') })
       }
 
       setNotifications(notifs)
@@ -493,6 +531,7 @@ function HomeContent() {
       console.error('Erro na Home:', err)
     } finally {
       setDataLoading(false)
+      setLoadingPulse(false)
     }
   }, [context, currentDate, user])
 
@@ -522,6 +561,12 @@ function HomeContent() {
   if (authLoading || dataLoading || !layoutLoaded) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans px-4 pt-6 pb-28">
+        {/* Indicador de carregamento sutil */}
+        {loadingPulse && (
+          <div className="fixed top-20 right-4 z-50">
+            <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          </div>
+        )}
         <HomeSkeleton />
       </div>
     )
@@ -587,6 +632,27 @@ function HomeContent() {
           </div>
         )
       case 'loans':
+        // 🆕 Bloqueio quando modo PF-only está ativo
+        if (appMode === 'personal_only') {
+          return (
+            <div key="loans" className="mb-6">
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+                <div className="px-5 py-4">
+                  <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
+                  <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1">
+                    Disponível apenas quando os dois contextos (PF e PJ) estão ativos.
+                  </p>
+                  <button
+                    onClick={() => router.push('/more')}
+                    className="mt-3 text-teal-600 dark:text-teal-400 text-sm font-bold hover:underline"
+                  >
+                    Ativar modo PF e PJ
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
         if (loans.length === 0) return null
         return (
           <div key="loans" className="mb-6">
@@ -924,7 +990,14 @@ function HomeContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
-      {/* Pull to refresh indicator */}
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
+      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
