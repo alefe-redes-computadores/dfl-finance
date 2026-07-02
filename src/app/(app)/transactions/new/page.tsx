@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
@@ -472,8 +471,9 @@ function NewTransactionContent() {
       setShowCreateCatModal(false)
       setNewCatName('')
       showToast('Categoria criada!', 'success')
-    } catch {
-      showToast('Erro ao criar categoria.', 'error')
+    } catch (err: any) {
+      console.error(err)
+      showToast(`Erro ao criar categoria: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSavingCategory(false)
     }
@@ -494,8 +494,9 @@ function NewTransactionContent() {
       setShowCreateAccModal(false)
       setNewAccName('')
       showToast('Conta criada!', 'success')
-    } catch {
-      showToast('Erro ao criar conta.', 'error')
+    } catch (err: any) {
+      console.error(err)
+      showToast(`Erro ao criar conta: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSavingAccount(false)
     }
@@ -516,8 +517,9 @@ function NewTransactionContent() {
       setShowCreateTagModal(false)
       setNewTagName('')
       showToast('Tag criada!', 'success')
-    } catch {
-      showToast('Erro ao criar tag.', 'error')
+    } catch (err: any) {
+      console.error(err)
+      showToast(`Erro ao criar tag: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSavingTag(false)
     }
@@ -789,7 +791,7 @@ function NewTransactionContent() {
       router.push('/transactions')
     } catch (e: any) {
       console.error('Erro ao salvar:', e)
-      showToast('Erro ao salvar transação.', 'error')
+      showToast(`Erro ao salvar transação: ${e.message || 'Verifique sua conexão'}`, 'error')
     } finally {
       setIsSubmitting(false)
     }
