@@ -7,8 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
-  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building,
-  RefreshCw
+  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -517,8 +516,8 @@ export default function MorePage() {
             <MenuItem iconName="repeat" label="Assinaturas" href="/subscriptions" />
             <MenuItem iconName="file-text" label="Financiamentos" href="/financings" />
             <MenuItem iconName="users" label="Quem me deve" href="/debts" />
-            {/* 🆕 Contatos adicionado abaixo de Quem me deve */}
             <MenuItem iconName="users" label="Contatos" href="/contacts" />
+            <MenuItem iconName="arrow-right-left" label="Empréstimos entre Contextos" href="/loans" />
           </div>
         </div>
 
