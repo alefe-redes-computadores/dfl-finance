@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, RefreshCw, Upload, Image, FileText, X,
+  ChevronLeft, RefreshCw, Upload, Image as ImageIcon, FileText, X,
   Calendar, Search, Filter, Eye, Trash2, Loader2
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -182,7 +182,7 @@ export default function ReceiptsPage() {
   }
 
   const getFileIcon = (type: string) => {
-    if (type.includes('image')) return <Image size={16} className="text-blue-500" />
+    if (type.includes('image')) return <ImageIcon size={16} className="text-blue-500" />
     return <FileText size={16} className="text-red-500" />
   }
 
@@ -238,7 +238,7 @@ export default function ReceiptsPage() {
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-            <Image size={20} className="text-teal-500" />
+            <ImageIcon size={20} className="text-teal-500" />
             Comprovantes
           </h1>
           <div className="flex items-center gap-1">
@@ -313,7 +313,7 @@ export default function ReceiptsPage() {
         ) : filteredReceipts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-300">
             <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-              <Image size={40} className="text-gray-400 dark:text-gray-500" />
+              <ImageIcon size={40} className="text-gray-400 dark:text-gray-500" />
             </div>
             <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">
               {search ? 'Nenhum resultado encontrado' : 'Nenhum comprovante'}
