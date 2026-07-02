@@ -84,6 +84,7 @@ export default function AccountStatementPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0 })
   const [loading, setLoading] = useState(!isNew)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -152,6 +153,7 @@ export default function AccountStatementPage() {
   const loadData = useCallback(async () => {
     if (!id || !user || isNew) return
     setLoading(true)
+    setLoadingPulse(true)
 
     try {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
@@ -193,6 +195,7 @@ export default function AccountStatementPage() {
       console.error("Erro inesperado:", err)
     } finally {
       setLoading(false)
+      setLoadingPulse(false)
     }
   }, [id, currentDate, user, isNew])
 
@@ -500,6 +503,12 @@ export default function AccountStatementPage() {
   // ============================================================
   if (loading && !account) return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
       <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200"><ChevronLeft size={24} /></button>
         <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Detalhes da Conta</h1>
@@ -526,6 +535,13 @@ export default function AccountStatementPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -825,6 +841,7 @@ export default function AccountStatementPage() {
           </div>
         </div>
       )}
+
     </div>
   )
 }
