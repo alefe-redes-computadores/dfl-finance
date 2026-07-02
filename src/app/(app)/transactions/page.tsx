@@ -13,6 +13,7 @@ import {
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import BankLogo from '@/components/BankLogo'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -91,7 +92,7 @@ const TransactionsSkeleton = () => (
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, setContext, appMode } = useContext_()
+  const { context, appMode } = useContext_()
   const [transactions, setTransactions] = useState<any[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -149,7 +150,7 @@ export default function TransactionsPage() {
 
     let query = supabase
       .from('transactions')
-      .select('*, categories(name, icon, color), accounts!account_id(name)', { count: 'exact' })
+      .select('*, categories(name, icon, color), accounts!account_id(name, color)', { count: 'exact' })
       .match({ user_id: user.id, context: context })
       .gte('date', start)
       .lte('date', end)
@@ -340,6 +341,9 @@ export default function TransactionsPage() {
                       const installmentBadge = hasInstallments 
                         ? `${t.installment_index || 1}/${t.total_installments}` 
                         : null
+
+                      // Nome da transação (com fallback para categoria)
+                      const transactionName = t.description || t.categories?.name || (isIncomeVisual ? 'Receita' : 'Despesa')
                       
                       return (
                         <div 
@@ -363,13 +367,31 @@ export default function TransactionsPage() {
                           </div>
                           
                           <div className="flex-1 min-w-0 pr-2">
+                            {/* Nome da transação em destaque */}
                             <div className="flex items-center gap-1.5">
-                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">{t.description ?? t.categories?.name ?? 'Sem descrição'}</p>
+                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">
+                                {transactionName}
+                              </p>
                               {attachmentIcon && (
                                 <span className="shrink-0">{attachmentIcon}</span>
                               )}
                             </div>
-                            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{t.categories?.name ?? 'Geral'} • {t.accounts?.name ?? ''}</p>
+                            {/* Linha de apoio: categoria • conta */}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {t.categories?.name && (
+                                <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                                  {t.categories.name}
+                                </span>
+                              )}
+                              {t.categories?.name && t.accounts?.name && (
+                                <span className="text-[11px] text-gray-300 dark:text-gray-600">•</span>
+                              )}
+                              {t.accounts?.name && (
+                                <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                                  {t.accounts.name}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="text-right flex-shrink-0">
