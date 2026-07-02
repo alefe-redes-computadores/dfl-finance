@@ -5,42 +5,26 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Search, Trash2, Eye, Download, FileText,
-  Image as ImageIcon, X, AlertCircle, RefreshCw, Paperclip,
-  Calendar, HardDrive
+  ChevronLeft, RefreshCw, Upload, Image, FileText, X,
+  Calendar, Search, Filter, Eye, Trash2, Loader2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
-
-interface ReceiptFile {
-  name: string
-  url: string
-  created_at: string
-  size: number
-  isImage: boolean
-  transaction_id?: string
-  transaction_desc?: string
-  transaction_date?: string
-}
+import Image from 'next/image'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const ReceiptsSkeleton = () => (
-  <div className="space-y-2 animate-pulse">
-    {[1, 2, 3, 4].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
-        <div className="w-14 h-14 rounded-xl bg-gray-200 dark:bg-slate-700 flex-shrink-0" />
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="h-3.5 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-2.5 w-28 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          <div className="h-2.5 w-32 bg-teal-100 dark:bg-teal-900/20 rounded" />
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
-          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
-          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+  <div className="grid grid-cols-2 gap-3 animate-pulse">
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] overflow-hidden shadow-sm border border-gray-50 dark:border-slate-700">
+        <div className="aspect-square bg-gray-200 dark:bg-slate-700" />
+        <div className="p-3 space-y-2">
+          <div className="h-4 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
         </div>
       </div>
     ))}
@@ -50,14 +34,18 @@ const ReceiptsSkeleton = () => (
 export default function ReceiptsPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { context } = useContext_()
   const { showToast } = useToast()
-  const [receipts, setReceipts] = useState<ReceiptFile[]>([])
+
+  const [receipts, setReceipts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'image' | 'pdf'>('all')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [error, setError] = useState('')
+  const [filterType, setFilterType] = useState<'all' | 'image' | 'pdf'>('all')
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
@@ -100,131 +88,139 @@ export default function ReceiptsPage() {
   useEffect(() => {
     if (!user?.id) return
     loadReceipts()
-  }, [user?.id])
+  }, [user?.id, context])
 
   const loadReceipts = async () => {
     setLoading(true)
-    setError('')
+    setLoadingPulse(true)
 
-    try {
-      const { data: files, error: listError } = await supabase
-        .storage
-        .from('receipts')
-        .list(user.id, {
-          limit: 50,
-          sortBy: { column: 'created_at', order: 'desc' },
-        })
+    const { data } = await supabase
+      .from('receipts')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .order('created_at', { ascending: false })
 
-      if (listError) {
-        setError('Erro ao carregar comprovantes. Verifique as permissões do bucket.')
-        setReceipts([])
-        setLoading(false)
-        return
-      }
-
-      if (!files || files.length === 0) {
-        setReceipts([])
-        setLoading(false)
-        return
-      }
-
-      const receiptsData: ReceiptFile[] = files.map(file => {
-        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.name)
-        const { data: urlData } = supabase
-          .storage
-          .from('receipts')
-          .getPublicUrl(`${user.id}/${file.name}`)
-
-        return {
-          name: file.name,
-          url: urlData.publicUrl,
-          created_at: file.created_at || new Date().toISOString(),
-          size: file.metadata?.size || 0,
-          isImage,
-        }
-      })
-
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('id, receipt_url, description, date')
-        .eq('user_id', user.id)
-        .not('receipt_url', 'is', null)
-        .order('date', { ascending: false })
-        .limit(50)
-
-      const txMap = new Map<string, any>()
-      if (txs) {
-        txs.forEach(tx => {
-          if (tx.receipt_url) {
-            txMap.set(tx.receipt_url, tx)
-          }
-        })
-      }
-
-      const enrichedReceipts = receiptsData.map(r => {
-        const tx = txMap.get(r.url)
-        return {
-          ...r,
-          transaction_id: tx?.id,
-          transaction_desc: tx?.description,
-          transaction_date: tx?.date,
-        }
-      })
-
-      setReceipts(enrichedReceipts)
-    } catch (err: any) {
-      console.error('Erro ao carregar comprovantes:', err)
-      setError('Erro inesperado ao carregar comprovantes.')
-    } finally {
-      setLoading(false)
-    }
+    setReceipts(Array.isArray(data) ? data : [])
+    setLoading(false)
+    setLoadingPulse(false)
   }
 
-  const handleDelete = async (receipt: ReceiptFile) => {
-    if (!confirm(`Excluir o comprovante "${receipt.name}"?`)) return
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validar tipo
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    if (!validTypes.includes(file.type)) {
+      showToast('Formato não suportado. Use JPG, PNG, WEBP ou PDF.', 'warning')
+      return
+    }
+
+    // Validar tamanho (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Arquivo muito grande (máx 5MB).', 'warning')
+      return
+    }
+
+    setUploading(true)
+    setLoadingPulse(true)
 
     try {
-      const path = `${user.id}/${receipt.name}`
-      const { error: deleteError } = await supabase
-        .storage
+      const filePath = `receipts/${user?.id}/${Date.now()}_${file.name}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('receipts')
-        .remove([path])
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        })
 
-      if (deleteError) throw deleteError
+      if (uploadError) throw uploadError
 
-      if (receipt.transaction_id) {
-        await supabase
-          .from('transactions')
-          .update({ receipt_url: null })
-          .eq('id', receipt.transaction_id)
-      }
+      const { data: { publicUrl } } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(filePath)
 
-      showToast('Comprovante excluído.', 'success')
+      // Salvar no banco
+      const { error: insertError } = await supabase
+        .from('receipts')
+        .insert({
+          user_id: user.id,
+          context: context,
+          file_path: filePath,
+          file_url: publicUrl,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+          description: file.name,
+          uploaded_at: new Date().toISOString(),
+        })
+
+      if (insertError) throw insertError
+
+      showToast('Comprovante enviado com sucesso!', 'success')
       loadReceipts()
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    } catch (error: any) {
+      showToast(`Erro ao enviar: ${error.message}`, 'error')
+    } finally {
+      setUploading(false)
+      setLoadingPulse(false)
+      if (e.target) e.target.value = ''
     }
   }
 
-  const handleDownload = (receipt: ReceiptFile) => {
-    window.open(receipt.url, '_blank')
+  const handleDelete = async (id: string) => {
+    if (!confirm('Remover este comprovante?')) return
+
+    try {
+      await supabase.from('receipts').delete().eq('id', id)
+      showToast('Comprovante removido.', 'info')
+      loadReceipts()
+    } catch (error: any) {
+      showToast(`Erro ao remover: ${error.message}`, 'error')
+    }
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  const getFileIcon = (type: string) => {
+    if (type.includes('image')) return <Image size={16} className="text-blue-500" />
+    return <FileText size={16} className="text-red-500" />
+  }
+
+  const getFileLabel = (type: string) => {
+    if (type.includes('image')) return 'Imagem'
+    return 'PDF'
+  }
+
+  const getFileColor = (type: string) => {
+    if (type.includes('image')) return 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'
+    return 'bg-red-50 dark:bg-red-900/30 text-red-600'
   }
 
   const filteredReceipts = receipts.filter(r => {
-    const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
-    const matchesFilter = filter === 'all' || (filter === 'image' ? r.isImage : !r.isImage)
-    return matchesSearch && matchesFilter
+    const matchSearch = r.file_name?.toLowerCase().includes(search.toLowerCase()) ||
+                        r.description?.toLowerCase().includes(search.toLowerCase()) ||
+                        false
+    const matchType = filterType === 'all' || 
+                      (filterType === 'image' && r.file_type?.includes('image')) ||
+                      (filterType === 'pdf' && r.file_type?.includes('pdf'))
+    return matchSearch && matchType
   })
 
+  const filterOptions = [
+    { key: 'all', label: 'Todos' },
+    { key: 'image', label: 'Imagens' },
+    { key: 'pdf', label: 'PDFs' },
+  ]
+
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -235,163 +231,162 @@ export default function ReceiptsPage() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            Comprovantes {!loading && receipts.length > 0 && `(${filteredReceipts.length})`}
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <Image size={20} className="text-teal-500" />
+            Comprovantes
           </h1>
-          <div className="w-10" />
-        </div>
-
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome do arquivo..."
-            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none text-gray-700 dark:text-gray-300 focus:border-teal-500 transition-colors"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-2 mt-3">
-          {[
-            { id: 'all', label: 'Todos', icon: null },
-            { id: 'image', label: 'Imagens', icon: <ImageIcon size={12} /> },
-            { id: 'pdf', label: 'PDFs', icon: <FileText size={12} /> },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id as any)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
-                filter === f.id
-                  ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 shadow-sm'
-                  : 'bg-gray-50 dark:bg-slate-700 border border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600'
-              }`}
-            >
-              {f.icon}
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="px-4 pt-4">
-        {loading ? (
-          <ReceiptsSkeleton />
-        ) : error ? (
-          <div className="text-center py-12 animate-in fade-in duration-300">
-            <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
+          <div className="flex items-center gap-1">
             <button
               onClick={loadReceipts}
-              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors active:scale-95"
+              className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
             >
-              Tentar novamente
+              <RefreshCw size={20} className={loadingPulse ? 'animate-spin' : ''} />
             </button>
           </div>
+        </div>
+        <ContextToggle />
+      </div>
+
+      <div className="px-4 pt-4 space-y-4">
+        {/* Busca e Filtros */}
+        <div className="flex gap-2">
+          <div className="flex-1 flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-2.5 shadow-sm">
+            <Search size={18} className="text-gray-400 dark:text-gray-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar comprovante..."
+              className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium"
+            />
+          </div>
+          <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-100 dark:border-slate-700">
+            {filterOptions.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFilterType(f.key as any)}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                  filterType === f.key
+                    ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Upload */}
+        <div className="flex items-center justify-between">
+          <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
+            {filteredReceipts.length} comprovante{filteredReceipts.length !== 1 ? 's' : ''}
+          </p>
+          <div className="relative">
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={handleUpload}
+              className="hidden"
+              id="receipt-upload"
+              disabled={uploading}
+            />
+            <label
+              htmlFor="receipt-upload"
+              className={`flex items-center gap-2 px-4 py-2 bg-teal-700 text-white rounded-full text-sm font-bold cursor-pointer hover:bg-teal-800 transition-colors active:scale-95 ${
+                uploading ? 'opacity-50 pointer-events-none' : ''
+              }`}
+            >
+              {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              {uploading ? 'Enviando...' : 'Novo comprovante'}
+            </label>
+          </div>
+        </div>
+
+        {loading ? (
+          <ReceiptsSkeleton />
         ) : filteredReceipts.length === 0 ? (
-          <div className="text-center py-16 animate-in fade-in duration-300">
-            <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ImageIcon size={40} className="text-gray-300 dark:text-gray-600" />
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-300">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
+              <Image size={40} className="text-gray-400 dark:text-gray-500" />
             </div>
-            {receipts.length === 0 ? (
-              <>
-                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhum comprovante</h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-6">
-                  Os comprovantes que você anexar nas transações aparecerão aqui.
-                </p>
-              </>
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">
-                Nenhum resultado para "{search}".
-              </p>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">
+              {search ? 'Nenhum resultado encontrado' : 'Nenhum comprovante'}
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
+              {search 
+                ? 'Tente alterar o termo de busca.' 
+                : 'Envie comprovantes para organizar suas transações.'}
+            </p>
+            {!search && (
+              <label
+                htmlFor="receipt-upload"
+                className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors cursor-pointer"
+              >
+                <Upload size={16} className="inline mr-2" />
+                Enviar comprovante
+              </label>
             )}
           </div>
         ) : (
-          <div className="space-y-2 animate-in fade-in duration-300">
+          <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-300">
             {filteredReceipts.map(receipt => (
               <div
-                key={receipt.name}
-                className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all active:scale-[0.98]"
+                key={receipt.id}
+                className="bg-white dark:bg-slate-800 rounded-[20px] overflow-hidden shadow-sm border border-gray-50 dark:border-slate-700 hover:shadow-md transition-all active:scale-[0.98]"
               >
-                <div
-                  className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer relative group"
-                  onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
+                <div 
+                  className="aspect-square bg-gray-100 dark:bg-slate-700 relative cursor-pointer group"
+                  onClick={() => {
+                    setSelectedReceipt(receipt)
+                    setShowModal(true)
+                  }}
                 >
-                  {receipt.isImage ? (
-                    <img src={receipt.url} alt={receipt.name} className="w-full h-full object-cover" />
+                  {receipt.file_type?.includes('image') ? (
+                    <img
+                      src={receipt.file_url}
+                      alt={receipt.file_name}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-red-50 dark:bg-red-900/20">
-                      <FileText size={24} className="text-red-400" />
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                      <FileText size={48} />
+                      <span className="text-xs mt-2">PDF</span>
                     </div>
                   )}
-                  {/* Overlay de hover */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <Eye size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={24} className="text-white" />
+                  </div>
+                  <div className={`absolute top-2 right-2 text-[9px] font-bold px-2 py-0.5 rounded-full ${getFileColor(receipt.file_type)} flex items-center gap-1`}>
+                    {getFileIcon(receipt.file_type)}
+                    {getFileLabel(receipt.file_type)}
                   </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    {receipt.isImage ? (
-                      <ImageIcon size={12} className="text-blue-500 flex-shrink-0" />
-                    ) : (
-                      <Paperclip size={12} className="text-red-500 flex-shrink-0" />
-                    )}
-                    <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                      {receipt.name}
+                <div className="p-3">
+                  <p className="font-bold text-[13px] text-gray-800 dark:text-gray-200 truncate">
+                    {receipt.file_name || 'Sem nome'}
+                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                      <Calendar size={10} />
+                      {format(new Date(receipt.uploaded_at || receipt.created_at), "dd/MM/yy", { locale: ptBR })}
                     </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(receipt.id)
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Calendar size={10} className="text-gray-400 flex-shrink-0" />
-                    <p className="text-[10px] text-gray-400">
-                      {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                    </p>
-                    <span className="text-gray-300 dark:text-gray-600">•</span>
-                    <HardDrive size={10} className="text-gray-400 flex-shrink-0" />
-                    <p className="text-[10px] text-gray-400">
-                      {formatFileSize(receipt.size)}
-                    </p>
-                  </div>
-                  {receipt.transaction_desc && (
-                    <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 truncate flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-teal-400 flex-shrink-0" />
-                      Vinculado a: {receipt.transaction_desc}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
-                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-full transition-colors"
-                    title="Visualizar"
-                  >
-                    <Eye size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDownload(receipt)}
-                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-full transition-colors"
-                    title="Download"
-                  >
-                    <Download size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(receipt)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
-                    title="Excluir"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
               </div>
             ))}
@@ -399,24 +394,51 @@ export default function ReceiptsPage() {
         )}
       </div>
 
-      {/* Preview Modal */}
-      {previewUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setPreviewUrl(null)}
-        >
-          <button
-            onClick={() => setPreviewUrl(null)}
-            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X size={28} />
-          </button>
-          <img
-            src={previewUrl}
-            alt="Preview"
-            className="max-w-full max-h-[85vh] object-contain rounded-2xl animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          />
+      {/* Modal de visualização */}
+      {showModal && selectedReceipt && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80" onClick={() => setShowModal(false)}>
+          <div className="relative max-w-lg w-[90%] max-h-[80vh] bg-white dark:bg-slate-800 rounded-2xl overflow-hidden animate-in fade-in-zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-2 right-2 z-10 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-4 border-b border-gray-100 dark:border-slate-700">
+              <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate">
+                {selectedReceipt.file_name}
+              </p>
+              <p className="text-[10px] text-gray-400">
+                {format(new Date(selectedReceipt.uploaded_at || selectedReceipt.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              </p>
+            </div>
+
+            <div className="p-4 flex items-center justify-center max-h-[60vh] overflow-auto">
+              {selectedReceipt.file_type?.includes('image') ? (
+                <img
+                  src={selectedReceipt.file_url}
+                  alt={selectedReceipt.file_name}
+                  className="max-w-full max-h-[55vh] object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <FileText size={80} className="text-gray-400 mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                    Visualização de PDF não disponível no app.
+                  </p>
+                  <a
+                    href={selectedReceipt.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
+                  >
+                    Abrir PDF
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
