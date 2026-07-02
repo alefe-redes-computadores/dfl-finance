@@ -10,7 +10,7 @@ import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
   PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
-  Sun, Moon, Sunrise, Sunset, RefreshCw
+  Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -35,6 +35,7 @@ const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
   { id: 'projection', label: 'Projeção de Saldo' },
+  { id: 'loans', label: 'Empréstimos entre Contextos' }, // NOVA SEÇÃO
   { id: 'next-card', label: 'Próxima Fatura' },
   { id: 'pendings', label: 'Pendências' },
   { id: 'receivables', label: 'A Receber' },
@@ -129,6 +130,7 @@ function HomeContent() {
   const [subscriptions, setSubscriptions] = useState<any[]>([])
   const [debts, setDebts] = useState<any[]>([])
   const [financings, setFinancings] = useState<any[]>([])
+  const [loans, setLoans] = useState<any[]>([]) // NOVO
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -148,7 +150,6 @@ function HomeContent() {
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
 
-  // Extrai o primeiro nome para a saudação
   const fullName = user?.user_metadata?.name || 'Álefe'
   const firstName = fullName.split(' ')[0]
 
@@ -294,7 +295,7 @@ function HomeContent() {
       const prevStart = getLocalDateString(startOfMonth(prevMonthDate))
       const prevEnd = getLocalDateString(endOfMonth(prevMonthDate))
 
-      const [{ data: transactions }, { data: prevTransactions }, { data: subsData }, { data: debtsData }, { data: financingsData }, { data: budgetsData }, { data: creditCards }] = await Promise.all([
+      const [{ data: transactions }, { data: prevTransactions }, { data: subsData }, { data: debtsData }, { data: financingsData }, { data: budgetsData }, { data: creditCards }, { data: loansData }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -332,14 +333,20 @@ function HomeContent() {
           .from('credit_cards')
           .select('*')
           .match({ user_id: user.id, context: context, is_archived: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('loans')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('status', ['active', 'completed'])
           .order('created_at', { ascending: false })
       ])
 
       const txs = Array.isArray(transactions) ? transactions : []
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
       setFinancings(Array.isArray(financingsData) ? financingsData : [])
+      setLoans(Array.isArray(loansData) ? loansData : [])
 
-      // Dívidas com progresso
       const debtsArray = Array.isArray(debtsData) ? debtsData : []
       const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
         const { data: payments } = await supabase
@@ -354,7 +361,6 @@ function HomeContent() {
       setDebts(debtsWithProgress)
       setTotalToReceive(debtsWithProgress.reduce((a, d) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
 
-      // Resumo financeiro
       const income = txs.filter((t) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const expense = txs.filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
       const balance = income - expense
@@ -376,7 +382,6 @@ function HomeContent() {
       setSummary({ income, expense, balance })
       setRecentTransactions(txs.slice(0, 5))
 
-      // Contas
       const { data: accsData } = await supabase.from('accounts').select('*').match({ user_id: user.id, context: context }).order('name')
       const accsWithPrevisto = (Array.isArray(accsData) ? accsData : []).map((acc) => {
         const accTxs = txs.filter((t) => t.account_id === acc.id && t.status === 'pending')
@@ -387,7 +392,6 @@ function HomeContent() {
       })
       setAccounts(accsWithPrevisto)
 
-      // Cartões de crédito
       const cardsArray = Array.isArray(creditCards) ? creditCards : []
       const cardsWithInvoice = cardsArray.map((card) => {
         const cardTxs = txs.filter((t) => t.credit_card_id === card.id)
@@ -397,7 +401,6 @@ function HomeContent() {
       setCards(cardsWithInvoice)
       setPendings({ toPay, toReceive, faturas: cardsWithInvoice.reduce((acc, c) => acc + c.faturaAtual, 0) })
 
-      // Orçamentos
       const budgetsArray = Array.isArray(budgetsData) ? budgetsData : []
       const budgetsWithSpent = budgetsArray.map((budget) => {
         const spent = txs.filter((t) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0)
@@ -421,7 +424,6 @@ function HomeContent() {
 
       const notifs: any[] = []
 
-      // Cartões de crédito
       cardsWithInvoice.forEach(card => {
         const days = (card.due_day || 1) - todayDay
         if (days < 0) {
@@ -431,7 +433,6 @@ function HomeContent() {
         }
       })
 
-      // Assinaturas
       const subs = Array.isArray(subsData) ? subsData : []
       subs.forEach((sub: any) => {
         const days = (sub.due_day || 1) - todayDay
@@ -442,7 +443,6 @@ function HomeContent() {
         }
       })
 
-      // Financiamentos
       const fins = Array.isArray(financingsData) ? financingsData : []
       fins.forEach((fin: any) => {
         if (!fin.next_due_date) return
@@ -454,7 +454,6 @@ function HomeContent() {
         }
       })
 
-      // Dívidas
       debtsWithProgress.forEach((debt: any) => {
         if (!debt.due_date) return
         const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
@@ -466,7 +465,6 @@ function HomeContent() {
         }
       })
 
-      // Orçamentos
       budgetsWithSpent.forEach((budget: any) => {
         const spent = budget.spent
         const remaining = budget.remaining
@@ -477,7 +475,6 @@ function HomeContent() {
         }
       })
 
-      // Pendências gerais
       const pendingExpenses = txs.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
       if (pendingExpenses.length > 0) {
         notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
@@ -485,7 +482,7 @@ function HomeContent() {
 
       const pendingIncomes = txs.filter(t => t.status === 'pending' && t.type === 'income')
       if (pendingIncomes.length > 0) {
-        notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending', severity: 'success', isRead: readSet.has('pending-incomes') })
+        notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending`, severity: 'success', isRead: readSet.has('pending-incomes') })
       }
 
       setNotifications(notifs)
@@ -529,6 +526,10 @@ function HomeContent() {
       </div>
     )
   }
+
+  const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
+  const getContextIcon = (ctx: string) =>
+    ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
 
   const renderSection = (sectionId: string) => {
     switch (sectionId) {
@@ -583,6 +584,54 @@ function HomeContent() {
         return (
           <div key="projection" className="mb-6">
             <ProjectionSparklineCard />
+          </div>
+        )
+      case 'loans':
+        if (loans.length === 0) return null
+        return (
+          <div key="loans" className="mb-6">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/loans')}>
+                <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
+                <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+              </div>
+              <div className="px-2 pb-2">
+                {loans.filter(l => l.status === 'active').slice(0, 3).map(loan => {
+                  const progress = Number(loan.total_amount) > 0
+                    ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100
+                    : 0
+                  const isOverdue = loan.due_date && differenceInDays(new Date(loan.due_date), today) < 0
+                  return (
+                    <div key={loan.id} onClick={() => router.push(`/loans/${loan.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                      <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                        <ArrowRightLeft size={18} className="text-teal-600 dark:text-teal-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-1.5">
+                            {getContextIcon(loan.source_context)}
+                            <span className="text-[11px] text-gray-500">{getContextLabel(loan.source_context)}</span>
+                            <ArrowRightLeft size={10} className="text-gray-400" />
+                            {getContextIcon(loan.dest_context)}
+                            <span className="text-[11px] text-gray-500">{getContextLabel(loan.dest_context)}</span>
+                          </div>
+                          <p className="text-[14px] font-bold text-teal-600 ml-2 shrink-0">{formatCurrency(Number(loan.remaining_amount) || 0)}</p>
+                        </div>
+                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1">
+                          <div className={`h-full rounded-full transition-all duration-700 ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[11px] text-gray-400">
+                            {loan.paid_installments}/{loan.total_installments} parcelas
+                          </span>
+                          <span className="text-[11px] font-bold text-gray-500">{progress.toFixed(0)}% pago</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )
       case 'next-card':
@@ -666,43 +715,23 @@ function HomeContent() {
                   const isOverdue = daysUntilDue !== null && daysUntilDue < 0
                   const percent = Math.min(debt.percent, 100)
                   return (
-                    <div
-                      key={debt.id}
-                      onClick={() => router.push(`/debts/${debt.id}`)}
-                      className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors"
-                    >
+                    <div key={debt.id} onClick={() => router.push(`/debts/${debt.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                       <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}>
                         <IconComp size={20} />
                       </div>
-
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start mb-1">
                           <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 truncate">{debt.person_name}</p>
                           <p className="text-[15px] font-bold text-emerald-600 ml-2 shrink-0">{formatCurrency(remaining)}</p>
                         </div>
-
                         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden mb-1">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${
-                              isOverdue ? 'bg-red-500' : remaining <= 0 ? 'bg-emerald-500' : 'bg-teal-500'
-                            }`}
-                            style={{ width: `${percent}%` }}
-                          />
+                          <div className={`h-full rounded-full transition-all duration-700 ${isOverdue ? 'bg-red-500' : remaining <= 0 ? 'bg-emerald-500' : 'bg-teal-500'}`} style={{ width: `${percent}%` }} />
                         </div>
-
                         <div className="flex justify-between items-center">
-                          <span className={`text-[11px] font-medium ${
-                            isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
-                          }`}>
-                            {isOverdue
-                              ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)`
-                              : debt.due_date
-                                ? `Vence ${format(new Date(debt.due_date), "dd/MM")}`
-                                : 'Sem prazo'}
+                          <span className={`text-[11px] font-medium ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                            {isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)` : debt.due_date ? `Vence ${format(new Date(debt.due_date), "dd/MM")}` : 'Sem prazo'}
                           </span>
-                          <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
-                            {percent.toFixed(0)}% pago
-                          </span>
+                          <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">{percent.toFixed(0)}% pago</span>
                         </div>
                       </div>
                     </div>
