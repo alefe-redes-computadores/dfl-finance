@@ -12,9 +12,7 @@ import {
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { usePaginatedTransactions } from '@/lib/hooks/usePaginatedTransactions'
-import { InfiniteScroll } from '@/components/ui/InfiniteScroll'
-import Skeleton from '@/components/Skeleton'
+import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -63,7 +61,7 @@ function dateLabel(dateStr: string) {
   return format(d, "dd 'DE' MMMM", { locale: ptBR }).toUpperCase()
 }
 
-// Skeleton específico da página (já existente)
+// Componente visual para simular o carregamento (Skeleton)
 const TransactionsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     {[1, 2].map((group) => (
@@ -93,65 +91,24 @@ const TransactionsSkeleton = () => (
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const [context, setContext] = useState<Context>('dfl')
+  const { context, setContext, appMode } = useContext_()
+  const [transactions, setTransactions] = useState<any[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   
+  // Referências para detectar o clique fora dos modais
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
 
   const [search, setSearch] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
-
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
-  const [refreshing, setRefreshing] = useState(false)
-  const pullStartY = useRef(0)
-  const pullCurrentY = useRef(0)
-  const pullDistance = useRef(0)
-  const isPulling = useRef(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10) return
-    pullStartY.current = e.touches[0].clientY
-    pullCurrentY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current) return
-    pullCurrentY.current = e.touches[0].clientY
-    pullDistance.current = Math.max(0, pullCurrentY.current - pullStartY.current)
-    if (pullDistance.current > 20 && !refreshing) {
-      setRefreshing(true)
-      isPulling.current = false
-      refetch()
-      setTimeout(() => setRefreshing(false), 1500)
-    }
-  }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-    pullDistance.current = 0
-  }
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [refreshing])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
 
   // Lógica para fechar os modais ao clicar fora
   useEffect(() => {
@@ -179,39 +136,92 @@ export default function TransactionsPage() {
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
-  // ============================================================
-  // USANDO O NOVO HOOK usePaginatedTransactions
-  // ============================================================
-  const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-  const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+  const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
+    if (!user) return;
+    
+    if (pageNum === 0) setLoading(true)
+    else setLoadingMore(true)
 
-  // Determina o tipo de filtro para o hook (income, expense, transfer) ou undefined para 'all'
-  const filterType = filter === 'all' ? undefined : filter
+    const from = pageNum * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-  const {
-    transactions,
-    loading,
-    hasMore,
-    loadMore,
-    totalCount,
-    isEmpty,
-    refetch
-  } = usePaginatedTransactions({
-    context: context,
-    category: undefined, // não temos filtro por categoria na página
-    startDate: start,
-    endDate: end,
-    search: search || undefined,
-    pageSize: PAGE_SIZE,
+    let query = supabase
+      .from('transactions')
+      .select('*, categories(name, icon, color), accounts!account_id(name)', { count: 'exact' })
+      .match({ user_id: user.id, context: context })
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false }) // Garante que a transação adicionada por último fique no topo
+
+    if (filter !== 'all') query = query.eq('type', filter)
+    
+    const { data, count, error } = await query
+    
+    if (error) {
+      console.error("Erro na listagem de transações:", error)
+    }
+    
+    const txs = Array.isArray(data) ? data : []
+
+    if (append) {
+      setTransactions(prev => [...prev, ...txs])
+    } else {
+      setTransactions(txs)
+    }
+
+    const totalLoaded = append ? (pageNum + 1) * PAGE_SIZE : txs.length
+    setHasMore(count ? totalLoaded < count : txs.length === PAGE_SIZE)
+    setLoading(false)
+    setLoadingMore(false)
+  }, [context, currentDate, filter, user])
+
+  useEffect(() => {
+    setPage(0)
+    setHasMore(true)
+    loadTransactions(0)
+  }, [loadTransactions])
+
+  // Infinite Scroll
+  const handleScroll = useCallback(() => {
+    if (loadingMore || !hasMore || loading) return
+    
+    const scrollY = window.scrollY
+    const windowHeight = window.innerHeight
+    const documentHeight = document.documentElement.scrollHeight
+    
+    if (scrollY + windowHeight >= documentHeight - 200) {
+      const nextPage = page + 1
+      setPage(nextPage)
+      loadTransactions(nextPage, true)
+    }
+  }, [page, hasMore, loadingMore, loading, loadTransactions])
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [handleScroll])
+
+  const filtered = transactions.filter(t => {
+    let matchSearch = true;
+    if (search) {
+      const desc = String(t.description || '').toLowerCase();
+      const cat = String(t.categories?.name || '').toLowerCase();
+      const term = search.toLowerCase();
+      matchSearch = desc.includes(term) || cat.includes(term);
+    }
+
+    let matchStatus = true;
+    if (statusFilter !== 'all') {
+      matchStatus = t.status === statusFilter;
+    }
+
+    return matchSearch && matchStatus;
   })
 
-  // Aplicar filtro de status (pendente/efetivada) no frontend
-  const filteredByStatus = transactions.filter(t => {
-    if (statusFilter === 'all') return true
-    return t.status === statusFilter
-  })
-
-  const grouped = groupByDate(filteredByStatus)
+  const grouped = groupByDate(filtered)
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
 
   const filters: { key: Filter; label: string; icon: React.ReactNode }[] = [
@@ -228,23 +238,13 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
-      {/* Indicador de Pull to Refresh */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
       <div className="px-4 pt-6 pb-4 bg-[#f8f9fa] dark:bg-slate-900 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
             
-            {/* Menu de Exportação */}
+            {/* Menu de Exportação com Ref para detectar clique fora */}
             <div className="relative" ref={exportMenuRef}>
               <button 
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -270,14 +270,7 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-5">
-          {(['dfl', 'personal'] as Context[]).map(c => (
-            <button key={c} onClick={() => setContext(c)}
-              className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${context === c ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>
-              {c === 'dfl' ? 'Empresa' : 'Pessoal'}
-            </button>
-          ))}
-        </div>
+        <ContextToggle />
 
         <div className="flex gap-2 mb-4 relative">
           <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
@@ -286,7 +279,7 @@ export default function TransactionsPage() {
               className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
           </div>
           
-          {/* Menu de Status */}
+          {/* Menu de Status com Ref para detectar clique fora */}
           <div className="relative" ref={statusMenuRef}>
             <button 
               onClick={() => setShowStatusMenu(!showStatusMenu)} 
@@ -319,22 +312,16 @@ export default function TransactionsPage() {
       </div>
 
       <div className="px-4">
-        {loading && transactions.length === 0 ? (
+        {loading ? (
           <TransactionsSkeleton />
-        ) : filteredByStatus.length === 0 && !loading ? (
+        ) : filtered.length === 0 && !loadingMore ? (
           <div className="flex flex-col items-center py-20 text-gray-400 dark:text-gray-500 animate-in fade-in duration-300">
             <ReceiptText size={48} className="mb-4 opacity-20" />
             <p className="text-[15px] font-bold text-gray-500 dark:text-gray-400">Nenhuma transação</p>
             <p className="text-[13px] mt-1">Nenhum resultado encontrado.</p>
           </div>
         ) : (
-          <InfiniteScroll
-            fetchNextPage={loadMore}
-            hasNextPage={hasMore}
-            isFetchingNextPage={loading && transactions.length > 0}
-            loadingText="Carregando mais transações..."
-            endText="Todas as transações carregadas"
-          >
+          <>
             <div className="space-y-6 animate-in fade-in duration-300">
               {sortedDates.map(date => (
                 <div key={date}>
@@ -348,6 +335,7 @@ export default function TransactionsPage() {
                       const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
                       const attachmentIcon = getAttachmentIcon(t.receipt_url)
                       
+                      // Badge de parcelas
                       const hasInstallments = t.total_installments && t.total_installments > 1
                       const installmentBadge = hasInstallments 
                         ? `${t.installment_index || 1}/${t.total_installments}` 
@@ -406,7 +394,17 @@ export default function TransactionsPage() {
                 </div>
               ))}
             </div>
-          </InfiniteScroll>
+
+            {/* Indicador de Infinite Scroll */}
+            {loadingMore && (
+              <div className="flex justify-center py-6">
+                <Loader2 className="animate-spin text-teal-700" size={24} />
+              </div>
+            )}
+            {!hasMore && filtered.length > 0 && (
+              <p className="text-center text-xs font-medium text-gray-400 py-6">Todas as transações carregadas</p>
+            )}
+          </>
         )}
       </div>
     </div>
