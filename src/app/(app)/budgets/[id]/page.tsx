@@ -28,24 +28,20 @@ const ICON_MAP: Record<string, React.ElementType> = {
 // ============================================================
 const BudgetDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6">
-    {/* Header */}
     <div className="flex items-center justify-between mb-6">
       <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
       <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
       <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
     </div>
 
-    {/* Navegador de meses */}
     <div className="flex items-center justify-center mb-4">
       <div className="h-10 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" />
     </div>
 
-    {/* Badge de status */}
     <div className="flex justify-center mb-4">
       <div className="h-6 w-24 bg-gray-200 dark:bg-slate-700 rounded-full" />
     </div>
 
-    {/* Card Principal */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
@@ -70,7 +66,6 @@ const BudgetDetailSkeleton = () => (
       <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
     </div>
 
-    {/* Transações */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       {[1, 2, 3].map((i) => (
@@ -97,13 +92,13 @@ export default function BudgetDetailPage() {
   const [spent, setSpent] = useState(0)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [projection, setProjection] = useState('')
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -141,9 +136,6 @@ export default function BudgetDetailPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // FUNÇÃO AUXILIAR: Ícone de anexo
-  // ============================================================
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -154,6 +146,7 @@ export default function BudgetDetailPage() {
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
@@ -192,7 +185,6 @@ export default function BudgetDetailPage() {
       setTransactions(txs)
       setSpent(totalSpent)
 
-      // Projeção: média diária até agora
       const remaining = Number(budgetData.amount) - totalSpent
       const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
       
@@ -215,15 +207,20 @@ export default function BudgetDetailPage() {
     }
 
     setLoading(false)
+    setLoadingPulse(false)
   }, [id, user, currentDate])
 
   useEffect(() => { loadData() }, [loadData])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // Skeleton enquanto carrega
   if (loading) return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
       <BudgetDetailSkeleton />
     </div>
   )
@@ -243,8 +240,12 @@ export default function BudgetDetailPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans px-4 pt-6 transition-colors duration-300">
-      
-      {/* Pull to refresh */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -254,7 +255,6 @@ export default function BudgetDetailPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.push('/budgets')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
           <ChevronLeft size={24} />
@@ -273,7 +273,6 @@ export default function BudgetDetailPage() {
         </div>
       </div>
 
-      {/* Badge de Status com ícone */}
       <div className="flex justify-center mb-4">
         <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
           isOverBudget 
@@ -288,7 +287,6 @@ export default function BudgetDetailPage() {
         </span>
       </div>
 
-      {/* Card Principal */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4 animate-in fade-in duration-300">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${budget.color}20`, color: budget.color }}>
@@ -327,7 +325,6 @@ export default function BudgetDetailPage() {
         </p>
       </div>
 
-      {/* Alerta de Projeção com ícone */}
       {projection && (
         <div className={`rounded-[20px] p-4 mb-4 shadow-sm border flex items-start gap-3 ${
           isOverBudget 
@@ -341,7 +338,6 @@ export default function BudgetDetailPage() {
         </div>
       )}
 
-      {/* Transações Vinculadas */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Transações do mês</h3>
         {loading ? (
@@ -402,7 +398,6 @@ export default function BudgetDetailPage() {
           </div>
         )}
       </div>
-
     </div>
   )
 }
