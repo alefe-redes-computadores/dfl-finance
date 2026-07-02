@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import * as Icons from 'lucide-react'
-import { 
-  ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag 
-} from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useToast } from '@/contexts/ToastContext'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -17,31 +16,25 @@ const DEFAULT_CATEGORIES = [
   { name:'Insumos', icon:'ShoppingBag', color:'#16a34a', type:'expense', context:'dfl', sort_order:1 },
   { name:'Embalagens', icon:'Gift', color:'#0891b2', type:'expense', context:'dfl', sort_order:2 },
   { name:'Fornecedores', icon:'Briefcase', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
-  { name:'Marketing', icon:'TrendingUp', color:'#ec4899', type:'expense', context:'dfl', sort_order:4 },
-  { name:'Manutenção', icon:'Wrench', color:'#ca8a04', type:'expense', context:'dfl', sort_order:5 },
   { name:'Vendas', icon:'ShoppingCart', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
-  { name:'Delivery', icon:'Car', color:'#0891b2', type:'income', context:'dfl', sort_order:2 },
-  { name:'Eventos', icon:'Music', color:'#ec4899', type:'income', context:'dfl', sort_order:3 },
   { name:'Moradia', icon:'Home', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
   { name:'Alimentação', icon:'Utensils', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
-  { name:'Transporte', icon:'Car', color:'#0891b2', type:'expense', context:'personal', sort_order:3 },
-  { name:'Saúde', icon:'HeartPulse', color:'#dc2626', type:'expense', context:'personal', sort_order:4 },
-  { name:'Lazer', icon:'Gamepad2', color:'#7c3aed', type:'expense', context:'personal', sort_order:5 },
   { name:'Salário', icon:'Briefcase', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
-  { name:'Freelance', icon:'Laptop', color:'#0891b2', type:'income', context:'personal', sort_order:2 },
-  { name:'Investimentos', icon:'TrendingUp', color:'#ca8a04', type:'income', context:'personal', sort_order:3 },
 ]
 
 export default function CategoriesPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, appMode } = useContext_() // ← AGORA USA CONTEXTO GLOBAL
+  const { context, appMode } = useContext_() 
+  const { showToast } = useToast()
+
+  // 🔥 TRAVA DE CONTEXTO: Se estiver em personal_only, força 'personal'.
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [categories, setCategories] = useState<any[]>([])
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [tab, setTab] = useState<'expense'|'income'>('expense')
-  // ❌ REMOVIDO: const [context, setContext] = useState<'dfl'|'personal'>('dfl')
   
   const [showForm, setShowForm] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
@@ -56,7 +49,7 @@ export default function CategoriesPage() {
     if (user) {
       initialize()
     }
-  }, [user, tab, context]) // context agora é global e reage a mudanças
+  }, [user, tab, effectiveContext]) // Reage a mudanças do contexto efetivo
 
   async function initialize() {
     await ensureDefaultCategories()
@@ -78,29 +71,33 @@ export default function CategoriesPage() {
 
     const missing = DEFAULT_CATEGORIES.filter(
       cat =>
-        !existingKeys.has(
-          `${cat.name}-${cat.type}-${cat.context}`
-        )
+        cat.context === effectiveContext && // Só cria as do contexto atual
+        !existingKeys.has(`${cat.name}-${cat.type}-${cat.context}`)
     )
 
     if (!missing.length) return
 
-    await supabase.from('categories').insert(
-      missing.map(cat => ({
-        ...cat,
-        user_id: user.id,
-        is_default: true,
-      }))
-    )
+    try {
+      await supabase.from('categories').insert(
+        missing.map(cat => ({
+          ...cat,
+          user_id: user.id,
+          is_default: true,
+        }))
+      )
+    } catch (e) {
+      console.error("Erro ao criar padrões:", e)
+    }
   }
 
   async function loadCategories() {
     if (!user) return
     
+    // Busca apenas as categorias do effectiveContext! (Fim do vazamento de dados)
     const { data: mainCats } = await supabase
       .from('categories')
       .select('*')
-      .match({ user_id: user.id, type: tab, context: context })
+      .match({ user_id: user.id, type: tab, context: effectiveContext })
       .is('parent_id', null)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
@@ -108,7 +105,7 @@ export default function CategoriesPage() {
     const { data: allSubs } = await supabase
       .from('categories')
       .select('*')
-      .match({ user_id: user.id, type: tab, context: context })
+      .match({ user_id: user.id, type: tab, context: effectiveContext })
       .not('parent_id', 'is', null)
       .order('name', { ascending: true })
 
@@ -164,25 +161,33 @@ export default function CategoriesPage() {
       icon,
       color,
       type: tab,
-      context,
+      context: effectiveContext, // Força salvar no contexto correto
       parent_id: parentId,
       user_id: user!.id,
       is_default: false,
       sort_order: 999,
     }
 
-    if (editingCategory) {
-      await supabase.from('categories').update(payload).eq('id', editingCategory.id)
-    } else {
-      await supabase.from('categories').insert(payload)
-    }
+    try {
+      if (editingCategory) {
+        const { error } = await supabase.from('categories').update(payload).eq('id', editingCategory.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('categories').insert(payload)
+        if (error) throw error
+      }
 
-    setName('')
-    setEditingCategory(null)
-    setParentId(null)
-    setShowForm(false)
-    setSaving(false)
-    loadCategories()
+      setName('')
+      setEditingCategory(null)
+      setParentId(null)
+      setShowForm(false)
+      loadCategories()
+    } catch (err: any) {
+      console.error("Erro Supabase Categories:", err)
+      showToast(`Erro ao salvar: ${err.message}`, 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete(id: string, e: React.MouseEvent) {
@@ -212,7 +217,6 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      {/* ContextToggle no lugar do seletor inline */}
       <ContextToggle />
 
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4">
@@ -339,13 +343,6 @@ export default function CategoriesPage() {
                       </p>
 
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full ${
-                            cat.is_default ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                          }`}
-                        >
-                          {cat.is_default ? 'Padrão' : 'Personalizada'}
-                        </span>
                         {subCount > 0 && (
                           <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
                             {subCount} subcategoria{subCount !== 1 ? 's' : ''}
