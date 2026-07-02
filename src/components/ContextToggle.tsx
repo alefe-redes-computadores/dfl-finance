@@ -3,11 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { Montserrat } from 'next/font/google'
+import { Building2, User } from 'lucide-react'
+import { Poppins } from 'next/font/google'
 
-const montserrat = Montserrat({
+const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['200', '400', '700'],
+  weight: ['300', '400', '500', '600', '700'],
   display: 'swap',
 })
 
@@ -116,26 +117,28 @@ export default function ContextToggle() {
 
   return (
     <div className="inline-flex mt-1">
-      <div className={`flex bg-gray-100 dark:bg-slate-700 p-0.5 rounded-full ${montserrat.className}`}>
+      <div className={`flex bg-gray-100 dark:bg-slate-700 p-0.5 rounded-full ${poppins.className}`}>
         <button
           onClick={() => setContext('dfl')}
-          className={`px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
             context === 'dfl'
               ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-900 dark:text-gray-100'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
-          PJ
+          <Building2 className="w-3.5 h-3.5" />
+          <span>PJ</span>
         </button>
         <button
           onClick={() => setContext('personal')}
-          className={`px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
             context === 'personal'
               ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-900 dark:text-gray-100'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
-          PF
+          <User className="w-3.5 h-3.5" />
+          <span>PF</span>
         </button>
       </div>
     </div>
