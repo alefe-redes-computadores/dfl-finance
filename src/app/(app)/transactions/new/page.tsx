@@ -48,6 +48,7 @@ function NewTransactionContent() {
   const { context, appMode } = useContext_()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+  const [loadingPulse, setLoadingPulse] = useState(false)
 
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -176,6 +177,7 @@ function NewTransactionContent() {
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
+    setLoadingPulse(true)
     const catType = type === 'income' ? 'income' : 'expense'
 
     const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }, { data: cardsData }, { data: contactsData }] =
@@ -233,6 +235,7 @@ function NewTransactionContent() {
     setContacts(Array.isArray(contactsData) ? contactsData : [])
     setTags(Array.isArray(tgs) ? tgs : [])
     setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
+    setLoadingPulse(false)
   }, [user, effectiveContext, type])
 
   useEffect(() => {
@@ -564,7 +567,6 @@ function NewTransactionContent() {
       }
     }
 
-    // Fallback: se não houver descrição, usa o nome da categoria
     const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
 
     let totalParcels = 1
@@ -814,6 +816,12 @@ function NewTransactionContent() {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
 
       <input
         ref={galeriaInputRef}
@@ -911,7 +919,7 @@ function NewTransactionContent() {
       {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
 
-        {/* Nome da transação (NOVO) */}
+        {/* Nome da transação */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
           <input
@@ -1011,7 +1019,7 @@ function NewTransactionContent() {
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
             <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
             
-            {/* Observações (NOVO) */}
+            {/* Observações */}
             <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
               <FileText size={20} className="text-gray-400 dark:text-gray-500" />
               <input
