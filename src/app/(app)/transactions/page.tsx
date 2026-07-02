@@ -34,9 +34,6 @@ const safeNum = (val: any) => {
   return isNaN(parsed) ? 0 : parsed;
 }
 
-// ============================================================
-// FUNÇÃO AUXILIAR: Verifica tipo de anexo pelo receipt_url
-// ============================================================
 const getAttachmentIcon = (url: string | null) => {
   if (!url) return null
   const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -62,7 +59,6 @@ function dateLabel(dateStr: string) {
   return format(d, "dd 'DE' MMMM", { locale: ptBR }).toUpperCase()
 }
 
-// Componente visual para simular o carregamento (Skeleton)
 const TransactionsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     {[1, 2].map((group) => (
@@ -96,11 +92,11 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [loadingPulse, setLoadingPulse] = useState(false)
   
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   
-  // Referências para detectar o clique fora dos modais
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
 
@@ -111,7 +107,6 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
-  // Lógica para fechar os modais ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -142,6 +137,7 @@ export default function TransactionsPage() {
     
     if (pageNum === 0) setLoading(true)
     else setLoadingMore(true)
+    setLoadingPulse(true)
 
     const from = pageNum * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
@@ -155,7 +151,7 @@ export default function TransactionsPage() {
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
-      .order('created_at', { ascending: false }) // Garante que a transação adicionada por último fique no topo
+      .order('created_at', { ascending: false })
 
     if (filter !== 'all') query = query.eq('type', filter)
     
@@ -177,6 +173,7 @@ export default function TransactionsPage() {
     setHasMore(count ? totalLoaded < count : txs.length === PAGE_SIZE)
     setLoading(false)
     setLoadingMore(false)
+    setLoadingPulse(false)
   }, [context, currentDate, filter, user])
 
   useEffect(() => {
@@ -185,7 +182,6 @@ export default function TransactionsPage() {
     loadTransactions(0)
   }, [loadTransactions])
 
-  // Infinite Scroll
   const handleScroll = useCallback(() => {
     if (loadingMore || !hasMore || loading) return
     
@@ -240,12 +236,18 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       <div className="px-4 pt-6 pb-4 bg-[#f8f9fa] dark:bg-slate-900 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
             
-            {/* Menu de Exportação com Ref para detectar clique fora */}
             <div className="relative" ref={exportMenuRef}>
               <button 
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -280,7 +282,6 @@ export default function TransactionsPage() {
               className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
           </div>
           
-          {/* Menu de Status com Ref para detectar clique fora */}
           <div className="relative" ref={statusMenuRef}>
             <button 
               onClick={() => setShowStatusMenu(!showStatusMenu)} 
@@ -300,7 +301,6 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* FILTROS COM ÍCONES */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {filters.map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)}
@@ -336,13 +336,11 @@ export default function TransactionsPage() {
                       const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
                       const attachmentIcon = getAttachmentIcon(t.receipt_url)
                       
-                      // Badge de parcelas
                       const hasInstallments = t.total_installments && t.total_installments > 1
                       const installmentBadge = hasInstallments 
                         ? `${t.installment_index || 1}/${t.total_installments}` 
                         : null
 
-                      // Nome da transação (com fallback para categoria)
                       const transactionName = t.description || t.categories?.name || (isIncomeVisual ? 'Receita' : 'Despesa')
                       
                       return (
@@ -367,7 +365,6 @@ export default function TransactionsPage() {
                           </div>
                           
                           <div className="flex-1 min-w-0 pr-2">
-                            {/* Nome da transação em destaque */}
                             <div className="flex items-center gap-1.5">
                               <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">
                                 {transactionName}
@@ -376,7 +373,6 @@ export default function TransactionsPage() {
                                 <span className="shrink-0">{attachmentIcon}</span>
                               )}
                             </div>
-                            {/* Linha de apoio: categoria • conta */}
                             <div className="flex items-center gap-1.5 mt-0.5">
                               {t.categories?.name && (
                                 <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
@@ -417,7 +413,6 @@ export default function TransactionsPage() {
               ))}
             </div>
 
-            {/* Indicador de Infinite Scroll */}
             {loadingMore && (
               <div className="flex justify-center py-6">
                 <Loader2 className="animate-spin text-teal-700" size={24} />
