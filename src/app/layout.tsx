@@ -1,59 +1,42 @@
-import type { Metadata } from 'next'
-import { Poppins } from 'next/font/google'
-import './globals.css'
-import { ThemeProvider } from '@/contexts/ThemeContext'
-import { ToastProvider } from '@/contexts/ToastContext'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
+import BottomNav from '@/components/BottomNav'
+import { ContextProvider } from '@/components/ContextToggle'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-poppins',
-  display: 'swap',
-})
+function AppContent({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  const router = useRouter()
 
-export const metadata: Metadata = {
-  title: 'DFL Finance',
-  description: 'Gestão financeira completa',
-  manifest: '/manifest.json',
+  useEffect(() => {
+    if (!loading && !user) router.replace('/login')
+  }, [user, loading, router])
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="w-8 h-8 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+
+  if (!user) return null
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
+      <ErrorBoundary>
+        {children}
+      </ErrorBoundary>
+      <BottomNav />
+    </div>
+  )
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={poppins.variable}>
-      <head>
-        <link rel="icon" href="/favicon.ico" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <meta name="theme-color" content="#14b8a6" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        {/* 🆕 Registro do Service Worker para Push Notifications */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js')
-                  .then(reg => console.log('SW registrado', reg.scope))
-                  .catch(err => console.error('Falha no SW', err))
-              }
-            `,
-          }}
-        />
-      </head>
-      <body className={poppins.className}>
-        <ErrorBoundary>
-          <ThemeProvider>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </ThemeProvider>
-        </ErrorBoundary>
-      </body>
-    </html>
+    <ContextProvider>
+      <AppContent>{children}</AppContent>
+    </ContextProvider>
   )
 }
