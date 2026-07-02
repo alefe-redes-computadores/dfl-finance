@@ -1,106 +1,90 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  BarChart2,
-  PlusCircle,
-  MinusCircle,
-  Save,
-  Eye,
-  EyeOff,
-  AlertCircle,
-  RefreshCw,
-  Target,
-  Calendar,
-  Wallet,
-  Sparkles,
-  ArrowUp,
-  ArrowDown,
+  ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Wallet,
+  Calendar, BarChart3, LineChart, AlertCircle, Info
 } from 'lucide-react'
-import { getDynamicIcon } from '@/lib/iconUtils'
-import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { formatCurrency } from '@/lib/utils'
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
+  LineChart as ReLineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as ReTooltip,
-  Legend,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
 } from 'recharts'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const ProjectionsSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
+  <div className="space-y-4 animate-pulse">
+    {/* Cards de resumo */}
+    <div className="grid grid-cols-3 gap-3">
+      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
+        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
+        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+      </div>
+      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
+        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
+        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+      </div>
+      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
+        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
+        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+      </div>
+    </div>
+
     {/* Gráfico */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="h-5 w-48 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      <div className="h-[250px] bg-gray-100 dark:bg-slate-700/50 rounded-xl" />
+      <div className="flex items-center justify-between mb-4">
+        <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="flex gap-2">
+          <div className="h-8 w-16 bg-gray-200 dark:bg-slate-700 rounded-full" />
+          <div className="h-8 w-16 bg-gray-200 dark:bg-slate-700 rounded-full" />
+          <div className="h-8 w-16 bg-gray-200 dark:bg-slate-700 rounded-full" />
+        </div>
+      </div>
+      <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl" />
     </div>
 
-    {/* Cards de média */}
-    <div className="grid grid-cols-2 gap-3">
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="h-3 w-24 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
-        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="h-3 w-24 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
-        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-      </div>
-    </div>
-
-    {/* Botão simular */}
-    <div className="h-12 bg-gray-200 dark:bg-slate-700 rounded-xl" />
-
-    {/* Cenários salvos */}
+    {/* Tabela de projeção */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="h-5 w-36 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      {[1, 2].map((i) => (
-        <div key={i} className="flex justify-between items-center p-3 mb-2">
-          <div className="space-y-2">
-            <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-3 w-40 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-          <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
+      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center justify-between p-2 border-b border-gray-50 dark:border-slate-700 last:border-0">
+          <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
         </div>
       ))}
     </div>
   </div>
 )
 
-function ProjectionsContent() {
+export default function ProjectionsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [currentBalance, setCurrentBalance] = useState(0)
-  const [monthlyData, setMonthlyData] = useState<any[]>([])
-  const [projectionMonths, setProjectionMonths] = useState(3)
-  const [chartData, setChartData] = useState<any[]>([])
-  const [scenarios, setScenarios] = useState<any[]>([])
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null)
-  const [showSimulator, setShowSimulator] = useState(false)
-  const [simulatorAmount, setSimulatorAmount] = useState('0,00')
-  const [simulatorType, setSimulatorType] = useState<'expense' | 'income'>('expense')
-  const [simulatedData, setSimulatedData] = useState<any[]>([])
-  const [saveScenarioName, setSaveScenarioName] = useState('')
-  const [savingScenario, setSavingScenario] = useState(false)
-  const [showSaveScenario, setShowSaveScenario] = useState(false)
+  const [projections, setProjections] = useState<any[]>([])
+  const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m')
+  const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
   // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
@@ -119,7 +103,7 @@ function ProjectionsContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadProjections().finally(() => setRefreshing(false))
+      loadData().finally(() => setRefreshing(false))
     }
   }
 
@@ -140,158 +124,125 @@ function ProjectionsContent() {
     }
   }, [loading, refreshing])
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`
-
-  const loadProjections = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
-    const { data: accounts } = await supabase
-      .from('accounts')
-      .select('balance')
-      .match({ user_id: user.id, context })
+    // Buscar transações dos últimos 6 meses
+    const endDate = new Date()
+    const startDate = subMonths(endDate, 6)
 
-    const balance = (accounts || []).reduce((acc, a) => acc + (Number(a.balance) || 0), 0)
-    setCurrentBalance(balance)
-
-    const today = new Date()
-    const startDate = format(subMonths(today, 3), 'yyyy-MM-dd')
-    const endDate = format(today, 'yyyy-MM-dd')
-
-    const { data: txs } = await supabase
+    const { data: transactions } = await supabase
       .from('transactions')
-      .select('amount, type, date')
-      .match({ user_id: user.id, context })
-      .gte('date', startDate)
-      .lte('date', endDate)
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .gte('date', format(startDate, 'yyyy-MM-dd'))
+      .lte('date', format(endDate, 'yyyy-MM-dd'))
+      .order('date', { ascending: true })
 
-    const monthlyMap: Record<string, { income: number; expense: number }> = {}
-    for (let i = 3; i >= 1; i--) {
-      const monthStart = format(startOfMonth(subMonths(today, i)), 'yyyy-MM')
-      monthlyMap[monthStart] = { income: 0, expense: 0 }
-    }
-    monthlyMap[format(startOfMonth(today), 'yyyy-MM')] = { income: 0, expense: 0 }
+    const txArray = Array.isArray(transactions) ? transactions : []
 
-    ;(txs || []).forEach((tx: any) => {
-      const monthKey = format(new Date(tx.date), 'yyyy-MM')
-      if (monthlyMap[monthKey]) {
-        if (tx.type === 'income') {
-          monthlyMap[monthKey].income += Number(tx.amount) || 0
-        } else {
-          monthlyMap[monthKey].expense += Number(tx.amount) || 0
-        }
+    // Calcular média mensal de receitas e despesas
+    const months = new Map()
+    txArray.forEach(tx => {
+      const month = format(new Date(tx.date), 'yyyy-MM')
+      if (!months.has(month)) {
+        months.set(month, { income: 0, expense: 0 })
+      }
+      const data = months.get(month)
+      if (tx.type === 'income') {
+        data.income += Number(tx.amount)
+      } else {
+        data.expense += Number(tx.amount)
       }
     })
 
-    const sortedMonths = Object.entries(monthlyMap).sort(([a], [b]) => a.localeCompare(b))
-    setMonthlyData(sortedMonths)
-
-    const validMonths = sortedMonths.filter(([_, v]) => v.income > 0 || v.expense > 0)
-    const avgIncome = validMonths.length > 0 ? validMonths.reduce((acc, [_, v]) => acc + v.income, 0) / validMonths.length : 0
-    const avgExpense = validMonths.length > 0 ? validMonths.reduce((acc, [_, v]) => acc + v.expense, 0) / validMonths.length : 0
-
-    const projectionPoints = []
-    let runningBalance = balance
-    for (let i = 0; i <= projectionMonths; i++) {
-      const monthLabel = i === 0 ? 'Atual' : format(addMonths(today, i), 'MMM', { locale: ptBR })
-      projectionPoints.push({
-        month: monthLabel,
-        saldo: Math.round(runningBalance * 100) / 100,
-        receitas: Math.round(avgIncome * 100) / 100,
-        despesas: Math.round(avgExpense * 100) / 100,
-      })
-      runningBalance += avgIncome - avgExpense
-    }
-
-    setChartData(projectionPoints)
-
-    const { data: savedScenarios } = await supabase
-      .from('scenarios')
-      .select('*')
-      .match({ user_id: user.id, context })
-      .order('created_at', { ascending: false })
-
-    setScenarios(savedScenarios || [])
-    setLoading(false)
-  }, [user, context, projectionMonths])
-
-  useEffect(() => {
-    loadProjections()
-  }, [loadProjections])
-
-  const handleSimulate = () => {
-    const amount = parseFloat(simulatorAmount.replace('.', '').replace(',', '.')) || 0
-    if (amount <= 0) return
-
-    const baseData = chartData.map((d, i) => {
-      if (i === 0) return { ...d }
-      const newSaldo = simulatorType === 'expense' ? d.saldo - amount : d.saldo + amount
-      return { ...d, saldo: newSaldo, simulado: true }
+    let totalIncome = 0
+    let totalExpense = 0
+    months.forEach((data) => {
+      totalIncome += data.income
+      totalExpense += data.expense
     })
-    setSimulatedData(baseData)
-    setShowSaveScenario(true)
-  }
 
-  const handleSaveScenario = async () => {
-    if (!user?.id || !saveScenarioName.trim()) return
-    setSavingScenario(true)
+    const avgIncome = totalIncome / months.size
+    const avgExpense = totalExpense / months.size
 
-    const amount = parseFloat(simulatorAmount.replace('.', '').replace(',', '.')) || 0
-    const payload = {
-      user_id: user.id,
-      context,
-      name: saveScenarioName,
-      description: `${simulatorType === 'expense' ? 'Gasto extra' : 'Receita extra'} de R$ ${formatCurrency(amount)}`,
-      extra_income: simulatorType === 'income' ? amount : 0,
-      extra_expense: simulatorType === 'expense' ? amount : 0,
+    // Calcular saldo atual
+    let currentBalance = 0
+    txArray.forEach(tx => {
+      currentBalance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)
+    })
+
+    // Gerar projeções
+    const monthsToProject = parseInt(period)
+    const projectionData = []
+    let balance = currentBalance
+
+    for (let i = 0; i <= monthsToProject; i++) {
+      const date = addMonths(new Date(), i)
+      const monthKey = format(date, 'yyyy-MM')
+      const monthLabel = format(date, "MMM 'yy", { locale: ptBR })
+
+      let income = avgIncome
+      let expense = avgExpense
+
+      // Aplicar cenário
+      if (scenario === 'optimistic') {
+        income *= 1.1
+        expense *= 0.9
+      } else if (scenario === 'pessimistic') {
+        income *= 0.9
+        expense *= 1.1
+      }
+
+      balance += income - expense
+
+      projectionData.push({
+        month: monthKey,
+        label: monthLabel,
+        income: income,
+        expense: expense,
+        balance: balance,
+        currentBalance: i === 0 ? currentBalance : undefined,
+      })
     }
 
-    const { error } = await supabase.from('scenarios').insert(payload)
-    if (!error) {
-      setShowSimulator(false)
-      setShowSaveScenario(false)
-      setSimulatorAmount('0,00')
-      loadProjections()
-    } else {
-      alert('Erro ao salvar cenário.')
-    }
-    setSavingScenario(false)
-  }
+    setProjections(projectionData)
+    setLoading(false)
+    setLoadingPulse(false)
+  }, [user, context, period, scenario])
 
-  const renderChart = (data: any[]) => (
-    <ResponsiveContainer width="100%" height={250}>
-      <AreaChart data={data}>
-        <defs>
-          <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
-          </linearGradient>
-          {data[0]?.simulado && (
-            <linearGradient id="colorSimulado" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-            </linearGradient>
-          )}
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
-        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-        <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
-        <ReTooltip formatter={(val: number) => formatCurrency(val)} />
-        <Area type="monotone" dataKey="saldo" stroke="#14b8a6" strokeWidth={2} fill="url(#colorSaldo)" name="Saldo" />
-        {data[0]?.simulado && (
-          <Area type="monotone" dataKey="saldo" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" fill="url(#colorSimulado)" name="Simulado" />
-        )}
-      </AreaChart>
-    </ResponsiveContainer>
-  )
+  useEffect(() => { loadData() }, [loadData])
+
+  const periods = [
+    { key: '3m', label: '3 meses' },
+    { key: '6m', label: '6 meses' },
+    { key: '12m', label: '12 meses' },
+  ]
+
+  const scenarios = [
+    { key: 'optimistic', label: 'Otimista', icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    { key: 'realistic', label: 'Realista', icon: BarChart3, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' },
+    { key: 'pessimistic', label: 'Pessimista', icon: TrendingDown, color: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400' },
+  ]
+
+  const currentData = projections[0] || { balance: 0 }
+  const futureData = projections[projections.length - 1] || { balance: 0 }
+  const variation = currentData.balance !== 0 
+    ? ((futureData.balance - currentData.balance) / Math.abs(currentData.balance)) * 100 
+    : 0
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -302,224 +253,214 @@ function ProjectionsContent() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
-          <ChevronLeft size={24} />
-        </button>
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <LineChart size={20} className="text-teal-500" />
+            Projeções
+          </h1>
+          <button
+            onClick={loadData}
+            className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+          >
+            <RefreshCw size={20} className={loadingPulse ? 'animate-spin' : ''} />
+          </button>
+        </div>
         <ContextToggle />
-        <div className="w-8" />
       </div>
 
-      <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-6">Projeções</h1>
+      <div className="px-4 pt-4 space-y-4">
+        {/* Filtros */}
+        <div className="flex flex-wrap gap-2 items-center justify-between">
+          <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
+            {periods.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key as any)}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                  period === p.key
+                    ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
 
-      {loading ? (
-        <ProjectionsSkeleton />
-      ) : (
-        <div className="animate-in fade-in duration-300">
-          {/* Gráfico principal */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">
-                Saldo Projetado ({projectionMonths} meses)
-              </h3>
-              <div className="flex gap-1">
-                {[3, 6, 12].map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setProjectionMonths(m)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all active:scale-95 ${
-                      projectionMonths === m
-                        ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
-                        : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                    }`}
+          <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
+            {scenarios.map(s => {
+              const Icon = s.icon
+              const isActive = scenario === s.key
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => setScenario(s.key as any)}
+                  className={`px-2 py-1.5 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 ${
+                    isActive
+                      ? s.color
+                      : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Icon size={12} />
+                  {s.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {loading ? (
+          <ProjectionsSkeleton />
+        ) : projections.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
+              <LineChart size={40} className="text-gray-400 dark:text-gray-500" />
+            </div>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Dados insuficientes</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[280px]">
+              Precisamos de mais transações para fazer uma projeção precisa. Continue registrando suas movimentações.
+            </p>
+            <button
+              onClick={() => router.push('/transactions/new')}
+              className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
+            >
+              Adicionar transação
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            {/* Cards de resumo */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+                <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
+                  <Wallet size={16} className="text-teal-600 dark:text-teal-400" />
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold mb-1">Saldo atual</p>
+                <p className={`text-[15px] font-bold ${currentData.balance >= 0 ? 'text-teal-600' : 'text-red-500'}`}>
+                  {formatCurrency(currentData.balance)}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+                <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
+                  <TrendingUp size={16} className="text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold mb-1">Projetado</p>
+                <p className={`text-[15px] font-bold ${futureData.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {formatCurrency(futureData.balance)}
+                </p>
+              </div>
+              <div className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border text-center ${
+                variation >= 0 
+                  ? 'border-emerald-200 dark:border-emerald-800' 
+                  : 'border-red-200 dark:border-red-800'
+              }`}>
+                <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
+                  <BarChart3 size={16} className="text-orange-600 dark:text-orange-400" />
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold mb-1">Variação</p>
+                <p className={`text-[15px] font-bold ${variation >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {variation >= 0 ? '+' : ''}{variation.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+
+            {/* Gráfico */}
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                  <LineChart size={16} className="text-gray-400" />
+                  Evolução do Saldo
+                </h3>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-teal-500" />
+                    <span className="text-[10px] text-gray-400">Projetado</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                    <span className="text-[10px] text-gray-400">Atual</span>
+                  </div>
+                </div>
+              </div>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={projections}>
+                    <defs>
+                      <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
+                    <Tooltip
+                      formatter={(v: any) => formatCurrency(v)}
+                      contentStyle={{ fontSize: 12, borderRadius: 12 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="balance"
+                      stroke="#14b8a6"
+                      strokeWidth={2}
+                      fill="url(#balanceGradient)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="currentBalance"
+                      stroke="#34d399"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      dot={{ r: 4 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Tabela de projeção */}
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                  <Calendar size={16} className="text-gray-400" />
+                  Projeção mensal
+                </h3>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <Info size={12} />
+                  Cenário {scenarios.find(s => s.key === scenario)?.label}
+                </div>
+              </div>
+              <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                {projections.map((item, index) => (
+                  <div
+                    key={item.month}
+                    className={`flex items-center justify-between p-3 rounded-xl ${
+                      index === 0 ? 'bg-teal-50 dark:bg-teal-900/20' : ''
+                    } ${index === projections.length - 1 ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}
                   >
-                    {m}m
-                  </button>
+                    <span className="text-[12px] font-bold text-gray-700 dark:text-gray-300">
+                      {item.label}
+                      {index === 0 && ' (atual)'}
+                      {index === projections.length - 1 && ' (projetado)'}
+                    </span>
+                    <span className="text-[12px] text-gray-500 dark:text-gray-400">
+                      {formatCurrency(item.income)} / {formatCurrency(item.expense)}
+                    </span>
+                    <span className={`text-[13px] font-bold ${item.balance >= 0 ? 'text-teal-600' : 'text-red-500'}`}>
+                      {formatCurrency(item.balance)}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
-            {chartData.length > 0 ? (
-              renderChart(simulatedData.length > 0 ? simulatedData : chartData)
-            ) : (
-              <div className="text-center py-10">
-                <BarChart2 size={40} className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 dark:text-gray-500">Dados insuficientes para projeção.</p>
-              </div>
-            )}
-            {simulatedData.length > 0 && (
-              <div className="flex items-center gap-2 mt-3 justify-center">
-                <div className="w-3 h-0.5 bg-teal-500 rounded-full" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">Projeção atual</span>
-                <div className="w-3 h-0.5 bg-amber-500 rounded-full" style={{ borderStyle: 'dashed' }} />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">Cenário simulado</span>
-                <button
-                  onClick={() => { setSimulatedData([]); setShowSaveScenario(false) }}
-                  className="text-[10px] text-red-500 font-bold ml-2 hover:underline"
-                >
-                  Limpar
-                </button>
-              </div>
-            )}
           </div>
-
-          {/* Cards de média */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-6 h-6 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
-                  <TrendingDown size={12} className="text-red-500" />
-                </div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold">Gastos Fixos (média)</p>
-              </div>
-              <p className="text-[15px] font-bold text-red-500 mt-1">
-                {formatCurrency(monthlyData.length > 0 ? monthlyData.slice(-3).reduce((acc, [_, v]) => acc + v.expense, 0) / 3 : 0)}
-              </p>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-6 h-6 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center">
-                  <TrendingDown size={12} className="text-orange-500" />
-                </div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold">Gastos Variáveis (média)</p>
-              </div>
-              <p className="text-[15px] font-bold text-orange-500 mt-1">
-                {formatCurrency(monthlyData.length > 0 ? monthlyData.slice(-3).reduce((acc, [_, v]) => acc + v.expense * 0.3, 0) / 3 : 0)}
-              </p>
-            </div>
-          </div>
-
-          {/* Botão Simular */}
-          <button
-            onClick={() => setShowSimulator(!showSimulator)}
-            className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold mb-4 hover:bg-teal-800 transition-colors active:scale-[0.98] shadow-lg shadow-teal-700/20 flex items-center justify-center gap-2"
-          >
-            <Sparkles size={18} />
-            {showSimulator ? 'Ocultar Simulador' : 'Simular Cenário'}
-          </button>
-
-          {/* Simulador */}
-          {showSimulator && (
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6 animate-in fade-in slide-in-from-top-2 duration-200">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Simular impacto</h3>
-              <div className="mb-4">
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor</label>
-                <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 focus-within:ring-2 focus-within:ring-teal-500 transition-all">
-                  <span className="text-gray-400 dark:text-gray-500 font-bold mr-2">R$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={simulatorAmount}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, '')
-                      if (!digits) { setSimulatorAmount('0,00'); return }
-                      const formatted = (Number(digits) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                      setSimulatorAmount(formatted)
-                    }}
-                    className="bg-transparent w-full outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
-                    placeholder="0,00"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setSimulatorType('expense')}
-                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-                    simulatorType === 'expense'
-                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800'
-                      : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                  }`}
-                >
-                  <ArrowDown size={12} />
-                  Nova Despesa
-                </button>
-                <button
-                  onClick={() => setSimulatorType('income')}
-                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-                    simulatorType === 'income'
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                  }`}
-                >
-                  <ArrowUp size={12} />
-                  Nova Receita
-                </button>
-              </div>
-              <button
-                onClick={handleSimulate}
-                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <Target size={16} />
-                Calcular Impacto
-              </button>
-            </div>
-          )}
-
-          {/* Salvar cenário */}
-          {showSaveScenario && (
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6 animate-in fade-in slide-in-from-top-2 duration-200">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Salvar cenário</h3>
-              <input
-                type="text"
-                value={saveScenarioName}
-                onChange={(e) => setSaveScenarioName(e.target.value)}
-                placeholder="Nome do cenário"
-                className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 outline-none text-sm text-gray-800 dark:text-gray-200 mb-4 focus:ring-2 focus:ring-teal-500 transition-all"
-              />
-              <button
-                onClick={handleSaveScenario}
-                disabled={savingScenario}
-                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                {savingScenario ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : (
-                  <Save size={16} />
-                )}
-                {savingScenario ? 'Salvando...' : 'Salvar Cenário'}
-              </button>
-            </div>
-          )}
-
-          {/* Cenários salvos */}
-          {scenarios.length > 0 && (
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Cenários Salvos</h3>
-              {scenarios.map((scenario: any) => (
-                <div
-                  key={scenario.id}
-                  className={`p-3 rounded-xl mb-2 cursor-pointer transition-all active:scale-[0.98] ${
-                    selectedScenarioId === scenario.id
-                      ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800'
-                      : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'
-                  }`}
-                  onClick={() => setSelectedScenarioId(scenario.id === selectedScenarioId ? null : scenario.id)}
-                >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{scenario.name}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{scenario.description}</p>
-                    </div>
-                    <span className={`text-[13px] font-bold ${
-                      scenario.extra_expense > 0 ? 'text-red-500' : 'text-emerald-600'
-                    }`}>
-                      {scenario.extra_expense > 0 ? '- ' : '+ '}
-                      {formatCurrency(scenario.extra_expense > 0 ? scenario.extra_expense : scenario.extra_income)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  )
-}
-
-export default function ProjectionsPage() {
-  return (
-    <ContextProvider>
-      <ProjectionsContent />
-    </ContextProvider>
   )
 }
