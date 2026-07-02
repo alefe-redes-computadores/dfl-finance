@@ -33,6 +33,7 @@ export default function EditTransactionPage() {
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [tx, setTx] = useState<any>(null)
@@ -82,7 +83,6 @@ export default function EditTransactionPage() {
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
 
-  // Modal de exclusão inteligente
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteMode, setDeleteMode] = useState<'single' | 'future' | 'all' | null>(null)
 
@@ -248,6 +248,7 @@ export default function EditTransactionPage() {
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
     try {
       const catType = txType === 'income' ? 'income' : 'expense'
@@ -323,6 +324,7 @@ export default function EditTransactionPage() {
       console.error('Erro inesperado:', err)
     } finally {
       setLoading(false)
+      setLoadingPulse(false)
     }
   }, [id, user, txType, searchParams, context])
 
@@ -353,7 +355,6 @@ export default function EditTransactionPage() {
       return
     }
 
-    // Fallback: se não houver descrição, usa o nome da categoria
     const selectedCat =
       categories.find((c) => c.id === categoryId) ||
       Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
@@ -505,9 +506,6 @@ export default function EditTransactionPage() {
     }
   }
 
-  // ============================================================
-  // EXCLUSÃO INTELIGENTE (PARCELAS/RECORRENTES)
-  // ============================================================
   const hasInstallments = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
 
   const handleDeleteClick = () => {
@@ -573,6 +571,12 @@ export default function EditTransactionPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+        {/* Indicador de carregamento sutil */}
+        {loadingPulse && (
+          <div className="fixed top-20 right-4 z-50">
+            <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          </div>
+        )}
         <Loader2 className="animate-spin text-teal-700" size={40} />
       </div>
     )
@@ -602,11 +606,16 @@ export default function EditTransactionPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
 
       <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
       <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
 
-      {/* Header com gradiente dinâmico */}
       <div className={`${headerGradient} px-4 pt-6 pb-4 shadow-sm border-b border-gray-100 dark:border-slate-700 sticky top-0 z-10 transition-all duration-300`}>
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -630,7 +639,6 @@ export default function EditTransactionPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        {/* Valor com sombra colorida */}
         <div className={`bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 ${valueShadow} transition-shadow duration-300`}>
           <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Valor</label>
           <div className="flex items-center gap-1 text-3xl font-bold">
@@ -646,7 +654,6 @@ export default function EditTransactionPage() {
           </div>
         </div>
 
-        {/* Nome da transação (NOVO - movido para cá) */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
           <Edit3 size={20} className="text-gray-400" />
           <input
@@ -658,7 +665,6 @@ export default function EditTransactionPage() {
           />
         </div>
 
-        {/* Pago/Recebido com animação melhorada */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${isPaid ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
@@ -678,7 +684,6 @@ export default function EditTransactionPage() {
           )}
         </div>
 
-        {/* Cartão de Crédito */}
         {!isIncome && creditCards.length > 0 && (
           <button onClick={() => setShowCardModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -693,7 +698,6 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* Categoria */}
         <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Tag size={20} className="text-gray-400" />
@@ -714,7 +718,6 @@ export default function EditTransactionPage() {
           </div>
         </button>
 
-        {/* Conta */}
         {!creditCardId && (
           <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -730,7 +733,6 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* Seletor de Contato */}
         {contacts.length > 0 && (
           <button onClick={() => setShowContactModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -745,7 +747,6 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* Data com ícone melhorado */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
             <Calendar size={16} className="text-gray-500" />
@@ -759,7 +760,6 @@ export default function EditTransactionPage() {
           )}
         </div>
 
-        {/* Comprovante com ícone destacado */}
         {uploading ? (
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
             <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -791,7 +791,6 @@ export default function EditTransactionPage() {
           </button>
         )}
 
-        {/* Mais detalhes com animação */}
         <button
           onClick={() => setShowDetails(!showDetails)}
           className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2 hover:scale-105 transition-transform"
@@ -804,7 +803,6 @@ export default function EditTransactionPage() {
           className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}
         >
           <div className="space-y-3 pt-1">
-            {/* Observações (NOVO - movido para cá) */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
               <FileText size={20} className="text-gray-400 opacity-50" />
               <input
@@ -816,7 +814,6 @@ export default function EditTransactionPage() {
               />
             </div>
 
-            {/* Tags */}
             <button onClick={() => setShowTagModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Tag size={20} className="text-gray-400" />
@@ -829,7 +826,6 @@ export default function EditTransactionPage() {
 
             {!isIncome && (
               <>
-                {/* Reembolso com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
@@ -845,7 +841,6 @@ export default function EditTransactionPage() {
                   </button>
                 </div>
 
-                {/* Devolução/Estorno com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -858,7 +853,6 @@ export default function EditTransactionPage() {
                   </button>
                 </div>
 
-                {/* Financiamento com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between cursor-pointer" onClick={() => setShowFinancingModal(true)}>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
@@ -871,7 +865,6 @@ export default function EditTransactionPage() {
                   </button>
                 </div>
 
-                {/* Empréstimo com ícone colorido */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between cursor-pointer" onClick={() => setShowLoanModal(true)}>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -889,7 +882,6 @@ export default function EditTransactionPage() {
         </div>
       </div>
 
-      {/* Botão salvar com efeito de confirmação */}
       <div className="fixed bottom-6 left-0 w-full flex justify-center pointer-events-none z-50">
         <button
           onClick={handleSave}
@@ -910,9 +902,6 @@ export default function EditTransactionPage() {
         </button>
       </div>
 
-      {/* ============================================================ */}
-      {/* MODAL DE EXCLUSÃO INTELIGENTE */}
-      {/* ============================================================ */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowDeleteModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
@@ -964,7 +953,6 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Modal Contatos */}
       {showContactModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowContactModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1001,7 +989,6 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Demais modais mantidos sem alteração */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
