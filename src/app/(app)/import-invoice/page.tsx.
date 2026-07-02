@@ -5,61 +5,47 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Upload, FileText, Loader2, Check, X, Edit3,
-  Trash2, Download, CreditCard, Tag, Wallet,
-  ChevronRight, ArrowRightLeft, Building, HandCoins,
-  Camera, Plus, RefreshCw, AlertCircle, Sparkles, FileUp,
-  ArrowDown, ArrowUp
+  ChevronLeft, Upload, FileText, X, Check, AlertTriangle,
+  Loader2, RefreshCw, File, FileSpreadsheet, FileArchive,
+  Banknote, Calendar, Tag, AlertCircle, Sparkles, TrendingUp, TrendingDown
 } from 'lucide-react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import ModalFinancing from '@/components/ModalFinancing'
-import ModalEmprestimo from '@/components/ModalEmprestimo'
-import BankLogo from '@/components/BankLogo'
-import { getDynamicIcon } from '@/lib/iconUtils'
-import MoneyInput from '@/components/MoneyInput'
-
-interface ExtractedTransaction {
-  date: string
-  description: string
-  amount: number
-  suggested_category: string
-}
+import { formatCurrency } from '@/lib/utils'
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 // ============================================================
-// SKELETON LOADER PARA EXTRAÇÃO
+// SKELETON LOADER
 // ============================================================
-const ExtractionSkeleton = () => (
-  <div className="space-y-4 animate-pulse">
-    {/* Card de info do arquivo */}
-    <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-          <Loader2 size={22} className="animate-spin text-teal-600 dark:text-teal-400" />
-        </div>
-        <div className="space-y-2 flex-1">
-          <div className="h-4 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
+const PreviewSkeleton = () => (
+  <div className="animate-pulse space-y-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="h-5 w-16 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
       </div>
+      <div className="h-8 w-24 bg-gray-200 dark:bg-slate-700 rounded-full" />
     </div>
 
-    {/* Cards de transação simulados */}
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-        <div className="flex items-start justify-between mb-3">
-          <div className="h-8 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+    <div className="space-y-2">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-xl">
+          <div className="w-6 h-6 bg-gray-200 dark:bg-slate-600 rounded" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-40 bg-gray-200 dark:bg-slate-600 rounded" />
+            <div className="h-2.5 w-24 bg-gray-100 dark:bg-slate-600/50 rounded" />
+          </div>
+          <div className="h-4 w-16 bg-gray-200 dark:bg-slate-600 rounded" />
         </div>
-        <div className="h-4 w-3/4 bg-gray-100 dark:bg-slate-700/50 rounded mb-3" />
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-5 w-16 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
-        </div>
-      </div>
-    ))}
+      ))}
+    </div>
+
+    <div className="flex gap-3">
+      <div className="flex-1 h-12 bg-gray-200 dark:bg-slate-700 rounded-xl" />
+      <div className="flex-1 h-12 bg-gray-200 dark:bg-slate-700 rounded-xl" />
+    </div>
   </div>
 )
 
@@ -68,689 +54,530 @@ export default function ImportInvoicePage() {
   const { user } = useAuth()
   const { context } = useContext_()
   const { showToast } = useToast()
+
+  const [file, setFile] = useState<File | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loadingPulse, setLoadingPulse] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importProgress, setImportProgress] = useState(0)
+  const [importedCount, setImportedCount] = useState(0)
+  const [errorCount, setErrorCount] = useState(0)
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'ready' | 'importing' | 'done' | 'error'>('idle')
+  const [confidenceScore, setConfidenceScore] = useState<number | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const [file, setFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [transactions, setTransactions] = useState<ExtractedTransaction[]>([])
-  const [importing, setImporting] = useState(false)
-  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
-
-  // Seletores
-  const [creditCardId, setCreditCardId] = useState('')
-  const [creditCards, setCreditCards] = useState<any[]>([])
-  const [accountId, setAccountId] = useState('')
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [categoryId, setCategoryId] = useState('')
-  const [categories, setCategories] = useState<any[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [tags, setTags] = useState<any[]>([])
-
-  // Opções de aplicação em massa
-  const [applyCategoryToAll, setApplyCategoryToAll] = useState(false)
-  const [applyAccountToAll, setApplyAccountToAll] = useState(false)
-
-  // Modais
-  const [showCardModal, setShowCardModal] = useState(false)
-  const [showAccModal, setShowAccModal] = useState(false)
-  const [showCatModal, setShowCatModal] = useState(false)
-  const [showTagModal, setShowTagModal] = useState(false)
-  const [showFinancingModal, setShowFinancingModal] = useState(false)
-  const [showLoanModal, setShowLoanModal] = useState(false)
-  const [financingId, setFinancingId] = useState<string | null>(null)
-  const [debtId, setDebtId] = useState<string | null>(null)
-
-  // Detalhes adicionais
-  const [showDetails, setShowDetails] = useState(false)
-  const [notes, setNotes] = useState('')
-  const [isRefund, setIsRefund] = useState(false)
-
-  useEffect(() => {
-    if (!user?.id) return
-    loadSelectors()
-  }, [user?.id, context])
-
-  const loadSelectors = async () => {
-    const [{ data: cards }, { data: accs }, { data: cats }, { data: tgs }] = await Promise.all([
-      supabase.from('credit_cards').select('id, name, color').eq('user_id', user.id).eq('context', context),
-      supabase.from('accounts').select('id, name, color').eq('user_id', user.id).eq('context', context).order('name'),
-      supabase.from('categories').select('*').eq('user_id', user.id).eq('context', context).eq('type', 'expense'),
-      supabase.from('tags').select('id, name, color').eq('user_id', user.id).eq('context', context).order('name')
-    ])
-
-    setCreditCards(cards || [])
-    setAccounts(accs || [])
-    setCategories(cats || [])
-    setTags(tgs || [])
-  }
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ============================================================
+  // UPLOAD E PROCESSAMENTO
+  // ============================================================
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
-    if (!selectedFile || !user?.id) return
+    if (!selectedFile) return
+
+    // Validar extensão
+    const validExtensions = ['.pdf', '.ofx', '.qfx', '.csv']
+    const fileExt = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase()
+    if (!validExtensions.includes(fileExt)) {
+      showToast('Por favor, selecione um arquivo PDF, OFX, QFX ou CSV.', 'warning')
+      return
+    }
+
+    // Validar tamanho (max 10MB para faturas)
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      showToast('Arquivo muito grande (máx 10MB).', 'warning')
+      return
+    }
 
     setFile(selectedFile)
+    setStatus('uploading')
     setLoading(true)
-    setStep('preview')
+    setLoadingPulse(true)
 
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('user_id', user.id)
-      formData.append('context', context)
+      // Upload para Supabase Storage
+      const filePath = `invoices/${user?.id}/${Date.now()}_${selectedFile.name}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('invoices')
+        .upload(filePath, selectedFile, {
+          cacheControl: '3600',
+          upsert: false,
+        })
+
+      if (uploadError) throw uploadError
+
+      // Obter URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('invoices')
+        .getPublicUrl(filePath)
+
+      // Processar com a IA
+      setStatus('processing')
+      showToast('Analisando fatura com IA...', 'info')
 
       const response = await fetch('/api/extract-invoice', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileUrl: publicUrl,
+          filePath: filePath,
+          fileType: fileExt.replace('.', ''),
+        }),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao extrair transações')
+        throw new Error(result.error || 'Falha no processamento da fatura')
       }
 
-      setTransactions(data.transactions || [])
-      showToast(`${data.transactions.length} transações encontradas.`, 'success')
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao processar arquivo', 'error')
-      setStep('upload')
-    } finally {
+      // Processar resultado
+      const extracted = result.data || result.transactions || []
+      setTransactions(Array.isArray(extracted) ? extracted : [])
+      setConfidenceScore(result.confidence || null)
+      setStatus('ready')
       setLoading(false)
+      setLoadingPulse(false)
+
+      showToast(`${extracted.length} transações encontradas na fatura!`, 'success')
+    } catch (error: any) {
+      console.error('Erro no processamento:', error)
+      showToast(`Erro: ${error.message || 'Falha ao processar fatura'}`, 'error')
+      setStatus('error')
+      setLoading(false)
+      setLoadingPulse(false)
     }
   }
 
-  const updateTransaction = (index: number, field: string, value: any) => {
-    setTransactions(prev => {
-      const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
-      return updated
-    })
+  // ============================================================
+  // RESET
+  // ============================================================
+  const handleReset = () => {
+    setFile(null)
+    setTransactions([])
+    setStatus('idle')
+    setImportProgress(0)
+    setImportedCount(0)
+    setErrorCount(0)
+    setConfidenceScore(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
-  const removeTransaction = (index: number) => {
-    setTransactions(prev => prev.filter((_, i) => i !== index))
-  }
-
+  // ============================================================
+  // IMPORTAR TRANSAÇÕES
+  // ============================================================
   const handleImport = async () => {
-    if (!user?.id || transactions.length === 0) return
+    if (!user?.id) {
+      showToast('Sessão expirada.', 'error')
+      return
+    }
+
+    if (transactions.length === 0) {
+      showToast('Nenhuma transação para importar.', 'warning')
+      return
+    }
+
     setImporting(true)
+    setStatus('importing')
+    setLoadingPulse(true)
 
-    try {
-      let invoiceId: string | null = null
+    let successCount = 0
+    let failCount = 0
 
-      if (creditCardId) {
-        const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+    for (let i = 0; i < transactions.length; i++) {
+      const tx = transactions[i]
+      setImportProgress(((i + 1) / transactions.length) * 100)
 
-        const { data: existingInvoice } = await supabase
-          .from('credit_invoices')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('credit_card_id', creditCardId)
-          .eq('status', 'open')
-          .single()
+      try {
+        // Validar dados
+        if (!tx.amount || !tx.description) {
+          failCount++
+          continue
+        }
 
-        if (existingInvoice) {
-          invoiceId = existingInvoice.id
+        // Buscar categoria (opcional)
+        let categoryId = null
+        if (tx.category) {
+          const { data: catData } = await supabase
+            .from('categories')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('name', tx.category)
+            .maybeSingle()
+          if (catData) categoryId = catData.id
+        }
 
-          const { data: currentInvoice } = await supabase
-            .from('credit_invoices')
-            .select('total_amount')
-            .eq('id', invoiceId)
-            .single()
+        // Inserir transação
+        const { error } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: user.id,
+            context: context,
+            type: tx.type || 'expense',
+            amount: tx.amount,
+            description: tx.description,
+            date: tx.date || format(new Date(), 'yyyy-MM-dd'),
+            status: 'done',
+            affects_balance: true,
+            category_id: categoryId,
+            notes: tx.notes || null,
+            receipt_url: tx.receipt_url || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
 
-          const newTotal = (Number(currentInvoice?.total_amount) || 0) + totalAmount
-
-          await supabase
-            .from('credit_invoices')
-            .update({
-              total_amount: newTotal,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', invoiceId)
+        if (error) {
+          console.error('Erro ao inserir:', error)
+          failCount++
         } else {
-          const today = new Date()
-          const closingDay = 10
-          const dueDay = 15
-
-          const closingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
-          if (today > closingDate) {
-            closingDate.setMonth(closingDate.getMonth() + 1)
-          }
-
-          const startDate = new Date(closingDate)
-          startDate.setMonth(startDate.getMonth() - 1)
-          startDate.setDate(closingDay + 1)
-
-          const dueDate = new Date(closingDate)
-          dueDate.setDate(dueDay)
-          if (dueDate <= closingDate) {
-            dueDate.setMonth(dueDate.getMonth() + 1)
-          }
-
-          const { data: newInvoice, error: invoiceError } = await supabase
-            .from('credit_invoices')
-            .insert({
-              user_id: user.id,
-              credit_card_id: creditCardId,
-              closing_date: closingDate.toISOString().split('T')[0],
-              due_date: dueDate.toISOString().split('T')[0],
-              start_date: startDate.toISOString().split('T')[0],
-              end_date: closingDate.toISOString().split('T')[0],
-              total_amount: totalAmount,
-              status: 'open',
-              context,
-            })
-            .select()
-            .single()
-
-          if (invoiceError) throw invoiceError
-          invoiceId = newInvoice.id
+          successCount++
         }
+      } catch (err) {
+        console.error('Erro na transação:', err)
+        failCount++
       }
+    }
 
-      const payload = transactions.map((tx, index) => {
-        const catId = applyCategoryToAll ? categoryId : null
-        const accId = applyAccountToAll ? accountId : null
+    setImportedCount(successCount)
+    setErrorCount(failCount)
+    setStatus('done')
+    setLoadingPulse(false)
 
-        let finalNotes = notes
-        if (isRefund) finalNotes = `[Devolução/Estorno] ${finalNotes}`.trim()
-
-        return {
-          user_id: user.id,
-          type: 'expense',
-          amount: tx.amount,
-          description: tx.description,
-          category_id: catId,
-          account_id: accId,
-          credit_card_id: creditCardId || null,
-          invoice_id: invoiceId,
-          tag_ids: selectedTags.length > 0 ? selectedTags : null,
-          date: tx.date,
-          status: creditCardId ? 'done' : (accId ? 'done' : 'pending'),
-          context,
-          notes: finalNotes || null,
-          financing_id: financingId,
-          debt_id: debtId,
-        }
-      })
-
-      const { error } = await supabase.from('transactions').insert(payload)
-      if (error) throw error
-
-      const notifId = `import-${Date.now()}`
-      await supabase.from('notifications').insert({
-        id: notifId,
-        user_id: user.id,
-        type: 'import_done',
-        title: 'Fatura importada',
-        subtitle: `${transactions.length} transações importadas com sucesso.`,
-        severity: 'success',
-        data: {
-          count: transactions.length,
-          card_name: creditCards.find(c => c.id === creditCardId)?.name || 'Conta'
-        },
-        read: false
-      })
-
-      showToast(`${transactions.length} transações importadas!`, 'success')
-      setStep('done')
-      router.refresh()
-    } catch (err: any) {
-      console.error('Erro ao importar:', err)
-      showToast(`Erro ao importar: ${err.message}`, 'error')
-    } finally {
-      setImporting(false)
+    if (failCount === 0) {
+      showToast(`${successCount} transações importadas com sucesso!`, 'success')
+    } else {
+      showToast(`${successCount} importadas, ${failCount} falhas.`, 'warning')
     }
   }
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  const toggleTag = (id: string) => {
-    setSelectedTags(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
+  // ============================================================
+  // FORMATADORES
+  // ============================================================
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'idle': return 'text-gray-400 bg-gray-100 dark:bg-slate-700'
+      case 'uploading': return 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400'
+      case 'processing': return 'text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-400'
+      case 'ready': return 'text-teal-600 bg-teal-50 dark:bg-teal-900/20 dark:text-teal-400'
+      case 'importing': return 'text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-400'
+      case 'done': return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400'
+      case 'error': return 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400'
+      default: return 'text-gray-400 bg-gray-100 dark:bg-slate-700'
+    }
   }
 
-  const selectedCard = creditCards.find(c => c.id === creditCardId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
-  const selectedCat = categories.find(c => c.id === categoryId)
-
-  // Skeleton durante extração
-  if (loading) {
-    return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-        <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="w-10" />
-          </div>
-          <div className="h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-        </div>
-        <div className="px-4 pt-4">
-          <ExtractionSkeleton />
-        </div>
-      </div>
-    )
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'idle': return 'Aguardando arquivo'
+      case 'uploading': return 'Enviando...'
+      case 'processing': return 'Processando com IA...'
+      case 'ready': return 'Pronto para importar'
+      case 'importing': return 'Importando...'
+      case 'done': return 'Importado com sucesso'
+      case 'error': return 'Erro no processamento'
+      default: return 'Desconhecido'
+    }
   }
 
+  const getFileIcon = (fileName: string) => {
+    const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase()
+    switch (ext) {
+      case '.pdf': return <FileText size={20} className="text-red-500" />
+      case '.ofx': return <FileArchive size={20} className="text-orange-500" />
+      case '.qfx': return <FileArchive size={20} className="text-orange-500" />
+      case '.csv': return <FileSpreadsheet size={20} className="text-green-500" />
+      default: return <File size={20} className="text-gray-500" />
+    }
+  }
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'income': return <TrendingUp size={16} className="text-emerald-500" />
+      case 'expense': return <TrendingDown size={16} className="text-red-500" />
+      default: return <Banknote size={16} className="text-gray-400" />
+    }
+  }
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'income': return 'Receita'
+      case 'expense': return 'Despesa'
+      default: return type
+    }
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
 
       {/* Header */}
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Importar Fatura</h1>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <Sparkles size={20} className="text-teal-500" />
+            Importar Fatura
+          </h1>
           <div className="w-10" />
         </div>
         <ContextToggle />
       </div>
 
-      <div className="px-4 pt-4">
-        {/* Etapa 1: Upload */}
-        {step === 'upload' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-2xl p-8 flex flex-col items-center gap-3 text-gray-500 hover:border-teal-500 hover:text-teal-600 transition-all active:scale-[0.98] bg-white dark:bg-slate-800"
-            >
-              <div className="w-16 h-16 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <FileUp size={32} className="text-teal-600 dark:text-teal-400" />
+      <div className="px-4 pt-4 space-y-4">
+        {/* Upload Area */}
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-slate-700 text-center animate-in fade-in duration-300">
+          {status === 'idle' || status === 'error' ? (
+            <>
+              <div className="w-20 h-20 bg-gray-50 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText size={32} className="text-gray-400 dark:text-gray-500" />
               </div>
-              <div className="text-center">
-                <p className="font-bold text-sm">Selecionar arquivo</p>
-                <p className="text-xs text-gray-400 mt-1">PDF ou OFX da sua fatura</p>
-              </div>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.ofx"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-          </div>
-        )}
-
-        {/* Etapa 2: Preview e configuração */}
-        {step === 'preview' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            {/* Info do arquivo */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-                  <FileText size={22} className="text-teal-600 dark:text-teal-400" />
-                </div>
-                <div>
-                  <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{file?.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full">
-                      <Sparkles size={12} />
-                      {transactions.length} transações encontradas
-                    </span>
+              <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Selecione a fatura</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Formatos suportados: PDF, OFX, QFX, CSV
+                <br />
+                Máx: 10MB
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.ofx,.qfx,.csv"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="invoice-upload"
+              />
+              <label
+                htmlFor="invoice-upload"
+                className="inline-block bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors cursor-pointer active:scale-95"
+              >
+                <Upload size={18} className="inline mr-2" />
+                Selecionar Arquivo
+              </label>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-teal-50 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
+                    {file ? getFileIcon(file.name) : <FileText size={20} className="text-teal-600" />}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-sm text-gray-800 dark:text-gray-200 truncate max-w-[180px]">
+                      {file?.name || 'Arquivo carregado'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {file ? (file.size / 1024).toFixed(1) + ' KB' : ''}
+                    </p>
                   </div>
                 </div>
+                <div className={`text-[10px] font-bold px-3 py-1 rounded-full ${getStatusColor(status)} flex items-center gap-1`}>
+                  {status === 'processing' && <Loader2 size={12} className="animate-spin" />}
+                  {getStatusLabel(status)}
+                </div>
               </div>
-            </div>
 
-            {/* Seletores principais */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl mx-0 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
-              {/* Cartão de crédito */}
-              {creditCards.length > 0 && (
-                <button
-                  onClick={() => setShowCardModal(true)}
-                  className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <CreditCard size={20} className="text-gray-400 dark:text-gray-500" />
-                    <span className={`text-sm font-medium ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {selectedCard ? selectedCard.name : 'Cartão de crédito (opcional)'}
-                    </span>
+              {status === 'processing' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-2 py-2">
+                    <Loader2 size={20} className="animate-spin text-teal-600" />
+                    <span className="text-sm text-gray-500">Analisando fatura com IA...</span>
                   </div>
-                  {selectedCard && (
-                    <div
-                      onClick={(e) => { e.stopPropagation(); setCreditCardId('') }}
-                      className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <X size={16} />
-                    </div>
-                  )}
-                </button>
+                  <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                    <div className="h-full bg-teal-500 rounded-full animate-pulse w-3/4" />
+                  </div>
+                </div>
               )}
 
-              {/* Categoria (aplicar a todas) */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50 dark:border-slate-700">
+              {(status === 'ready' || status === 'done') && (
                 <button
-                  onClick={() => setShowCatModal(true)}
-                  className="flex items-center gap-4 flex-1"
+                  onClick={handleReset}
+                  disabled={importing}
+                  className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-50"
                 >
-                  <Tag size={20} className="text-gray-400 dark:text-gray-500" />
-                  <span className={`text-sm font-medium ${applyCategoryToAll && selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {applyCategoryToAll && selectedCat ? selectedCat.name : 'Categoria (aplicar a todas)'}
-                  </span>
+                  <RefreshCw size={14} className="inline mr-1" />
+                  Trocar arquivo
                 </button>
-                <button
-                  onClick={() => { setApplyCategoryToAll(!applyCategoryToAll); if (!applyCategoryToAll) setShowCatModal(true) }}
-                  className={`w-11 h-6 rounded-full relative transition-colors ${applyCategoryToAll ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${applyCategoryToAll ? 'right-1' : 'left-1'}`} />
-                </button>
-              </div>
+              )}
+            </div>
+          )}
+        </div>
 
-              {/* Conta (aplicar a todas) */}
-              <div className="flex items-center justify-between px-5 py-3">
-                <button
-                  onClick={() => setShowAccModal(true)}
-                  className="flex items-center gap-4 flex-1"
-                >
-                  <Wallet size={20} className="text-gray-400 dark:text-gray-500" />
-                  <span className={`text-sm font-medium ${applyAccountToAll && selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {applyAccountToAll && selectedAcc ? selectedAcc.name : 'Conta (aplicar a todas)'}
+        {/* Preview */}
+        {(status === 'ready' || status === 'processing' || status === 'importing' || status === 'done') && (
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Banknote size={18} className="text-teal-600" />
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200">Transações Encontradas</h3>
+                {status === 'ready' && (
+                  <span className="text-[10px] text-gray-400 font-medium bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                    {transactions.length}
                   </span>
-                </button>
-                <button
-                  onClick={() => { setApplyAccountToAll(!applyAccountToAll); if (!applyAccountToAll) setShowAccModal(true) }}
-                  className={`w-11 h-6 rounded-full relative transition-colors ${applyAccountToAll ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${applyAccountToAll ? 'right-1' : 'left-1'}`} />
-                </button>
+                )}
+                {confidenceScore !== null && status === 'ready' && (
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                    confidenceScore > 0.8 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                    confidenceScore > 0.5 ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' :
+                    'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                  }`}>
+                    IA: {(confidenceScore * 100).toFixed(0)}%
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Lista de transações editáveis */}
-            <div className="space-y-2">
-              {transactions.map((tx, index) => (
-                <div
-                  key={index}
-                  className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all active:scale-[0.98]"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <input
-                      type="date"
-                      value={tx.date}
-                      onChange={(e) => updateTransaction(index, 'date', e.target.value)}
-                      className="text-sm font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200 w-32"
-                    />
-                    <button
-                      onClick={() => removeTransaction(index)}
-                      className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    value={tx.description}
-                    onChange={(e) => updateTransaction(index, 'description', e.target.value)}
-                    className="w-full text-sm bg-transparent outline-none text-gray-700 dark:text-gray-300 mb-2"
-                    placeholder="Descrição"
-                  />
-
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 text-sm font-bold text-red-600">
-                      <span className="text-gray-400">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={tx.amount}
-                        onChange={(e) => updateTransaction(index, 'amount', parseFloat(e.target.value) || 0)}
-                        className="w-24 bg-transparent outline-none font-bold text-red-600"
-                      />
-                    </div>
-                    {tx.suggested_category && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
-                        {tx.suggested_category}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Detalhes adicionais (expansível) */}
-            <button
-              onClick={() => setShowDetails(!showDetails)}
-              className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2 hover:scale-105 transition-transform"
-            >
-              {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
-              {showDetails ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
-            </button>
-
-            {showDetails && (
-              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="p-5 space-y-5">
-                  {/* Tags */}
-                  <button
-                    onClick={() => setShowTagModal(true)}
-                    className="w-full flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Tag size={20} className="text-gray-400 dark:text-gray-500" />
-                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                        {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
-                      </span>
-                    </div>
-                    <ChevronRight size={18} className="text-gray-300" />
-                  </button>
-
-                  {/* Observações */}
-                  <div className="flex items-center gap-3">
-                    <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
-                    <input
-                      type="text"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Observações gerais"
-                      className="flex-1 text-sm bg-transparent outline-none text-gray-700 dark:text-gray-300"
-                    />
-                  </div>
-
-                  {/* Estorno */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <ArrowRightLeft size={20} className="text-gray-400 dark:text-gray-500" />
-                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
-                    </div>
-                    <button
-                      onClick={() => setIsRefund(!isRefund)}
-                      className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
-                    </button>
-                  </div>
-
-                  {/* Financiamento */}
+            {status === 'processing' ? (
+              <PreviewSkeleton />
+            ) : transactions.length === 0 && status === 'ready' ? (
+              <div className="text-center py-8">
+                <AlertCircle size={32} className="text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhuma transação encontrada na fatura.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {transactions.map((tx, index) => (
                   <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setShowFinancingModal(true)}
+                    key={index}
+                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <Building size={20} className="text-gray-400 dark:text-gray-500" />
-                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span>
+                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-600 flex items-center justify-center">
+                      {getTypeIcon(tx.type)}
                     </div>
-                    <button className={`w-11 h-6 rounded-full relative transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${financingId ? 'right-1' : 'left-1'}`} />
-                    </button>
-                  </div>
-
-                  {/* Empréstimo */}
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setShowLoanModal(true)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <HandCoins size={20} className="text-gray-400 dark:text-gray-500" />
-                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200 truncate">
+                        {tx.description || 'Sem descrição'}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        {tx.date && (
+                          <span className="flex items-center gap-0.5">
+                            <Calendar size={10} />
+                            {format(new Date(tx.date), "dd/MM/yyyy", { locale: ptBR })}
+                          </span>
+                        )}
+                        {tx.category && (
+                          <span className="flex items-center gap-0.5">
+                            <Tag size={10} />
+                            {tx.category}
+                          </span>
+                        )}
+                        <span className="text-[9px] uppercase font-bold text-gray-300 dark:text-gray-600">
+                          {getTypeLabel(tx.type)}
+                        </span>
+                      </div>
                     </div>
-                    <button className={`w-11 h-6 rounded-full relative transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${debtId ? 'right-1' : 'left-1'}`} />
-                    </button>
+                    <div className={`text-[14px] font-bold whitespace-nowrap ${
+                      tx.type === 'income' ? 'text-emerald-600' : 'text-red-500'
+                    }`}>
+                      {tx.type === 'income' ? '+' : '-'}
+                      {formatCurrency(tx.amount)}
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             )}
 
-            {/* Botão de importar */}
-            <button
-              onClick={handleImport}
-              disabled={importing || transactions.length === 0}
-              className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] shadow-lg shadow-teal-700/20"
-            >
-              {importing ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-              {importing ? 'Importando...' : `Importar ${transactions.length} transações`}
-            </button>
+            {(status === 'ready' || status === 'done') && transactions.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {status === 'ready' && (
+                  <>
+                    <button
+                      onClick={handleImport}
+                      disabled={importing}
+                      className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <Check size={18} />
+                      Importar {transactions.length} transações
+                    </button>
+                    <button
+                      onClick={handleReset}
+                      disabled={importing}
+                      className="px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                    >
+                      <X size={18} />
+                    </button>
+                  </>
+                )}
+                {status === 'done' && (
+                  <>
+                    <button
+                      onClick={() => router.push('/transactions')}
+                      className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors"
+                    >
+                      Ver transações
+                    </button>
+                    <button
+                      onClick={handleReset}
+                      className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      Nova importação
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Etapa 3: Concluído */}
-        {step === 'done' && (
-          <div className="text-center py-12 animate-in fade-in zoom-in-95 duration-300">
-            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check size={40} className="text-emerald-600 dark:text-emerald-400" />
+        {/* Progresso da Importação */}
+        {status === 'importing' && (
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-teal-600" />
+                Importando...
+              </span>
+              <span className="text-sm text-gray-400">{Math.round(importProgress)}%</span>
             </div>
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Importação concluída!</h2>
-            <p className="text-gray-500 mb-6">{transactions.length} transações foram importadas com sucesso.</p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => router.push('/transactions')}
-                className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors active:scale-95 shadow-lg shadow-teal-700/20"
-              >
-                Ver transações
-              </button>
-              <button
-                onClick={() => {
-                  setStep('upload')
-                  setFile(null)
-                  setTransactions([])
-                }}
-                className="bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-2xl font-bold border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-95"
-              >
-                Importar outra
-              </button>
+            <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-teal-500 rounded-full transition-all duration-300" style={{ width: `${importProgress}%` }} />
             </div>
           </div>
         )}
+
+        {/* Resultado */}
+        {status === 'done' && (
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-emerald-200 dark:border-emerald-800 animate-in fade-in duration-300">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+                <Check size={20} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 dark:text-gray-200">Importação concluída</h3>
+                <p className="text-sm text-gray-500">
+                  {importedCount} transações importadas
+                  {errorCount > 0 && ` • ${errorCount} falhas`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ajuda */}
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700">
+          <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+            <Sparkles size={16} className="text-teal-500" />
+            Como funciona
+          </h3>
+          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <p>1. <span className="font-bold text-gray-600 dark:text-gray-300">Envie o arquivo</span> da sua fatura (PDF ou OFX)</p>
+            <p>2. <span className="font-bold text-gray-600 dark:text-gray-300">IA analisa</span> e extrai todas as transações</p>
+            <p>3. <span className="font-bold text-gray-600 dark:text-gray-300">Revise</span> os dados extraídos</p>
+            <p>4. <span className="font-bold text-gray-600 dark:text-gray-300">Importe</span> com um clique</p>
+          </div>
+        </div>
       </div>
-
-      {/* Modais de seleção */}
-      {showCardModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
-              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              {creditCards.map((card) => (
-                <button
-                  key={card.id}
-                  onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
-                  className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${creditCardId === card.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}>
-                    <CreditCard size={20} />
-                  </div>
-                  <span className="flex-1 text-left font-medium">{card.name}</span>
-                  {creditCardId === card.id && <Check size={20} className="text-teal-700" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCatModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => setShowCatModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              {categories.map((cat) => {
-                const IconComp = getDynamicIcon(cat.icon)
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false); setApplyCategoryToAll(true) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${categoryId === cat.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
-                      <IconComp size={20} />
-                    </div>
-                    <span className="flex-1 text-left font-medium">{cat.name}</span>
-                    {categoryId === cat.id && <Check size={20} className="text-teal-700" />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAccModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
-              <button onClick={() => setShowAccModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              {accounts.map((acc) => (
-                <button
-                  key={acc.id}
-                  onClick={() => { setAccountId(acc.id); setShowAccModal(false); setApplyAccountToAll(true) }}
-                  className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${accountId === acc.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                >
-                  <BankLogo color={acc.color} name={acc.name} size="md" />
-                  <span className="flex-1 text-left font-medium">{acc.name}</span>
-                  {accountId === acc.id && <Check size={20} className="text-teal-700" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showTagModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
-              <button onClick={() => setShowTagModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              {tags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => toggleTag(tag.id)}
-                  className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${selectedTags.includes(tag.id) ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                >
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                  <span className="flex-1 text-left font-medium">{tag.name}</span>
-                  {selectedTags.includes(tag.id) && <Check size={20} className="text-teal-700" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modais auxiliares */}
-      <ModalFinancing
-        isOpen={showFinancingModal}
-        onClose={() => setShowFinancingModal(false)}
-        onSave={(id) => setFinancingId(id)}
-      />
-      <ModalEmprestimo
-        isOpen={showLoanModal}
-        onClose={() => setShowLoanModal(false)}
-        onSave={(id) => setDebtId(id)}
-      />
     </div>
   )
 }
