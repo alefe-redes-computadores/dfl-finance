@@ -201,7 +201,7 @@ export default function NotificationsPage() {
 
     const pendingIncomes = transactions?.filter(t => t.status === 'pending' && t.type === 'income') || []
     if (pendingIncomes.length > 0) {
-      notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending`, severity: 'success', isRead: readSet.has('pending-incomes') })
+      notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending', severity: 'success', isRead: readSet.has('pending-incomes') })
     }
 
     setNotifications(notifs)
