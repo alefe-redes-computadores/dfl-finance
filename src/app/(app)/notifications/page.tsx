@@ -8,7 +8,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import {
   ChevronLeft, Bell, CreditCard, Repeat, Target, Clock, CheckCircle,
   AlertTriangle, Trash2, Archive, Check, X, Loader2, Search, Filter,
-  RotateCcw, Eye, EyeOff, RefreshCw, BellOff, ShieldCheck
+  RotateCcw, Eye, EyeOff, RefreshCw, BellOff, ShieldCheck, User
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -59,7 +59,7 @@ const NotificationsSkeleton = () => (
 export default function NotificationsPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, appMode } = useContext_()
   const { showToast } = useToast()
 
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -201,7 +201,7 @@ export default function NotificationsPage() {
 
     const pendingIncomes = transactions?.filter(t => t.status === 'pending' && t.type === 'income') || []
     if (pendingIncomes.length > 0) {
-      notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending', severity: 'success', isRead: readSet.has('pending-incomes') })
+      notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending`, severity: 'success', isRead: readSet.has('pending-incomes') })
     }
 
     setNotifications(notifs)
@@ -318,7 +318,7 @@ export default function NotificationsPage() {
     }
   }
 
-  const filters: { key: FilterType; label: string; icon?: React.ReactNode; count?: number }[] = [
+  const filters: { key: FilterType; label: string; count?: number }[] = [
     { key: 'all', label: 'Todas', count: notifications.length },
     { key: 'unread', label: 'Não lidas', count: unreadCount },
     { key: 'critical', label: 'Críticas', count: notifications.filter(n => n.severity === 'critical').length },
@@ -384,7 +384,15 @@ export default function NotificationsPage() {
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 tracking-tight">Central de Alertas</h1>
+          <div>
+            <h1 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 tracking-tight text-center">Central de Alertas</h1>
+            {appMode === 'personal_only' && (
+              <div className="flex items-center justify-center gap-1 mt-0.5">
+                <User size={10} className="text-gray-400" />
+                <span className="text-[10px] font-medium text-gray-400">Modo Pessoal</span>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <button onClick={handleArchiveAll} className="p-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors bg-white dark:bg-slate-800 rounded-full shadow-sm" title="Arquivar todas">
               <Archive size={18} />
@@ -450,16 +458,17 @@ export default function NotificationsPage() {
             </p>
           </div>
         ) : (
-          filteredNotifications.map(notif => {
+          filteredNotifications.map((notif, index) => {
             const theme = getThemeVars(notif.severity)
             return (
               <div
                 key={notif.id}
-                className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border transition-all group active:scale-[0.98] ${
+                className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border transition-all group active:scale-[0.98] animate-in fade-in slide-in-from-bottom-2 ${
                   notif.isRead 
                     ? 'opacity-60 bg-gray-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700' 
                     : `${theme.border} hover:shadow-md`
                 }`}
+                style={{ animationDelay: `${index * 40}ms` }}
               >
                 <div className="flex items-center gap-4">
                   {/* Ícone */}
