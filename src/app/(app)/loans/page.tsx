@@ -11,9 +11,10 @@ import {
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { formatCurrency } from '@/lib/utils'
 
 // ============================================================
-// SKELETON LOADER
+// SKELETON LOADER (COM CORES SUAVES)
 // ============================================================
 const LoansSkeleton = () => (
   <div className="space-y-3 animate-pulse">
@@ -62,6 +63,7 @@ export default function LoansPage() {
   const { context } = useContext_()
   const [loans, setLoans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   // Pull to refresh
@@ -109,18 +111,37 @@ export default function LoansPage() {
 
   const loadLoans = async () => {
     setLoading(true)
+    setLoadingPulse(true)
+
     const { data } = await supabase
       .from('loans')
       .select('*')
       .eq('user_id', user.id)
+      .eq('context', context)
       .order('created_at', { ascending: false })
 
     setLoans(Array.isArray(data) ? data : [])
     setLoading(false)
+    setLoadingPulse(false)
   }
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const getStatusConfig = (status: string, dueDate: string) => {
+    if (status === 'completed') return { label: 'Quitado', icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' }
+    if (status === 'cancelled') return { label: 'Cancelado', icon: AlertTriangle, color: 'text-gray-500 bg-gray-100 dark:bg-slate-700' }
+    const daysUntilDue = differenceInDays(new Date(dueDate), new Date())
+    if (daysUntilDue < 0) return { label: `Atrasado ${Math.abs(daysUntilDue)}d`, icon: AlertTriangle, color: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400' }
+    if (daysUntilDue <= 7) return { label: `Vence em ${daysUntilDue}d`, icon: Clock, color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400' }
+    return { label: 'Ativo', icon: CheckCircle2, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' }
+  }
+
+  const getBorderColor = (status: string, dueDate: string) => {
+    if (status === 'completed') return 'border-emerald-200 dark:border-emerald-800'
+    if (status === 'cancelled') return 'border-gray-200 dark:border-gray-700'
+    const daysUntilDue = differenceInDays(new Date(dueDate), new Date())
+    if (daysUntilDue < 0) return 'border-red-200 dark:border-red-800'
+    if (daysUntilDue <= 7) return 'border-orange-200 dark:border-orange-800'
+    return 'border-gray-50 dark:border-slate-700'
+  }
 
   const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
   const getContextIcon = (ctx: string) =>
@@ -136,6 +157,13 @@ export default function LoansPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -165,7 +193,7 @@ export default function LoansPage() {
       {loading ? (
         <LoansSkeleton />
       ) : loans.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
           <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
             <ArrowRightLeft size={40} className="text-gray-400 dark:text-gray-500" />
           </div>
@@ -175,15 +203,15 @@ export default function LoansPage() {
           </p>
           <button
             onClick={() => router.push('/loans/new')}
-            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm"
+            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
           >
             Novo empréstimo
           </button>
         </div>
       ) : (
-        <div className="animate-in fade-in duration-300">
+        <div className="space-y-4 animate-in fade-in duration-300">
           {/* Cards de resumo */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="grid grid-cols-2 gap-3">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
                 <TrendingUp size={16} className="text-emerald-600 dark:text-emerald-400" />
@@ -206,39 +234,32 @@ export default function LoansPage() {
               const progress = Number(loan.total_amount) > 0
                 ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100
                 : 0
-              const isCompleted = loan.status === 'completed'
-              const isCancelled = loan.status === 'cancelled'
-              const isActive = loan.status === 'active'
-              const daysUntilDue = loan.due_date ? differenceInDays(new Date(loan.due_date), new Date()) : null
-              const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && isActive
+              const statusConfig = getStatusConfig(loan.status, loan.due_date)
+              const borderColor = getBorderColor(loan.status, loan.due_date)
 
               return (
                 <div
                   key={loan.id}
                   onClick={() => router.push(`/loans/${loan.id}`)}
-                  className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${
-                    isOverdue ? 'border-red-200 dark:border-red-800' :
-                    isCompleted ? 'border-emerald-200 dark:border-emerald-800' :
-                    'border-gray-50 dark:border-slate-700'
-                  }`}
+                  className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${borderColor}`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        isActive ? 'bg-teal-50 dark:bg-teal-900/30' :
-                        isCompleted ? 'bg-emerald-50 dark:bg-emerald-900/30' :
-                        'bg-gray-100 dark:bg-slate-700'
-                      }`}>
-                        <ArrowRightLeft size={20} className={
-                          isActive ? 'text-teal-600 dark:text-teal-400' :
-                          isCompleted ? 'text-emerald-600 dark:text-emerald-400' :
-                          'text-gray-400'
-                        } />
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-slate-700">
+                        <ArrowRightLeft size={20} className="text-teal-600 dark:text-teal-400" />
                       </div>
                       <div>
-                        <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">
-                          {getContextLabel(loan.source_context)} → {getContextLabel(loan.dest_context)}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="flex items-center gap-0.5 text-[12px] font-bold text-gray-700 dark:text-gray-300">
+                            {getContextIcon(loan.source_context)}
+                            {getContextLabel(loan.source_context)}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="flex items-center gap-0.5 text-[12px] font-bold text-gray-700 dark:text-gray-300">
+                            {getContextIcon(loan.dest_context)}
+                            {getContextLabel(loan.dest_context)}
+                          </span>
+                        </div>
                         <p className="text-[11px] text-gray-400 dark:text-gray-500">
                           {loan.description || 'Empréstimo'}
                           {' • '}
@@ -246,31 +267,23 @@ export default function LoansPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {isCompleted && <CheckCircle2 size={16} className="text-emerald-500" />}
-                      {isCancelled && <AlertTriangle size={16} className="text-gray-400" />}
-                      {isOverdue && <AlertTriangle size={16} className="text-red-500" />}
-                      {isActive && !isOverdue && <Clock size={16} className="text-teal-500" />}
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                        isCompleted ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
-                        isCancelled ? 'bg-gray-100 dark:bg-slate-700 text-gray-500' :
-                        isOverdue ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
-                        'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400'
-                      }`}>
-                        {isCompleted ? 'Quitado' : isCancelled ? 'Cancelado' : isOverdue ? 'Atrasado' : 'Ativo'}
-                      </span>
+                    <div className={`text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 ${statusConfig.color}`}>
+                      <statusConfig.icon size={12} />
+                      {statusConfig.label}
                     </div>
                   </div>
 
                   <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
                     <div className={`h-full rounded-full transition-all duration-700 ${
-                      isCompleted ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'
+                      loan.status === 'completed' ? 'bg-emerald-500' :
+                      loan.status === 'cancelled' ? 'bg-gray-400' :
+                      'bg-teal-500'
                     }`} style={{ width: `${Math.min(progress, 100)}%` }} />
                   </div>
 
                   <div className="flex justify-between text-[11px]">
                     <span className="text-gray-400 dark:text-gray-500 font-medium">
-                      {isCompleted ? 'Total pago' : `Falta ${formatCurrency(Number(loan.remaining_amount) || 0)}`}
+                      {loan.status === 'completed' ? 'Total pago' : `Falta ${formatCurrency(Number(loan.remaining_amount) || 0)}`}
                     </span>
                     <span className="text-gray-400 dark:text-gray-500 font-medium">
                       {progress.toFixed(0)}% • {formatCurrency(Number(loan.total_amount))}
