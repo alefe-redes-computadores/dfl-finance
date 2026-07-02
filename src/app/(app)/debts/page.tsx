@@ -15,7 +15,6 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 // ============================================================
 const DebtsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
-    {/* Cards de resumo */}
     <div className="grid grid-cols-2 gap-3">
       <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
@@ -29,7 +28,6 @@ const DebtsSkeleton = () => (
       </div>
     </div>
 
-    {/* Cards de dívida */}
     {[1, 2, 3].map((i) => (
       <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-3">
@@ -60,11 +58,11 @@ function DebtsContent() {
   const { context } = useContext_()
   const [debts, setDebts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
   const [totalToReceive, setTotalToReceive] = useState(0)
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -105,6 +103,7 @@ function DebtsContent() {
   const loadDebts = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
     const { data: debtsData } = await supabase
       .from('debts')
@@ -131,6 +130,7 @@ function DebtsContent() {
     setDebts(debtsWithProgress)
     setTotalToReceive(debtsWithProgress.reduce((a, d) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
     setLoading(false)
+    setLoadingPulse(false)
   }, [user, context, filter])
 
   useEffect(() => { loadDebts() }, [loadDebts])
@@ -139,8 +139,13 @@ function DebtsContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
-      {/* Pull to refresh */}
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
