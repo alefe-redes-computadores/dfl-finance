@@ -10,6 +10,7 @@ import {
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight, Trash2, Loader2, Paperclip,
   Image as ImageIcon, CreditCard, Calendar, RefreshCw, Users,
+  Edit3, FileText,
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -59,6 +60,7 @@ function NewTransactionContent() {
   const [isPaid, setIsPaid] = useState(true)
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [desc, setDesc] = useState('')
+  const [notes, setNotes] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
@@ -562,6 +564,9 @@ function NewTransactionContent() {
       }
     }
 
+    // Fallback: se não houver descrição, usa o nome da categoria
+    const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
+
     let totalParcels = 1
     let recurringGroupId: string | null = null
 
@@ -719,7 +724,7 @@ function NewTransactionContent() {
           user_id: user.id,
           type,
           amount: installmentAmount,
-          description: desc || null,
+          description: finalDescription,
           category_id: categoryId || null,
           account_id: creditCardId ? null : (accountId || null),
           credit_card_id: creditCardId || null,
@@ -730,6 +735,7 @@ function NewTransactionContent() {
           status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
           context: effectiveContext,
           receipt_url: i === 0 ? receiptUrl : null,
+          notes: notes || null,
           recurring_group_id: recurringGroupId,
           installment_index: totalParcels > 1 ? i + 1 : 1,
           total_installments: totalParcels > 1 ? totalParcels : 1,
@@ -758,7 +764,7 @@ function NewTransactionContent() {
         if (i === 0 && isReimbursable && savedTx) {
           linkedTransactionId = savedTx.id
           const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
-          const reimbursementDesc = `Reembolso: ${desc || 'Transação'}`
+          const reimbursementDesc = `Reembolso: ${finalDescription}`
 
           const { data: reimbTx, error: reimbError } = await supabase
             .from('transactions')
@@ -904,6 +910,20 @@ function NewTransactionContent() {
 
       {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+
+        {/* Nome da transação (NOVO) */}
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+          <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
+          <input
+            type="text"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
+            className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+          />
+        </div>
+
+        {/* Pago/Recebido */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
             {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
@@ -990,7 +1010,18 @@ function NewTransactionContent() {
         {showDetails && (
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
             <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
-            <input placeholder="Descrição" value={desc} onChange={(e) => setDesc(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
+            
+            {/* Observações (NOVO) */}
+            <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+              <FileText size={20} className="text-gray-400 dark:text-gray-500" />
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observações (opcional)"
+                className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+            </div>
 
             <div className="px-5 py-5 border-b border-gray-50 dark:border-slate-700">
               <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-4">Repetição</p>
