@@ -8,7 +8,8 @@ import {
   ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag 
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import IconPicker from '@/components/IconPicker' // Importando o nosso modal
+import IconPicker from '@/components/IconPicker'
+import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -34,18 +35,19 @@ const DEFAULT_CATEGORIES = [
 export default function CategoriesPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const { context, appMode } = useContext_() // ← AGORA USA CONTEXTO GLOBAL
 
   const [categories, setCategories] = useState<any[]>([])
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [tab, setTab] = useState<'expense'|'income'>('expense')
-  const [context, setContext] = useState<'dfl'|'personal'>('dfl')
+  // ❌ REMOVIDO: const [context, setContext] = useState<'dfl'|'personal'>('dfl')
   
   const [showForm, setShowForm] = useState(false)
-  const [showIconModal, setShowIconModal] = useState(false) // Controle do Modal de Ícones
+  const [showIconModal, setShowIconModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<any | null>(null)
   const [name, setName] = useState('')
-  const [icon, setIcon] = useState('Tag') // PascalCase para o Lucide
+  const [icon, setIcon] = useState('Tag')
   const [color, setColor] = useState('#16a34a')
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -54,7 +56,7 @@ export default function CategoriesPage() {
     if (user) {
       initialize()
     }
-  }, [user, tab, context])
+  }, [user, tab, context]) // context agora é global e reage a mudanças
 
   async function initialize() {
     await ensureDefaultCategories()
@@ -134,7 +136,6 @@ export default function CategoriesPage() {
     setColor(cat.color)
     setParentId(cat.parent_id || null)
     
-    // Tratativa para ícones minúsculos vindo do banco antigo
     if (cat.icon) {
       const formattedIcon = cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1)
       setIcon(formattedIcon)
@@ -191,7 +192,6 @@ export default function CategoriesPage() {
     loadCategories()
   }
 
-  // Componente dinâmico do ícone selecionado no form
   const FormIconComp = (Icons as any)[icon] || Icons.Tag
 
   return (
@@ -212,19 +212,8 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4 w-fit">
-        {(['dfl','personal'] as const).map(c => (
-          <button
-            key={c}
-            onClick={() => setContext(c)}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              context===c ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            {c==='dfl'?'DFL':'Pessoal'}
-          </button>
-        ))}
-      </div>
+      {/* ContextToggle no lugar do seletor inline */}
+      <ContextToggle />
 
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4">
         {([['expense','Despesas'],['income','Receitas']] as const).map(([k,l]) => (
@@ -324,7 +313,6 @@ export default function CategoriesPage() {
       ) : (
         <div className="space-y-2">
           {categories.map(cat => {
-            // Ajuste para renderizar ícones dinâmicos nas categorias da lista
             const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
             const ListIconComp = (Icons as any)[catIconName] || Icons.Tag
             
@@ -386,7 +374,6 @@ export default function CategoriesPage() {
                 {isExpanded && (
                   <div className="ml-6 mt-1 space-y-1">
                     {subcategories[cat.id]?.map((sub: any) => {
-                      // Ajuste de ícone dinâmico para subcategorias
                       const subIconName = sub.icon ? sub.icon.charAt(0).toUpperCase() + sub.icon.slice(1) : 'Tag'
                       const SubIconComp = (Icons as any)[subIconName] || Icons.Tag
                       
@@ -428,7 +415,6 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      {/* Renderizando o Modal do IconPicker (oculto por padrão) */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
