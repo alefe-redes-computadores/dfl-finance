@@ -10,7 +10,6 @@ interface UsePaginatedTransactionsProps {
   pageSize?: number
 }
 
-//TESTE PRA DEPLOY
 export function usePaginatedTransactions({
   context,
   category,
@@ -58,8 +57,11 @@ export function usePaginatedTransactions({
     setLoading(true)
     try {
       const { data, count } = await fetchTransactions(page)
-      setTransactions(prev => [...prev, ...data])
-      setHasMore(prev.length + data.length < count)
+      setTransactions(prev => {
+        const newTransactions = [...prev, ...data]
+        setHasMore(newTransactions.length < count)
+        return newTransactions
+      })
       setTotalCount(count)
       setPage(prev => prev + 1)
     } catch (error) {
