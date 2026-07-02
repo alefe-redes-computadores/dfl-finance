@@ -1,5 +1,3 @@
-import { toast } from 'sonner' // ou o sistema de toast que você usa (ex: useToast)
-
 type LogLevel = 'info' | 'warn' | 'error' | 'debug'
 
 export const logger = {
@@ -11,11 +9,7 @@ export const logger = {
   },
   error: (message: string, error?: any) => {
     console.error(`[ERROR] ${message}`, error)
-    // Mostrar toast para o usuário
-    toast.error(message, {
-      description: error?.message || 'Tente novamente mais tarde.',
-      duration: 5000,
-    })
+    // Opcional: enviar para serviço de logging (ex: Sentry) posteriormente
   },
   debug: (message: string, data?: any) => {
     if (process.env.NODE_ENV === 'development') {
