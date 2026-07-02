@@ -51,16 +51,25 @@ function MenuItem({
   }
 
   const content = (
-    <div className={`flex items-center group w-full transition-all active:scale-[0.98] ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30'}`}>
+    <div className={`flex items-center group w-full transition-all active:scale-[0.98] ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30'}`}>
       <div className="pl-4 py-3">
-        <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 transition-colors group-hover:scale-110">
+        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors ${
+          disabled ? 'bg-gray-100 dark:bg-slate-700 text-gray-400' : 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 group-hover:scale-110'
+        }`}>
           <IconComp size={20} />
         </div>
       </div>
       <div className="flex-1 flex items-center justify-between pr-4 py-4 ml-4 border-b border-gray-50 dark:border-slate-700/50 group-last:border-0">
-        <span className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 truncate">
-          {label}
-        </span>
+        <div className="flex-1 min-w-0">
+          <span className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 truncate block">
+            {label}
+          </span>
+          {disabled && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 block">
+              Requer dois contextos (PF e PJ)
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {badge && (
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 flex-shrink-0 animate-pulse">
@@ -68,9 +77,9 @@ function MenuItem({
             </span>
           )}
           {disabled ? (
-            <Lock size={16} className="text-gray-300 dark:text-gray-600" />
+            <Lock size={16} className="text-gray-300 dark:text-gray-600 flex-shrink-0" />
           ) : (
-            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500 group-hover:translate-x-1 transition-transform flex-shrink-0" />
           )}
         </div>
       </div>
@@ -78,7 +87,7 @@ function MenuItem({
   )
 
   if (disabled) {
-    return <button type="button" className="w-full text-left" onClick={onClick}>{content}</button>
+    return <button type="button" className="w-full text-left" onClick={() => {}}>{content}</button>
   }
 
   if (href) {
@@ -199,6 +208,7 @@ export default function MorePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [profileLoading, setProfileLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
 
   const [showCropModal, setShowCropModal] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
@@ -214,7 +224,11 @@ export default function MorePage() {
   useEffect(() => {
     if (user?.id) {
       setName(user.user_metadata?.full_name || '')
-      const timer = setTimeout(() => setProfileLoading(false), 400)
+      setLoadingPulse(true)
+      const timer = setTimeout(() => {
+        setProfileLoading(false)
+        setLoadingPulse(false)
+      }, 400)
       return () => clearTimeout(timer)
     }
   }, [user?.id, user?.user_metadata?.full_name])
@@ -344,6 +358,13 @@ export default function MorePage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 px-4 pt-8 font-sans transition-colors duration-300">
       
+      {/* Indicador de carregamento sutil no canto */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {showCropModal && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white dark:bg-slate-800 p-6 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
@@ -517,7 +538,12 @@ export default function MorePage() {
             <MenuItem iconName="file-text" label="Financiamentos" href="/financings" />
             <MenuItem iconName="users" label="Quem me deve" href="/debts" />
             <MenuItem iconName="users" label="Contatos" href="/contacts" />
-            <MenuItem iconName="arrow-right-left" label="Empréstimos entre Contextos" href="/loans" />
+            <MenuItem 
+              iconName="arrow-right-left" 
+              label={appMode === 'personal_only' ? 'Empréstimos entre Contextos' : 'Empréstimos entre Contextos'} 
+              href={appMode === 'personal_only' ? undefined : '/loans'}
+              disabled={appMode === 'personal_only'}
+            />
           </div>
         </div>
 
