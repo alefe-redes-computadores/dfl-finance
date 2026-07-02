@@ -6,10 +6,12 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Loader2, Check, ArrowRightLeft, Building2, User, Calendar,
+  TrendingUp, TrendingDown
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { formatCurrency } from '@/lib/utils'
 
 export default function NewLoanPage() {
   const router = useRouter()
@@ -25,6 +27,7 @@ export default function NewLoanPage() {
   const [dueDate, setDueDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loadingPulse, setLoadingPulse] = useState(false)
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
@@ -42,14 +45,17 @@ export default function NewLoanPage() {
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     if (amountNum <= 0) { showToast('Informe um valor válido.', 'warning'); return }
     if (sourceContext === destContext) { showToast('Origem e destino devem ser diferentes.', 'warning'); return }
+    if (!dueDate) { showToast('Informe a data de vencimento.', 'warning'); return }
 
     setSaving(true)
+    setLoadingPulse(true)
 
     try {
       const { error } = await supabase
         .from('loans')
         .insert({
           user_id: user.id,
+          context: context,
           source_context: sourceContext,
           dest_context: destContext,
           total_amount: amountNum,
@@ -59,6 +65,8 @@ export default function NewLoanPage() {
           due_date: dueDate,
           status: 'active',
           description: description || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
 
       if (error) throw error
@@ -69,6 +77,7 @@ export default function NewLoanPage() {
       showToast(`Erro ao criar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
+      setLoadingPulse(false)
     }
   }
 
@@ -76,21 +85,33 @@ export default function NewLoanPage() {
   const getContextIcon = (ctx: string) =>
     ctx === 'dfl' ? <Building2 size={16} className="text-blue-500" /> : <User size={16} className="text-emerald-500" />
 
+  const installmentValue = installments > 0 ? amountNum / installments : 0
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Novo Empréstimo</h1>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <ArrowRightLeft size={20} className="text-teal-500" />
+            Novo Empréstimo
+          </h1>
           <div className="w-10" />
         </div>
         <ContextToggle />
       </div>
 
-      <div className="px-4 pt-4 space-y-4">
+      <div className="px-4 pt-4 space-y-4 animate-in fade-in duration-300">
         {/* Card de contexto */}
         <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700">
           <p className="text-xs font-bold text-gray-500 uppercase block mb-4">Fluxo do empréstimo</p>
@@ -121,7 +142,9 @@ export default function NewLoanPage() {
 
           {/* Seta */}
           <div className="flex justify-center mb-4">
-            <ArrowRightLeft size={20} className="text-gray-400" />
+            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+              <ArrowRightLeft size={18} className="text-gray-400" />
+            </div>
           </div>
 
           {/* Destino */}
@@ -171,17 +194,18 @@ export default function NewLoanPage() {
           <select
             value={installments}
             onChange={(e) => setInstallments(Number(e.target.value))}
-            className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-gray-800 dark:text-gray-200"
+            className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm font-bold outline-none text-gray-800 dark:text-gray-200 appearance-none"
           >
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
               <option key={n} value={n}>{n}x</option>
             ))}
           </select>
-          <p className="text-[11px] text-gray-400 mt-2">
-            {installments > 1
-              ? `Valor da parcela: R$ ${(amountNum / installments).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-              : 'Pagamento único'}
-          </p>
+          {installmentValue > 0 && (
+            <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1">
+              <TrendingDown size={12} />
+              Valor da parcela: <span className="font-bold text-gray-600 dark:text-gray-300">{formatCurrency(installmentValue)}</span>
+            </p>
+          )}
         </div>
 
         {/* Vencimento */}
@@ -206,8 +230,22 @@ export default function NewLoanPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Ex: Empréstimo para pagar fornecedor"
-            className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+            className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
           />
+        </div>
+
+        {/* Resumo */}
+        <div className="bg-teal-50 dark:bg-teal-900/20 rounded-[24px] p-4 border border-teal-100 dark:border-teal-800">
+          <p className="text-sm text-teal-700 dark:text-teal-300 font-medium">
+            <span className="font-bold">Resumo:</span> R$ {amount}
+            <span className="mx-1">•</span>
+            {getContextLabel(sourceContext)} → {getContextLabel(destContext)}
+            {installments > 1 && (
+              <span className="block text-xs text-teal-600 dark:text-teal-400 mt-1">
+                {installments}x de {formatCurrency(installmentValue)}
+              </span>
+            )}
+          </p>
         </div>
 
         {/* Botão salvar */}
