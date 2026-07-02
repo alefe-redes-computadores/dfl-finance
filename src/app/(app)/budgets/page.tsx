@@ -13,7 +13,6 @@ import { format, subMonths, addMonths, startOfMonth, endOfMonth, isToday, isYest
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
-// Helper para renderizar os ícones dinamicamente
 const getDynamicIcon = (iconName: string) => {
   if (!iconName) return Icons.Tag
   const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
@@ -25,7 +24,6 @@ const getDynamicIcon = (iconName: string) => {
 // ============================================================
 const BudgetsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
-    {/* Card Resumo */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -46,7 +44,6 @@ const BudgetsSkeleton = () => (
       <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
     </div>
 
-    {/* Cards de Orçamento */}
     {[1, 2, 3].map((i) => (
       <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-3">
@@ -78,13 +75,13 @@ function BudgetsContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [budgets, setBudgets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
   const [calendarTransactions, setCalendarTransactions] = useState<any[]>([])
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -125,6 +122,7 @@ function BudgetsContent() {
   const loadBudgets = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
     const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
@@ -156,11 +154,11 @@ function BudgetsContent() {
 
     setBudgets(budgetsWithSpent)
 
-    // Dados para o calendário (transações pendentes e efetivadas)
     const calendarTxs = txs.filter(t => t.type === 'expense' || t.type === 'sangria')
     setCalendarTransactions(calendarTxs)
 
     setLoading(false)
+    setLoadingPulse(false)
   }, [user, context, currentDate])
 
   useEffect(() => { loadBudgets() }, [loadBudgets])
@@ -173,7 +171,6 @@ function BudgetsContent() {
   const isTotalOverBudget = totalPercent >= 100
   const isTotalWarning = totalPercent >= 75 && totalPercent < 100
 
-  // Agrupa transações por data para o calendário
   const groupedByDate: Record<string, any[]> = {}
   calendarTransactions.forEach(tx => {
     const key = tx.date
@@ -190,8 +187,13 @@ function BudgetsContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
-      {/* Pull to refresh */}
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -201,7 +203,6 @@ function BudgetsContent() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
         <div className="flex items-center gap-2">
@@ -249,7 +250,6 @@ function BudgetsContent() {
         </div>
       ) : (
         <div className="animate-in fade-in duration-300">
-          {/* Card Resumo */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -296,7 +296,6 @@ function BudgetsContent() {
             </p>
           </div>
 
-          {/* Lista de Orçamentos */}
           <div className="space-y-3">
             {budgets.map(budget => {
               const IconComp = getDynamicIcon(budget.categories?.icon)
@@ -353,7 +352,6 @@ function BudgetsContent() {
         </div>
       )}
 
-      {/* Modal Calendário de Faturas */}
       {showCalendar && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCalendar(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
