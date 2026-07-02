@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
-  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building
+  Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building, RefreshCw
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
