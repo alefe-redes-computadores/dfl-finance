@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
@@ -44,7 +45,9 @@ function NewTransactionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useToast()
-  const { appMode } = useContext_()
+  const { context, appMode } = useContext_()
+
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -52,7 +55,6 @@ function NewTransactionContent() {
   const [type, setType] = useState<TxType>(
     (searchParams.get('type') as TxType) || 'expense'
   )
-  const [context, setContext] = useState<Context>('dfl')
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
@@ -181,36 +183,36 @@ function NewTransactionContent() {
           .from('categories')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', context)
+          .eq('context', effectiveContext)
           .eq('type', catType),
         supabase
           .from('accounts')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', context)
+          .eq('context', effectiveContext)
           .order('name'),
         supabase
           .from('tags')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', context)
+          .eq('context', effectiveContext)
           .order('name'),
         supabase
           .from('budgets')
           .select('*')
-          .match({ user_id: user.id, context }),
+          .match({ user_id: user.id, context: effectiveContext }),
         supabase
           .from('credit_cards')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', context)
+          .eq('context', effectiveContext)
           .eq('is_archived', false)
           .order('name'),
         supabase
           .from('contacts')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', context)
+          .eq('context', effectiveContext)
           .order('name'),
       ])
 
@@ -230,7 +232,7 @@ function NewTransactionContent() {
     setContacts(Array.isArray(contactsData) ? contactsData : [])
     setTags(Array.isArray(tgs) ? tgs : [])
     setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
-  }, [user, context, type])
+  }, [user, effectiveContext, type])
 
   useEffect(() => {
     loadData()
@@ -251,7 +253,7 @@ function NewTransactionContent() {
     supabase
       .from('transactions')
       .select('amount')
-      .match({ user_id: user.id, context, category_id: categoryId })
+      .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
       .eq('status', 'done')
       .gte('date', start)
       .lte('date', end)
@@ -277,7 +279,7 @@ function NewTransactionContent() {
           setBudgetAlert(null)
         }
       })
-  }, [categoryId, amountNum, type, budgets, user, context])
+  }, [categoryId, amountNum, type, budgets, user, effectiveContext])
 
   const uploadFile = async (file: File) => {
     if (!user) return
@@ -406,13 +408,11 @@ function NewTransactionContent() {
       setTimeout(() => setShowCamera(true), 150)
       return
     }
-
     if (option === 'galeria') {
       galeriaInputRef.current?.click()
       setTimeout(() => setShowReceiptModal(false), 200)
       return
     }
-
     if (option === 'pdf') {
       pdfInputRef.current?.click()
       setTimeout(() => setShowReceiptModal(false), 200)
@@ -461,7 +461,7 @@ function NewTransactionContent() {
           name: newCatName.trim(),
           icon: newCatIcon,
           color: newCatColor,
-          context,
+          context: effectiveContext,
           type: type === 'income' ? 'income' : 'expense',
         })
         .select()
@@ -485,7 +485,7 @@ function NewTransactionContent() {
     try {
       const { data, error } = await supabase
         .from('accounts')
-        .insert({ user_id: user.id, name: newAccName.trim(), color: newAccColor, context })
+        .insert({ user_id: user.id, name: newAccName.trim(), color: newAccColor, context: effectiveContext })
         .select()
         .single()
       if (error) throw error
@@ -507,7 +507,7 @@ function NewTransactionContent() {
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ user_id: user.id, name: newTagName.trim(), color: newTagColor, context })
+        .insert({ user_id: user.id, name: newTagName.trim(), color: newTagColor, context: effectiveContext })
         .select()
         .single()
       if (error) throw error
@@ -538,7 +538,7 @@ function NewTransactionContent() {
         const { data: existingTxs } = await supabase
           .from('transactions')
           .select('amount')
-          .match({ user_id: user.id, context, category_id: categoryId })
+          .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
           .eq('status', 'done')
           .gte('date', start)
           .lte('date', end)
@@ -637,7 +637,7 @@ function NewTransactionContent() {
                 total_amount: 0,
                 paid_amount: 0,
                 status: 'open',
-                context,
+                context: effectiveContext,
               })
               .select()
               .single()
@@ -726,7 +726,7 @@ function NewTransactionContent() {
           tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
           status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
-          context,
+          context: effectiveContext,
           receipt_url: i === 0 ? receiptUrl : null,
           recurring_group_id: recurringGroupId,
           installment_index: totalParcels > 1 ? i + 1 : 1,
@@ -755,7 +755,7 @@ function NewTransactionContent() {
 
         if (i === 0 && isReimbursable && savedTx) {
           linkedTransactionId = savedTx.id
-          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
+          const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
           const reimbursementDesc = `Reembolso: ${desc || 'Transação'}`
 
           const { data: reimbTx, error: reimbError } = await supabase
