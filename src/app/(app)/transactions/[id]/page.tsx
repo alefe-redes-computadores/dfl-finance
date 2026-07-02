@@ -8,7 +8,7 @@ import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
   ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
-  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, Layers,
+  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, Layers, FileText,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -49,6 +49,7 @@ export default function EditTransactionPage() {
   const [isPaid, setIsPaid] = useState(false)
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [description, setDescription] = useState('')
+  const [notes, setNotes] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
@@ -56,7 +57,6 @@ export default function EditTransactionPage() {
   const [txType, setTxType] = useState<'income' | 'expense'>('expense')
 
   const [showDetails, setShowDetails] = useState(false)
-  const [notes, setNotes] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isRefund, setIsRefund] = useState(false)
   const [isReimbursable, setIsReimbursable] = useState(false)
@@ -289,12 +289,12 @@ export default function EditTransactionPage() {
           setIsPaid(txData.status === 'done')
           setDate(txData.date)
           setDescription(txData.description || '')
+          setNotes(txData.notes || '')
           setCategoryId(txData.category_id || '')
           setAccountId(txData.account_id || '')
           setCreditCardId(txData.credit_card_id || '')
           setContactId(txData.contact_id || '')
           setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
-          setNotes(txData.notes || '')
           setIsReimbursable(txData.is_reimbursable || false)
           const amountSafe = Number(txData.amount) || 0
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -353,13 +353,19 @@ export default function EditTransactionPage() {
       return
     }
 
+    // Fallback: se não houver descrição, usa o nome da categoria
+    const selectedCat =
+      categories.find((c) => c.id === categoryId) ||
+      Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
+    const finalDescription = description.trim() || selectedCat?.name || 'Transação sem nome'
+
     let finalNotes = notes
     if (txType === 'expense') {
       const flags = []
       if (isRefund) flags.push('[Devolução/Estorno]')
       if (financingId) flags.push('[Financiamento]')
       if (debtId) flags.push('[Empréstimo]')
-      if (flags.length > 0) finalNotes = `${flags.join(' ')} ${notes}`.trim()
+      if (flags.length > 0) finalNotes = `${flags.join(' ')} ${finalNotes}`.trim()
     }
 
     const payload: any = {
@@ -367,7 +373,7 @@ export default function EditTransactionPage() {
       amount: rawAmount,
       status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
       date,
-      description: description || null,
+      description: finalDescription,
       category_id: categoryId || null,
       account_id: creditCardId ? null : (accountId || null),
       credit_card_id: creditCardId || null,
@@ -434,7 +440,7 @@ export default function EditTransactionPage() {
               user_id: user.id,
               type: txType === 'expense' ? 'income' : 'expense',
               amount: rawAmount,
-              description: `Reembolso: ${description || 'Transação'}`,
+              description: `Reembolso: ${finalDescription}`,
               date,
               status: 'pending',
               context: otherContext,
@@ -464,7 +470,7 @@ export default function EditTransactionPage() {
               user_id: user.id,
               type: txType === 'expense' ? 'income' : 'expense',
               amount: rawAmount,
-              description: `Reembolso: ${description || 'Transação'}`,
+              description: `Reembolso: ${finalDescription}`,
               date,
               status: 'pending',
               context: otherContext,
@@ -534,17 +540,14 @@ export default function EditTransactionPage() {
       }
 
       if (mode === 'single' || !hasInstallments) {
-        // Exclui apenas esta transação
         await supabase.from('transactions').delete().match({ id, user_id: user.id })
       } else if (mode === 'future' && tx?.recurring_group_id) {
-        // Exclui esta e as próximas (date >= tx.date)
         await supabase
           .from('transactions')
           .delete()
           .match({ user_id: user.id, recurring_group_id: tx.recurring_group_id })
           .gte('date', tx.date)
       } else if (mode === 'all' && tx?.recurring_group_id) {
-        // Exclui todas do grupo
         await supabase
           .from('transactions')
           .delete()
@@ -641,6 +644,18 @@ export default function EditTransactionPage() {
               placeholder="0,00"
             />
           </div>
+        </div>
+
+        {/* Nome da transação (NOVO - movido para cá) */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+          <Edit3 size={20} className="text-gray-400" />
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
+            className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+          />
         </div>
 
         {/* Pago/Recebido com animação melhorada */}
@@ -744,12 +759,6 @@ export default function EditTransactionPage() {
           )}
         </div>
 
-        {/* Descrição */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
-          <Edit3 size={20} className="text-gray-400" />
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200" />
-        </div>
-
         {/* Comprovante com ícone destacado */}
         {uploading ? (
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
@@ -795,6 +804,18 @@ export default function EditTransactionPage() {
           className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}
         >
           <div className="space-y-3 pt-1">
+            {/* Observações (NOVO - movido para cá) */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+              <FileText size={20} className="text-gray-400 opacity-50" />
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observações (opcional)"
+                className="flex-1 text-sm bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+            </div>
+
             {/* Tags */}
             <button onClick={() => setShowTagModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -805,12 +826,6 @@ export default function EditTransactionPage() {
               </div>
               <ChevronRight size={18} className="text-gray-300" />
             </button>
-
-            {/* Observações */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
-              <Edit3 size={20} className="text-gray-400 opacity-50" />
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações" className="flex-1 text-sm bg-transparent outline-none text-gray-800 dark:text-gray-200" />
-            </div>
 
             {!isIncome && (
               <>
