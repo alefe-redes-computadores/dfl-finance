@@ -30,6 +30,13 @@ const ContextCtx = createContext<ContextCtx>({
 
 export const useContext_ = () => useContext(ContextCtx)
 
+// Função auxiliar para sincronizar o cookie (usado pelo middleware)
+const setAppModeCookie = (mode: 'personal_only' | 'full') => {
+  if (typeof document !== 'undefined') {
+    document.cookie = `dfl_app_mode=${mode}; path=/; max-age=${60 * 60 * 24 * 30}` // 30 dias
+  }
+}
+
 export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const hasSynced = useRef(false)
@@ -70,10 +77,12 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
         if (data?.app_mode) {
           setAppModeState(data.app_mode)
           localStorage.setItem('dfl_app_mode', data.app_mode)
+          setAppModeCookie(data.app_mode) // sincroniza cookie
           setContextState(data.app_mode === 'personal_only' ? 'personal' : 'dfl')
         } else {
           setAppModeState('full')
           localStorage.setItem('dfl_app_mode', 'full')
+          setAppModeCookie('full')
           setContextState('dfl')
         }
       } catch (err) {
@@ -96,6 +105,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   function setAppMode(mode: 'personal_only' | 'full') {
     setAppModeState(mode)
     localStorage.setItem('dfl_app_mode', mode)
+    setAppModeCookie(mode) // sincroniza cookie
     if (mode === 'personal_only') {
       setContextState('personal')
     } else {
