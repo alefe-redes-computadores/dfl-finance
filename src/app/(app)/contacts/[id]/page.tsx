@@ -84,6 +84,7 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<any>(null)
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [totalToPay, setTotalToPay] = useState(0)
   const [totalToReceive, setTotalToReceive] = useState(0)
@@ -126,9 +127,6 @@ export default function ContactDetailPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // FUNÇÃO AUXILIAR: Ícone de anexo
-  // ============================================================
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -143,6 +141,7 @@ export default function ContactDetailPage() {
 
   const loadContact = async () => {
     setLoading(true)
+    setLoadingPulse(true)
     const { data: contactData } = await supabase
       .from('contacts')
       .select('*')
@@ -168,6 +167,7 @@ export default function ContactDetailPage() {
     setTotalToPay(txsArray.filter(t => t.type === 'expense' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0))
     setTotalToReceive(txsArray.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0))
     setLoading(false)
+    setLoadingPulse(false)
   }
 
   const handleDelete = async () => {
@@ -193,13 +193,18 @@ export default function ContactDetailPage() {
   if (loading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+        {loadingPulse && (
+          <div className="fixed top-20 right-4 z-50">
+            <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          </div>
+        )}
         <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+          <div className="flex items-center justify-between mb-4 animate-pulse">
+            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
+            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-              <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+              <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
+              <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
             </div>
           </div>
           <div className="h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
@@ -222,6 +227,13 @@ export default function ContactDetailPage() {
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
+        </div>
+      )}
+
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
