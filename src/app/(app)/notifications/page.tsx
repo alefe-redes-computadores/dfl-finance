@@ -1,54 +1,49 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { useContext_ } from '@/components/ContextToggle'
 import {
-  ChevronLeft, Bell, CreditCard, Repeat, Target, Clock, CheckCircle,
-  AlertTriangle, Trash2, Archive, Check, X, Loader2, Search, Filter,
-  RotateCcw, Eye, EyeOff, RefreshCw, BellOff, ShieldCheck, User
+  ChevronLeft, RefreshCw, Bell, BellOff, CheckCheck, X,
+  Info, AlertTriangle, CheckCircle, AlertCircle, Clock,
+  Calendar, Filter, Loader2
 } from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
+import { format, isToday, isYesterday, startOfWeek, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
-
-interface Notification {
-  id: string
-  type: string
-  title: string
-  subtitle: string
-  cardId?: string
-  budgetId?: string
-  txId?: string
-  subId?: string
-  financingId?: string
-  debtId?: string
-  route?: string
-  severity: 'critical' | 'warning' | 'info' | 'success'
-  isRead: boolean
-}
-
-type FilterType = 'all' | 'critical' | 'warning' | 'info' | 'unread'
-type TabType = 'active' | 'archived'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const NotificationsSkeleton = () => (
-  <div className="space-y-3 px-4 mt-2 animate-pulse">
-    {[1, 2, 3, 4].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-[18px] bg-gray-200 dark:bg-slate-700" />
-          <div className="flex-1 min-w-0 space-y-2">
-            <div className="h-4 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-3 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
-            <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
+  <div className="space-y-4 animate-pulse">
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
+      </div>
+      <div className="h-9 w-28 bg-gray-200 dark:bg-slate-700 rounded-full" />
+    </div>
+
+    <div className="flex gap-2 overflow-x-auto pb-2">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="h-8 w-20 bg-gray-200 dark:bg-slate-700 rounded-full flex-shrink-0" />
+      ))}
+    </div>
+
+    {[1, 2, 3, 4, 5].map((i) => (
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
+              <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+            </div>
+            <div className="h-3 w-full bg-gray-100 dark:bg-slate-700/50 rounded" />
+            <div className="h-3 w-3/4 bg-gray-100 dark:bg-slate-700/50 rounded" />
           </div>
         </div>
       </div>
@@ -59,19 +54,15 @@ const NotificationsSkeleton = () => (
 export default function NotificationsPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context } = useContext_()
   const { showToast } = useToast()
 
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [archivedCount, setArchivedCount] = useState(0)
+  const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-  const [activeTab, setActiveTab] = useState<TabType>('active')
-  const [readIds, setReadIds] = useState<Set<string>>(new Set())
-  const [deleteTimer, setDeleteTimer] = useState<NodeJS.Timeout | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const [backupNotifs, setBackupNotifs] = useState<Notification[]>([])
+  const [filter, setFilter] = useState<'all' | 'info' | 'success' | 'warning' | 'error'>('all')
+  const [markingAll, setMarkingAll] = useState(false)
 
   // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
@@ -90,7 +81,7 @@ export default function NotificationsPage() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
+      loadNotifications().finally(() => setRefreshing(false))
     }
   }
 
@@ -111,248 +102,150 @@ export default function NotificationsPage() {
     }
   }, [loading, refreshing])
 
-  const loadData = useCallback(async () => {
-    if (!user) return
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
-    const { data: reads } = await supabase
-      .from('notification_reads')
-      .select('notification_id')
+    let query = supabase
+      .from('notifications')
+      .select('*')
       .eq('user_id', user.id)
+      .eq('context', context)
+      .order('created_at', { ascending: false })
 
-    const readSet = new Set(reads?.map(r => r.notification_id) || [])
-    setReadIds(readSet)
-
-    const { count: archCount } = await supabase
-      .from('notification_archives')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-
-    setArchivedCount(archCount || 0)
-
-    const today = new Date()
-    const startOfMonth = format(new Date(today.getFullYear(), today.getMonth(), 1), 'yyyy-MM-dd')
-    const endOfMonth = format(new Date(today.getFullYear(), today.getMonth() + 1, 0), 'yyyy-MM-dd')
-
-    const [{ data: transactions }, { data: subs }, { data: debtsData }, { data: financings }, { data: budgets }, { data: cards }] = await Promise.all([
-      supabase.from('transactions').select('*, categories(name, icon, color)').match({ user_id: user.id, context }).gte('date', startOfMonth).lte('date', endOfMonth).order('date', { ascending: false }),
-      supabase.from('subscriptions').select('*').match({ user_id: user.id, context, status: 'active' }),
-      supabase.from('debts').select('*').match({ user_id: user.id, context }).in('status', ['pending', 'partial']),
-      supabase.from('financings').select('*').match({ user_id: user.id, context, status: 'active' }),
-      supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context }),
-      supabase.from('credit_cards').select('*').match({ user_id: user.id, context, is_archived: false })
-    ])
-
-    const notifs: Notification[] = []
-
-    cards?.forEach(card => {
-      const days = (card.due_day || 1) - today.getDate()
-      if (days < 0) {
-        notifs.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day}`, cardId: card.id, severity: 'critical', isRead: readSet.has(`invoice-overdue-${card.id}`) })
-      } else if (days <= 3) {
-        notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
-      }
-    })
-
-    subs?.forEach(sub => {
-      const days = (sub.due_day || 1) - today.getDate()
-      if (days < 0) {
-        notifs.push({ id: `sub-overdue-${sub.id}`, type: 'subscription_overdue', title: `Assinatura vencida: ${sub.name}`, subtitle: `Venceu dia ${sub.due_day}`, subId: sub.id, severity: 'critical', isRead: readSet.has(`sub-overdue-${sub.id}`) })
-      } else if (days <= 5) {
-        notifs.push({ id: `sub-soon-${sub.id}`, type: 'subscription_soon', title: `Assinatura próxima: ${sub.name}`, subtitle: `Vence em ${days} dia(s)`, subId: sub.id, severity: 'warning', isRead: readSet.has(`sub-soon-${sub.id}`) })
-      }
-    })
-
-    financings?.forEach(fin => {
-      if (!fin.next_due_date) return
-      const daysUntilDue = differenceInDays(new Date(fin.next_due_date), today)
-      if (daysUntilDue < 0) {
-        notifs.push({ id: `financing-overdue-${fin.id}`, type: 'financing_overdue', title: `Parcela vencida: ${fin.name}`, subtitle: `Venceu ${format(new Date(fin.next_due_date), "dd/MM")}`, financingId: fin.id, severity: 'critical', isRead: readSet.has(`financing-overdue-${fin.id}`) })
-      } else if (daysUntilDue <= 3) {
-        notifs.push({ id: `financing-soon-${fin.id}`, type: 'financing_soon', title: `Parcela próxima: ${fin.name}`, subtitle: `Vence em ${daysUntilDue} dia(s)`, financingId: fin.id, severity: 'warning', isRead: readSet.has(`financing-soon-${fin.id}`) })
-      }
-    })
-
-    debtsData?.forEach(debt => {
-      if (!debt.due_date) return
-      const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
-      const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
-      if (daysUntilDue < 0) {
-        notifs.push({ id: `debt-overdue-${debt.id}`, type: 'debt_overdue', title: `Dívida vencida: ${debt.person_name}`, subtitle: `Venceu ${format(new Date(debt.due_date), "dd/MM")} — R$ ${remaining.toFixed(2)}`, debtId: debt.id, severity: 'critical', isRead: readSet.has(`debt-overdue-${debt.id}`) })
-      } else if (daysUntilDue <= 3) {
-        notifs.push({ id: `debt-soon-${debt.id}`, type: 'debt_soon', title: `Dívida próxima: ${debt.person_name}`, subtitle: `Vence em ${daysUntilDue} dia(s) — R$ ${remaining.toFixed(2)}`, debtId: debt.id, severity: 'warning', isRead: readSet.has(`debt-soon-${debt.id}`) })
-      }
-    })
-
-    budgets?.forEach(budget => {
-      const spent = transactions?.filter(t => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (Number(t.amount) || 0), 0) || 0
-      const remaining = Number(budget.amount) - spent
-      if (remaining < 0) {
-        notifs.push({ id: `budget-over-${budget.id}`, type: 'budget_over', title: `Orçamento estourado: ${budget.name || budget.categories?.name}`, subtitle: `Gasto R$ ${spent.toFixed(2)} de R$ ${Number(budget.amount).toFixed(2)}`, budgetId: budget.id, severity: 'critical', isRead: readSet.has(`budget-over-${budget.id}`) })
-      } else if (Number(budget.amount) > 0 && (spent / Number(budget.amount)) * 100 >= 80) {
-        notifs.push({ id: `budget-warn-${budget.id}`, type: 'budget_warning', title: `Orçamento quase lá: ${budget.name || budget.categories?.name}`, subtitle: `${((spent / Number(budget.amount)) * 100).toFixed(0)}% utilizado`, budgetId: budget.id, severity: 'warning', isRead: readSet.has(`budget-warn-${budget.id}`) })
-      }
-    })
-
-    const pendingExpenses = transactions?.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria')) || []
-    if (pendingExpenses.length > 0) {
-      notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
+    if (filter !== 'all') {
+      query = query.eq('type', filter)
     }
 
-    const pendingIncomes = transactions?.filter(t => t.status === 'pending' && t.type === 'income') || []
-    if (pendingIncomes.length > 0) {
-      notifs.push({ id: 'pending-incomes', type: 'pending_income', title: `${pendingIncomes.length} receita(s) a receber`, subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=income&status=pending', severity: 'success', isRead: readSet.has('pending-incomes') })
-    }
-
-    setNotifications(notifs)
+    const { data } = await query
+    setNotifications(Array.isArray(data) ? data : [])
     setLoading(false)
-  }, [user, context])
+    setLoadingPulse(false)
+  }, [user, context, filter])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadNotifications() }, [loadNotifications])
+
+  const markAsRead = async (id: string) => {
+    await supabase
+      .from('notifications')
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    setNotifications(prev => prev.map(n => 
+      n.id === id ? { ...n, read: true } : n
+    ))
+  }
+
+  const markAllAsRead = async () => {
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id)
+    if (unreadIds.length === 0) {
+      showToast('Todas as notificações já estão lidas.', 'info')
+      return
+    }
+
+    setMarkingAll(true)
+    await supabase
+      .from('notifications')
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .in('id', unreadIds)
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    setMarkingAll(false)
+    showToast(`${unreadIds.length} notificações marcadas como lidas.`, 'success')
+  }
+
+  const deleteNotification = async (id: string) => {
+    await supabase.from('notifications').delete().eq('id', id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'info': return <Info size={18} className="text-blue-500" />
+      case 'success': return <CheckCircle size={18} className="text-emerald-500" />
+      case 'warning': return <AlertTriangle size={18} className="text-orange-500" />
+      case 'error': return <AlertCircle size={18} className="text-red-500" />
+      default: return <Bell size={18} className="text-gray-500" />
+    }
+  }
+
+  const getTypeColor = (type: string, read: boolean) => {
+    const base = {
+      info: 'border-blue-200 dark:border-blue-800',
+      success: 'border-emerald-200 dark:border-emerald-800',
+      warning: 'border-orange-200 dark:border-orange-800',
+      error: 'border-red-200 dark:border-red-800',
+    }[type] || 'border-gray-200 dark:border-gray-700'
+    return read ? 'opacity-60' : base
+  }
+
+  const getTypeBg = (type: string, read: boolean) => {
+    if (read) return 'bg-white dark:bg-slate-800'
+    switch (type) {
+      case 'info': return 'bg-blue-50 dark:bg-blue-900/20'
+      case 'success': return 'bg-emerald-50 dark:bg-emerald-900/20'
+      case 'warning': return 'bg-orange-50 dark:bg-orange-900/20'
+      case 'error': return 'bg-red-50 dark:bg-red-900/20'
+      default: return 'bg-white dark:bg-slate-800'
+    }
+  }
+
+  const getTypeBgIcon = (type: string) => {
+    switch (type) {
+      case 'info': return 'bg-blue-100 dark:bg-blue-900/30'
+      case 'success': return 'bg-emerald-100 dark:bg-emerald-900/30'
+      case 'warning': return 'bg-orange-100 dark:bg-orange-900/30'
+      case 'error': return 'bg-red-100 dark:bg-red-900/30'
+      default: return 'bg-gray-100 dark:bg-slate-700'
+    }
+  }
+
+  const groupByDate = (items: any[]) => {
+    const groups: Record<string, any[]> = {}
+    const now = new Date()
+    const weekStart = startOfWeek(now, { locale: ptBR })
+
+    items.forEach(item => {
+      const date = new Date(item.created_at)
+      let key: string
+      if (isToday(date)) key = 'Hoje'
+      else if (isYesterday(date)) key = 'Ontem'
+      else if (differenceInDays(now, date) <= 7) key = 'Esta semana'
+      else if (differenceInDays(now, date) <= 30) key = 'Este mês'
+      else key = 'Anterior'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(item)
+    })
+
+    return groups
+  }
 
   const filteredNotifications = notifications.filter(n => {
-    if (activeTab === 'archived') return false 
-    switch (activeFilter) {
-      case 'critical': return n.severity === 'critical'
-      case 'warning': return n.severity === 'warning'
-      case 'info': return n.severity === 'info' || n.severity === 'success'
-      case 'unread': return !n.isRead
-      default: return true
-    }
+    if (filter === 'all') return true
+    return n.type === filter
   })
 
-  const unreadCount = notifications.filter(n => !n.isRead).length
+  const groupedNotifications = groupByDate(filteredNotifications)
+  const filterOrder = ['Hoje', 'Ontem', 'Esta semana', 'Este mês', 'Anterior']
 
-  const handleNotificationClick = async (notif: Notification) => {
-    if (notif.isRead) return 
+  const unreadCount = notifications.filter(n => !n.read).length
 
-    await supabase.from('notification_reads').upsert({
-      user_id: user!.id,
-      notification_id: notif.id,
-      read_at: new Date().toISOString()
-    }, { onConflict: 'user_id,notification_id' })
-
-     setReadIds(prev => {
-      const next = new Set(prev)
-      next.add(notif.id)
-      return next
-     })
-
-    if (notif.route) router.push(notif.route)
-    else if (notif.cardId) router.push(`/cards/${notif.cardId}`)
-    else if (notif.budgetId) router.push(`/budgets/${notif.budgetId}`)
-    else if (notif.financingId) router.push(`/financings/${notif.financingId}`)
-    else if (notif.debtId) router.push(`/debts/${notif.debtId}`)
-    else if (notif.subId) router.push('/subscriptions')
-  }
-
-  const handleDelete = (notifId: string) => {
-    setBackupNotifs([...notifications])
-    setNotifications(prev => prev.filter(n => n.id !== notifId))
-    showUndoBanner(notifId)
-  }
-
-  const handleDeleteAll = () => {
-    setBackupNotifs([...notifications])
-    setNotifications([])
-    showUndoBanner('all')
-  }
-
-  const showUndoBanner = (id: string) => {
-    setPendingDelete(id)
-    if (deleteTimer) clearTimeout(deleteTimer)
-    const timer = setTimeout(() => {
-      setPendingDelete(null)
-      setBackupNotifs([])
-    }, 3000)
-    setDeleteTimer(timer)
-  }
-
-  const handleUndoDelete = () => {
-    if (deleteTimer) clearTimeout(deleteTimer)
-    setPendingDelete(null)
-    setNotifications([...backupNotifs])
-    setBackupNotifs([])
-  }
-
-  const handleArchiveAll = async () => {
-    if (!user) return
-    const allIds = filteredNotifications.map(n => n.id)
-    await supabase.from('notification_archives').insert({
-      user_id: user.id,
-      notification_ids: allIds
-    })
-    setNotifications(prev => prev.filter(n => !allIds.includes(n.id)))
-    setArchivedCount(prev => prev + 1)
-    showToast('Notificações arquivadas!', 'success')
-  }
-
-  const handleToggleRead = async (notif: Notification) => {
-    if (notif.isRead) {
-      await supabase.from('notification_reads').delete().match({ user_id: user!.id, notification_id: notif.id })
-      setReadIds(prev => { const n = new Set(prev); n.delete(notif.id); return n })
-    } else {
-      await supabase.from('notification_reads').upsert({ user_id: user!.id, notification_id: notif.id, read_at: new Date().toISOString() }, { onConflict: 'user_id,notification_id' })
-      setReadIds(prev => { const next = new Set(prev); next.add(notif.id); return next })
-    }
-  }
-
-  const getIcon = (type: string) => {
-    if (type.includes('invoice')) return <CreditCard size={18} />
-    if (type.includes('subscription')) return <Repeat size={18} />
-    if (type.includes('budget')) return <Target size={18} />
-    if (type.includes('pending_expense')) return <Clock size={18} />
-    if (type.includes('pending_income')) return <CheckCircle size={18} />
-    if (type.includes('financing')) return <AlertTriangle size={18} />
-    if (type.includes('debt')) return <AlertTriangle size={18} />
-    return <Bell size={18} />
-  }
-
-  const getThemeVars = (severity: string) => {
-    switch (severity) {
-      case 'critical': return { icon: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10', border: 'border-red-200 dark:border-red-800' }
-      case 'warning': return { icon: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-500/10', border: 'border-orange-200 dark:border-orange-800' }
-      case 'info': return { icon: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10', border: 'border-blue-200 dark:border-blue-800' }
-      case 'success': return { icon: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-800' }
-      default: return { icon: 'text-gray-400', bg: 'bg-gray-100 dark:bg-slate-700', border: 'border-gray-200 dark:border-slate-600' }
-    }
-  }
-
-  const filters: { key: FilterType; label: string; count?: number }[] = [
-    { key: 'all', label: 'Todas', count: notifications.length },
-    { key: 'unread', label: 'Não lidas', count: unreadCount },
-    { key: 'critical', label: 'Críticas', count: notifications.filter(n => n.severity === 'critical').length },
-    { key: 'warning', label: 'Atenção', count: notifications.filter(n => n.severity === 'warning').length },
-    { key: 'info', label: 'Informativas', count: notifications.filter(n => n.severity === 'info' || n.severity === 'success').length },
+  const filters = [
+    { key: 'all', label: 'Todas', icon: Bell },
+    { key: 'info', label: 'Info', icon: Info },
+    { key: 'success', label: 'Sucesso', icon: CheckCircle },
+    { key: 'warning', label: 'Alerta', icon: AlertTriangle },
+    { key: 'error', label: 'Erro', icon: AlertCircle },
   ]
 
-  // Skeleton enquanto carrega
-  if (loading) {
-    return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans transition-colors duration-300">
-        <div className="bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-2 sticky top-0 z-10">
-          <div className="flex items-center justify-between mb-6 animate-pulse">
-            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-            <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="flex items-center gap-1">
-              <div className="w-9 h-9 bg-gray-200 dark:bg-slate-700 rounded-full" />
-              <div className="w-9 h-9 bg-gray-200 dark:bg-slate-700 rounded-full" />
-            </div>
-          </div>
-          <div className="flex gap-2 pb-4 animate-pulse">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-10 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" />
-            ))}
-          </div>
-        </div>
-        <NotificationsSkeleton />
-      </div>
-    )
-  }
-
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans transition-colors duration-300 relative">
-      
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
       {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -363,161 +256,158 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* Banner Flutuante de Desfazer Exclusão */}
-      {pendingDelete && (
-        <div className="fixed top-20 left-4 right-4 z-50 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-5 py-4 rounded-[20px] shadow-2xl flex items-center justify-between animate-in slide-in-from-top-5 fade-in duration-300">
-          <span className="font-bold text-[14px]">
-            {pendingDelete === 'all' ? 'Todas as notificações excluídas' : 'Notificação excluída'}
-          </span>
-          <button 
-            onClick={handleUndoDelete}
-            className="flex items-center gap-1.5 px-4 py-2 bg-white/20 dark:bg-black/10 rounded-xl font-bold text-[13px] hover:bg-white/30 dark:hover:bg-black/20 transition-colors active:scale-95"
-          >
-            <RotateCcw size={16} /> Desfazer
-          </button>
-        </div>
-      )}
-
       {/* Header */}
-      <div className="bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-2 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
             <ChevronLeft size={24} />
           </button>
-          <div>
-            <h1 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 tracking-tight text-center">Central de Alertas</h1>
-            {appMode === 'personal_only' && (
-              <div className="flex items-center justify-center gap-1 mt-0.5">
-                <User size={10} className="text-gray-400" />
-                <span className="text-[10px] font-medium text-gray-400">Modo Pessoal</span>
-              </div>
+          <div className="flex items-center gap-2">
+            <Bell size={20} className="text-teal-500" />
+            <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Alertas</h1>
+            {unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                {unreadCount}
+              </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={handleArchiveAll} className="p-2 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors bg-white dark:bg-slate-800 rounded-full shadow-sm" title="Arquivar todas">
-              <Archive size={18} />
-            </button>
-            <button onClick={handleDeleteAll} className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors bg-white dark:bg-slate-800 rounded-full shadow-sm" title="Excluir todas">
-              <Trash2 size={18} />
-            </button>
+          <button
+            onClick={loadNotifications}
+            className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+          >
+            <RefreshCw size={20} className={loadingPulse ? 'animate-spin' : ''} />
+          </button>
+        </div>
+        <ContextToggle />
+      </div>
+
+      <div className="px-4 pt-4 space-y-4">
+        {/* Ações */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700 overflow-x-auto">
+            {filters.map(f => {
+              const Icon = f.icon
+              const count = notifications.filter(n => f.key === 'all' || n.type === f.key).length
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key as any)}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap ${
+                    filter === f.key
+                      ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
+                      : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Icon size={12} />
+                  {f.label}
+                  <span className="text-[9px] opacity-60">({count})</span>
+                </button>
+              )
+            })}
           </div>
-        </div>
 
-        {/* Filtros Premium com contagem */}
-        <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
-          {filters.map(f => (
+          {unreadCount > 0 && (
             <button
-              key={f.key}
-              onClick={() => setActiveFilter(f.key)}
-              className={`px-5 py-2.5 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 active:scale-95 ${
-                activeFilter === f.key
-                  ? 'bg-teal-700 text-white border-teal-700 shadow-md'
-                  : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-              }`}
+              onClick={markAllAsRead}
+              disabled={markingAll}
+              className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-full text-[10px] font-bold hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors disabled:opacity-50"
             >
-              {f.label}
-              {f.count !== undefined && f.count > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                  activeFilter === f.key
-                    ? 'bg-white/20 text-white'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-                }`}>
-                  {f.count}
-                </span>
-              )}
+              {markingAll ? <Loader2 size={12} className="animate-spin" /> : <CheckCheck size={12} />}
+              Marcar todas
             </button>
-          ))}
+          )}
         </div>
-      </div>
 
-      {/* Estatísticas */}
-      <div className="px-5 pb-3 flex items-center justify-between mt-2">
-        <p className="text-[12px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">
-          {filteredNotifications.length} alerta{filteredNotifications.length !== 1 ? 's' : ''}
-        </p>
-        <div className="flex items-center gap-4 text-[12px]">
-          <span className="flex items-center gap-1.5 text-red-500 font-bold bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded-md">
-            <AlertTriangle size={14} /> {notifications.filter(n => n.severity === 'critical').length}
-          </span>
-          <span className="flex items-center gap-1.5 text-orange-500 font-bold bg-orange-50 dark:bg-orange-500/10 px-2 py-1 rounded-md">
-            <Clock size={14} /> {notifications.filter(n => n.severity === 'warning').length}
-          </span>
-        </div>
-      </div>
-
-      {/* Lista */}
-      <div className="px-4 mt-2 space-y-3">
-        {filteredNotifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in duration-300">
-            <div className="w-20 h-20 rounded-[24px] bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
-              <ShieldCheck size={32} className="text-emerald-500" />
+        {loading ? (
+          <NotificationsSkeleton />
+        ) : filteredNotifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-300">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
+              <BellOff size={40} className="text-gray-400 dark:text-gray-500" />
             </div>
-            <p className="font-bold text-[18px] text-gray-800 dark:text-gray-200">Tudo sob controle!</p>
-            <p className="text-[14px] font-medium text-gray-400 dark:text-gray-500 mt-1">
-              {activeFilter !== 'all' ? 'Sem alertas nesta categoria.' : 'Não existem notificações pendentes.'}
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">
+              {filter === 'all' ? 'Nenhuma notificação' : `Nenhuma notificação do tipo "${filters.find(f => f.key === filter)?.label}"`}
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm max-w-[250px]">
+              {filter === 'all' 
+                ? 'As notificações aparecerão aqui quando houver novidades.' 
+                : 'Tente outro filtro ou aguarde novas notificações.'}
             </p>
           </div>
         ) : (
-          filteredNotifications.map((notif, index) => {
-            const theme = getThemeVars(notif.severity)
-            return (
-              <div
-                key={notif.id}
-                className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border transition-all group active:scale-[0.98] animate-in fade-in slide-in-from-bottom-2 ${
-                  notif.isRead 
-                    ? 'opacity-60 bg-gray-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700' 
-                    : `${theme.border} hover:shadow-md`
-                }`}
-                style={{ animationDelay: `${index * 40}ms` }}
-              >
-                <div className="flex items-center gap-4">
-                  {/* Ícone */}
-                  <button
-                    onClick={() => handleNotificationClick(notif)}
-                    className={`relative w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0 ${theme.bg} hover:scale-110 transition-transform`}
-                  >
-                    <span className={theme.icon}>
-                      {getIcon(notif.type)}
-                    </span>
-                    {!notif.isRead && (
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-[3px] border-white dark:border-slate-800 animate-pulse" />
-                    )}
-                  </button>
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {filterOrder.map(groupKey => {
+              const items = groupedNotifications[groupKey] || []
+              if (items.length === 0) return null
 
-                  {/* Conteúdo */}
-                  <button
-                    onClick={() => handleNotificationClick(notif)}
-                    className="flex-1 min-w-0 text-left py-1"
-                  >
-                    <p className="text-[15px] font-bold text-gray-800 dark:text-gray-100 leading-tight">
-                      {notif.title}
-                    </p>
-                    <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-1 truncate">
-                      {notif.subtitle}
-                    </p>
-                  </button>
+              return (
+                <div key={groupKey}>
+                  <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 mb-2 px-1">
+                    {groupKey}
+                  </p>
+                  <div className="space-y-2">
+                    {items.map(notification => {
+                      const isRead = notification.read
+                      const type = notification.type || 'info'
 
-                  {/* Ações */}
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <button
-                      onClick={() => handleToggleRead(notif)}
-                      className="p-2 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-700 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 rounded-full transition-colors"
-                      title={notif.isRead ? 'Desmarcar como lida' : 'Marcar como lida'}
-                    >
-                      {notif.isRead ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(notif.id)}
-                      className="p-2 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-700 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 rounded-full transition-colors"
-                      title="Apagar"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                      return (
+                        <div
+                          key={notification.id}
+                          className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border transition-all hover:shadow-md ${
+                            isRead 
+                              ? 'opacity-60 border-gray-100 dark:border-slate-700' 
+                              : `border-l-4 ${getTypeColor(type, false)}`
+                          } ${getTypeBg(type, isRead)}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getTypeBgIcon(type)}`}>
+                              {getTypeIcon(type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className={`font-bold text-[14px] text-gray-800 dark:text-gray-200 ${
+                                    !isRead ? 'text-gray-900 dark:text-gray-100' : ''
+                                  }`}>
+                                    {notification.title || 'Notificação'}
+                                  </p>
+                                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                                    {notification.message}
+                                  </p>
+                                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    {format(new Date(notification.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {!isRead && (
+                                    <button
+                                      onClick={() => markAsRead(notification.id)}
+                                      className="p-1 text-gray-400 hover:text-teal-600 transition-colors"
+                                      title="Marcar como lida"
+                                    >
+                                      <CheckCheck size={14} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => deleteNotification(notification.id)}
+                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                    title="Remover"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
