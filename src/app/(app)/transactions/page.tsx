@@ -14,6 +14,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYest
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import BankLogo from '@/components/BankLogo'
+import { useScrollPosition } from '@/hooks/useScrollPosition'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -93,10 +94,10 @@ export default function TransactionsPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loadingPulse, setLoadingPulse] = useState(false)
-  
+
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
-  
+
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
 
@@ -106,6 +107,9 @@ export default function TransactionsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+
+  // 🆕 Usando o hook useScrollPosition
+  const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -134,7 +138,7 @@ export default function TransactionsPage() {
 
   const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
     if (!user) return;
-    
+
     if (pageNum === 0) setLoading(true)
     else setLoadingMore(true)
     setLoadingPulse(true)
@@ -154,13 +158,13 @@ export default function TransactionsPage() {
       .order('created_at', { ascending: false })
 
     if (filter !== 'all') query = query.eq('type', filter)
-    
+
     const { data, count, error } = await query
-    
+
     if (error) {
       console.error("Erro na listagem de transações:", error)
     }
-    
+
     const txs = Array.isArray(data) ? data : []
 
     if (append) {
@@ -182,24 +186,15 @@ export default function TransactionsPage() {
     loadTransactions(0)
   }, [loadTransactions])
 
-  const handleScroll = useCallback(() => {
+  // 🆕 Infinite Scroll usando useScrollPosition
+  useEffect(() => {
     if (loadingMore || !hasMore || loading) return
-    
-    const scrollY = window.scrollY
-    const windowHeight = window.innerHeight
-    const documentHeight = document.documentElement.scrollHeight
-    
     if (scrollY + windowHeight >= documentHeight - 200) {
       const nextPage = page + 1
       setPage(nextPage)
       loadTransactions(nextPage, true)
     }
-  }, [page, hasMore, loadingMore, loading, loadTransactions])
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [handleScroll])
+  }, [scrollY, windowHeight, documentHeight, page, hasMore, loadingMore, loading, loadTransactions])
 
   const filtered = transactions.filter(t => {
     let matchSearch = true;
@@ -247,7 +242,7 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
-            
+
             <div className="relative" ref={exportMenuRef}>
               <button 
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -281,7 +276,7 @@ export default function TransactionsPage() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar transação..."
               className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
           </div>
-          
+
           <div className="relative" ref={statusMenuRef}>
             <button 
               onClick={() => setShowStatusMenu(!showStatusMenu)} 
@@ -332,17 +327,17 @@ export default function TransactionsPage() {
                       const isTransferIn = t.type === 'transfer' && t.description?.includes('de ');
                       const isIncomeVisual = t.type === 'income' || isTransferIn;
                       const isPending = t.status === 'pending';
-                      
+
                       const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
                       const attachmentIcon = getAttachmentIcon(t.receipt_url)
-                      
+
                       const hasInstallments = t.total_installments && t.total_installments > 1
                       const installmentBadge = hasInstallments 
                         ? `${t.installment_index || 1}/${t.total_installments}` 
                         : null
 
                       const transactionName = t.description || t.categories?.name || (isIncomeVisual ? 'Receita' : 'Despesa')
-                      
+
                       return (
                         <div 
                           key={t.id} 
@@ -363,7 +358,7 @@ export default function TransactionsPage() {
                             style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6', color: t.categories?.color || '#64748b' }}>
                             <IconComp size={18} />
                           </div>
-                          
+
                           <div className="flex-1 min-w-0 pr-2">
                             <div className="flex items-center gap-1.5">
                               <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">
