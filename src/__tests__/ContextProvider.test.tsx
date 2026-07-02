@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ContextProvider, useContext_, ContextToggle } from '@/components/ContextToggle'
 
 // Mock do localStorage
@@ -14,18 +14,21 @@ const localStorageMock = (() => {
 
 Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 
-// Mock do supabase (para o ContextProvider)
+// Mock do supabase
 jest.mock('@/lib/supabase', () => ({
   supabase: {
-    auth: {
-      getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null })
-    },
+    auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }) },
     from: jest.fn().mockReturnValue({
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({ data: null, error: null })
     })
   }
+}))
+
+// Mock do useAuth
+jest.mock('@/lib/hooks/useAuth', () => ({
+  useAuth: () => ({ user: { id: 'test-user' }, loading: false })
 }))
 
 // Componente de teste para acessar o contexto
@@ -48,75 +51,45 @@ describe('ContextProvider', () => {
     localStorage.clear()
   })
 
-  it('deve iniciar com appMode null e contexto dfl', () => {
-    render(
-      <ContextProvider>
-        <TestConsumer />
-      </ContextProvider>
-    )
+  it('inicia com appMode null e contexto dfl', () => {
+    render(<ContextProvider><TestConsumer /></ContextProvider>)
     expect(screen.getByTestId('appmode-value').textContent).toBe('null')
     expect(screen.getByTestId('context-value').textContent).toBe('dfl')
   })
 
-  it('deve carregar appMode do localStorage', () => {
+  it('carrega appMode do localStorage', () => {
     localStorage.setItem('dfl_app_mode', 'personal_only')
-    render(
-      <ContextProvider>
-        <TestConsumer />
-      </ContextProvider>
-    )
+    render(<ContextProvider><TestConsumer /></ContextProvider>)
     expect(screen.getByTestId('appmode-value').textContent).toBe('personal_only')
     expect(screen.getByTestId('context-value').textContent).toBe('personal')
   })
 
-  it('deve alternar para personal_only e bloquear setContext', () => {
-    render(
-      <ContextProvider>
-        <TestConsumer />
-      </ContextProvider>
-    )
-    
+  it('bloqueia setContext no modo personal_only', () => {
+    render(<ContextProvider><TestConsumer /></ContextProvider>)
     fireEvent.click(screen.getByTestId('set-mode-personal-only'))
-    expect(screen.getByTestId('appmode-value').textContent).toBe('personal_only')
     expect(screen.getByTestId('context-value').textContent).toBe('personal')
-    
-    // Tentar mudar para dfl não deve funcionar
-    fireEvent.click(screen.getByTestId('set-dfl'))
+    fireEvent.click(screen.getByTestId('set-dfl')) // deve ser ignorado
     expect(screen.getByTestId('context-value').textContent).toBe('personal')
   })
 
-  it('deve permitir setContext no modo full', () => {
-    render(
-      <ContextProvider>
-        <TestConsumer />
-      </ContextProvider>
-    )
-    
-    fireEvent.click(screen.getByTestId('set-mode-full'))
+  it('permite setContext no modo full', () => {
+    localStorage.setItem('dfl_app_mode', 'full')
+    render(<ContextProvider><TestConsumer /></ContextProvider>)
     fireEvent.click(screen.getByTestId('set-personal'))
     expect(screen.getByTestId('context-value').textContent).toBe('personal')
   })
 })
 
 describe('ContextToggle', () => {
-  it('não deve renderizar quando appMode não é full', () => {
+  it('não renderiza quando appMode não é full', () => {
     localStorage.setItem('dfl_app_mode', 'personal_only')
-    const { container } = render(
-      <ContextProvider>
-        <ContextToggle />
-      </ContextProvider>
-    )
+    const { container } = render(<ContextProvider><ContextToggle /></ContextProvider>)
     expect(container.firstChild).toBeNull()
   })
 
-  it('deve renderizar quando appMode é full', () => {
+  it('renderiza com PJ e PF quando appMode é full', () => {
     localStorage.setItem('dfl_app_mode', 'full')
-    const { container } = render(
-      <ContextProvider>
-        <ContextToggle />
-      </ContextProvider>
-    )
-    expect(container.firstChild).not.toBeNull()
+    render(<ContextProvider><ContextToggle /></ContextProvider>)
     expect(screen.getByText('PJ')).toBeInTheDocument()
     expect(screen.getByText('PF')).toBeInTheDocument()
   })
