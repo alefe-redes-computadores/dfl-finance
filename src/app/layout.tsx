@@ -3,8 +3,10 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import BottomNav from '@/components/BottomNav'
-import { ContextProvider } from '@/components/ContextToggle'
+
+// 🚨 SUSPEITOS DESATIVADOS TEMPORARIAMENTE:
+// import BottomNav from '@/components/BottomNav'
+// import { ContextProvider } from '@/components/ContextToggle'
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -24,16 +26,18 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
+      {/* Faixa de aviso para sabermos que o modo de recuperação funcionou */}
+      <div className="p-4 bg-red-600 text-white text-center font-bold text-sm">
+        MODO DE RECUPERAÇÃO ATIVO
+      </div>
       {children}
-      <BottomNav />
     </div>
   )
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ContextProvider>
-      <AppContent>{children}</AppContent>
-    </ContextProvider>
+    // 🚨 ContextProvider removido temporariamente
+    <AppContent>{children}</AppContent>
   )
 }
