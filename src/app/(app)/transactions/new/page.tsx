@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -13,18 +13,73 @@ import {
   Edit3, FileText,
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
-import ReceiptModal from '@/components/ReceiptModal'
-import CameraCapture from '@/components/CameraCapture'
-import QRCodeScanner from '@/components/QRCodeScanner'
+import dynamic from 'next/dynamic'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
-import ModalFinancing from '@/components/ModalFinancing'
-import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+
+// ============================================================
+// LAZY LOADING DOS MODAIS PESADOS
+// ============================================================
+const ReceiptModal = dynamic(
+  () => import('@/components/ReceiptModal'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl">
+          <Loader2 className="animate-spin text-teal-600 mx-auto" size={32} />
+          <p className="text-sm text-gray-500 mt-2">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
+const CameraCapture = dynamic(
+  () => import('@/components/CameraCapture'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl">
+          <Loader2 className="animate-spin text-teal-600 mx-auto" size={32} />
+          <p className="text-sm text-gray-500 mt-2">Abrindo câmera...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
+const QRCodeScanner = dynamic(
+  () => import('@/components/QRCodeScanner'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl">
+          <Loader2 className="animate-spin text-teal-600 mx-auto" size={32} />
+          <p className="text-sm text-gray-500 mt-2">Abrindo scanner...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
+const ModalFinancing = dynamic(
+  () => import('@/components/ModalFinancing'),
+  { ssr: false }
+)
+
+const ModalEmprestimo = dynamic(
+  () => import('@/components/ModalEmprestimo'),
+  { ssr: false }
+)
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -46,12 +101,7 @@ function NewTransactionContent() {
   const searchParams = useSearchParams()
   const { showToast } = useToast()
   const { context, appMode } = useContext_()
-
-  const vibrate = (pattern: number | number[]) => {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(pattern)
-    }
-  }
+  const { vibrate, success } = useHapticFeedback()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -167,13 +217,13 @@ function NewTransactionContent() {
   const selectedCard = creditCards.find((c) => c.id === creditCardId)
   const selectedContact = contacts.find((c) => c.id === contactId)
 
-  const toggleTag = (id: string) => {
+  const toggleTag = useCallback((id: string) => {
     setSelectedTags((prev) => {
       if (prev.includes(id)) return prev.filter((t) => t !== id)
       if (prev.length >= 5) return prev
       return [...prev, id]
     })
-  }
+  }, [])
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -242,15 +292,22 @@ function NewTransactionContent() {
     loadData()
   }, [loadData])
 
-  useEffect(() => {
+  const budgetAlertMemo = useMemo(() => {
     if (!categoryId || amountNum <= 0 || type !== 'expense') {
+      return null
+    }
+    const budget = budgets.find((b) => b.category_id === categoryId)
+    if (!budget) return null
+    return budget
+  }, [categoryId, amountNum, type, budgets])
+
+  useEffect(() => {
+    if (!budgetAlertMemo || !user?.id) {
       setBudgetAlert(null)
       return
     }
-    const budget = budgets.find((b) => b.category_id === categoryId)
-    if (!budget) { setBudgetAlert(null); return }
-    if (!user?.id) return
 
+    const budget = budgetAlertMemo
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
@@ -283,7 +340,7 @@ function NewTransactionContent() {
           setBudgetAlert(null)
         }
       })
-  }, [categoryId, amountNum, type, budgets, user, effectiveContext])
+  }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
 
   const uploadFile = async (file: File) => {
     if (!user) return
@@ -530,7 +587,7 @@ function NewTransactionContent() {
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     if (amountNum <= 0) { showToast('Valor deve ser maior que zero.', 'warning'); return }
@@ -795,7 +852,7 @@ function NewTransactionContent() {
       }
 
       showToast('Transação salva com sucesso!', 'success')
-      vibrate([50])
+      success()
       router.refresh()
       router.push('/transactions')
     } catch (e: any) {
@@ -804,16 +861,16 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }
+  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
 
-  const AttachmentIcon = () => {
+  const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
     if (receiptUrl) {
       if (receiptType === 'pdf') return <Paperclip size={20} className="text-teal-600 dark:text-teal-400" />
       return <ImageIcon size={20} className="text-teal-600 dark:text-teal-400" />
     }
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
-  }
+  }, [uploading, receiptUrl, receiptType])
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
@@ -858,7 +915,7 @@ function NewTransactionContent() {
             <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
           <button onClick={() => !receiptUrl && setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
-            <AttachmentIcon />
+            {AttachmentIcon}
           </button>
         </div>
       </div>
@@ -1053,6 +1110,435 @@ function NewTransactionContent() {
           </div>
         )}
       </div>
+
+      {/* ============================================================
+          MODAIS COM LAZY LOADING
+          ============================================================ */}
+      {showReceiptModal && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          onSelect={handleReceiptOption}
+        />
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          onClose={() => setShowCamera(false)}
+          onCapture={handleCameraCapture}
+        />
+      )}
+
+      {showQRScanner && (
+        <QRCodeScanner
+          isOpen={showQRScanner}
+          onClose={() => setShowQRScanner(false)}
+          onResult={handleQRResult}
+        />
+      )}
+
+      {showFinancingModal && (
+        <ModalFinancing
+          isOpen={showFinancingModal}
+          onClose={() => setShowFinancingModal(false)}
+          onSelect={(financingId: string) => {
+            setFinancingId(financingId)
+            setShowFinancingModal(false)
+          }}
+        />
+      )}
+
+      {showLoanModal && (
+        <ModalEmprestimo
+          isOpen={showLoanModal}
+          onClose={() => setShowLoanModal(false)}
+          onSelect={(debtId: string) => {
+            setDebtId(debtId)
+            setShowLoanModal(false)
+          }}
+        />
+      )}
+
+      {/* Modais de criação (já são leves, mantidos como estão) */}
+      {showCatModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => setShowCatModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {categories.map((cat) => {
+                const IconComp = getDynamicIcon(cat.icon)
+                const subs = subcategories[cat.id] || []
+                return (
+                  <div key={cat.id}>
+                    <button
+                      onClick={() => {
+                        setCategoryId(cat.id)
+                        setShowCatModal(false)
+                      }}
+                      className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
+                          <IconComp size={20} />
+                        </div>
+                        <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{cat.name}</span>
+                      </div>
+                      <ChevronRight size={18} className="text-gray-300" />
+                    </button>
+                    {subs.length > 0 && (
+                      <div className="ml-12 space-y-1 mt-1">
+                        {subs.map((sub) => {
+                          const SubIconComp = getDynamicIcon(sub.icon)
+                          return (
+                            <button
+                              key={sub.id}
+                              onClick={() => {
+                                setCategoryId(sub.id)
+                                setShowCatModal(false)
+                              }}
+                              className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                            >
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
+                                <SubIconComp size={16} />
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{sub.name}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => setShowAccModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  onClick={() => {
+                    setAccountId(acc.id)
+                    setShowAccModal(false)
+                  }}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <BankLogo color={acc.color} name={acc.name} size="sm" />
+                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{acc.name}</span>
+                  </div>
+                  <span className="text-sm font-bold text-gray-500 dark:text-gray-400">
+                    {formatCurrency(acc.balance || 0)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCardModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {creditCards.map((card) => (
+                <button
+                  key={card.id}
+                  onClick={() => {
+                    setCreditCardId(card.id)
+                    setShowCardModal(false)
+                  }}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}>
+                      <CreditCard size={20} />
+                    </div>
+                    <div>
+                      <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{card.name}</span>
+                      <p className="text-[10px] text-gray-400">Vence dia {card.due_day}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showContactModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowContactModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contatos</h3>
+              <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {contacts.map((contact) => {
+                const IconComp = getDynamicIcon(contact.icon || 'user')
+                return (
+                  <button
+                    key={contact.id}
+                    onClick={() => {
+                      setContactId(contact.id)
+                      setShowContactModal(false)
+                    }}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color || '#14b8a6'}20`, color: contact.color || '#14b8a6' }}>
+                        <IconComp size={20} />
+                      </div>
+                      <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{contact.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-400">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTagModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags (máx 5)</h3>
+              <button onClick={() => setShowTagModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {tags.map((tag) => {
+                const isSelected = selectedTags.includes(tag.id)
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors ${isSelected ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color || '#22c55e' }} />
+                      <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{tag.name}</span>
+                    </div>
+                    {isSelected && <Check size={18} className="text-teal-600" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateCatModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Nova Categoria</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome</label>
+                <input
+                  type="text"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  placeholder="Ex: Supermercado"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Cor</label>
+                <div className="flex gap-2 flex-wrap">
+                  {CATEGORY_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setNewCatColor(color)}
+                      className={`w-8 h-8 rounded-full transition-all ${newCatColor === color ? 'ring-2 ring-offset-2 ring-teal-500' : ''}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Ícone</label>
+                <button
+                  onClick={() => setShowIconPicker(true)}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm flex items-center gap-3"
+                >
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>
+                    {(() => {
+                      const IconComp = getDynamicIcon(newCatIcon)
+                      return <IconComp size={18} />
+                    })()}
+                  </div>
+                  <span className="text-gray-600 dark:text-gray-300">{newCatIcon}</span>
+                </button>
+              </div>
+              <button
+                onClick={handleSaveCategory}
+                disabled={savingCategory || !newCatName.trim()}
+                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+              >
+                {savingCategory ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Criar Categoria'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateAccModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Nova Conta</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome</label>
+                <input
+                  type="text"
+                  value={newAccName}
+                  onChange={(e) => setNewAccName(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  placeholder="Ex: Conta Corrente"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Cor</label>
+                <div className="flex gap-2 flex-wrap">
+                  {CATEGORY_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setNewAccColor(color)}
+                      className={`w-8 h-8 rounded-full transition-all ${newAccColor === color ? 'ring-2 ring-offset-2 ring-teal-500' : ''}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={handleSaveAccount}
+                disabled={savingAccount || !newAccName.trim()}
+                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+              >
+                {savingAccount ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Criar Conta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateTagModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Nova Tag</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome</label>
+                <input
+                  type="text"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  placeholder="Ex: Urgente"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Cor</label>
+                <div className="flex gap-2 flex-wrap">
+                  {CATEGORY_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setNewTagColor(color)}
+                      className={`w-8 h-8 rounded-full transition-all ${newTagColor === color ? 'ring-2 ring-offset-2 ring-teal-500' : ''}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={handleSaveTag}
+                disabled={savingTag || !newTagName.trim()}
+                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+              >
+                {savingTag ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Criar Tag'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showIconPicker && (
+        <IconPicker
+          isOpen={showIconPicker}
+          onClose={() => setShowIconPicker(false)}
+          onSelect={(icon: string) => {
+            setNewCatIcon(icon)
+            setShowIconPicker(false)
+          }}
+        />
+      )}
+
+      {showCustomRecurrenceModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Recorrência Personalizada</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Total de parcelas</label>
+                <input
+                  type="number"
+                  value={customParcels}
+                  onChange={(e) => setCustomParcels(Number(e.target.value))}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  min="1"
+                  max="120"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Intervalo (meses)</label>
+                <input
+                  type="number"
+                  value={customInterval}
+                  onChange={(e) => setCustomInterval(Number(e.target.value))}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  min="1"
+                  max="12"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCustomRecurrenceModal(false)}
+                  className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setFrequency('custom')
+                    setShowCustomRecurrenceModal(false)
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-teal-700 text-white font-bold"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
