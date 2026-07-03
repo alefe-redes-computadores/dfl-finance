@@ -35,11 +35,11 @@ export function ConciProgress({
       <div className="w-full h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
         <div
           className="h-full bg-teal-500 rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${Math.min(progress, 100)}%` }}
         />
         <div
           className="absolute inset-0 h-full bg-emerald-500/30 rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${donePercent}%` }}
+          style={{ width: `${Math.min(donePercent, 100)}%` }}
         />
       </div>
     </div>
