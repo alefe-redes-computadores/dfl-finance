@@ -324,8 +324,8 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY PREMIUM COM TAMANHO AJUSTADO (pt-6) ── */}
-      <div className="sticky top-0 z-50 bg-[#f8f9fa]/90 dark:bg-slate-900/90 backdrop-blur-md pt-6 pb-3 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
+      {/* ── HEADER STICKY: Reduzido pb-3 para pb-2 para colar mais no conteúdo abaixo ── */}
+      <div className="sticky top-0 z-50 bg-[#f8f9fa]/90 dark:bg-slate-900/90 backdrop-blur-md pt-6 pb-2 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
         
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
@@ -396,7 +396,8 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      <div className="px-4 pt-4">
+      {/* ── CONTEÚDO PRINCIPAL: Reduzido de pt-4 para pt-2 ── */}
+      <div className="px-4 pt-2">
         {loading ? (
           <TransactionsSkeleton />
         ) : filtered.length === 0 && !loadingMore ? (
