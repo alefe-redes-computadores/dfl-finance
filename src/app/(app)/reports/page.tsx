@@ -13,29 +13,39 @@ import { format, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isWithi
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RePieChart,
-  Pie,
-  Cell,
-  Legend,
-  LineChart as ReLineChart,
-  Line,
-} from 'recharts'
+import dynamic from 'next/dynamic'
+
+// ============================================================
+// LAZY LOADING DOS GRÁFICOS (Recharts)
+// ============================================================
+const BarChartComponent = dynamic(
+  () => import('recharts').then(mod => mod.BarChart),
+  { ssr: false, loading: () => <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
+)
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false })
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
+const PieChartComponent = dynamic(
+  () => import('recharts').then(mod => mod.PieChart),
+  { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
+)
+const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false })
+const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false })
+const Legend = dynamic(() => import('recharts').then(mod => mod.Legend), { ssr: false })
+const LineChartComponent = dynamic(
+  () => import('recharts').then(mod => mod.LineChart),
+  { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
+)
+const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false })
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
-
 const ReportsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
-    {/* Cards de resumo */}
     <div className="grid grid-cols-3 gap-3">
       <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
@@ -54,13 +64,11 @@ const ReportsSkeleton = () => (
       </div>
     </div>
 
-    {/* Gráfico de barras */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-xl" />
     </div>
 
-    {/* Gráfico de pizza e linha */}
     <div className="grid grid-cols-2 gap-3">
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
         <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
@@ -85,7 +93,6 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState<'1m' | '3m' | '6m' | '12m'>('3m')
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -154,7 +161,6 @@ export default function ReportsPage() {
     ? transactions 
     : transactions.filter(t => t.type === filterType)
 
-  // Cards de resumo
   const totalIncome = transactions
     .filter(t => t.type === 'income')
     .reduce((acc, t) => acc + Number(t.amount), 0)
@@ -165,7 +171,6 @@ export default function ReportsPage() {
 
   const balance = totalIncome - totalExpense
 
-  // Dados por categoria
   const categoryData = filteredTransactions.reduce((acc: any[], t) => {
     const categoryName = t.categories?.name || 'Outros'
     const existing = acc.find(item => item.name === categoryName)
@@ -179,7 +184,6 @@ export default function ReportsPage() {
 
   const COLORS = ['#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-  // Dados por mês
   const monthlyData = transactions.reduce((acc: any[], t) => {
     const monthKey = format(new Date(t.date), 'yyyy-MM')
     const existing = acc.find(item => item.month === monthKey)
@@ -197,7 +201,6 @@ export default function ReportsPage() {
     return acc
   }, []).sort((a, b) => a.month.localeCompare(b.month))
 
-  // Dados por dia (últimos 30 dias)
   const dailyData = (() => {
     const endDate = new Date()
     const startDate = subMonths(endDate, 1)
@@ -217,12 +220,7 @@ export default function ReportsPage() {
     })
   })()
 
-  // ============================================================
-  // EXPORTAÇÃO
-  // ============================================================
   const handleExport = (format: 'pdf' | 'csv') => {
-    // Aqui você pode implementar a exportação
-    // Por enquanto, apenas um toast
     alert(`Exportando relatório em ${format.toUpperCase()}`)
   }
 
@@ -241,14 +239,12 @@ export default function ReportsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -258,7 +254,6 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
@@ -279,7 +274,6 @@ export default function ReportsPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        {/* Filtros */}
         <div className="flex flex-wrap gap-2 items-center justify-between">
           <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
             {periods.map(p => (
@@ -334,7 +328,6 @@ export default function ReportsPage() {
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in duration-300">
-            {/* Cards de resumo */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
                 <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
@@ -365,7 +358,6 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Gráfico de barras (mensal) */}
             {monthlyData.length > 0 && (
               <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
@@ -374,7 +366,7 @@ export default function ReportsPage() {
                 </h3>
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData}>
+                    <BarChartComponent data={monthlyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
@@ -384,21 +376,19 @@ export default function ReportsPage() {
                       />
                       <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                    </BarChartComponent>
                   </ResponsiveContainer>
                 </div>
               </div>
             )}
 
-            {/* Gráficos de pizza e linha */}
             <div className="grid grid-cols-2 gap-3">
-              {/* Pizza - Categorias */}
               {categoryData.length > 0 && (
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
                   <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Categorias</h3>
                   <div className="h-[150px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <RePieChart>
+                      <PieChartComponent>
                         <Pie
                           data={categoryData}
                           dataKey="value"
@@ -417,19 +407,18 @@ export default function ReportsPage() {
                           formatter={(v: any) => formatCurrency(v)}
                           contentStyle={{ fontSize: 10, borderRadius: 12 }}
                         />
-                      </RePieChart>
+                      </PieChartComponent>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
 
-              {/* Linha - Saldo diário */}
               {dailyData.length > 0 && (
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
                   <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Saldo Diário</h3>
                   <div className="h-[150px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ReLineChart data={dailyData}>
+                      <LineChartComponent data={dailyData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="date" tick={{ fontSize: 8 }} interval={4} />
                         <YAxis tick={{ fontSize: 8 }} tickFormatter={(v) => `R$${v}`} />
@@ -444,14 +433,13 @@ export default function ReportsPage() {
                           strokeWidth={2}
                           dot={false}
                         />
-                      </ReLineChart>
+                      </LineChartComponent>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Botões de exportação */}
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => handleExport('pdf')}
