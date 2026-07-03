@@ -377,22 +377,14 @@ function AnalysisContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
+      {/* 🔵 Bolinha de carregamento sutil (único indicador) */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
+      {/* ❌ REMOVIDO: Toast de "Atualizando..." que dava impressão de lentidão */}
 
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
