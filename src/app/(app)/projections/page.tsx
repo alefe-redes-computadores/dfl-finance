@@ -12,19 +12,12 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
+import dynamic from 'next/dynamic'
 
-// ✅ Imports normais (sem lazy loading) para evitar erro de tipagem
-import {
-  AreaChart,
-  Area,
-  LineChart as ReLineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer
-} from 'recharts'
+// ============================================================
+// LAZY LOADING DO MÓDULO REACHTS INTEIRO (RESOLVE O ERRO)
+// ============================================================
+const Recharts = dynamic(() => import('recharts'), { ssr: false }) as any
 
 // ============================================================
 // SKELETON LOADER
@@ -375,29 +368,29 @@ export default function ProjectionsPage() {
                 </div>
               </div>
               <div className="h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={projections}>
+                <Recharts.ResponsiveContainer width="100%" height="100%">
+                  <Recharts.AreaChart data={projections}>
                     <defs>
                       <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
                         <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
-                    <Tooltip
+                    <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <Recharts.XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                    <Recharts.YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
+                    <Recharts.Tooltip
                       formatter={(v: any) => formatCurrency(v)}
                       contentStyle={{ fontSize: 12, borderRadius: 12 }}
                     />
-                    <Area
+                    <Recharts.Area
                       type="monotone"
                       dataKey="balance"
                       stroke="#14b8a6"
                       strokeWidth={2}
                       fill="url(#balanceGradient)"
                     />
-                    <Line
+                    <Recharts.Line
                       type="monotone"
                       dataKey="currentBalance"
                       stroke="#34d399"
@@ -405,8 +398,8 @@ export default function ProjectionsPage() {
                       strokeDasharray="5 5"
                       dot={{ r: 4 }}
                     />
-                  </AreaChart>
-                </ResponsiveContainer>
+                  </Recharts.AreaChart>
+                </Recharts.ResponsiveContainer>
               </div>
             </div>
 
