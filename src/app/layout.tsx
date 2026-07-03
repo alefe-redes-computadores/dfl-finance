@@ -5,9 +5,14 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
+import './globals.css'
 
-// 🚨 IMPORTANTE: Esta linha devolve o visual (Tailwind) pro seu app!
-import './globals.css' 
+// 1. IMPORTAÇÃO DA POPPINS
+import { Poppins } from 'next/font/google'
+const poppins = Poppins({ 
+  subsets: ['latin'], 
+  weight: ['400', '500', '600', '700'] // Pesos comuns da Poppins
+})
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -34,8 +39,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  // 2. APLICAÇÃO DA CLASSE poppins.className
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={poppins.className}>
       <body>
         <ContextProvider>
           <AppContent>{children}</AppContent>
