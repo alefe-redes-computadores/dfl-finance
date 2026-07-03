@@ -1484,6 +1484,7 @@ function NewTransactionContent() {
         <IconPicker
           isOpen={showIconPicker}
           onClose={() => setShowIconPicker(false)}
+          selectedIcon={newCatIcon}
           onSelect={(icon: string) => {
             setNewCatIcon(icon)
             setShowIconPicker(false)
