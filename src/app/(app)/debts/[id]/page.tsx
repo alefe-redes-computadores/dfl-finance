@@ -21,7 +21,6 @@ import { formatCurrency } from '@/lib/utils'
 // ============================================================
 const DebtDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6 space-y-4">
-    {/* Card principal */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
@@ -47,7 +46,6 @@ const DebtDetailSkeleton = () => (
       <div className="h-3 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
     </div>
 
-    {/* Histórico */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       {[1, 2, 3].map((i) => (
@@ -67,7 +65,7 @@ export default function DebtDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, appMode } = useContext_()
   const { showToast } = useToast()
 
   const [debt, setDebt] = useState<any>(null)
@@ -77,17 +75,14 @@ export default function DebtDetailPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Modal de pagamento
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [payAmount, setPayAmount] = useState('0,00')
   const [payAmountNum, setPayAmountNum] = useState(0)
   const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [payNote, setPayNote] = useState('')
 
-  // Modal de exclusão
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -144,7 +139,6 @@ export default function DebtDetailPage() {
 
     setDebt(debtData)
 
-    // Buscar pagamentos (transações vinculadas)
     const { data: payData } = await supabase
       .from('transactions')
       .select('*')
@@ -172,8 +166,42 @@ export default function DebtDetailPage() {
     setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
+  // 🔧 CORREÇÃO: Função para buscar uma conta padrão do contexto atual
+  const getDefaultAccount = async (): Promise<string | null> => {
+    if (!user?.id || !context) return null
+
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('context', context)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+
+    if (error || !data) {
+      return null
+    }
+
+    return data.id
+  }
+
   const handlePayment = async () => {
-    if (!user?.id || payAmountNum <= 0) return
+    if (!user?.id) {
+      showToast('Usuário não autenticado.', 'error')
+      return
+    }
+
+    if (!context) {
+      showToast('Selecione um contexto (PF ou PJ) antes de registrar.', 'warning')
+      return
+    }
+
+    if (payAmountNum <= 0) {
+      showToast('Digite um valor válido.', 'warning')
+      return
+    }
+
     const remaining = Number(debt.total_amount) - Number(debt.paid_amount || 0)
     if (payAmountNum > remaining) {
       showToast('Valor excede o saldo devedor.', 'warning')
@@ -183,6 +211,26 @@ export default function DebtDetailPage() {
     setSaving(true)
 
     try {
+      // Buscar uma conta padrão para o contexto atual
+      const accountId = await getDefaultAccount()
+      if (!accountId) {
+        showToast('Nenhuma conta encontrada para este contexto. Crie uma conta primeiro.', 'warning')
+        setSaving(false)
+        return
+      }
+
+      // Buscar uma categoria padrão para receitas
+      const { data: categoryData } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('context', context)
+        .eq('type', 'income')
+        .limit(1)
+        .single()
+
+      const categoryId = categoryData?.id || null
+
       // 1. Registrar pagamento como transação (receita)
       const { data: tx, error: txError } = await supabase
         .from('transactions')
@@ -196,6 +244,8 @@ export default function DebtDetailPage() {
           status: 'done',
           affects_balance: true,
           debt_id: id,
+          account_id: accountId,
+          category_id: categoryId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -224,7 +274,8 @@ export default function DebtDetailPage() {
       setPayNote('')
       loadData()
     } catch (err: any) {
-      showToast(`Erro ao registrar pagamento: ${err.message}`, 'error')
+      console.error('Erro ao registrar pagamento:', err)
+      showToast(`Erro ao registrar pagamento: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -254,7 +305,6 @@ export default function DebtDetailPage() {
     return { label: 'Em dia', icon: CheckCircle2, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' }
   }
 
-  // Skeleton enquanto carrega
   if (loading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
@@ -280,14 +330,12 @@ export default function DebtDetailPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -297,7 +345,6 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
         <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
           <ChevronLeft size={24} />
@@ -325,7 +372,6 @@ export default function DebtDetailPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4 animate-in fade-in duration-300">
-        {/* Card Principal */}
         <div className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border ${
           debt.status === 'paid' ? 'border-emerald-200 dark:border-emerald-800' :
           debt.status === 'cancelled' ? 'border-gray-200 dark:border-gray-700' :
@@ -392,7 +438,6 @@ export default function DebtDetailPage() {
           </div>
         </div>
 
-        {/* Botão de pagamento (se ativo) */}
         {isActive && remaining > 0 && (
           <button
             onClick={() => setShowPaymentModal(true)}
@@ -403,7 +448,6 @@ export default function DebtDetailPage() {
           </button>
         )}
 
-        {/* Histórico de pagamentos */}
         <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
           <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
             <Clock size={18} className="text-gray-400" />
@@ -442,7 +486,6 @@ export default function DebtDetailPage() {
         </div>
       </div>
 
-      {/* Modal de Pagamento */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
@@ -506,7 +549,6 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Modal de Exclusão */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowDeleteModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
