@@ -13,23 +13,12 @@ import { format, subMonths, eachDayOfInterval } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
+import dynamic from 'next/dynamic'
 
-// ✅ Imports normais (sem lazy loading) para evitar erro de tipagem
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RePieChart,
-  Pie,
-  Cell,
-  Legend,
-  LineChart as ReLineChart,
-  Line
-} from 'recharts'
+// ============================================================
+// LAZY LOADING DO MÓDULO REACHTS INTEIRO (RESOLVE O ERRO)
+// ============================================================
+const Recharts = dynamic(() => import('recharts'), { ssr: false }) as any
 
 // ============================================================
 // SKELETON LOADER
@@ -144,6 +133,7 @@ export default function ReportsPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Dados processados
   const filteredTransactions = filterType === 'all' 
     ? transactions 
     : transactions.filter(t => t.type === filterType)
@@ -352,19 +342,19 @@ export default function ReportsPage() {
                   Evolução Mensal
                 </h3>
                 <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
-                      <Tooltip
+                  <Recharts.ResponsiveContainer width="100%" height="100%">
+                    <Recharts.BarChart data={monthlyData}>
+                      <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <Recharts.XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                      <Recharts.YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
+                      <Recharts.Tooltip
                         formatter={(v: any) => formatCurrency(v)}
                         contentStyle={{ fontSize: 12, borderRadius: 12 }}
                       />
-                      <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      <Recharts.Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Recharts.Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </Recharts.BarChart>
+                  </Recharts.ResponsiveContainer>
                 </div>
               </div>
             )}
@@ -374,9 +364,9 @@ export default function ReportsPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
                   <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Categorias</h3>
                   <div className="h-[150px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RePieChart>
-                        <Pie
+                    <Recharts.ResponsiveContainer width="100%" height="100%">
+                      <Recharts.PieChart>
+                        <Recharts.Pie
                           data={categoryData}
                           dataKey="value"
                           nameKey="name"
@@ -387,15 +377,15 @@ export default function ReportsPage() {
                           paddingAngle={2}
                         >
                           {categoryData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            <Recharts.Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
-                        </Pie>
-                        <Tooltip
+                        </Recharts.Pie>
+                        <Recharts.Tooltip
                           formatter={(v: any) => formatCurrency(v)}
                           contentStyle={{ fontSize: 10, borderRadius: 12 }}
                         />
-                      </RePieChart>
-                    </ResponsiveContainer>
+                      </Recharts.PieChart>
+                    </Recharts.ResponsiveContainer>
                   </div>
                 </div>
               )}
@@ -404,24 +394,24 @@ export default function ReportsPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
                   <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Saldo Diário</h3>
                   <div className="h-[150px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ReLineChart data={dailyData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="date" tick={{ fontSize: 8 }} interval={4} />
-                        <YAxis tick={{ fontSize: 8 }} tickFormatter={(v) => `R$${v}`} />
-                        <Tooltip
+                    <Recharts.ResponsiveContainer width="100%" height="100%">
+                      <Recharts.LineChart data={dailyData}>
+                        <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <Recharts.XAxis dataKey="date" tick={{ fontSize: 8 }} interval={4} />
+                        <Recharts.YAxis tick={{ fontSize: 8 }} tickFormatter={(v) => `R$${v}`} />
+                        <Recharts.Tooltip
                           formatter={(v: any) => formatCurrency(v)}
                           contentStyle={{ fontSize: 10, borderRadius: 12 }}
                         />
-                        <Line
+                        <Recharts.Line
                           type="monotone"
                           dataKey="balance"
                           stroke="#14b8a6"
                           strokeWidth={2}
                           dot={false}
                         />
-                      </ReLineChart>
-                    </ResponsiveContainer>
+                      </Recharts.LineChart>
+                    </Recharts.ResponsiveContainer>
                   </div>
                 </div>
               )}
