@@ -15,6 +15,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { formatCurrency } from '@/lib/utils'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 // ============================================================
 // SKELETON LOADER (CORES SUAVES)
@@ -65,8 +66,9 @@ export default function DebtDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context } = useContext_()
   const { showToast } = useToast()
+  const { success, error, vibrate } = useHapticFeedback()
 
   const [debt, setDebt] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
@@ -166,7 +168,6 @@ export default function DebtDetailPage() {
     setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // 🔧 CORREÇÃO: Função para buscar uma conta padrão do contexto atual
   const getDefaultAccount = async (): Promise<string | null> => {
     if (!user?.id || !context) return null
 
@@ -189,37 +190,40 @@ export default function DebtDetailPage() {
   const handlePayment = async () => {
     if (!user?.id) {
       showToast('Usuário não autenticado.', 'error')
+      error()
       return
     }
 
     if (!context) {
       showToast('Selecione um contexto (PF ou PJ) antes de registrar.', 'warning')
+      error()
       return
     }
 
     if (payAmountNum <= 0) {
       showToast('Digite um valor válido.', 'warning')
+      error()
       return
     }
 
     const remaining = Number(debt.total_amount) - Number(debt.paid_amount || 0)
     if (payAmountNum > remaining) {
       showToast('Valor excede o saldo devedor.', 'warning')
+      error()
       return
     }
 
     setSaving(true)
 
     try {
-      // Buscar uma conta padrão para o contexto atual
       const accountId = await getDefaultAccount()
       if (!accountId) {
         showToast('Nenhuma conta encontrada para este contexto. Crie uma conta primeiro.', 'warning')
         setSaving(false)
+        error()
         return
       }
 
-      // Buscar uma categoria padrão para receitas
       const { data: categoryData } = await supabase
         .from('categories')
         .select('id')
@@ -231,7 +235,6 @@ export default function DebtDetailPage() {
 
       const categoryId = categoryData?.id || null
 
-      // 1. Registrar pagamento como transação (receita)
       const { data: tx, error: txError } = await supabase
         .from('transactions')
         .insert({
@@ -254,7 +257,6 @@ export default function DebtDetailPage() {
 
       if (txError) throw txError
 
-      // 2. Atualizar dívida
       const newPaid = Number(debt.paid_amount || 0) + payAmountNum
       const newStatus = newPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
 
@@ -267,7 +269,8 @@ export default function DebtDetailPage() {
         })
         .eq('id', id)
 
-      showToast('Pagamento registrado com sucesso!', 'success')
+      success()
+      showToast('✅ Pagamento registrado com sucesso!', 'success')
       setShowPaymentModal(false)
       setPayAmount('0,00')
       setPayAmountNum(0)
@@ -275,7 +278,8 @@ export default function DebtDetailPage() {
       loadData()
     } catch (err: any) {
       console.error('Erro ao registrar pagamento:', err)
-      showToast(`Erro ao registrar pagamento: ${err.message || 'Erro desconhecido'}`, 'error')
+      error()
+      showToast(`❌ Erro ao registrar pagamento: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSaving(false)
     }
