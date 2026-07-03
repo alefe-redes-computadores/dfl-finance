@@ -3,10 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
+import BottomNav from '@/components/BottomNav'
+import { ContextProvider } from '@/components/ContextToggle'
 
-// Mantivemos desligados para testar
-// import BottomNav from '@/components/BottomNav'
-// import { ContextProvider } from '@/components/ContextToggle'
+// 🚨 IMPORTANTE: Esta linha devolve o visual (Tailwind) pro seu app!
+import './globals.css' 
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -26,10 +27,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-      <div className="p-4 bg-red-600 text-white text-center font-bold text-sm">
-        MODO DE RECUPERAÇÃO - TENTATIVA 2
-      </div>
       {children}
+      <BottomNav />
     </div>
   )
 }
@@ -38,7 +37,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
       <body>
-        <AppContent>{children}</AppContent>
+        <ContextProvider>
+          <AppContent>{children}</AppContent>
+        </ContextProvider>
       </body>
     </html>
   )
