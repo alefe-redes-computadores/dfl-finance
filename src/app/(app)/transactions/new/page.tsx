@@ -1124,6 +1124,7 @@ function NewTransactionContent() {
 
       {showCamera && (
         <CameraCapture
+          isOpen={showCamera}
           onClose={() => setShowCamera(false)}
           onCapture={handleCameraCapture}
         />
