@@ -59,7 +59,6 @@ function NewTransactionContent() {
     (searchParams.get('type') as TxType) || 'expense'
   )
   const [context, setContext] = useState<Context>(() => {
-    // Inicializa com o contexto efetivo
     return effectiveContext
   })
   const [amountNum, setAmountNum] = useState(0)
@@ -925,6 +924,20 @@ function NewTransactionContent() {
 
       {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+        
+        {/* 🆕 Nome da transação / Descrição (restaurado no topo) */}
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+          <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
+          <input
+            type="text"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
+            className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+          />
+        </div>
+
+        {/* Pago/Recebido */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
             {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
@@ -1017,18 +1030,7 @@ function NewTransactionContent() {
               className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent"
             />
 
-            {/* Descrição + Observações */}
-            <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
-              <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
-              <input
-                type="text"
-                value={desc}
-                onChange={(e) => setDesc(e.target.value)}
-                placeholder="Descrição da transação"
-                className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-            </div>
-
+            {/* 🆕 Observações (restaurado) */}
             <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
               <FileText size={20} className="text-gray-400 dark:text-gray-500" />
               <input
