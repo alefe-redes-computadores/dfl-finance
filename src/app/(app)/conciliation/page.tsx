@@ -7,7 +7,6 @@ import { ArrowLeft, Upload } from 'lucide-react'
 import { useConciQueue } from '@/hooks/useConciQueue'
 import { ConciCard } from '@/components/conciliation/ConciCard'
 import { ConciProgress } from '@/components/conciliation/ConciProgress'
-import { ConciActions } from '@/components/conciliation/ConciActions'
 import { ConciSummary } from '@/components/conciliation/ConciSummary'
 import { generateMockTransactions } from '@/lib/conciliationUtils'
 import { useToast } from '@/contexts/ToastContext'
@@ -26,14 +25,12 @@ export default function ConciliationPage() {
     approve,
     reject,
     reset,
-    clear,
     getStats,
   } = useConciQueue()
 
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // Carrega dados de exemplo ao entrar
   useEffect(() => {
     if (queue.length === 0 && !isComplete) {
       const mock = generateMockTransactions(6)
@@ -59,16 +56,14 @@ export default function ConciliationPage() {
   const handleReset = () => {
     const mock = generateMockTransactions(6)
     reset(mock)
-    showToast('Fila reiniciada com novos dados 🔄', 'info')
+    showToast('Fila reiniciada 🔄', 'info')
   }
 
   const handleTapCard = (id: string) => {
-    // Futuro: abrir modal para editar a transação
     showToast('Edição em breve ✏️', 'info')
   }
 
   const handleImportCSV = () => {
-    // Futuro: abrir modal de importação
     showToast('Importação de CSV em breve 📄', 'info')
   }
 
@@ -124,7 +119,7 @@ export default function ConciliationPage() {
             onReset={handleReset}
           />
         ) : current ? (
-          <div className="w-full space-y-4">
+          <div className="w-full">
             <ConciCard
               transaction={current}
               onApprove={handleApprove}
@@ -132,11 +127,6 @@ export default function ConciliationPage() {
               onTap={handleTapCard}
               isLast={currentIndex === total - 1}
               isLoading={isProcessing}
-            />
-            <ConciActions
-              onApprove={() => handleApprove(current.id)}
-              onReject={() => handleReject(current.id)}
-              disabled={isProcessing}
             />
           </div>
         ) : (
