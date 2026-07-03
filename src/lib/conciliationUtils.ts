@@ -1,9 +1,6 @@
 // src/lib/conciliationUtils.ts
 import { TransactionSuggestion } from '@/components/conciliation/ConciCard'
 
-/**
- * Formata um valor numérico para moeda brasileira (R$)
- */
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -11,10 +8,6 @@ export function formatCurrency(value: number): string {
   }).format(value)
 }
 
-/**
- * Converte um arquivo CSV em um array de transações sugeridas
- * Espera colunas: date, amount (obrigatórias) e opcionalmente description, type
- */
 export function parseCSVToTransactions(
   csvContent: string
 ): Omit<TransactionSuggestion, 'id' | 'status'>[] {
@@ -26,9 +19,10 @@ export function parseCSVToTransactions(
   const amountIdx = headers.indexOf('amount')
   const descIdx = headers.indexOf('description')
   const typeIdx = headers.indexOf('type')
+  const accountIdx = headers.indexOf('account')
 
   if (dateIdx === -1 || amountIdx === -1) {
-    throw new Error('CSV deve conter colunas: date, amount (e opcionalmente description, type)')
+    throw new Error('CSV deve conter colunas: date, amount')
   }
 
   const result: Omit<TransactionSuggestion, 'id' | 'status'>[] = []
@@ -40,6 +34,7 @@ export function parseCSVToTransactions(
     const amount = parseFloat(cols[amountIdx]) || 0
     const typeRaw = typeIdx >= 0 ? cols[typeIdx]?.toLowerCase() : ''
     const type: 'income' | 'expense' = typeRaw === 'income' ? 'income' : 'expense'
+    const accountName = accountIdx >= 0 ? cols[accountIdx] || 'Conta Corrente' : 'Conta Corrente'
 
     if (amount > 0) {
       result.push({
@@ -47,6 +42,7 @@ export function parseCSVToTransactions(
         description,
         amount,
         type,
+        accountName,
         source: 'csv',
       })
     }
@@ -55,26 +51,23 @@ export function parseCSVToTransactions(
   return result
 }
 
-/**
- * Gera transações de exemplo para teste da conciliação
- */
 export function generateMockTransactions(
   count: number = 5
 ): Omit<TransactionSuggestion, 'id' | 'status'>[] {
   const descriptions = [
-    'Supermercado',
-    'Farmácia',
-    'Restaurante',
-    'Uber',
+    'Supermercado Extra',
+    'Farmácia Drogasil',
+    'Restaurante Outback',
+    'Uber Viagem',
     'Netflix',
-    'Salário',
-    'Freelance',
-    'Aluguel',
-    'Energia',
+    'Salário Empresa',
+    'Freelance Design',
+    'Aluguel Apartamento',
+    'Energia Elétrica',
     'Água',
   ]
   const categories = ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Serviços']
-  const accounts = ['Conta Corrente', 'Poupança', 'Cartão Crédito']
+  const accounts = ['Conta Corrente', 'Poupança', 'Cartão de Crédito']
 
   const result: Omit<TransactionSuggestion, 'id' | 'status'>[] = []
 
@@ -94,7 +87,7 @@ export function generateMockTransactions(
       amount,
       type: isIncome ? 'income' : 'expense',
       categorySuggestion: categories[i % categories.length],
-      accountSuggestion: accounts[i % accounts.length],
+      accountName: accounts[i % accounts.length],
       source: 'manual',
     })
   }
