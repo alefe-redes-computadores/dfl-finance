@@ -11,7 +11,9 @@ export interface ConciTransaction {
   amount: number
   type: 'income' | 'expense'
   categorySuggestion?: string
-  accountSuggestion?: string
+  accountName?: string
+  accountId?: string
+  context?: 'dfl' | 'personal'
   source?: 'csv' | 'ocr' | 'manual'
   status: 'pending' | 'approved' | 'rejected'
   originalData?: any
@@ -39,14 +41,12 @@ export function useConciQueue(): UseConciQueueReturn {
   const [queue, setQueue] = useState<ConciTransaction[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
 
-  // Carrega do localStorage ao iniciar
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
         setQueue(parsed)
-        // Encontra o primeiro pending
         const firstPending = parsed.findIndex((t: ConciTransaction) => t.status === 'pending')
         setCurrentIndex(firstPending >= 0 ? firstPending : parsed.length)
       } catch {
@@ -55,7 +55,6 @@ export function useConciQueue(): UseConciQueueReturn {
     }
   }, [])
 
-  // Salva no localStorage sempre que a fila mudar
   useEffect(() => {
     if (queue.length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(queue))
@@ -77,7 +76,6 @@ export function useConciQueue(): UseConciQueueReturn {
       updated[currentIndex] = { ...updated[currentIndex], status: 'approved' }
       return updated
     })
-    // Avança para o próximo pending
     setCurrentIndex(prev => {
       const next = queue.findIndex((t, i) => i > prev && t.status === 'pending')
       return next >= 0 ? next : queue.length
