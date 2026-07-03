@@ -108,7 +108,7 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
-  // 🆕 Usando o hook useScrollPosition
+  // 🆕 Hook para posição de scroll
   const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
   useEffect(() => {
@@ -186,7 +186,7 @@ export default function TransactionsPage() {
     loadTransactions(0)
   }, [loadTransactions])
 
-  // 🆕 Infinite Scroll usando useScrollPosition
+  // 🆕 Infinite scroll com useScrollPosition
   useEffect(() => {
     if (loadingMore || !hasMore || loading) return
     if (scrollY + windowHeight >= documentHeight - 200) {
@@ -231,7 +231,6 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
@@ -242,7 +241,6 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
-
             <div className="relative" ref={exportMenuRef}>
               <button 
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -336,8 +334,6 @@ export default function TransactionsPage() {
                         ? `${t.installment_index || 1}/${t.total_installments}` 
                         : null
 
-                      const transactionName = t.description || t.categories?.name || (isIncomeVisual ? 'Receita' : 'Despesa')
-
                       return (
                         <div 
                           key={t.id} 
@@ -362,7 +358,7 @@ export default function TransactionsPage() {
                           <div className="flex-1 min-w-0 pr-2">
                             <div className="flex items-center gap-1.5">
                               <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">
-                                {transactionName}
+                                {t.description ?? t.categories?.name ?? (isIncomeVisual ? 'Receita' : 'Despesa')}
                               </p>
                               {attachmentIcon && (
                                 <span className="shrink-0">{attachmentIcon}</span>
