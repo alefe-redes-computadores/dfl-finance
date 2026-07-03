@@ -1,11 +1,8 @@
-// src/app/layout.tsx
 import type { Metadata } from 'next'
 import { Poppins } from 'next/font/google'
-import './globals.css'  // ← ESSENCIAL! Não esqueça
+import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
-import { AuthProvider } from '@/lib/hooks/useAuth'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -45,15 +42,11 @@ export default function RootLayout({
         <meta name="theme-color" content="#0f172a" />
       </head>
       <body className="antialiased bg-gray-50 dark:bg-slate-900">
-        <ErrorBoundary>
-          <AuthProvider>
-            <ThemeProvider>
-              <ToastProvider>
-                {children}
-              </ToastProvider>
-            </ThemeProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
