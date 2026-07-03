@@ -147,6 +147,7 @@ export default function TransactionsPage() {
       .match({ user_id: user.id, context: context })
       .gte('date', start)
       .lte('date', end)
+      .order('status', { ascending: true }) // 🔄 PENDENTES PRIMEIRO
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
 
