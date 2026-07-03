@@ -56,6 +56,13 @@ const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
 
 // ============================================================
+// FUNÇÕES AUXILIARES (para contexto)
+// ============================================================
+const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
+const getContextIcon = (ctx: string) =>
+  ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
+
+// ============================================================
 // SAUDAÇÃO DINÂMICA
 // ============================================================
 function getGreeting(): { text: string; icon: React.ReactNode } {
