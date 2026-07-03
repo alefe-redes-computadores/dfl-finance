@@ -28,6 +28,7 @@ import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
+import { toast } from 'sonner' // 🆕 Import para ações personalizadas
 
 // 🆕 Lazy loading do gráfico de projeção (pesado)
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
@@ -575,8 +576,8 @@ function HomeContent() {
     const newEnabledSections = enabledSections.filter(id => id !== sectionId)
     setEnabledSections(newEnabledSections)
     
-    // Mostrar Toast com botão Desfazer
-    showToast(`"${sectionLabel}" ocultado`, {
+    // 🆕 Mostrar Toast com botão Desfazer usando sonner diretamente
+    toast(`"${sectionLabel}" ocultado`, {
       action: {
         label: 'Desfazer',
         onClick: () => {
