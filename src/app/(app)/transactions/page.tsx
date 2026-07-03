@@ -324,10 +324,8 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY PREMIUM COM FROSTED GLASS E SAFE AREA ── */}
-      {/* pt-12 garante que a barra do celular não corte o título */}
-      {/* bg/90 e backdrop-blur criam o vidro fosco para a rolagem ficar perfeita */}
-      <div className="sticky top-0 z-50 bg-[#f8f9fa]/90 dark:bg-slate-900/90 backdrop-blur-md pt-12 pb-3 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
+      {/* ── HEADER STICKY PREMIUM COM TAMANHO AJUSTADO (pt-6) ── */}
+      <div className="sticky top-0 z-50 bg-[#f8f9fa]/90 dark:bg-slate-900/90 backdrop-blur-md pt-6 pb-3 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
         
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
