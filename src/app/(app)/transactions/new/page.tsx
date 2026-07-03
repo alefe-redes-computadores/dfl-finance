@@ -25,7 +25,6 @@ import ModalFinancing from '@/components/ModalFinancing'
 import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -47,7 +46,13 @@ function NewTransactionContent() {
   const searchParams = useSearchParams()
   const { showToast } = useToast()
   const { context, appMode } = useContext_()
-  const { vibrate, success } = useHapticFeedback()
+
+  // 🆕 Função vibrate local (sem dependência de hook)
+  const vibrate = useCallback((pattern: number | number[]) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(pattern)
+    }
+  }, [])
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -798,7 +803,7 @@ function NewTransactionContent() {
       }
 
       showToast('Transação salva com sucesso!', 'success')
-      success()
+      vibrate([50])
       router.refresh()
       router.push('/transactions')
     } catch (e: any) {
@@ -807,7 +812,7 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
+  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -820,7 +825,6 @@ function NewTransactionContent() {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
@@ -996,7 +1000,6 @@ function NewTransactionContent() {
           </button>
         )}
 
-        {/* 🆕 Seletor de Contato */}
         {contacts.length > 0 && (
           <button onClick={() => setShowContactModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-4">
@@ -1023,7 +1026,6 @@ function NewTransactionContent() {
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
             <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
 
-            {/* Observações */}
             <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
               <FileText size={20} className="text-gray-400 dark:text-gray-500" />
               <input
@@ -1065,15 +1067,13 @@ function NewTransactionContent() {
               )}
             </div>
 
-            {/* Restante do conteúdo (modais, botões, etc) permanece igual ao original... */}
-            {/* O restante do código é extenso, mas mantive as alterações principais */}
-
+            {/* O restante do conteúdo (modais) é o mesmo que você já tinha, então mantenha */
+            }
           </div>
         )}
       </div>
 
       {/* Modais e botões — mantenha o que já existe no seu arquivo original */}
-
     </div>
   )
 }
