@@ -16,72 +16,72 @@ import { formatCurrency } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
 // ============================================================
-// LAZY LOADING DOS GRÁFICOS (Recharts) - COM TIPAGEM ANY
+// LAZY LOADING DOS GRÁFICOS (Recharts) - FORÇANDO ANY
 // ============================================================
-const BarChartComponent = dynamic(
+const BarChartComponent: any = dynamic(
   () => import('recharts').then(mod => mod.BarChart),
   { ssr: false, loading: () => <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-) as any
+)
 
-const Bar = dynamic(
+const Bar: any = dynamic(
   () => import('recharts').then(mod => mod.Bar),
   { ssr: false }
-) as any
+)
 
-const XAxis = dynamic(
+const XAxis: any = dynamic(
   () => import('recharts').then(mod => mod.XAxis),
   { ssr: false }
-) as any
+)
 
-const YAxis = dynamic(
+const YAxis: any = dynamic(
   () => import('recharts').then(mod => mod.YAxis),
   { ssr: false }
-) as any
+)
 
-const CartesianGrid = dynamic(
+const CartesianGrid: any = dynamic(
   () => import('recharts').then(mod => mod.CartesianGrid),
   { ssr: false }
-) as any
+)
 
-const Tooltip = dynamic(
+const Tooltip: any = dynamic(
   () => import('recharts').then(mod => mod.Tooltip),
   { ssr: false }
-) as any
+)
 
-const ResponsiveContainer = dynamic(
+const ResponsiveContainer: any = dynamic(
   () => import('recharts').then(mod => mod.ResponsiveContainer),
   { ssr: false }
-) as any
+)
 
-const PieChartComponent = dynamic(
+const PieChartComponent: any = dynamic(
   () => import('recharts').then(mod => mod.PieChart),
   { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-) as any
+)
 
-const Pie = dynamic(
+const Pie: any = dynamic(
   () => import('recharts').then(mod => mod.Pie),
   { ssr: false }
-) as any
+)
 
-const Cell = dynamic(
+const Cell: any = dynamic(
   () => import('recharts').then(mod => mod.Cell),
   { ssr: false }
-) as any
+)
 
-const Legend = dynamic(
+const Legend: any = dynamic(
   () => import('recharts').then(mod => mod.Legend),
   { ssr: false }
-) as any
+)
 
-const LineChartComponent = dynamic(
+const LineChartComponent: any = dynamic(
   () => import('recharts').then(mod => mod.LineChart),
   { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-) as any
+)
 
-const Line = dynamic(
+const Line: any = dynamic(
   () => import('recharts').then(mod => mod.Line),
   { ssr: false }
-) as any
+)
 
 // ============================================================
 // SKELETON LOADER
