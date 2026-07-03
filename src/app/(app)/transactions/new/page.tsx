@@ -13,73 +13,19 @@ import {
   Edit3, FileText,
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
-import dynamic from 'next/dynamic'
+import ReceiptModal from '@/components/ReceiptModal'
+import CameraCapture from '@/components/CameraCapture'
+import QRCodeScanner from '@/components/QRCodeScanner'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import ModalFinancing from '@/components/ModalFinancing'
+import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-
-// ============================================================
-// LAZY LOADING DOS MODAIS PESADOS
-// ============================================================
-const ReceiptModal = dynamic(
-  () => import('@/components/ReceiptModal'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl">
-          <Loader2 className="animate-spin text-teal-600 mx-auto" size={32} />
-          <p className="text-sm text-gray-500 mt-2">Carregando...</p>
-        </div>
-      </div>
-    )
-  }
-)
-
-const CameraCapture = dynamic(
-  () => import('@/components/CameraCapture'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl">
-          <Loader2 className="animate-spin text-teal-600 mx-auto" size={32} />
-          <p className="text-sm text-gray-500 mt-2">Abrindo câmera...</p>
-        </div>
-      </div>
-    )
-  }
-)
-
-const QRCodeScanner = dynamic(
-  () => import('@/components/QRCodeScanner'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl">
-          <Loader2 className="animate-spin text-teal-600 mx-auto" size={32} />
-          <p className="text-sm text-gray-500 mt-2">Abrindo scanner...</p>
-        </div>
-      </div>
-    )
-  }
-)
-
-const ModalFinancing = dynamic(
-  () => import('@/components/ModalFinancing'),
-  { ssr: false }
-)
-
-const ModalEmprestimo = dynamic(
-  () => import('@/components/ModalEmprestimo'),
-  { ssr: false }
-)
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -100,10 +46,10 @@ function NewTransactionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useToast()
-  const { context, appMode } = useContext_()
+  const { context: globalContext, appMode } = useContext_()
   const { vibrate, success } = useHapticFeedback()
 
-  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : globalContext
   const [loadingPulse, setLoadingPulse] = useState(false)
 
   const galeriaInputRef = useRef<HTMLInputElement>(null)
@@ -112,6 +58,10 @@ function NewTransactionContent() {
   const [type, setType] = useState<TxType>(
     (searchParams.get('type') as TxType) || 'expense'
   )
+  const [context, setContext] = useState<Context>(() => {
+    // Inicializa com o contexto efetivo
+    return effectiveContext
+  })
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
@@ -236,36 +186,36 @@ function NewTransactionContent() {
           .from('categories')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', effectiveContext)
+          .eq('context', context)
           .eq('type', catType),
         supabase
           .from('accounts')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', effectiveContext)
+          .eq('context', context)
           .order('name'),
         supabase
           .from('tags')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', effectiveContext)
+          .eq('context', context)
           .order('name'),
         supabase
           .from('budgets')
           .select('*')
-          .match({ user_id: user.id, context: effectiveContext }),
+          .match({ user_id: user.id, context }),
         supabase
           .from('credit_cards')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', effectiveContext)
+          .eq('context', context)
           .eq('is_archived', false)
           .order('name'),
         supabase
           .from('contacts')
           .select('*')
           .eq('user_id', user.id)
-          .eq('context', effectiveContext)
+          .eq('context', context)
           .order('name'),
       ])
 
@@ -286,7 +236,7 @@ function NewTransactionContent() {
     setTags(Array.isArray(tgs) ? tgs : [])
     setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
     setLoadingPulse(false)
-  }, [user, effectiveContext, type])
+  }, [user, context, type])
 
   useEffect(() => {
     loadData()
@@ -314,7 +264,7 @@ function NewTransactionContent() {
     supabase
       .from('transactions')
       .select('amount')
-      .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
+      .match({ user_id: user.id, context, category_id: categoryId })
       .eq('status', 'done')
       .gte('date', start)
       .lte('date', end)
@@ -340,7 +290,7 @@ function NewTransactionContent() {
           setBudgetAlert(null)
         }
       })
-  }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
+  }, [budgetAlertMemo, categoryId, amountNum, user, context])
 
   const uploadFile = async (file: File) => {
     if (!user) return
@@ -522,7 +472,7 @@ function NewTransactionContent() {
           name: newCatName.trim(),
           icon: newCatIcon,
           color: newCatColor,
-          context: effectiveContext,
+          context,
           type: type === 'income' ? 'income' : 'expense',
         })
         .select()
@@ -547,7 +497,7 @@ function NewTransactionContent() {
     try {
       const { data, error } = await supabase
         .from('accounts')
-        .insert({ user_id: user.id, name: newAccName.trim(), color: newAccColor, context: effectiveContext })
+        .insert({ user_id: user.id, name: newAccName.trim(), color: newAccColor, context })
         .select()
         .single()
       if (error) throw error
@@ -570,7 +520,7 @@ function NewTransactionContent() {
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ user_id: user.id, name: newTagName.trim(), color: newTagColor, context: effectiveContext })
+        .insert({ user_id: user.id, name: newTagName.trim(), color: newTagColor, context })
         .select()
         .single()
       if (error) throw error
@@ -602,7 +552,7 @@ function NewTransactionContent() {
         const { data: existingTxs } = await supabase
           .from('transactions')
           .select('amount')
-          .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
+          .match({ user_id: user.id, context, category_id: categoryId })
           .eq('status', 'done')
           .gte('date', start)
           .lte('date', end)
@@ -703,7 +653,7 @@ function NewTransactionContent() {
                 total_amount: 0,
                 paid_amount: 0,
                 status: 'open',
-                context: effectiveContext,
+                context,
               })
               .select()
               .single()
@@ -792,7 +742,7 @@ function NewTransactionContent() {
           tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
           status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
-          context: effectiveContext,
+          context,
           receipt_url: i === 0 ? receiptUrl : null,
           notes: notes || null,
           recurring_group_id: recurringGroupId,
@@ -822,7 +772,7 @@ function NewTransactionContent() {
 
         if (i === 0 && isReimbursable && savedTx) {
           linkedTransactionId = savedTx.id
-          const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
+          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
           const reimbursementDesc = `Reembolso: ${finalDescription}`
 
           const { data: reimbTx, error: reimbError } = await supabase
@@ -861,7 +811,7 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
+  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, context, customInterval, customParcels, vibrate, success])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -903,6 +853,7 @@ function NewTransactionContent() {
         }}
       />
 
+      {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
         <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
           <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
@@ -922,6 +873,7 @@ function NewTransactionContent() {
 
       <ContextToggle />
 
+      {/* Valor */}
       <div className="py-6 text-center px-6">
         <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">
           Valor {isIncome ? 'da Receita' : creditCardId ? 'da Compra' : 'da Despesa'}
@@ -944,6 +896,7 @@ function NewTransactionContent() {
         )}
       </div>
 
+      {/* Preview do comprovante */}
       {uploading ? (
         <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
           <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -970,18 +923,8 @@ function NewTransactionContent() {
         </div>
       ) : null}
 
+      {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
-          <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
-          <input
-            type="text"
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
-            className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-          />
-        </div>
-
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
             {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
@@ -1042,6 +985,7 @@ function NewTransactionContent() {
           </button>
         )}
 
+        {/* Contato */}
         {contacts.length > 0 && (
           <button onClick={() => setShowContactModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-4">
@@ -1057,6 +1001,7 @@ function NewTransactionContent() {
         )}
       </div>
 
+      {/* Mais detalhes */}
       <div className="mx-4 mt-4">
         <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
@@ -1065,7 +1010,24 @@ function NewTransactionContent() {
 
         {showDetails && (
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
-            <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => handleDateChange(e.target.value)}
+              className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent"
+            />
+
+            {/* Descrição + Observações */}
+            <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+              <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
+              <input
+                type="text"
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder="Descrição da transação"
+                className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+            </div>
 
             <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
               <FileText size={20} className="text-gray-400 dark:text-gray-500" />
@@ -1104,16 +1066,85 @@ function NewTransactionContent() {
                       </button>
                     ))}
                   </div>
+                  {frequency === 'custom' && (
+                    <p className="text-xs text-teal-700 dark:text-teal-400 font-medium ml-1 mt-1">
+                      Serão geradas {customParcels} parcelas, a cada {customInterval} mês(es).
+                    </p>
+                  )}
                 </div>
               )}
             </div>
+
+            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+              <div className="flex items-center gap-3">
+                <Tag size={20} className="text-gray-400 dark:text-gray-500" />
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                  {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
+                </span>
+              </div>
+              <Plus size={20} className="text-teal-700 dark:text-teal-400" />
+            </button>
+
+            {!isIncome && (
+              <div className="p-5 space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw size={20} className="text-gray-400 dark:text-gray-500" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É um reembolso</span>
+                      <span className="text-[11px] text-gray-400">Pago com recurso do outro contexto (PF/PJ)</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsReimbursable(!isReimbursable)} className={`w-12 h-6 rounded-full transition-colors ${isReimbursable ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isReimbursable ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <ArrowRightLeft size={20} className="text-gray-400 dark:text-gray-500" />
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
+                  </div>
+                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowFinancingModal(true)}>
+                  <div className="flex items-center gap-3"><Building size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span></div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${financingId ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowLoanModal(true)}>
+                  <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span></div>
+                  <button className={`w-12 h-6 rounded-full transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${debtId ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* ============================================================
-          MODAIS COM LAZY LOADING
-          ============================================================ */}
+      {/* Botão salvar */}
+      <div className="fixed bottom-8 w-full flex justify-center z-40 pointer-events-none">
+        <button
+          onClick={handleSave}
+          disabled={isSubmitting}
+          className={`pointer-events-auto w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform disabled:opacity-50`}
+        >
+          {isSubmitting ? (
+            <Loader2 size={30} className="text-white animate-spin" />
+          ) : (
+            <Check size={30} className="text-white" />
+          )}
+        </button>
+      </div>
+
+      {/* Modais */}
       {showReceiptModal && (
         <ReceiptModal
           isOpen={showReceiptModal}
@@ -1121,7 +1152,6 @@ function NewTransactionContent() {
           onOptionSelect={handleReceiptOption}
         />
       )}
-
       {showCamera && (
         <CameraCapture
           isOpen={showCamera}
@@ -1129,90 +1159,86 @@ function NewTransactionContent() {
           onCapture={handleCameraCapture}
         />
       )}
-
       {showQRScanner && (
         <QRCodeScanner
           onClose={() => setShowQRScanner(false)}
           onResult={handleQRResult}
         />
       )}
-
       {showFinancingModal && (
         <ModalFinancing
           isOpen={showFinancingModal}
           onClose={() => setShowFinancingModal(false)}
-          onSave={(financingId: string) => {
-            setFinancingId(financingId)
-            setShowFinancingModal(false)
-          }}
+          onSave={(id) => setFinancingId(id)}
         />
       )}
-
       {showLoanModal && (
         <ModalEmprestimo
           isOpen={showLoanModal}
           onClose={() => setShowLoanModal(false)}
-          onSave={(debtId: string) => {
-            setDebtId(debtId)
-            setShowLoanModal(false)
-          }}
+          onSave={(id) => setDebtId(id)}
         />
       )}
+      <IconPicker
+        isOpen={showIconPicker}
+        onClose={() => setShowIconPicker(false)}
+        selectedIcon={newCatIcon}
+        onSelect={setNewCatIcon}
+      />
 
-      {/* Modais de criação (já são leves, mantidos como estão) */}
+      {/* Modais de criação e seleção (mantidos integrais) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => setShowCatModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {categories.map((cat) => {
                 const IconComp = getDynamicIcon(cat.icon)
-                const subs = subcategories[cat.id] || []
+                const subCount = subcategories[cat.id]?.length || 0
+                const isActive = cat.id === categoryId
                 return (
-                  <div key={cat.id}>
-                    <button
-                      onClick={() => {
-                        setCategoryId(cat.id)
-                        setShowCatModal(false)
-                      }}
-                      className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
-                          <IconComp size={20} />
-                        </div>
-                        <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{cat.name}</span>
-                      </div>
-                      <ChevronRight size={18} className="text-gray-300" />
-                    </button>
-                    {subs.length > 0 && (
-                      <div className="ml-12 space-y-1 mt-1">
-                        {subs.map((sub) => {
-                          const SubIconComp = getDynamicIcon(sub.icon)
-                          return (
-                            <button
-                              key={sub.id}
-                              onClick={() => {
-                                setCategoryId(sub.id)
-                                setShowCatModal(false)
-                              }}
-                              className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                            >
-                              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
-                                <SubIconComp size={16} />
-                              </div>
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{sub.name}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setSelectedParentCat(cat); subCount > 0 ? setShowSubCatModal(true) : setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
+                    {subCount > 0 && <span className="text-xs text-gray-400 font-medium mr-2">{subCount}</span>}
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300" />}
+                  </button>
                 )
               })}
+              {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSubCatModal && selectedParentCat && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2"><ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" /></button>
+              <div><h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3><p className="text-xs text-gray-500">{selectedParentCat.name}</p></div>
+            </div>
+            <div className="space-y-2">
+              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
+                const SubIcon = getDynamicIcon(sub.icon)
+                const isActive = sub.id === categoryId
+                return (
+                  <button key={sub.id} onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}><SubIcon size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              <button onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }} className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 text-gray-500 font-medium">
+                Usar "{selectedParentCat.name}" sem subcategoria
+              </button>
             </div>
           </div>
         </div>
@@ -1223,27 +1249,21 @@ function NewTransactionContent() {
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
-              <button onClick={() => setShowAccModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+              <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {accounts.map((acc) => (
-                <button
-                  key={acc.id}
-                  onClick={() => {
-                    setAccountId(acc.id)
-                    setShowAccModal(false)
-                  }}
-                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <BankLogo color={acc.color} name={acc.name} size="sm" />
-                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{acc.name}</span>
-                  </div>
-                  <span className="text-sm font-bold text-gray-500 dark:text-gray-400">
-                    {formatCurrency(acc.balance || 0)}
-                  </span>
-                </button>
-              ))}
+              {accounts.map((acc) => {
+                const isActive = acc.id === accountId
+                return (
+                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
             </div>
           </div>
         </div>
@@ -1253,30 +1273,22 @@ function NewTransactionContent() {
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões</h3>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-2">
-              {creditCards.map((card) => (
-                <button
-                  key={card.id}
-                  onClick={() => {
-                    setCreditCardId(card.id)
-                    setShowCardModal(false)
-                  }}
-                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}>
-                      <CreditCard size={20} />
-                    </div>
-                    <div>
-                      <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{card.name}</span>
-                      <p className="text-[10px] text-gray-400">Vence dia {card.due_day}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+              {creditCards.map((card) => {
+                const isActive = card.id === creditCardId
+                return (
+                  <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {creditCards.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>}
             </div>
           </div>
         </div>
@@ -1291,26 +1303,26 @@ function NewTransactionContent() {
             </div>
             <div className="space-y-2">
               {contacts.map((contact) => {
+                const isActive = contact.id === contactId
                 const IconComp = getDynamicIcon(contact.icon || 'user')
                 return (
-                  <button
-                    key={contact.id}
-                    onClick={() => {
-                      setContactId(contact.id)
-                      setShowContactModal(false)
-                    }}
-                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color || '#14b8a6'}20`, color: contact.color || '#14b8a6' }}>
-                        <IconComp size={20} />
-                      </div>
-                      <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{contact.name}</span>
+                  <button key={contact.id} onClick={() => { setContactId(contact.id); setShowContactModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}>
+                      <IconComp size={20} />
                     </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</span>
                     <span className="text-xs text-gray-400">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
+              {contacts.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">Nenhum contato cadastrado.</p>
+                  <button onClick={() => { setShowContactModal(false); router.push('/contacts/new') }} className="text-teal-600 text-sm font-bold mt-2">Criar contato</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1320,80 +1332,40 @@ function NewTransactionContent() {
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags (máx 5)</h3>
-              <button onClick={() => setShowTagModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {tags.map((tag) => {
-                const isSelected = selectedTags.includes(tag.id)
+                const isActive = selectedTags.includes(tag.id)
                 return (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTag(tag.id)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors ${isSelected ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color || '#22c55e' }} />
-                      <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{tag.name}</span>
-                    </div>
-                    {isSelected && <Check size={18} className="text-teal-600" />}
+                  <button key={tag.id} onClick={() => toggleTag(tag.id)}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
+              {tags.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma tag encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
       {showCreateCatModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Nova Categoria</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome</label>
-                <input
-                  type="text"
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
-                  placeholder="Ex: Supermercado"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Cor</label>
-                <div className="flex gap-2 flex-wrap">
-                  {CATEGORY_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setNewCatColor(color)}
-                      className={`w-8 h-8 rounded-full transition-all ${newCatColor === color ? 'ring-2 ring-offset-2 ring-teal-500' : ''}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Ícone</label>
-                <button
-                  onClick={() => setShowIconPicker(true)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>
-                    {(() => {
-                      const IconComp = getDynamicIcon(newCatIcon)
-                      return <IconComp size={18} />
-                    })()}
-                  </div>
-                  <span className="text-gray-600 dark:text-gray-300">{newCatIcon}</span>
-                </button>
-              </div>
-              <button
-                onClick={handleSaveCategory}
-                disabled={savingCategory || !newCatName.trim()}
-                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
-              >
-                {savingCategory ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Criar Categoria'}
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova categoria</h3>
+              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-6">
+              <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Nome da categoria" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" />
+              <div><p className="text-sm text-gray-500 font-medium mb-3">Ícone</p><button onClick={() => setShowIconPicker(true)} className="flex items-center gap-3 bg-gray-100 dark:bg-slate-700 rounded-xl px-4 py-3 w-full text-left"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>{(() => { const I = getDynamicIcon(newCatIcon); return <I size={18} /> })()}</div><span className="text-sm font-medium text-gray-800 dark:text-white flex-1">{newCatIcon}</span><ChevronDown size={16} className="text-gray-400" /></button></div>
+              <div><p className="text-sm text-gray-500 font-medium mb-3">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => setNewCatColor(c)} className={`w-10 h-10 rounded-full transition-transform ${newCatColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button onClick={handleSaveCategory} disabled={savingCategory || !newCatName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 disabled:opacity-50 flex justify-center items-center">
+                {savingCategory ? <Loader2 size={24} className="animate-spin" /> : 'Salvar categoria'}
               </button>
             </div>
           </div>
@@ -1401,39 +1373,17 @@ function NewTransactionContent() {
       )}
 
       {showCreateAccModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Nova Conta</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome</label>
-                <input
-                  type="text"
-                  value={newAccName}
-                  onChange={(e) => setNewAccName(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
-                  placeholder="Ex: Conta Corrente"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Cor</label>
-                <div className="flex gap-2 flex-wrap">
-                  {CATEGORY_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setNewAccColor(color)}
-                      className={`w-8 h-8 rounded-full transition-all ${newAccColor === color ? 'ring-2 ring-offset-2 ring-teal-500' : ''}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <button
-                onClick={handleSaveAccount}
-                disabled={savingAccount || !newAccName.trim()}
-                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
-              >
-                {savingAccount ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Criar Conta'}
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova conta</h3>
+              <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-6">
+              <input type="text" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} placeholder="Nome da conta" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" />
+              <div><p className="text-sm text-gray-500 font-medium mb-3">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => setNewAccColor(c)} className={`w-10 h-10 rounded-full transition-transform ${newAccColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button onClick={handleSaveAccount} disabled={savingAccount || !newAccName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 disabled:opacity-50 flex justify-center items-center">
+                {savingAccount ? <Loader2 size={24} className="animate-spin" /> : 'Salvar conta'}
               </button>
             </div>
           </div>
@@ -1441,101 +1391,34 @@ function NewTransactionContent() {
       )}
 
       {showCreateTagModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Nova Tag</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome</label>
-                <input
-                  type="text"
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
-                  placeholder="Ex: Urgente"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Cor</label>
-                <div className="flex gap-2 flex-wrap">
-                  {CATEGORY_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setNewTagColor(color)}
-                      className={`w-8 h-8 rounded-full transition-all ${newTagColor === color ? 'ring-2 ring-offset-2 ring-teal-500' : ''}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <button
-                onClick={handleSaveTag}
-                disabled={savingTag || !newTagName.trim()}
-                className="w-full bg-teal-700 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
-              >
-                {savingTag ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Criar Tag'}
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova tag</h3>
+              <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-6">
+              <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Nome da tag" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" />
+              <div><p className="text-sm text-gray-500 font-medium mb-3">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => setNewTagColor(c)} className={`w-10 h-10 rounded-full transition-transform ${newTagColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button onClick={handleSaveTag} disabled={savingTag || !newTagName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 disabled:opacity-50 flex justify-center items-center">
+                {savingTag ? <Loader2 size={24} className="animate-spin" /> : 'Salvar tag'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {showIconPicker && (
-        <IconPicker
-          isOpen={showIconPicker}
-          onClose={() => setShowIconPicker(false)}
-          selectedIcon={newCatIcon}
-          onSelect={(icon: string) => {
-            setNewCatIcon(icon)
-            setShowIconPicker(false)
-          }}
-        />
-      )}
-
       {showCustomRecurrenceModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4 text-center">Recorrência Personalizada</h3>
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Recorrência Personalizada</h3>
+              <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
             <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Total de parcelas</label>
-                <input
-                  type="number"
-                  value={customParcels}
-                  onChange={(e) => setCustomParcels(Number(e.target.value))}
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
-                  min="1"
-                  max="120"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Intervalo (meses)</label>
-                <input
-                  type="number"
-                  value={customInterval}
-                  onChange={(e) => setCustomInterval(Number(e.target.value))}
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
-                  min="1"
-                  max="12"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowCustomRecurrenceModal(false)}
-                  className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    setFrequency('custom')
-                    setShowCustomRecurrenceModal(false)
-                  }}
-                  className="flex-1 py-3 rounded-xl bg-teal-700 text-white font-bold"
-                >
-                  Aplicar
-                </button>
-              </div>
+              <div><label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Número de parcelas</label><input type="number" value={customParcels} onChange={(e) => setCustomParcels(Number(e.target.value))} className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" min={1} max={120} /></div>
+              <div><label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Intervalo (em meses)</label><input type="number" value={customInterval} onChange={(e) => setCustomInterval(Number(e.target.value))} className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" min={1} max={24} /></div>
+              <button onClick={() => setShowCustomRecurrenceModal(false)} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4">Confirmar</button>
             </div>
           </div>
         </div>
