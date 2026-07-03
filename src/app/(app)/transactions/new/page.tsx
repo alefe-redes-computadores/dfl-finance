@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -47,12 +47,11 @@ function NewTransactionContent() {
   const { showToast } = useToast()
   const { context, appMode } = useContext_()
 
-  // 🆕 Função vibrate local (sem dependência de hook)
-  const vibrate = useCallback((pattern: number | number[]) => {
+  const vibrate = (pattern: number | number[]) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(pattern)
     }
-  }, [])
+  }
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -168,13 +167,13 @@ function NewTransactionContent() {
   const selectedCard = creditCards.find((c) => c.id === creditCardId)
   const selectedContact = contacts.find((c) => c.id === contactId)
 
-  const toggleTag = useCallback((id: string) => {
+  const toggleTag = (id: string) => {
     setSelectedTags((prev) => {
       if (prev.includes(id)) return prev.filter((t) => t !== id)
       if (prev.length >= 5) return prev
       return [...prev, id]
     })
-  }, [])
+  }
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -243,22 +242,15 @@ function NewTransactionContent() {
     loadData()
   }, [loadData])
 
-  const budgetAlertMemo = useMemo(() => {
-    if (!categoryId || amountNum <= 0 || type !== 'expense') {
-      return null
-    }
-    const budget = budgets.find((b) => b.category_id === categoryId)
-    if (!budget) return null
-    return budget
-  }, [categoryId, amountNum, type, budgets])
-
   useEffect(() => {
-    if (!budgetAlertMemo || !user?.id) {
+    if (!categoryId || amountNum <= 0 || type !== 'expense') {
       setBudgetAlert(null)
       return
     }
+    const budget = budgets.find((b) => b.category_id === categoryId)
+    if (!budget) { setBudgetAlert(null); return }
+    if (!user?.id) return
 
-    const budget = budgetAlertMemo
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
@@ -291,7 +283,7 @@ function NewTransactionContent() {
           setBudgetAlert(null)
         }
       })
-  }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
+  }, [categoryId, amountNum, type, budgets, user, effectiveContext])
 
   const uploadFile = async (file: File) => {
     if (!user) return
@@ -538,7 +530,7 @@ function NewTransactionContent() {
     }
   }
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     if (amountNum <= 0) { showToast('Valor deve ser maior que zero.', 'warning'); return }
@@ -812,16 +804,16 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate])
+  }
 
-  const AttachmentIcon = useMemo(() => {
+  const AttachmentIcon = () => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
     if (receiptUrl) {
       if (receiptType === 'pdf') return <Paperclip size={20} className="text-teal-600 dark:text-teal-400" />
       return <ImageIcon size={20} className="text-teal-600 dark:text-teal-400" />
     }
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
-  }, [uploading, receiptUrl, receiptType])
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-32 transition-colors duration-300">
@@ -854,7 +846,6 @@ function NewTransactionContent() {
         }}
       />
 
-      {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
         <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
           <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
@@ -867,14 +858,13 @@ function NewTransactionContent() {
             <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
           <button onClick={() => !receiptUrl && setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
-            {AttachmentIcon}
+            <AttachmentIcon />
           </button>
         </div>
       </div>
 
       <ContextToggle />
 
-      {/* Valor */}
       <div className="py-6 text-center px-6">
         <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">
           Valor {isIncome ? 'da Receita' : creditCardId ? 'da Compra' : 'da Despesa'}
@@ -897,7 +887,6 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Preview do comprovante */}
       {uploading ? (
         <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
           <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -924,10 +913,7 @@ function NewTransactionContent() {
         </div>
       ) : null}
 
-      {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
-
-        {/* Nome da transação */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
           <input
@@ -939,7 +925,6 @@ function NewTransactionContent() {
           />
         </div>
 
-        {/* Pago/Recebido */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
             {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
@@ -1015,7 +1000,6 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Mais detalhes */}
       <div className="mx-4 mt-4">
         <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
@@ -1066,14 +1050,9 @@ function NewTransactionContent() {
                 </div>
               )}
             </div>
-
-            {/* O restante do conteúdo (modais) é o mesmo que você já tinha, então mantenha */
-            }
           </div>
         )}
       </div>
-
-      {/* Modais e botões — mantenha o que já existe no seu arquivo original */}
     </div>
   )
 }
