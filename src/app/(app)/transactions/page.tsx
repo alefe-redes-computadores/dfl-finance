@@ -180,6 +180,16 @@ export default function TransactionsPage() {
 
   const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
+  // 🔥 Ref para medir a altura do header
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [headerHeight, setHeaderHeight] = useState(0)
+
+  useEffect(() => {
+    if (headerRef.current) {
+      setHeaderHeight(headerRef.current.offsetHeight)
+    }
+  }, [])
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -331,8 +341,11 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER FIXO - mantido exatamente como estava, só adicionei z-10 */}
-      <div className="sticky top-0 z-10 bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-4 border-b border-gray-100 dark:border-slate-800">
+      {/* 🔥 HEADER FIXO - com ref para medir altura */}
+      <div 
+        ref={headerRef}
+        className="sticky top-0 z-10 bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-4 border-b border-gray-100 dark:border-slate-800"
+      >
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
@@ -400,8 +413,11 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* 🔥 CONTEÚDO ROLÁVEL - com padding-top para compensar o header fixo */}
-      <div className="px-4 pt-4 pb-24">
+      {/* 🔥 CONTEÚDO ROLÁVEL - com padding-top dinâmico para compensar o header */}
+      <div 
+        className="px-4 pb-24"
+        style={{ paddingTop: headerHeight > 0 ? `${headerHeight + 16}px` : '120px' }}
+      >
         {loading ? (
           <TransactionsSkeleton />
         ) : filtered.length === 0 && !loadingMore ? (
