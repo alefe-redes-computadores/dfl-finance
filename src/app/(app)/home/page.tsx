@@ -11,7 +11,7 @@ import {
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
   PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
-  Sparkles, Calendar, X
+  Sparkles, Calendar
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -28,6 +28,7 @@ import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
+import { UndoToast } from '@/components/ui/UndoToast'
 
 // 🆕 Lazy loading do gráfico de projeção (pesado)
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
@@ -52,7 +53,7 @@ const ALL_SECTIONS = [
 
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 
-// 🆕 Cards fixos (NUNCA terão botão "X")
+// 🆕 Cards fixos (NUNCA terão botão)
 const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
 
 // ============================================================
@@ -159,6 +160,9 @@ function HomeContent() {
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
   const [personalizeOrder, setPersonalizeOrder] = useState<typeof ALL_SECTIONS>(ALL_SECTIONS)
   const [personalizeEnabled, setPersonalizeEnabled] = useState<Set<string>>(new Set(DEFAULT_SECTION_ORDER))
+
+  // 🆕 Estado para o toast com desfazer
+  const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
 
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
@@ -579,26 +583,49 @@ function HomeContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  // 🆕 Função para ocultar um card (sem desfazer)
+  // 🆕 Função para ocultar um card (com UndoToast)
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
-    const newEnabledSections = enabledSections.filter(id => id !== sectionId)
-    setEnabledSections(newEnabledSections)
-    
-    // Notificar o usuário
-    showToast(`"${sectionLabel}" ocultado! Use "Personalizar Dashboard" para reativar.`, 'info')
-    
-    // Persistir a mudança
+    // Guarda a seção que está sendo removida
+    const removedSection = sectionId
+    const removedLabel = sectionLabel
+
+    // Remove visualmente
+    setEnabledSections(prev => prev.filter(id => id !== removedSection))
+
+    // Mostra o toast com desfazer
+    setUndoToast({
+      message: `"${removedLabel}" ocultado`,
+      onUndo: () => {
+        // Restaura o card
+        setEnabledSections(prev => {
+          const restored = [...prev, removedSection]
+          return restored.sort((a, b) => {
+            const idxA = ALL_SECTIONS.findIndex(s => s.id === a)
+            const idxB = ALL_SECTIONS.findIndex(s => s.id === b)
+            return idxA - idxB
+          })
+        })
+        // Feedback de restauração
+        showToast(`"${removedLabel}" restaurado`, 'success')
+        // Remove o toast
+        setUndoToast(null)
+      }
+    })
+
+    // Persiste a mudança após 3 segundos (se não for desfeito)
     setTimeout(() => {
       setEnabledSections(current => {
-        if (!current.includes(sectionId)) {
+        if (!current.includes(removedSection)) {
           saveLayout(current)
         }
         return current
       })
-    }, 300)
+      // Fecha o toast automaticamente após a persistência
+      setUndoToast(null)
+    }, 3500)
   }
 
-  // Função para renderizar cada seção (com botão X centralizado)
+  // Função para renderizar cada seção (com botão EyeOff centralizado)
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
     const isFixed = FIXED_SECTIONS.includes(sectionId) // Cards fixos NÃO têm botão
@@ -657,10 +684,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                 title="Ocultar card"
               >
-                <X size={14} />
+                <EyeOff size={14} />
               </button>
             )}
             <Suspense fallback={<Skeleton className="h-24 w-full rounded-xl" />}>
@@ -675,10 +702,10 @@ function HomeContent() {
               {!isFixed && (
                 <button
                   onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                  className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                  className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                   title="Ocultar card"
                 >
-                  <X size={14} />
+                  <EyeOff size={14} />
                 </button>
               )}
               <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
@@ -704,10 +731,10 @@ function HomeContent() {
               {!isFixed && (
                 <button
                   onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                  className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                  className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                   title="Ocultar card"
                 >
-                  <X size={14} />
+                  <EyeOff size={14} />
                 </button>
               )}
               <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
@@ -736,10 +763,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                 title="Ocultar card"
               >
-                <X size={14} />
+                <EyeOff size={14} />
               </button>
             )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
@@ -793,10 +820,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('next-card', 'Próxima Fatura')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                 title="Ocultar card"
               >
-                <X size={14} />
+                <EyeOff size={14} />
               </button>
             )}
             {nextCard ? (
@@ -866,10 +893,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('receivables', 'A Receber')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                 title="Ocultar card"
               >
-                <X size={14} />
+                <EyeOff size={14} />
               </button>
             )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
@@ -918,10 +945,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('financings', 'Financiamentos')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                 title="Ocultar card"
               >
-                <X size={14} />
+                <EyeOff size={14} />
               </button>
             )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
@@ -958,10 +985,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('budgets', 'Orçamentos')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
                 title="Ocultar card"
               >
-                <X size={14} />
+                <EyeOff size={14} />
               </button>
             )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
@@ -1125,6 +1152,16 @@ function HomeContent() {
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
+      )}
+
+      {/* 🆕 Toast com desfazer */}
+      {undoToast && (
+        <UndoToast
+          message={undoToast.message}
+          onUndo={undoToast.onUndo}
+          onDismiss={() => setUndoToast(null)}
+          duration={3000}
+        />
       )}
 
       <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} isSyncing={isSyncing} />
