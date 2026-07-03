@@ -12,7 +12,6 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
-import Image from 'next/image'
 
 // ============================================================
 // SKELETON LOADER
@@ -110,14 +109,12 @@ export default function ReceiptsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validar tipo
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
     if (!validTypes.includes(file.type)) {
       showToast('Formato não suportado. Use JPG, PNG, WEBP ou PDF.', 'warning')
       return
     }
 
-    // Validar tamanho (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showToast('Arquivo muito grande (máx 5MB).', 'warning')
       return
@@ -141,7 +138,6 @@ export default function ReceiptsPage() {
         .from('receipts')
         .getPublicUrl(filePath)
 
-      // Salvar no banco
       const { error: insertError } = await supabase
         .from('receipts')
         .insert({
@@ -214,14 +210,12 @@ export default function ReceiptsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -231,7 +225,6 @@ export default function ReceiptsPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
@@ -254,7 +247,6 @@ export default function ReceiptsPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        {/* Busca e Filtros */}
         <div className="flex gap-2">
           <div className="flex-1 flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-2.5 shadow-sm">
             <Search size={18} className="text-gray-400 dark:text-gray-500" />
@@ -282,7 +274,6 @@ export default function ReceiptsPage() {
           </div>
         </div>
 
-        {/* Upload */}
         <div className="flex items-center justify-between">
           <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
             {filteredReceipts.length} comprovante{filteredReceipts.length !== 1 ? 's' : ''}
@@ -335,66 +326,78 @@ export default function ReceiptsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-300">
-            {filteredReceipts.map(receipt => (
-              <div
-                key={receipt.id}
-                className="bg-white dark:bg-slate-800 rounded-[20px] overflow-hidden shadow-sm border border-gray-50 dark:border-slate-700 hover:shadow-md transition-all active:scale-[0.98]"
-              >
-                <div 
-                  className="aspect-square bg-gray-100 dark:bg-slate-700 relative cursor-pointer group"
-                  onClick={() => {
-                    setSelectedReceipt(receipt)
-                    setShowModal(true)
-                  }}
-                >
-                  {receipt.file_type?.includes('image') ? (
-                    <img
-                      src={receipt.file_url}
-                      alt={receipt.file_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                      <FileText size={48} />
-                      <span className="text-xs mt-2">PDF</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Eye size={24} className="text-white" />
-                  </div>
-                  <div className={`absolute top-2 right-2 text-[9px] font-bold px-2 py-0.5 rounded-full ${getFileColor(receipt.file_type)} flex items-center gap-1`}>
-                    {getFileIcon(receipt.file_type)}
-                    {getFileLabel(receipt.file_type)}
-                  </div>
-                </div>
+            {filteredReceipts.map(receipt => {
+              // Estado para controlar erro de carregamento da imagem
+              const [imgError, setImgError] = useState(false)
 
-                <div className="p-3">
-                  <p className="font-bold text-[13px] text-gray-800 dark:text-gray-200 truncate">
-                    {receipt.file_name || 'Sem nome'}
-                  </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                      <Calendar size={10} />
-                      {format(new Date(receipt.uploaded_at || receipt.created_at), "dd/MM/yy", { locale: ptBR })}
+              return (
+                <div
+                  key={receipt.id}
+                  className="bg-white dark:bg-slate-800 rounded-[20px] overflow-hidden shadow-sm border border-gray-50 dark:border-slate-700 hover:shadow-md transition-all active:scale-[0.98]"
+                >
+                  <div 
+                    className="aspect-square bg-gray-100 dark:bg-slate-700 relative cursor-pointer group"
+                    onClick={() => {
+                      setSelectedReceipt(receipt)
+                      setShowModal(true)
+                    }}
+                  >
+                    {receipt.file_type?.includes('image') ? (
+                      !imgError ? (
+                        <img
+                          src={receipt.file_url}
+                          alt={receipt.file_name}
+                          className="w-full h-full object-cover"
+                          onError={() => setImgError(true)}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100 dark:bg-slate-700">
+                          <ImageIcon size={40} className="opacity-30" />
+                          <span className="text-xs mt-1 text-gray-400">Imagem indisponível</span>
+                        </div>
+                      )
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100 dark:bg-slate-700">
+                        <FileText size={48} className="text-red-400" />
+                        <span className="text-xs mt-2 font-medium text-gray-500">PDF</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Eye size={24} className="text-white" />
+                    </div>
+                    <div className={`absolute top-2 right-2 text-[9px] font-bold px-2 py-0.5 rounded-full ${getFileColor(receipt.file_type)} flex items-center gap-1`}>
+                      {getFileIcon(receipt.file_type)}
+                      {getFileLabel(receipt.file_type)}
+                    </div>
+                  </div>
+
+                  <div className="p-3">
+                    <p className="font-bold text-[13px] text-gray-800 dark:text-gray-200 truncate">
+                      {receipt.file_name || 'Sem nome'}
                     </p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDelete(receipt.id)
-                      }}
-                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                        <Calendar size={10} />
+                        {format(new Date(receipt.uploaded_at || receipt.created_at), "dd/MM/yy", { locale: ptBR })}
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(receipt.id)
+                        }}
+                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Modal de visualização */}
       {showModal && selectedReceipt && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80" onClick={() => setShowModal(false)}>
           <div className="relative max-w-lg w-[90%] max-h-[80vh] bg-white dark:bg-slate-800 rounded-2xl overflow-hidden animate-in fade-in-zoom-in-95 duration-200">
