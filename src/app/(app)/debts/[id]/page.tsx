@@ -88,7 +88,6 @@ export default function DebtDetailPage() {
     setLoading(true)
     setLoadingPulse(true)
 
-    // 🔥 Busca a dívida ATUALIZADA
     const { data: debtData, error: debtError } = await supabase
       .from('debts')
       .select('*')
@@ -107,7 +106,6 @@ export default function DebtDetailPage() {
       setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
     }
 
-    // 🔥 Busca os pagamentos ATUALIZADOS
     const { data: payData, error: payError } = await supabase
       .from('transactions')
       .select('*')
@@ -148,9 +146,8 @@ export default function DebtDetailPage() {
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
       
-      // 🔥 CORREÇÃO: Matemática precisa em centavos
-      const totalPaidCents = Math.round(totalPaid * 100)
       const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
+      const totalPaidCents = Math.round(totalPaid * 100)
       const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
       
       await supabase.from('debts').update({ status: newStatus }).eq('id', id)
@@ -189,9 +186,13 @@ export default function DebtDetailPage() {
     setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
+  // ============================================================
+  // 🔥 HANDLE PAYMENT COM FEEDBACKS E TRY/CATCH ROBUSTO
+  // ============================================================
   const handlePayment = async () => {
     if (isSubmitting) return
 
+    // 🔥 VALIDAÇÕES (com feedback)
     if (!user?.id) {
       showToast('Usuário não autenticado.', 'error')
       error()
@@ -204,7 +205,13 @@ export default function DebtDetailPage() {
       return
     }
 
-    // 🔥 CORREÇÃO DE PRECISÃO MATEMÁTICA: Usando centavos para evitar erros de decimal (0.000001)
+    if (!debt) {
+      showToast('Dívida não carregada.', 'error')
+      error()
+      return
+    }
+
+    // 🔥 MATEMÁTICA EM CENTAVOS
     const debtContext = debt.context || 'dfl'
     const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
     
@@ -212,10 +219,9 @@ export default function DebtDetailPage() {
     const totalPaidCents = Math.round(totalPaid * 100)
     const payAmountCents = Math.round(payAmountNum * 100)
     const remainingCents = totalAmountCents - totalPaidCents
-    const remaining = remainingCents / 100
 
     if (payAmountCents > remainingCents) {
-      showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
+      showToast(`O valor máximo é ${formatCurrency(remainingCents / 100)}.`, 'warning')
       error()
       return
     }
@@ -225,6 +231,7 @@ export default function DebtDetailPage() {
 
     try {
       const targetAccountId = payAccountId || debt.account_id || null
+      const idempotencyKey = crypto.randomUUID()
 
       // 1. Criar transação
       const { data: txData, error: txError } = await supabase
@@ -240,12 +247,13 @@ export default function DebtDetailPage() {
           status: 'done',
           affects_balance: true,
           context: debtContext,
+          idempotency_key: idempotencyKey,
         })
         .select()
 
       if (txError) throw txError
 
-      // 2. Atualizar saldo da conta (se houver)
+      // 2. Atualizar saldo da conta
       if (targetAccountId) {
         const { data: acc } = await supabase
           .from('accounts')
@@ -261,35 +269,33 @@ export default function DebtDetailPage() {
         }
       }
 
-      // 3. Atualizar status da dívida com cálculo à prova de balas
+      // 3. Atualizar status da dívida
       const newTotalPaidCents = totalPaidCents + payAmountCents
       const newTotalPaid = newTotalPaidCents / 100
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
 
-      const { error: debtUpdateError } = await supabase
+      const { error: updateError } = await supabase
         .from('debts')
-        .update({ 
+        .update({
           status: newStatus,
           paid_amount: newTotalPaid,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
 
-      // Se falhar no banco, joga o erro pra tela
-      if (debtUpdateError) throw debtUpdateError
+      if (updateError) throw updateError
 
-      // 🔥 FECHA O MODAL
+      // 🔥 SUCESSO (fecha modal, mostra toast, vibra)
       setShowPaymentModal(false)
       setPayAmount('0,00')
       setPayAmountNum(0)
       setPayNote('')
       setPayAccountId('')
 
-      // 🔥 MOSTRA O TOAST
       success()
       showToast('✅ Pagamento registrado com sucesso!', 'success')
 
-      // 🔥 RECARREGA OS DADOS (e força atualização)
+      // Recarrega dados
       await loadData()
 
     } catch (err: any) {
@@ -329,14 +335,12 @@ export default function DebtDetailPage() {
     )
   }
 
-  // 🔥 CÁLCULO VISUAL ATUALIZADO (100% livre de bugs decimais)
+  // 🔥 CÁLCULOS VISUAIS EM CENTAVOS
   const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
   const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
   const totalPaidCents = Math.round(totalPaid * 100)
   const remainingCents = totalAmountCents - totalPaidCents
   const remaining = remainingCents / 100
-
-  // Só é "Pago" se o status for paid ou se literalmente faltar 0 centavos.
   const isPaid = debt.status === 'paid' || remainingCents <= 0
   const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
 
@@ -411,7 +415,6 @@ export default function DebtDetailPage() {
           </div>
         </div>
 
-        {/* 🔥 BARRA DE PROGRESSO - AGORA FICA VERDE DE FATO */}
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
           <div
             className={`h-full rounded-full transition-all duration-1000 ease-out ${
