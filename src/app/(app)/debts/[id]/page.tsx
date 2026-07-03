@@ -147,7 +147,12 @@ export default function DebtDetailPage() {
 
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-      const newStatus = totalPaid >= Number(debt.total_amount) ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
+      
+      // 🔥 CORREÇÃO: Matemática precisa em centavos
+      const totalPaidCents = Math.round(totalPaid * 100)
+      const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
+      const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
+      
       await supabase.from('debts').update({ status: newStatus }).eq('id', id)
 
       const deletedPayment = payments.find(p => p.id === paymentId)
@@ -199,12 +204,17 @@ export default function DebtDetailPage() {
       return
     }
 
-    // 🔥 Calcula com base no estado ATUAL
+    // 🔥 CORREÇÃO DE PRECISÃO MATEMÁTICA: Usando centavos para evitar erros de decimal (0.000001)
     const debtContext = debt.context || 'dfl'
     const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-    const remaining = Number(debt.total_amount) - totalPaid
+    
+    const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
+    const totalPaidCents = Math.round(totalPaid * 100)
+    const payAmountCents = Math.round(payAmountNum * 100)
+    const remainingCents = totalAmountCents - totalPaidCents
+    const remaining = remainingCents / 100
 
-    if (payAmountNum > remaining) {
+    if (payAmountCents > remainingCents) {
       showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
       error()
       return
@@ -251,11 +261,12 @@ export default function DebtDetailPage() {
         }
       }
 
-      // 3. Atualizar status da dívida
-      const newTotalPaid = totalPaid + payAmountNum
-      const newStatus = newTotalPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
+      // 3. Atualizar status da dívida com cálculo à prova de balas
+      const newTotalPaidCents = totalPaidCents + payAmountCents
+      const newTotalPaid = newTotalPaidCents / 100
+      const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
 
-      await supabase
+      const { error: debtUpdateError } = await supabase
         .from('debts')
         .update({ 
           status: newStatus,
@@ -263,6 +274,9 @@ export default function DebtDetailPage() {
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
+
+      // Se falhar no banco, joga o erro pra tela
+      if (debtUpdateError) throw debtUpdateError
 
       // 🔥 FECHA O MODAL
       setShowPaymentModal(false)
@@ -315,11 +329,16 @@ export default function DebtDetailPage() {
     )
   }
 
-  // 🔥 Calcula percentual com base nos dados ATUALIZADOS
+  // 🔥 CÁLCULO VISUAL ATUALIZADO (100% livre de bugs decimais)
   const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-  const remaining = Number(debt.total_amount) - totalPaid
-  const percent = Number(debt.total_amount) > 0 ? (totalPaid / Number(debt.total_amount)) * 100 : 0
-  const isPaid = debt.status === 'paid' || remaining <= 0
+  const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
+  const totalPaidCents = Math.round(totalPaid * 100)
+  const remainingCents = totalAmountCents - totalPaidCents
+  const remaining = remainingCents / 100
+
+  // Só é "Pago" se o status for paid ou se literalmente faltar 0 centavos.
+  const isPaid = debt.status === 'paid' || remainingCents <= 0
+  const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
 
   const IconComp = getDynamicIcon(debt.icon || 'user')
   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
@@ -386,13 +405,13 @@ export default function DebtDetailPage() {
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Pago</p>
             <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
           </div>
-          <div className={`text-center rounded-xl p-3 ${remaining > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remaining > 0 ? 'Falta' : 'Pago'}</p>
-            <p className={`text-[15px] font-bold ${remaining > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{formatCurrency(Math.abs(remaining))}</p>
+          <div className={`text-center rounded-xl p-3 ${remainingCents > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remainingCents > 0 ? 'Falta' : 'Pago'}</p>
+            <p className={`text-[15px] font-bold ${remainingCents > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{formatCurrency(Math.abs(remaining))}</p>
           </div>
         </div>
 
-        {/* 🔥 BARRA DE PROGRESSO - VERDE QUANDO PAGO */}
+        {/* 🔥 BARRA DE PROGRESSO - AGORA FICA VERDE DE FATO */}
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
           <div
             className={`h-full rounded-full transition-all duration-1000 ease-out ${
@@ -404,7 +423,7 @@ export default function DebtDetailPage() {
         <div className="flex justify-between text-[11px]">
           <span className="text-gray-400 dark:text-gray-500 font-medium">{percent.toFixed(0)}% pago</span>
           {isPaid && <span className="text-emerald-600 font-bold">✅ Pago!</span>}
-          {isOverdue && <span className="text-red-500 font-bold">Atrasado {Math.abs(daysUntilDue)} dia(s)</span>}
+          {isOverdue && !isPaid && <span className="text-red-500 font-bold">Atrasado {Math.abs(daysUntilDue)} dia(s)</span>}
         </div>
       </div>
 
