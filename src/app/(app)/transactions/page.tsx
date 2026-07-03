@@ -324,11 +324,10 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY COMPACTO E SEGURO (CORRIGIDO) ── */}
-      {/* pt-7 garante isolamento do topo do celular e mb-0 limpa o espaçamento fantasma */}
-      <div className="sticky top-0 z-30 bg-[#f8f9fa] dark:bg-slate-900 pt-7 pb-2 px-4 mb-0 border-b border-gray-100/20 dark:border-slate-800/20">
+      {/* ── HEADER STICKY BLINDADO CONTRA CORTE DE SUB-PIXEL ── */}
+      {/* Usamos borda sólida e shadow sutil para criar uma linha de corte matemática limpa */}
+      <div className="sticky top-0 z-30 bg-[#f8f9fa] dark:bg-slate-900 pt-7 pb-3 px-4 mb-0 border-b border-gray-200 dark:border-slate-800 shadow-sm shadow-black/[0.005]">
         
-        {/* Compactamos as margens inferiores de mb-6 para mb-3 */}
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
@@ -357,12 +356,10 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* O alternador de contexto agora fica colado na estrutura sem empurrar a página */}
         <div className="mb-3">
           <ContextToggle />
         </div>
 
-        {/* Compactamos de mb-4 para mb-3 */}
         <div className="flex gap-2 mb-3 relative">
           <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
             <Search size={18} className="text-gray-400 dark:text-gray-500" />
@@ -373,7 +370,7 @@ export default function TransactionsPage() {
           <div className="relative" ref={statusMenuRef}>
             <button 
               onClick={() => setShowStatusMenu(!showStatusMenu)} 
-              className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
             >
               <SlidersHorizontal size={20} />
             </button>
@@ -400,9 +397,9 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* ── CONTEÚDO DA LISTA COM ESPAÇAMENTO REAJUSTADO ── */}
-      {/* mt-3 traz os cards para perto do cabeçalho de forma harmônica */}
-      <div className="px-4 mt-3">
+      {/* ── CONTEÚDO CORRIGIDO COM PADDING SEGURO ── */}
+      {/* Mudamos de mt-3 para pt-4 para criar uma almofada de ar invisível contra o corte de letras */}
+      <div className="px-4 pt-4">
         {loading ? (
           <TransactionsSkeleton />
         ) : filtered.length === 0 && !loadingMore ? (
