@@ -88,24 +88,41 @@ export default function DebtDetailPage() {
     setLoading(true)
     setLoadingPulse(true)
 
-    const { data: debtData } = await supabase
+    console.log('[loadData] Carregando dívida:', id)
+
+    const { data: debtData, error: debtError } = await supabase
       .from('debts')
       .select('*')
       .match({ id: id, user_id: user.id })
       .single()
+
+    if (debtError) {
+      console.error('[loadData] Erro ao carregar dívida:', debtError)
+      showToast('Erro ao carregar dívida.', 'error')
+      setLoading(false)
+      setLoadingPulse(false)
+      return
+    }
+
+    console.log('[loadData] Dívida carregada:', debtData)
 
     if (debtData) {
       setDebt(debtData)
       setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
     }
 
-    const { data: payData } = await supabase
+    const { data: payData, error: payError } = await supabase
       .from('transactions')
       .select('*')
       .eq('debt_id', id)
       .order('date', { ascending: false })
 
+    if (payError) {
+      console.error('[loadData] Erro ao carregar pagamentos:', payError)
+    }
+
     setPayments(Array.isArray(payData) ? payData : [])
+    console.log('[loadData] Pagamentos carregados:', payData?.length || 0)
 
     const { data: accData } = await supabase
       .from('accounts')
@@ -115,7 +132,7 @@ export default function DebtDetailPage() {
     setAccounts(Array.isArray(accData) ? accData : [])
     setLoading(false)
     setLoadingPulse(false)
-  }, [id, user])
+  }, [id, user, showToast])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -130,16 +147,13 @@ export default function DebtDetailPage() {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
     try {
-      // Excluir a transação
       await supabase.from('transactions').delete().eq('id', paymentId)
 
-      // Recalcular total pago
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
       const newStatus = totalPaid >= Number(debt.total_amount) ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
       await supabase.from('debts').update({ status: newStatus }).eq('id', id)
 
-      // Se havia conta vinculada, reverter saldo (subtrair o valor)
       const deletedPayment = payments.find(p => p.id === paymentId)
       if (deletedPayment?.account_id) {
         const { data: acc } = await supabase
@@ -175,8 +189,27 @@ export default function DebtDetailPage() {
   }
 
   const handlePayment = async () => {
-    if (isSubmitting) return
-    if (!user?.id || payAmountNum <= 0) {
+    console.log('[handlePayment] Iniciando...')
+    console.log('[handlePayment] user:', user?.id)
+    console.log('[handlePayment] payAmountNum:', payAmountNum)
+    console.log('[handlePayment] payDate:', payDate)
+    console.log('[handlePayment] payNote:', payNote)
+    console.log('[handlePayment] payAccountId:', payAccountId)
+
+    if (isSubmitting) {
+      console.log('[handlePayment] Já está enviando, ignorando...')
+      return
+    }
+
+    if (!user?.id) {
+      console.error('[handlePayment] Usuário não autenticado')
+      showToast('Usuário não autenticado.', 'error')
+      error()
+      return
+    }
+
+    if (payAmountNum <= 0) {
+      console.error('[handlePayment] Valor inválido')
       showToast('Digite um valor válido.', 'warning')
       error()
       return
@@ -184,11 +217,14 @@ export default function DebtDetailPage() {
 
     // Usar o contexto da dívida (do banco) em vez do hook
     const debtContext = debt.context || 'dfl'
+    console.log('[handlePayment] debtContext:', debtContext)
 
     const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
     const remaining = Number(debt.total_amount) - totalPaid
+    console.log('[handlePayment] totalPaid:', totalPaid, 'remaining:', remaining)
 
     if (payAmountNum > remaining) {
+      console.error('[handlePayment] Valor excede o saldo devedor')
       showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
       error()
       return
@@ -200,9 +236,11 @@ export default function DebtDetailPage() {
     try {
       const targetAccountId = payAccountId || debt.account_id || null
       const idempotencyKey = crypto.randomUUID()
+      console.log('[handlePayment] targetAccountId:', targetAccountId)
+      console.log('[handlePayment] idempotencyKey:', idempotencyKey)
 
-      // 1. Criar transação (pagamento)
-      const { error: txError } = await supabase.from('transactions').insert({
+      console.log('[handlePayment] 1. Criando transação...')
+      const { data: txData, error: txError } = await supabase.from('transactions').insert({
         user_id: user.id,
         type: 'income',
         amount: payAmountNum,
@@ -214,34 +252,62 @@ export default function DebtDetailPage() {
         affects_balance: true,
         context: debtContext,
         idempotency_key: idempotencyKey,
-      })
+      }).select()
 
-      if (txError) throw txError
+      if (txError) {
+        console.error('[handlePayment] Erro ao criar transação:', txError)
+        throw txError
+      }
+
+      console.log('[handlePayment] Transação criada:', txData)
 
       // 2. Atualizar saldo da conta (se houver)
       if (targetAccountId) {
-        const { data: acc } = await supabase
+        console.log('[handlePayment] 2. Atualizando saldo da conta...')
+        const { data: acc, error: accError } = await supabase
           .from('accounts')
           .select('balance')
           .eq('id', targetAccountId)
           .single()
 
-        if (acc) {
-          await supabase
+        if (accError) {
+          console.error('[handlePayment] Erro ao buscar conta:', accError)
+        } else if (acc) {
+          console.log('[handlePayment] Saldo atual da conta:', acc.balance)
+          const { error: updateError } = await supabase
             .from('accounts')
             .update({ balance: Number(acc.balance) + payAmountNum })
             .eq('id', targetAccountId)
+
+          if (updateError) {
+            console.error('[handlePayment] Erro ao atualizar saldo da conta:', updateError)
+          } else {
+            console.log('[handlePayment] Saldo da conta atualizado!')
+          }
         }
       }
 
       // 3. Atualizar status da dívida
+      console.log('[handlePayment] 3. Atualizando status da dívida...')
       const newTotalPaid = totalPaid + payAmountNum
       const newStatus = newTotalPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
-      await supabase.from('debts').update({ 
-        status: newStatus,
-        paid_amount: newTotalPaid,
-        updated_at: new Date().toISOString()
-      }).eq('id', id)
+      console.log('[handlePayment] newTotalPaid:', newTotalPaid, 'newStatus:', newStatus)
+
+      const { error: updateDebtError } = await supabase
+        .from('debts')
+        .update({ 
+          status: newStatus,
+          paid_amount: newTotalPaid,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+
+      if (updateDebtError) {
+        console.error('[handlePayment] Erro ao atualizar dívida:', updateDebtError)
+        throw updateDebtError
+      }
+
+      console.log('[handlePayment] ✅ Tudo salvo com sucesso!')
 
       success()
       showToast('✅ Pagamento registrado com sucesso!', 'success')
@@ -252,7 +318,7 @@ export default function DebtDetailPage() {
       setPayAccountId('')
       loadData()
     } catch (err: any) {
-      console.error('Erro ao registrar pagamento:', err)
+      console.error('[handlePayment] ❌ Erro:', err)
       error()
       showToast(`❌ Erro ao registrar pagamento: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
