@@ -225,7 +225,7 @@ export default function TransactionsPage() {
     setLoadingPending(false)
   }, [user, context, currentDate])
 
-  // ── Query principal (sem alteração na lógica original) ─────────────────────
+  // ── Query principal ──────────────────────────────────────────────────────────
   const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
     if (!user) return;
 
@@ -287,7 +287,7 @@ export default function TransactionsPage() {
     }
   }, [scrollY, windowHeight, documentHeight, page, hasMore, loadingMore, loading, loadTransactions])
 
-  // ── Filtragem client-side (idêntica ao original) ───────────────────────────
+  // ── Filtragem client-side ──────────────────────────────────────────────────
   const filtered = transactions.filter(t => {
     let matchSearch = true;
     if (search) {
@@ -322,14 +322,17 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
+    // 🔥 Container principal com overflow-y-auto para scroll suave
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans transition-colors duration-300">
+      
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      <div className="px-4 pt-6 pb-4 bg-[#f8f9fa] dark:bg-slate-900 sticky top-0 z-20">
+      {/* 🔥 HEADER FIXO - mantido exatamente como estava, só adicionei z-10 */}
+      <div className="sticky top-0 z-10 bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-4 border-b border-gray-100 dark:border-slate-800">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
@@ -397,7 +400,8 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      <div className="px-4">
+      {/* 🔥 CONTEÚDO ROLÁVEL - com padding-top para compensar o header fixo */}
+      <div className="px-4 pt-4 pb-24">
         {loading ? (
           <TransactionsSkeleton />
         ) : filtered.length === 0 && !loadingMore ? (
