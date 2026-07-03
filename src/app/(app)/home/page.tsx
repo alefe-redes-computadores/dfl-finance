@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +11,7 @@ import {
   Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
   PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
-  Sparkles, Calendar
+  Sparkles, Calendar, X
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -27,7 +27,10 @@ import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
-import ProjectionSparklineCard from '@/components/ProjectionSparklineCard'
+import Skeleton from '@/components/Skeleton'
+
+// 🆕 Lazy loading do gráfico de projeção (pesado)
+const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
 // ============================================================
 // SEÇÕES DISPONÍVEIS (para personalização)
@@ -566,30 +569,53 @@ function HomeContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  if (authLoading || dataLoading || !layoutLoaded) {
-    return (
-      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans px-4 pt-6 pb-28">
-        {/* Indicador de carregamento sutil */}
-        {loadingPulse && (
-          <div className="fixed top-20 right-4 z-50">
-            <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-          </div>
-        )}
-        <HomeSkeleton />
-      </div>
-    )
+  // 🆕 Função para ocultar um card com desfazer (Toast)
+  const handleHideCard = (sectionId: string, sectionLabel: string) => {
+    // Remove o card da lista de seções habilitadas
+    const newEnabledSections = enabledSections.filter(id => id !== sectionId)
+    setEnabledSections(newEnabledSections)
+    
+    // Mostrar Toast com botão Desfazer
+    showToast(`"${sectionLabel}" ocultado`, {
+      action: {
+        label: 'Desfazer',
+        onClick: () => {
+          // Restaurar o card
+          setEnabledSections(prev => {
+            const restored = [...prev, sectionId]
+            // Manter a ordem original (adicionar na posição correta)
+            return restored.sort((a, b) => {
+              const idxA = ALL_SECTIONS.findIndex(s => s.id === a)
+              const idxB = ALL_SECTIONS.findIndex(s => s.id === b)
+              return idxA - idxB
+            })
+          })
+        }
+      },
+      duration: 3000, // 3 segundos para desfazer
+    })
+    
+    // Persistir a mudança após o delay (se não for desfeito)
+    setTimeout(() => {
+      // Verificar se o card ainda está removido (não foi restaurado)
+      setEnabledSections(current => {
+        if (!current.includes(sectionId)) {
+          saveLayout(current)
+        }
+        return current
+      })
+    }, 3500) // Um pouco mais que o duration do toast
   }
 
-  const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
-  const getContextIcon = (ctx: string) =>
-    ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
-
+  // Função para renderizar cada seção (agora com botão X)
   const renderSection = (sectionId: string) => {
+    const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
+    
     switch (sectionId) {
       case 'balance':
         return (
           <div key="balance" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all">
+            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all relative">
               <div className="flex items-center justify-center gap-2 mb-3">
                 <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">Saldo total</span>
                 <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
@@ -614,7 +640,14 @@ function HomeContent() {
         )
       case 'income-expense':
         return (
-          <div key="income-expense" className="mb-6">
+          <div key="income-expense" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('income-expense', 'Receitas / Despesas')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="grid grid-cols-2 gap-4">
               <div onClick={() => router.push('/transactions?filter=income')} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/50 shadow-sm rounded-[24px] p-5 flex flex-col items-center justify-center cursor-pointer hover:shadow-md transition-all">
                 <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-3">
@@ -635,15 +668,31 @@ function HomeContent() {
         )
       case 'projection':
         return (
-          <div key="projection" className="mb-6">
-            <ProjectionSparklineCard />
+          <div key="projection" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
+            <Suspense fallback={<Skeleton className="h-24 w-full rounded-xl" />}>
+              <ProjectionSparklineCard />
+            </Suspense>
           </div>
         )
       case 'loans':
         // 🆕 Bloqueio quando modo PF-only está ativo
         if (appMode === 'personal_only') {
           return (
-            <div key="loans" className="mb-6">
+            <div key="loans" className="mb-6 relative">
+              <button
+                onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
               <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
                 <div className="px-5 py-4">
                   <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
@@ -661,9 +710,47 @@ function HomeContent() {
             </div>
           )
         }
-        if (loans.length === 0) return null
+        // 🆕 Se não houver empréstimos, mostrar call to action
+        if (loans.length === 0) {
+          return (
+            <div key="loans" className="mb-6 relative">
+              <button
+                onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+                <div className="px-5 py-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
+                    <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+                  </div>
+                  <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1">
+                    Registre empréstimos entre PF e PJ para controlar saldos devedores.
+                  </p>
+                  <button
+                    onClick={() => router.push('/loans/new')}
+                    className="mt-3 bg-teal-700 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-teal-800 transition-colors"
+                  >
+                    <Plus size={14} className="inline mr-1" />
+                    Novo Empréstimo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
         return (
-          <div key="loans" className="mb-6">
+          <div key="loans" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/loans')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
@@ -711,7 +798,14 @@ function HomeContent() {
       case 'next-card':
         if (!nextCard && !allCardsPaid) return null
         return (
-          <div key="next-card" className="mb-6">
+          <div key="next-card" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('next-card', 'Próxima Fatura')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             {nextCard ? (
               <div onClick={() => router.push(`/cards/${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -743,7 +837,14 @@ function HomeContent() {
         )
       case 'pendings':
         return (
-          <div key="pendings" className="mb-6">
+          <div key="pendings" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('pendings', 'Pendências')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50">
               <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Pendências</h3>
               <div className="grid grid-cols-3 gap-3">
@@ -775,7 +876,14 @@ function HomeContent() {
       case 'receivables':
         if (debts.length === 0) return null
         return (
-          <div key="receivables" className="mb-6">
+          <div key="receivables" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('receivables', 'A Receber')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/debts')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">A Receber</h3>
@@ -818,7 +926,14 @@ function HomeContent() {
       case 'financings':
         if (financings.length === 0) return null
         return (
-          <div key="financings" className="mb-6">
+          <div key="financings" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('financings', 'Financiamentos')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/financings')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Financiamentos</h3>
@@ -849,7 +964,14 @@ function HomeContent() {
       case 'budgets':
         if (budgets.length === 0) return null
         return (
-          <div key="budgets" className="mb-6">
+          <div key="budgets" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('budgets', 'Orçamentos')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/budgets')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Orçamentos Ativos</h3>
@@ -887,7 +1009,14 @@ function HomeContent() {
         )
       case 'accounts':
         return (
-          <div key="accounts" className="mb-6">
+          <div key="accounts" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('accounts', 'Contas')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/accounts')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Contas</h3>
@@ -921,7 +1050,14 @@ function HomeContent() {
         )
       case 'cards':
         return (
-          <div key="cards" className="mb-6">
+          <div key="cards" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('cards', 'Cartões')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/cards')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
@@ -955,7 +1091,14 @@ function HomeContent() {
         )
       case 'recent':
         return (
-          <div key="recent" className="mb-6">
+          <div key="recent" className="mb-6 relative">
+            <button
+              onClick={() => handleHideCard('recent', 'Transações Recentes')}
+              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+              title="Ocultar card"
+            >
+              <X size={14} />
+            </button>
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/transactions')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Transações Recentes</h3>
