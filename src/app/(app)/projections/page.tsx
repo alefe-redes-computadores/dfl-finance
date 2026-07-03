@@ -12,24 +12,32 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, differenceInDay
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
-import {
-  LineChart as ReLineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Area,
-  AreaChart,
-} from 'recharts'
+import dynamic from 'next/dynamic'
+
+// ============================================================
+// LAZY LOADING DOS GRÁFICOS (Recharts)
+// ============================================================
+const AreaChartComponent = dynamic(
+  () => import('recharts').then(mod => mod.AreaChart),
+  { ssr: false, loading: () => <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
+)
+const Area = dynamic(() => import('recharts').then(mod => mod.Area), { ssr: false })
+const LineChartComponent = dynamic(
+  () => import('recharts').then(mod => mod.LineChart),
+  { ssr: false, loading: () => <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
+)
+const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false })
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const ProjectionsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
-    {/* Cards de resumo */}
     <div className="grid grid-cols-3 gap-3">
       <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
@@ -48,7 +56,6 @@ const ProjectionsSkeleton = () => (
       </div>
     </div>
 
-    {/* Gráfico */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="flex items-center justify-between mb-4">
         <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
@@ -61,7 +68,6 @@ const ProjectionsSkeleton = () => (
       <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl" />
     </div>
 
-    {/* Tabela de projeção */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       {[1, 2, 3, 4, 5].map((i) => (
@@ -86,7 +92,6 @@ export default function ProjectionsPage() {
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m')
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -129,7 +134,6 @@ export default function ProjectionsPage() {
     setLoading(true)
     setLoadingPulse(true)
 
-    // Buscar transações dos últimos 6 meses
     const endDate = new Date()
     const startDate = subMonths(endDate, 6)
 
@@ -144,7 +148,6 @@ export default function ProjectionsPage() {
 
     const txArray = Array.isArray(transactions) ? transactions : []
 
-    // Calcular média mensal de receitas e despesas
     const months = new Map()
     txArray.forEach(tx => {
       const month = format(new Date(tx.date), 'yyyy-MM')
@@ -169,13 +172,11 @@ export default function ProjectionsPage() {
     const avgIncome = totalIncome / months.size
     const avgExpense = totalExpense / months.size
 
-    // Calcular saldo atual
     let currentBalance = 0
     txArray.forEach(tx => {
       currentBalance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)
     })
 
-    // Gerar projeções
     const monthsToProject = parseInt(period)
     const projectionData = []
     let balance = currentBalance
@@ -188,7 +189,6 @@ export default function ProjectionsPage() {
       let income = avgIncome
       let expense = avgExpense
 
-      // Aplicar cenário
       if (scenario === 'optimistic') {
         income *= 1.1
         expense *= 0.9
@@ -236,14 +236,12 @@ export default function ProjectionsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -253,7 +251,6 @@ export default function ProjectionsPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
@@ -274,7 +271,6 @@ export default function ProjectionsPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        {/* Filtros */}
         <div className="flex flex-wrap gap-2 items-center justify-between">
           <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
             {periods.map(p => (
@@ -334,7 +330,6 @@ export default function ProjectionsPage() {
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in duration-300">
-            {/* Cards de resumo */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
                 <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
@@ -369,7 +364,6 @@ export default function ProjectionsPage() {
               </div>
             </div>
 
-            {/* Gráfico */}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2">
@@ -389,7 +383,7 @@ export default function ProjectionsPage() {
               </div>
               <div className="h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={projections}>
+                  <AreaChartComponent data={projections}>
                     <defs>
                       <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
@@ -418,12 +412,11 @@ export default function ProjectionsPage() {
                       strokeDasharray="5 5"
                       dot={{ r: 4 }}
                     />
-                  </AreaChart>
+                  </AreaChartComponent>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Tabela de projeção */}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2">
