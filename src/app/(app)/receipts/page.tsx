@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Search, Trash2, Eye, Download, FileText,
-  Image as ImageIcon, X, AlertCircle
+  Image as ImageIcon, X, AlertCircle, Upload, RefreshCw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -30,19 +30,29 @@ export default function ReceiptsPage() {
   const { showToast } = useToast()
   const [receipts, setReceipts] = useState<ReceiptFile[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'image' | 'pdf'>('all')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
-  // Estado para armazenar erros de imagem por URL
+  const [uploading, setUploading] = useState(false)
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({})
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Pull to refresh
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
 
   useEffect(() => {
     if (!user?.id) return
     loadReceipts()
   }, [user?.id])
 
-  const loadReceipts = async () => {
+  const loadReceipts = async (showPulse = true) => {
+    if (showPulse) setLoadingPulse(true)
     setLoading(true)
     setError('')
 
@@ -51,7 +61,7 @@ export default function ReceiptsPage() {
         .storage
         .from('receipts')
         .list(user.id, {
-          limit: 50,
+          limit: 100,
           sortBy: { column: 'created_at', order: 'desc' },
         })
 
@@ -59,38 +69,48 @@ export default function ReceiptsPage() {
         setError('Erro ao carregar comprovantes. Verifique as permissões do bucket.')
         setReceipts([])
         setLoading(false)
+        setLoadingPulse(false)
         return
       }
 
       if (!files || files.length === 0) {
         setReceipts([])
         setLoading(false)
+        setLoadingPulse(false)
         return
       }
 
-      const receiptsData: ReceiptFile[] = files.map(file => {
+      const receiptsData: ReceiptFile[] = await Promise.all(files.map(async file => {
         const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.name)
-        const { data: urlData } = supabase
-          .storage
-          .from('receipts')
-          .getPublicUrl(`${user.id}/${file.name}`)
+        // Tenta obter URL pública; se falhar, usa signed URL
+        let url = ''
+        const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(`${user.id}/${file.name}`)
+        if (urlData?.publicUrl) {
+          url = urlData.publicUrl
+        } else {
+          // Fallback para signed URL
+          const { data: signedData } = await supabase.storage
+            .from('receipts')
+            .createSignedUrl(`${user.id}/${file.name}`, 3600)
+          if (signedData?.signedUrl) url = signedData.signedUrl
+        }
 
         return {
           name: file.name,
-          url: urlData.publicUrl,
+          url,
           created_at: file.created_at || new Date().toISOString(),
           size: file.metadata?.size || 0,
           isImage,
         }
-      })
+      }))
 
+      // Buscar transações com comprovantes vinculados
       const { data: txs } = await supabase
         .from('transactions')
         .select('id, receipt_url, description, date')
         .eq('user_id', user.id)
         .not('receipt_url', 'is', null)
         .order('date', { ascending: false })
-        .limit(50)
 
       const txMap = new Map<string, any>()
       if (txs) {
@@ -117,6 +137,45 @@ export default function ReceiptsPage() {
       setError('Erro inesperado ao carregar comprovantes.')
     } finally {
       setLoading(false)
+      setLoadingPulse(false)
+      setRefreshing(false)
+    }
+  }
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    if (!validTypes.includes(file.type)) {
+      showToast('Formato não suportado. Use JPG, PNG, WEBP ou PDF.', 'warning')
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Arquivo muito grande (máx 5MB).', 'warning')
+      return
+    }
+
+    setUploading(true)
+    setLoadingPulse(true)
+
+    try {
+      const filePath = `${user.id}/${Date.now()}_${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      showToast('Comprovante enviado com sucesso!', 'success')
+      loadReceipts(false)
+    } catch (error: any) {
+      showToast(`Erro ao enviar: ${error.message}`, 'error')
+    } finally {
+      setUploading(false)
+      setLoadingPulse(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -125,11 +184,7 @@ export default function ReceiptsPage() {
 
     try {
       const path = `${user.id}/${receipt.name}`
-      const { error: deleteError } = await supabase
-        .storage
-        .from('receipts')
-        .remove([path])
-
+      const { error: deleteError } = await supabase.storage.from('receipts').remove([path])
       if (deleteError) throw deleteError
 
       if (receipt.transaction_id) {
@@ -140,7 +195,7 @@ export default function ReceiptsPage() {
       }
 
       showToast('Comprovante excluído.', 'success')
-      loadReceipts()
+      loadReceipts(false)
     } catch (err: any) {
       showToast(`Erro ao excluir: ${err.message}`, 'error')
     }
@@ -162,9 +217,62 @@ export default function ReceiptsPage() {
     return matchesSearch && matchesFilter
   })
 
+  // Contagem por tipo
+  const totalImages = receipts.filter(r => r.isImage).length
+  const totalPdfs = receipts.filter(r => !r.isImage).length
+
+  // Pull to refresh handlers
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (window.scrollY > 10 || loading) return
+      pullStartY.current = e.touches[0].clientY
+      isPulling.current = true
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPulling.current || refreshing) return
+      const distance = e.touches[0].clientY - pullStartY.current
+      if (distance > 60) {
+        setRefreshing(true)
+        isPulling.current = false
+        loadReceipts(false)
+      }
+    }
+
+    const onTouchEnd = () => { isPulling.current = false }
+
+    container.addEventListener('touchstart', onTouchStart, { passive: true })
+    container.addEventListener('touchmove', onTouchMove, { passive: true })
+    container.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart)
+      container.removeEventListener('touchmove', onTouchMove)
+      container.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [loading, refreshing])
+
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+      {/* Indicador de carregamento sutil */}
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -173,7 +281,21 @@ export default function ReceiptsPage() {
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
             Comprovantes {!loading && receipts.length > 0 && `(${filteredReceipts.length})`}
           </h1>
-          <div className="w-10" />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-full transition-colors"
+              title="Enviar comprovante"
+            >
+              <Upload size={20} />
+            </button>
+            <button
+              onClick={() => loadReceipts(true)}
+              className="p-2 text-gray-400 hover:text-teal-600 rounded-full transition-colors"
+            >
+              <RefreshCw size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="relative">
@@ -192,22 +314,23 @@ export default function ReceiptsPage() {
           )}
         </div>
 
-        <div className="flex gap-2 mt-3">
+        {/* Filtros com contagem */}
+        <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scrollbar-hide">
           {[
-            { id: 'all', label: 'Todos' },
-            { id: 'image', label: 'Imagens' },
-            { id: 'pdf', label: 'PDFs' },
+            { id: 'all', label: 'Todos', count: receipts.length },
+            { id: 'image', label: 'Imagens', count: totalImages },
+            { id: 'pdf', label: 'PDFs', count: totalPdfs },
           ].map(f => (
             <button
               key={f.id}
               onClick={() => setFilter(f.id as any)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${
                 filter === f.id
                   ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
                   : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
               }`}
             >
-              {f.label}
+              {f.label} ({f.count})
             </button>
           ))}
         </div>
@@ -223,7 +346,7 @@ export default function ReceiptsPage() {
             <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
             <button
-              onClick={loadReceipts}
+              onClick={() => loadReceipts(true)}
               className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors"
             >
               Tentar novamente
@@ -238,17 +361,30 @@ export default function ReceiptsPage() {
                 <p className="text-gray-500 dark:text-gray-400 mb-6">
                   Os comprovantes que você anexar nas transações aparecerão aqui.
                 </p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors"
+                >
+                  <Upload size={18} className="inline mr-2" />
+                  Enviar comprovante
+                </button>
               </>
-            ) : (
+            ) : search ? (
               <p className="text-gray-500 dark:text-gray-400">
-                Nenhum resultado para "{search}".
+                Nenhum resultado para <span className="font-bold text-gray-700 dark:text-gray-300">"{search}"</span>
               </p>
+            ) : filter !== 'all' ? (
+              <p className="text-gray-500 dark:text-gray-400">
+                Nenhum {filter === 'image' ? 'imagem' : 'PDF'} encontrado.
+              </p>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400">Nenhum comprovante encontrado.</p>
             )}
           </div>
         ) : (
           <div className="space-y-2">
             {filteredReceipts.map(receipt => {
-              const hasError = imgErrors[receipt.url]
+              const hasError = imgErrors[receipt.url] || false
 
               return (
                 <div
@@ -256,8 +392,14 @@ export default function ReceiptsPage() {
                   className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all"
                 >
                   <div
-                    className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer"
-                    onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
+                    className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer flex items-center justify-center"
+                    onClick={() => {
+                      if (receipt.isImage && !hasError) {
+                        setPreviewUrl(receipt.url)
+                      } else {
+                        handleDownload(receipt)
+                      }
+                    }}
                   >
                     {receipt.isImage && !hasError ? (
                       <img
@@ -268,19 +410,15 @@ export default function ReceiptsPage() {
                           setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
                         }}
                       />
+                    ) : receipt.isImage ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                        <ImageIcon size={24} className="opacity-50" />
+                        <span className="text-[8px] mt-0.5">Erro</span>
+                      </div>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center">
-                        {receipt.isImage ? (
-                          <>
-                            <ImageIcon size={20} className="text-gray-400 opacity-50" />
-                            <span className="text-[8px] text-gray-400 mt-0.5">Indisponível</span>
-                          </>
-                        ) : (
-                          <>
-                            <FileText size={24} className="text-red-400" />
-                            <span className="text-[8px] font-medium text-gray-500 mt-0.5">PDF</span>
-                          </>
-                        )}
+                        <FileText size={24} className="text-red-400" />
+                        <span className="text-[8px] font-medium text-gray-500 mt-0.5">PDF</span>
                       </div>
                     )}
                   </div>
@@ -303,9 +441,15 @@ export default function ReceiptsPage() {
 
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => receipt.isImage ? setPreviewUrl(receipt.url) : handleDownload(receipt)}
+                      onClick={() => {
+                        if (receipt.isImage && !hasError) {
+                          setPreviewUrl(receipt.url)
+                        } else {
+                          handleDownload(receipt)
+                        }
+                      }}
                       className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
-                      title="Visualizar"
+                      title={receipt.isImage && !hasError ? 'Visualizar' : 'Abrir'}
                     >
                       <Eye size={16} />
                     </button>
@@ -331,6 +475,7 @@ export default function ReceiptsPage() {
         )}
       </div>
 
+      {/* Modal de preview */}
       {previewUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
@@ -350,6 +495,16 @@ export default function ReceiptsPage() {
           />
         </div>
       )}
+
+      {/* Input file oculto */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf"
+        onChange={handleUpload}
+        className="hidden"
+        disabled={uploading}
+      />
     </div>
   )
 }
