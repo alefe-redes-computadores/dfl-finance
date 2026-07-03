@@ -15,23 +15,52 @@ import { formatCurrency } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
 // ============================================================
-// LAZY LOADING DOS GRÁFICOS (Recharts)
+// LAZY LOADING DOS GRÁFICOS (Recharts) - COM TIPAGEM ANY PARA EVITAR ERRO
 // ============================================================
 const AreaChartComponent = dynamic(
   () => import('recharts').then(mod => mod.AreaChart),
   { ssr: false, loading: () => <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-const Area = dynamic(() => import('recharts').then(mod => mod.Area), { ssr: false })
+) as any
+
+const Area = dynamic(
+  () => import('recharts').then(mod => mod.Area),
+  { ssr: false }
+) as any
+
 const LineChartComponent = dynamic(
   () => import('recharts').then(mod => mod.LineChart),
   { ssr: false, loading: () => <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false })
-const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
-const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
-const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
-const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
-const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
+) as any
+
+const Line = dynamic(
+  () => import('recharts').then(mod => mod.Line),
+  { ssr: false }
+) as any
+
+const XAxis = dynamic(
+  () => import('recharts').then(mod => mod.XAxis),
+  { ssr: false }
+) as any
+
+const YAxis = dynamic(
+  () => import('recharts').then(mod => mod.YAxis),
+  { ssr: false }
+) as any
+
+const CartesianGrid = dynamic(
+  () => import('recharts').then(mod => mod.CartesianGrid),
+  { ssr: false }
+) as any
+
+const Tooltip = dynamic(
+  () => import('recharts').then(mod => mod.Tooltip),
+  { ssr: false }
+) as any
+
+const ResponsiveContainer = dynamic(
+  () => import('recharts').then(mod => mod.ResponsiveContainer),
+  { ssr: false }
+) as any
 
 // ============================================================
 // SKELETON LOADER
