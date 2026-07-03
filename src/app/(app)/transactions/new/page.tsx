@@ -1118,7 +1118,7 @@ function NewTransactionContent() {
         <ReceiptModal
           isOpen={showReceiptModal}
           onClose={() => setShowReceiptModal(false)}
-          onSelect={handleReceiptOption}
+          onSelectOption={handleReceiptOption}
         />
       )}
 
