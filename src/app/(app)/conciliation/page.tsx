@@ -32,11 +32,9 @@ export default function ConciliationPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
 
-  // Carrega dados ao entrar
   useEffect(() => {
     setLoadingPulse(true)
-    
-    // Simula carregamento (futuramente: carregar do CSV ou Supabase)
+
     const timer = setTimeout(() => {
       if (queue.length === 0 && !isComplete) {
         const mock = generateMockTransactions(6)
@@ -52,8 +50,7 @@ export default function ConciliationPage() {
   const handleApprove = (id: string) => {
     setIsProcessing(true)
     setLoadingPulse(true)
-    
-    // Simula processamento (futuramente: salvar no Supabase)
+
     setTimeout(() => {
       approve()
       showToast('Transação aprovada ✅', 'success')
@@ -65,7 +62,7 @@ export default function ConciliationPage() {
   const handleReject = (id: string) => {
     setIsProcessing(true)
     setLoadingPulse(true)
-    
+
     setTimeout(() => {
       reject()
       showToast('Transação descartada ❌', 'info')
@@ -76,7 +73,7 @@ export default function ConciliationPage() {
 
   const handleReset = () => {
     setLoadingPulse(true)
-    
+
     setTimeout(() => {
       const mock = generateMockTransactions(6)
       reset(mock)
@@ -93,7 +90,6 @@ export default function ConciliationPage() {
     showToast('Importação de CSV em breve 📄', 'info')
   }
 
-  // Se estiver carregando, mostra skeleton
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center p-4">
@@ -111,14 +107,12 @@ export default function ConciliationPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col">
-      {/* 🔵 Bolinha de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Header */}
       <header className="bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 px-4 py-3 sticky top-0 z-10">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <button
@@ -151,7 +145,6 @@ export default function ConciliationPage() {
         )}
       </header>
 
-      {/* Área principal */}
       <div className="flex-1 flex items-center justify-center p-4">
         {isComplete ? (
           <ConciSummary
