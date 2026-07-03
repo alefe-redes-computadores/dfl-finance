@@ -9,79 +9,27 @@ import {
   Calendar, Filter, Download, FileText, FileSpreadsheet,
   BarChart3, PieChart, LineChart, Loader2
 } from 'lucide-react'
-import { format, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval } from 'date-fns'
+import { format, subMonths, eachDayOfInterval } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
-import dynamic from 'next/dynamic'
 
-// ============================================================
-// LAZY LOADING DOS GRÁFICOS (Recharts) - FORÇANDO ANY
-// ============================================================
-const BarChartComponent: any = dynamic(
-  () => import('recharts').then(mod => mod.BarChart),
-  { ssr: false, loading: () => <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-
-const Bar: any = dynamic(
-  () => import('recharts').then(mod => mod.Bar),
-  { ssr: false }
-)
-
-const XAxis: any = dynamic(
-  () => import('recharts').then(mod => mod.XAxis),
-  { ssr: false }
-)
-
-const YAxis: any = dynamic(
-  () => import('recharts').then(mod => mod.YAxis),
-  { ssr: false }
-)
-
-const CartesianGrid: any = dynamic(
-  () => import('recharts').then(mod => mod.CartesianGrid),
-  { ssr: false }
-)
-
-const Tooltip: any = dynamic(
-  () => import('recharts').then(mod => mod.Tooltip),
-  { ssr: false }
-)
-
-const ResponsiveContainer: any = dynamic(
-  () => import('recharts').then(mod => mod.ResponsiveContainer),
-  { ssr: false }
-)
-
-const PieChartComponent: any = dynamic(
-  () => import('recharts').then(mod => mod.PieChart),
-  { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-
-const Pie: any = dynamic(
-  () => import('recharts').then(mod => mod.Pie),
-  { ssr: false }
-)
-
-const Cell: any = dynamic(
-  () => import('recharts').then(mod => mod.Cell),
-  { ssr: false }
-)
-
-const Legend: any = dynamic(
-  () => import('recharts').then(mod => mod.Legend),
-  { ssr: false }
-)
-
-const LineChartComponent: any = dynamic(
-  () => import('recharts').then(mod => mod.LineChart),
-  { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-
-const Line: any = dynamic(
-  () => import('recharts').then(mod => mod.Line),
-  { ssr: false }
-)
+// ✅ Imports normais (sem lazy loading) para evitar erro de tipagem
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart as RePieChart,
+  Pie,
+  Cell,
+  Legend,
+  LineChart as ReLineChart,
+  Line
+} from 'recharts'
 
 // ============================================================
 // SKELETON LOADER
@@ -405,7 +353,7 @@ export default function ReportsPage() {
                 </h3>
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChartComponent data={monthlyData}>
+                    <BarChart data={monthlyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
@@ -415,7 +363,7 @@ export default function ReportsPage() {
                       />
                       <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    </BarChartComponent>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
@@ -427,7 +375,7 @@ export default function ReportsPage() {
                   <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Categorias</h3>
                   <div className="h-[150px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChartComponent>
+                      <RePieChart>
                         <Pie
                           data={categoryData}
                           dataKey="value"
@@ -446,7 +394,7 @@ export default function ReportsPage() {
                           formatter={(v: any) => formatCurrency(v)}
                           contentStyle={{ fontSize: 10, borderRadius: 12 }}
                         />
-                      </PieChartComponent>
+                      </RePieChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -457,7 +405,7 @@ export default function ReportsPage() {
                   <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Saldo Diário</h3>
                   <div className="h-[150px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChartComponent data={dailyData}>
+                      <ReLineChart data={dailyData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="date" tick={{ fontSize: 8 }} interval={4} />
                         <YAxis tick={{ fontSize: 8 }} tickFormatter={(v) => `R$${v}`} />
@@ -472,7 +420,7 @@ export default function ReportsPage() {
                           strokeWidth={2}
                           dot={false}
                         />
-                      </LineChartComponent>
+                      </ReLineChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
