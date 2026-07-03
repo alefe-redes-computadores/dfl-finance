@@ -1,31 +1,24 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle, RefreshCw
+  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { useToast } from '@/contexts/ToastContext'
-import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { formatCurrency } from '@/lib/utils'
 
 export default function DebtDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const { showToast } = useToast()
-  const { success, error } = useHapticFeedback()
 
   const [debt, setDebt] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
   const [accounts, setAccounts] = useState<any[]>([])
@@ -45,76 +38,26 @@ export default function DebtDetailPage() {
 
   const [showAccModal, setShowAccModal] = useState(false)
 
-  // Pull to refresh
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
-
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
-    }
-  }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
-    setLoadingPulse(true)
 
-    const { data: debtData, error: debtError } = await supabase
+    const { data: debtData } = await supabase
       .from('debts')
       .select('*')
       .match({ id: id, user_id: user.id })
       .single()
 
-    if (debtError) {
-      console.error('[loadData] Erro ao carregar dívida:', debtError)
-      setLoading(false)
-      setLoadingPulse(false)
-      return
-    }
-
     if (debtData) {
       setDebt(debtData)
-      setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
+      setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de R$ ${Number(debtData.total_amount).toFixed(2).replace('.', ',')}. Você pode verificar?`)
     }
 
-    const { data: payData, error: payError } = await supabase
+    const { data: payData } = await supabase
       .from('transactions')
       .select('*')
       .eq('debt_id', id)
       .order('date', { ascending: false })
-
-    if (payError) {
-      console.error('[loadData] Erro ao carregar pagamentos:', payError)
-    }
 
     setPayments(Array.isArray(payData) ? payData : [])
 
@@ -125,53 +68,51 @@ export default function DebtDetailPage() {
 
     setAccounts(Array.isArray(accData) ? accData : [])
     setLoading(false)
-    setLoadingPulse(false)
   }, [id, user])
 
   useEffect(() => { loadData() }, [loadData])
 
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
   const handleDeleteDebt = async () => {
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
     await supabase.from('debts').delete().eq('id', id)
-    showToast('Dívida excluída.', 'info')
     router.push('/debts')
   }
 
   const handleDeletePayment = async (paymentId: string, amount: number) => {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
-    try {
-      await supabase.from('transactions').delete().eq('id', paymentId)
+    // Excluir a transação
+    await supabase.from('transactions').delete().eq('id', paymentId)
 
-      const updatedPayments = payments.filter(p => p.id !== paymentId)
-      const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-      
-      const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
-      const totalPaidCents = Math.round(totalPaid * 100)
-      const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
-      
-      await supabase.from('debts').update({ status: newStatus }).eq('id', id)
+    // Recalcular total pago (COM MATEMÁTICA CORRIGIDA EM CENTAVOS)
+    const updatedPayments = payments.filter(p => p.id !== paymentId)
+    const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
+    
+    const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
+    const totalPaidCents = Math.round(totalPaid * 100)
+    
+    const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
+    await supabase.from('debts').update({ status: newStatus }).eq('id', id)
 
-      const deletedPayment = payments.find(p => p.id === paymentId)
-      if (deletedPayment?.account_id) {
-        const { data: acc } = await supabase
+    // Se havia conta vinculada, reverter saldo (subtrair o valor)
+    const deletedPayment = payments.find(p => p.id === paymentId)
+    if (deletedPayment?.account_id) {
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('balance')
+        .eq('id', deletedPayment.account_id)
+        .single()
+      if (acc) {
+        await supabase
           .from('accounts')
-          .select('balance')
+          .update({ balance: Number(acc.balance) - amount })
           .eq('id', deletedPayment.account_id)
-          .single()
-        if (acc) {
-          await supabase
-            .from('accounts')
-            .update({ balance: Number(acc.balance) - amount })
-            .eq('id', deletedPayment.account_id)
-        }
       }
-
-      showToast('Pagamento removido.', 'info')
-      loadData()
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
     }
+
+    loadData()
   }
 
   const handlePayAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,43 +127,21 @@ export default function DebtDetailPage() {
     setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // ============================================================
-  // 🔥 HANDLE PAYMENT COM FEEDBACKS E TRY/CATCH ROBUSTO
-  // ============================================================
   const handlePayment = async () => {
     if (isSubmitting) return
+    if (!user?.id || payAmountNum <= 0) return
 
-    // 🔥 VALIDAÇÕES (com feedback)
-    if (!user?.id) {
-      showToast('Usuário não autenticado.', 'error')
-      error()
-      return
-    }
-
-    if (payAmountNum <= 0) {
-      showToast('Digite um valor válido.', 'warning')
-      error()
-      return
-    }
-
-    if (!debt) {
-      showToast('Dívida não carregada.', 'error')
-      error()
-      return
-    }
-
-    // 🔥 MATEMÁTICA EM CENTAVOS
-    const debtContext = debt.context || 'dfl'
+    // MATEMÁTICA CORRIGIDA EM CENTAVOS PARA EVITAR BUG DO JAVASCRIPT
     const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-    
     const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
     const totalPaidCents = Math.round(totalPaid * 100)
     const payAmountCents = Math.round(payAmountNum * 100)
+    
     const remainingCents = totalAmountCents - totalPaidCents
+    const remaining = remainingCents / 100
 
     if (payAmountCents > remainingCents) {
-      showToast(`O valor máximo é ${formatCurrency(remainingCents / 100)}.`, 'warning')
-      error()
+      alert(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`)
       return
     }
 
@@ -230,30 +149,24 @@ export default function DebtDetailPage() {
     setSaving(true)
 
     try {
-      const targetAccountId = payAccountId || debt.account_id || null
       const idempotencyKey = crypto.randomUUID()
 
-      // 1. Criar transação
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          type: 'income',
-          amount: payAmountNum,
-          description: payNote || `Pagamento de ${debt.person_name}`,
-          account_id: targetAccountId,
-          debt_id: id,
-          date: payDate,
-          status: 'done',
-          affects_balance: true,
-          context: debtContext,
-          idempotency_key: idempotencyKey,
-        })
-        .select()
+      const { error: txError } = await supabase.from('transactions').insert({
+        user_id: user.id,
+        type: 'income',
+        amount: payAmountNum,
+        description: payNote || `Pagamento de ${debt.person_name}`,
+        account_id: payAccountId || debt.account_id,
+        debt_id: id,
+        date: payDate,
+        status: 'done',
+        context: debt.context,
+        idempotency_key: idempotencyKey,
+      })
 
       if (txError) throw txError
 
-      // 2. Atualizar saldo da conta
+      const targetAccountId = payAccountId || debt.account_id
       if (targetAccountId) {
         const { data: acc } = await supabase
           .from('accounts')
@@ -269,39 +182,19 @@ export default function DebtDetailPage() {
         }
       }
 
-      // 3. Atualizar status da dívida
+      // ATUALIZAÇÃO BLINDADA DO STATUS
       const newTotalPaidCents = totalPaidCents + payAmountCents
-      const newTotalPaid = newTotalPaidCents / 100
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
+      await supabase.from('debts').update({ status: newStatus }).eq('id', id)
 
-      const { error: updateError } = await supabase
-        .from('debts')
-        .update({
-          status: newStatus,
-          paid_amount: newTotalPaid,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      // 🔥 SUCESSO (fecha modal, mostra toast, vibra)
       setShowPaymentModal(false)
       setPayAmount('0,00')
       setPayAmountNum(0)
       setPayNote('')
       setPayAccountId('')
-
-      success()
-      showToast('✅ Pagamento registrado com sucesso!', 'success')
-
-      // Recarrega dados
-      await loadData()
-
+      loadData()
     } catch (err: any) {
-      console.error('Erro ao registrar pagamento:', err)
-      error()
-      showToast(`❌ Erro: ${err.message || 'Erro desconhecido'}`, 'error')
+      alert('Erro ao registrar pagamento: ' + err.message)
     } finally {
       setSaving(false)
       setIsSubmitting(false)
@@ -311,7 +204,7 @@ export default function DebtDetailPage() {
   const handleSendWhatsApp = () => {
     const number = whatsAppNumber.replace(/\D/g, '')
     if (!number) {
-      showToast('Informe o número do WhatsApp.', 'warning')
+      alert('Informe o número do WhatsApp.')
       return
     }
     const url = `https://wa.me/55${number}?text=${encodeURIComponent(whatsAppMessage)}`
@@ -319,55 +212,41 @@ export default function DebtDetailPage() {
     setShowWhatsAppModal(false)
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+      <Loader2 className="animate-spin text-teal-700" size={40} />
+    </div>
+  )
 
-  if (!debt) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-        <p className="text-gray-500 dark:text-gray-400">Registro não encontrado.</p>
-      </div>
-    )
-  }
+  if (!debt) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+      <p className="text-gray-500 dark:text-gray-400">Registro não encontrado.</p>
+    </div>
+  )
 
-  // 🔥 CÁLCULOS VISUAIS EM CENTAVOS
+  const IconComp = getDynamicIcon(debt.icon || 'user')
+  
+  // CÁLCULO VISUAL BLINDADO
   const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
   const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
   const totalPaidCents = Math.round(totalPaid * 100)
   const remainingCents = totalAmountCents - totalPaidCents
   const remaining = remainingCents / 100
-  const isPaid = debt.status === 'paid' || remainingCents <= 0
+  
   const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
-
-  const IconComp = getDynamicIcon(debt.icon || 'user')
+  
+  // Só considera pago se o status for paid ou se literalmente faltar 0 centavos
+  const isPaid = debt.status === 'paid' || remainingCents <= 0
+  
   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
   const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
 
   const selectedAcc = accounts.find(a => a.id === payAccountId)
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
       
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-        </div>
-      )}
-
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -386,6 +265,7 @@ export default function DebtDetailPage() {
         </div>
       </div>
 
+      {/* Card Principal */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}>
@@ -417,9 +297,7 @@ export default function DebtDetailPage() {
 
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
           <div
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${
-              isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'
-            }`}
+            className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'}`}
             style={{ width: `${Math.min(percent, 100)}%` }}
           />
         </div>
@@ -430,6 +308,7 @@ export default function DebtDetailPage() {
         </div>
       </div>
 
+      {/* Botões de ação */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {!isPaid && (
           <button
@@ -447,6 +326,7 @@ export default function DebtDetailPage() {
         </button>
       </div>
 
+      {/* Histórico de Pagamentos */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Pagamentos</h3>
         {payments.length === 0 ? (
