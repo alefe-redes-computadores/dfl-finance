@@ -7,11 +7,10 @@ import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
 import './globals.css'
 
-// 1. IMPORTAÇÃO DA POPPINS
-import { Poppins } from 'next/font/google'
-const poppins = Poppins({ 
+import { Montserrat } from 'next/font/google'
+const montserrat = Montserrat({ 
   subsets: ['latin'], 
-  weight: ['400', '500', '600', '700'] // Pesos comuns da Poppins
+  weight: ['400', '500', '600', '700'] 
 })
 
 function AppContent({ children }: { children: React.ReactNode }) {
@@ -39,9 +38,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  // 2. APLICAÇÃO DA CLASSE poppins.className
   return (
-    <html lang="pt-BR" className={poppins.className}>
+    <html lang="pt-BR" className={montserrat.className}>
       <body>
         <ContextProvider>
           <AppContent>{children}</AppContent>
