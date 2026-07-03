@@ -559,6 +559,7 @@ export default function MorePage() {
           <SectionTitle>Ferramentas</SectionTitle>
           <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
             <MenuItem iconName="bot" label="Assistente IA" href="/assistant" badge="Novo" />
+            <MenuItem iconName="check-square" label="Conciliação Inteligente" href="/conciliation" badge="Novo" />
             <MenuItem iconName="image" label="Importar Comprovante" href="/import" />
             <MenuItem iconName="image" label="Galeria de Comprovantes" href="/receipts" />
             <MenuItem iconName="file-spreadsheet" label="Importar Extrato CSV" href="/import-csv" />
