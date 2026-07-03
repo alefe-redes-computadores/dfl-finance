@@ -28,7 +28,6 @@ import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
-import { toast } from 'sonner' // 🆕 Import para ações personalizadas
 
 // 🆕 Lazy loading do gráfico de projeção (pesado)
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
@@ -52,6 +51,9 @@ const ALL_SECTIONS = [
 ]
 
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
+
+// 🆕 Cards fixos (NUNCA terão botão "X")
+const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
 
 // ============================================================
 // SAUDAÇÃO DINÂMICA
@@ -570,53 +572,35 @@ function HomeContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  // 🆕 Função para ocultar um card com desfazer (Toast)
+  // 🆕 Função para ocultar um card (sem desfazer)
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
-    // Remove o card da lista de seções habilitadas
     const newEnabledSections = enabledSections.filter(id => id !== sectionId)
     setEnabledSections(newEnabledSections)
     
-    // 🆕 Mostrar Toast com botão Desfazer usando sonner diretamente
-    toast(`"${sectionLabel}" ocultado`, {
-      action: {
-        label: 'Desfazer',
-        onClick: () => {
-          // Restaurar o card
-          setEnabledSections(prev => {
-            const restored = [...prev, sectionId]
-            // Manter a ordem original (adicionar na posição correta)
-            return restored.sort((a, b) => {
-              const idxA = ALL_SECTIONS.findIndex(s => s.id === a)
-              const idxB = ALL_SECTIONS.findIndex(s => s.id === b)
-              return idxA - idxB
-            })
-          })
-        }
-      },
-      duration: 3000, // 3 segundos para desfazer
-    })
+    // Notificar o usuário
+    showToast(`"${sectionLabel}" ocultado! Use "Personalizar Dashboard" para reativar.`, 'info')
     
-    // Persistir a mudança após o delay (se não for desfeito)
+    // Persistir a mudança
     setTimeout(() => {
-      // Verificar se o card ainda está removido (não foi restaurado)
       setEnabledSections(current => {
         if (!current.includes(sectionId)) {
           saveLayout(current)
         }
         return current
       })
-    }, 3500) // Um pouco mais que o duration do toast
+    }, 300)
   }
 
-  // Função para renderizar cada seção (agora com botão X)
+  // Função para renderizar cada seção (com botão X centralizado)
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
+    const isFixed = FIXED_SECTIONS.includes(sectionId) // Cards fixos NÃO têm botão
     
     switch (sectionId) {
       case 'balance':
         return (
           <div key="balance" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all relative">
+            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all">
               <div className="flex items-center justify-center gap-2 mb-3">
                 <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">Saldo total</span>
                 <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
@@ -641,14 +625,7 @@ function HomeContent() {
         )
       case 'income-expense':
         return (
-          <div key="income-expense" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('income-expense', 'Receitas / Despesas')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+          <div key="income-expense" className="mb-6">
             <div className="grid grid-cols-2 gap-4">
               <div onClick={() => router.push('/transactions?filter=income')} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/50 shadow-sm rounded-[24px] p-5 flex flex-col items-center justify-center cursor-pointer hover:shadow-md transition-all">
                 <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-3">
@@ -670,30 +647,33 @@ function HomeContent() {
       case 'projection':
         return (
           <div key="projection" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+            )}
             <Suspense fallback={<Skeleton className="h-24 w-full rounded-xl" />}>
               <ProjectionSparklineCard />
             </Suspense>
           </div>
         )
       case 'loans':
-        // 🆕 Bloqueio quando modo PF-only está ativo
         if (appMode === 'personal_only') {
           return (
             <div key="loans" className="mb-6 relative">
-              <button
-                onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-                title="Ocultar card"
-              >
-                <X size={14} />
-              </button>
+              {!isFixed && (
+                <button
+                  onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
+                  className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                  title="Ocultar card"
+                >
+                  <X size={14} />
+                </button>
+              )}
               <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
                 <div className="px-5 py-4">
                   <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
@@ -711,17 +691,18 @@ function HomeContent() {
             </div>
           )
         }
-        // 🆕 Se não houver empréstimos, mostrar call to action
         if (loans.length === 0) {
           return (
             <div key="loans" className="mb-6 relative">
-              <button
-                onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-                title="Ocultar card"
-              >
-                <X size={14} />
-              </button>
+              {!isFixed && (
+                <button
+                  onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
+                  className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                  title="Ocultar card"
+                >
+                  <X size={14} />
+                </button>
+              )}
               <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
                 <div className="px-5 py-4">
                   <div className="flex items-center justify-between">
@@ -745,13 +726,15 @@ function HomeContent() {
         }
         return (
           <div key="loans" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+            )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/loans')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
@@ -800,13 +783,15 @@ function HomeContent() {
         if (!nextCard && !allCardsPaid) return null
         return (
           <div key="next-card" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('next-card', 'Próxima Fatura')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('next-card', 'Próxima Fatura')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+            )}
             {nextCard ? (
               <div onClick={() => router.push(`/cards/${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -838,14 +823,7 @@ function HomeContent() {
         )
       case 'pendings':
         return (
-          <div key="pendings" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('pendings', 'Pendências')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+          <div key="pendings" className="mb-6">
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50">
               <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Pendências</h3>
               <div className="grid grid-cols-3 gap-3">
@@ -878,13 +856,15 @@ function HomeContent() {
         if (debts.length === 0) return null
         return (
           <div key="receivables" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('receivables', 'A Receber')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('receivables', 'A Receber')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+            )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/debts')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">A Receber</h3>
@@ -928,13 +908,15 @@ function HomeContent() {
         if (financings.length === 0) return null
         return (
           <div key="financings" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('financings', 'Financiamentos')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('financings', 'Financiamentos')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+            )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/financings')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Financiamentos</h3>
@@ -966,13 +948,15 @@ function HomeContent() {
         if (budgets.length === 0) return null
         return (
           <div key="budgets" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('budgets', 'Orçamentos')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('budgets', 'Orçamentos')}
+                className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                title="Ocultar card"
+              >
+                <X size={14} />
+              </button>
+            )}
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/budgets')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Orçamentos Ativos</h3>
@@ -1010,14 +994,7 @@ function HomeContent() {
         )
       case 'accounts':
         return (
-          <div key="accounts" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('accounts', 'Contas')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+          <div key="accounts" className="mb-6">
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/accounts')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Contas</h3>
@@ -1051,14 +1028,7 @@ function HomeContent() {
         )
       case 'cards':
         return (
-          <div key="cards" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('cards', 'Cartões')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+          <div key="cards" className="mb-6">
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/cards')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
@@ -1092,14 +1062,7 @@ function HomeContent() {
         )
       case 'recent':
         return (
-          <div key="recent" className="mb-6 relative">
-            <button
-              onClick={() => handleHideCard('recent', 'Transações Recentes')}
-              className="absolute -top-1 right-0 p-1.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-              title="Ocultar card"
-            >
-              <X size={14} />
-            </button>
+          <div key="recent" className="mb-6">
             <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
               <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/transactions')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Transações Recentes</h3>
@@ -1142,14 +1105,12 @@ function HomeContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
