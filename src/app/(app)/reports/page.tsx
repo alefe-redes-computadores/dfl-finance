@@ -16,30 +16,72 @@ import { formatCurrency } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
 // ============================================================
-// LAZY LOADING DOS GRÁFICOS (Recharts)
+// LAZY LOADING DOS GRÁFICOS (Recharts) - COM TIPAGEM ANY
 // ============================================================
 const BarChartComponent = dynamic(
   () => import('recharts').then(mod => mod.BarChart),
   { ssr: false, loading: () => <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false })
-const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
-const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
-const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
-const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
-const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
+) as any
+
+const Bar = dynamic(
+  () => import('recharts').then(mod => mod.Bar),
+  { ssr: false }
+) as any
+
+const XAxis = dynamic(
+  () => import('recharts').then(mod => mod.XAxis),
+  { ssr: false }
+) as any
+
+const YAxis = dynamic(
+  () => import('recharts').then(mod => mod.YAxis),
+  { ssr: false }
+) as any
+
+const CartesianGrid = dynamic(
+  () => import('recharts').then(mod => mod.CartesianGrid),
+  { ssr: false }
+) as any
+
+const Tooltip = dynamic(
+  () => import('recharts').then(mod => mod.Tooltip),
+  { ssr: false }
+) as any
+
+const ResponsiveContainer = dynamic(
+  () => import('recharts').then(mod => mod.ResponsiveContainer),
+  { ssr: false }
+) as any
+
 const PieChartComponent = dynamic(
   () => import('recharts').then(mod => mod.PieChart),
   { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false })
-const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false })
-const Legend = dynamic(() => import('recharts').then(mod => mod.Legend), { ssr: false })
+) as any
+
+const Pie = dynamic(
+  () => import('recharts').then(mod => mod.Pie),
+  { ssr: false }
+) as any
+
+const Cell = dynamic(
+  () => import('recharts').then(mod => mod.Cell),
+  { ssr: false }
+) as any
+
+const Legend = dynamic(
+  () => import('recharts').then(mod => mod.Legend),
+  { ssr: false }
+) as any
+
 const LineChartComponent = dynamic(
   () => import('recharts').then(mod => mod.LineChart),
   { ssr: false, loading: () => <div className="h-[150px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false })
+) as any
+
+const Line = dynamic(
+  () => import('recharts').then(mod => mod.Line),
+  { ssr: false }
+) as any
 
 // ============================================================
 // SKELETON LOADER
@@ -154,9 +196,6 @@ export default function ReportsPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ============================================================
-  // PROCESSAMENTO DOS DADOS
-  // ============================================================
   const filteredTransactions = filterType === 'all' 
     ? transactions 
     : transactions.filter(t => t.type === filterType)
