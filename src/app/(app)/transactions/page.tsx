@@ -7,14 +7,15 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import { 
-  Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, Clock, Check,
-  ArrowLeftRight, Download, Image, Paperclip, ArrowDown, ArrowUp, Layers, RefreshCw
+  Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, 
+  ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, RefreshCw
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import BankLogo from '@/components/BankLogo'
 import { useScrollPosition } from '@/hooks/useScrollPosition'
+import { TransactionItem } from '@/components/transactions/TransactionItem'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -33,13 +34,6 @@ const safeNum = (val: any) => {
   if (typeof val === 'number') return val;
   const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g,""));
   return isNaN(parsed) ? 0 : parsed;
-}
-
-const getAttachmentIcon = (url: string | null) => {
-  if (!url) return null
-  const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-  if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-  return <Paperclip size={12} className="text-gray-500 shrink-0" />
 }
 
 function groupByDate(transactions: any[]) {
@@ -108,7 +102,6 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
-  // 🆕 Hook para posição de scroll
   const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
   useEffect(() => {
@@ -186,7 +179,6 @@ export default function TransactionsPage() {
     loadTransactions(0)
   }, [loadTransactions])
 
-  // 🆕 Infinite scroll com useScrollPosition
   useEffect(() => {
     if (loadingMore || !hasMore || loading) return
     if (scrollY + windowHeight >= documentHeight - 200) {
@@ -321,84 +313,14 @@ export default function TransactionsPage() {
                 <div key={date}>
                   <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 mb-3 px-1 tracking-wide">{dateLabel(date)}</p>
                   <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden">
-                    {grouped[date].map((t, index) => {
-                      const isTransferIn = t.type === 'transfer' && t.description?.includes('de ');
-                      const isIncomeVisual = t.type === 'income' || isTransferIn;
-                      const isPending = t.status === 'pending';
-
-                      const IconComp = t.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(t.categories?.icon)
-                      const attachmentIcon = getAttachmentIcon(t.receipt_url)
-
-                      const hasInstallments = t.total_installments && t.total_installments > 1
-                      const installmentBadge = hasInstallments 
-                        ? `${t.installment_index || 1}/${t.total_installments}` 
-                        : null
-
-                      return (
-                        <div 
-                          key={t.id} 
-                          onClick={() => router.push(`/transactions/${t.id}`)}
-                          className={`px-4 py-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${index !== grouped[date].length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
-                        >
-                          {isPending ? (
-                            <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                              <Clock size={12} className="text-red-400" />
-                            </div>
-                          ) : (
-                            <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                              <Check size={12} className="text-emerald-500" />
-                            </div>
-                          )}
-
-                          <div className="w-10 h-10 rounded-[12px] flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: t.categories?.color ? `${t.categories.color}20` : '#f3f4f6', color: t.categories?.color || '#64748b' }}>
-                            <IconComp size={18} />
-                          </div>
-
-                          <div className="flex-1 min-w-0 pr-2">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">
-                                {t.description ?? t.categories?.name ?? (isIncomeVisual ? 'Receita' : 'Despesa')}
-                              </p>
-                              {attachmentIcon && (
-                                <span className="shrink-0">{attachmentIcon}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              {t.categories?.name && (
-                                <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                                  {t.categories.name}
-                                </span>
-                              )}
-                              {t.categories?.name && t.accounts?.name && (
-                                <span className="text-[11px] text-gray-300 dark:text-gray-600">•</span>
-                              )}
-                              {t.accounts?.name && (
-                                <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                                  {t.accounts.name}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="text-right flex-shrink-0">
-                            <div className="flex items-center gap-1 justify-end mb-1">
-                              {installmentBadge && (
-                                <span className="text-[9px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-md">
-                                  {installmentBadge}
-                                </span>
-                              )}
-                              <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600">
-                                {format(new Date(t.date), "dd 'de' MMM", { locale: ptBR })}
-                              </p>
-                            </div>
-                            <p className={`text-[14px] font-bold whitespace-nowrap ${isIncomeVisual ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {isIncomeVisual ? '+' : '-'} R$ {safeNum(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })}
+                    {grouped[date].map((t, index) => (
+                      <TransactionItem
+                        key={t.id}
+                        transaction={t}
+                        index={index}
+                        totalItems={grouped[date].length}
+                      />
+                    ))}
                   </div>
                 </div>
               ))}
