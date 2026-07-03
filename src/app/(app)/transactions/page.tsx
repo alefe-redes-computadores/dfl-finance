@@ -80,7 +80,6 @@ const TransactionsSkeleton = () => (
   </div>
 )
 
-// ─── Card de Pendentes ────────────────────────────────────────────────────────
 function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -152,7 +151,6 @@ function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
     </div>
   )
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function TransactionsPage() {
   const { user } = useAuth()
@@ -205,7 +203,6 @@ export default function TransactionsPage() {
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
-  // ── Query separada para pendentes (sem paginação, sempre completa) ──────────
   const loadPending = useCallback(async () => {
     if (!user) return
     setLoadingPending(true)
@@ -225,7 +222,6 @@ export default function TransactionsPage() {
     setLoadingPending(false)
   }, [user, context, currentDate])
 
-  // ── Query principal (sem alteração na lógica original) ─────────────────────
   const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
     if (!user) return;
 
@@ -287,7 +283,6 @@ export default function TransactionsPage() {
     }
   }, [scrollY, windowHeight, documentHeight, page, hasMore, loadingMore, loading, loadTransactions])
 
-  // ── Filtragem client-side (idêntica ao original) ───────────────────────────
   const filtered = transactions.filter(t => {
     let matchSearch = true;
     if (search) {
@@ -329,81 +324,85 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY CORRIGIDO ── */}
-      {/* Removemos o padding horizontal daqui e colocamos fundo sólido com z-index alto */}
-      <div className="sticky top-0 z-30 bg-[#f8f9fa] dark:bg-slate-900 pt-6 pb-2">
-        <div className="px-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
-            <div className="flex items-center gap-2">
-              <div className="relative" ref={exportMenuRef}>
-                <button 
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center transition-colors hover:bg-gray-50 dark:hover:bg-slate-700"
-                >
-                  <Download size={18} className="text-gray-700 dark:text-gray-300" />
-                </button>
-                {showExportMenu && (
-                  <div className="absolute right-0 top-[42px] w-40 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-40 animate-in fade-in zoom-in-95 duration-200">
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Exportar extrato</p>
-                    {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
-                      <button key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-                <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
-                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-24 text-center">{monthLabel}</span>
-                <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
-              </div>
-            </div>
-          </div>
-
-          <ContextToggle />
-
-          <div className="flex gap-2 mb-4 relative">
-            <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
-              <Search size={18} className="text-gray-400 dark:text-gray-500" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar transação..."
-                className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
-            </div>
-
-            <div className="relative" ref={statusMenuRef}>
+      {/* ── HEADER STICKY COMPACTO E SEGURO (CORRIGIDO) ── */}
+      {/* pt-7 garante isolamento do topo do celular e mb-0 limpa o espaçamento fantasma */}
+      <div className="sticky top-0 z-30 bg-[#f8f9fa] dark:bg-slate-900 pt-7 pb-2 px-4 mb-0 border-b border-gray-100/20 dark:border-slate-800/20">
+        
+        {/* Compactamos as margens inferiores de mb-6 para mb-3 */}
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
+          <div className="flex items-center gap-2">
+            <div className="relative" ref={exportMenuRef}>
               <button 
-                onClick={() => setShowStatusMenu(!showStatusMenu)} 
-                className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center transition-colors hover:bg-gray-50 dark:hover:bg-slate-700"
               >
-                <SlidersHorizontal size={20} />
+                <Download size={18} className="text-gray-700 dark:text-gray-300" />
               </button>
-
-              {showStatusMenu && (
-                <div className="absolute right-0 top-[54px] w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-40 animate-in fade-in zoom-in-95 duration-200">
-                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Filtrar por Status</p>
-                  <button onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
-                  <button onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
-                  <button onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-[42px] w-40 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Exportar extrato</p>
+                  {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
+                    <button key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
+                  ))}
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {filters.map(f => (
-              <button key={f.key} onClick={() => setFilter(f.key)}
-                className={`px-5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${filter === f.key ? 'bg-teal-700 text-white border-teal-700 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                {f.icon}
-                {f.label}
-              </button>
-            ))}
+            <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
+              <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
+              <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-24 text-center">{monthLabel}</span>
+              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
+            </div>
           </div>
         </div>
-      </div>
-      {/* ── FIM HEADER STICKY ── */}
 
-      {/* Conteúdo rolável */}
-      <div className="px-4 mt-2">
+        {/* O alternador de contexto agora fica colado na estrutura sem empurrar a página */}
+        <div className="mb-3">
+          <ContextToggle />
+        </div>
+
+        {/* Compactamos de mb-4 para mb-3 */}
+        <div className="flex gap-2 mb-3 relative">
+          <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
+            <Search size={18} className="text-gray-400 dark:text-gray-500" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar transação..."
+              className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 font-medium" />
+          </div>
+
+          <div className="relative" ref={statusMenuRef}>
+            <button 
+              onClick={() => setShowStatusMenu(!showStatusMenu)} 
+              className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+            >
+              <SlidersHorizontal size={20} />
+            </button>
+
+            {showStatusMenu && (
+              <div className="absolute right-0 top-[54px] w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Filtrar por Status</p>
+                <button onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
+                <button onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
+                <button onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {filters.map(f => (
+            <button key={f.key} onClick={() => setFilter(f.key)}
+              className={`px-5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${filter === f.key ? 'bg-teal-700 text-white border-teal-700 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+              {f.icon}
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── CONTEÚDO DA LISTA COM ESPAÇAMENTO REAJUSTADO ── */}
+      {/* mt-3 traz os cards para perto do cabeçalho de forma harmônica */}
+      <div className="px-4 mt-3">
         {loading ? (
           <TransactionsSkeleton />
         ) : filtered.length === 0 && !loadingMore ? (
@@ -414,7 +413,6 @@ export default function TransactionsPage() {
           </div>
         ) : (
           <>
-            {/* ── Card de pendentes — aparece acima de tudo, some quando filtro já é 'pending' */}
             {statusFilter !== 'pending' && (
               <PendingCard txs={pendingTxs} loading={loadingPending} />
             )}
