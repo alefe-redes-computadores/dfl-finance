@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import { 
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, 
-  ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, RefreshCw
+  ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, RefreshCw, Clock, ChevronDown
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -80,11 +80,87 @@ const TransactionsSkeleton = () => (
   </div>
 )
 
+// ─── Card de Pendentes ────────────────────────────────────────────────────────
+function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  if (loading) {
+    return (
+      <div className="mb-6 animate-pulse">
+        <div className="h-[60px] bg-amber-100/60 dark:bg-amber-900/20 rounded-[20px]" />
+      </div>
+    )
+  }
+
+  if (txs.length === 0) return null
+
+  const totalExpense = txs
+    .filter(t => t.type === 'expense')
+    .reduce((s, t) => s + safeNum(t.amount), 0)
+  const totalIncome = txs
+    .filter(t => t.type === 'income')
+    .reduce((s, t) => s + safeNum(t.amount), 0)
+
+  const fmt = (v: number) =>
+    `R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  return (
+    <div className="mb-6">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-4 py-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-[20px] mb-1 transition-all active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
+            <Clock size={16} className="text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="text-left">
+            <p className="text-[13px] font-bold text-amber-800 dark:text-amber-300 leading-tight">
+              {txs.length} {txs.length === 1 ? 'transação pendente' : 'transações pendentes'}
+            </p>
+            <p className="text-[11px] font-medium mt-0.5">
+              {totalExpense > 0 && (
+                <span className="text-red-500 dark:text-red-400">−{fmt(totalExpense)}</span>
+              )}
+              {totalExpense > 0 && totalIncome > 0 && (
+                <span className="text-gray-300 mx-1">·</span>
+              )}
+              {totalIncome > 0 && (
+                <span className="text-emerald-600 dark:text-emerald-400">+{fmt(totalIncome)}</span>
+              )}
+            </p>
+          </div>
+        </div>
+        <ChevronDown
+          size={18}
+          className={`text-amber-500 dark:text-amber-400 transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`}
+        />
+      </button>
+
+      {!collapsed && (
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-amber-100 dark:border-amber-900/40 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+          {txs.map((t, index) => (
+            <TransactionItem
+              key={t.id}
+              transaction={t}
+              index={index}
+              totalItems={txs.length}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, appMode } = useContext_()
   const [transactions, setTransactions] = useState<any[]>([])
+  const [pendingTxs, setPendingTxs] = useState<any[]>([])
+  const [loadingPending, setLoadingPending] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -129,6 +205,27 @@ export default function TransactionsPage() {
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
+  // ── Query separada para pendentes (sem paginação, sempre completa) ──────────
+  const loadPending = useCallback(async () => {
+    if (!user) return
+    setLoadingPending(true)
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
+    const { data } = await supabase
+      .from('transactions')
+      .select('*, categories(name, icon, color), accounts!account_id(name, color)')
+      .match({ user_id: user.id, context: context, status: 'pending' })
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    setPendingTxs(Array.isArray(data) ? data : [])
+    setLoadingPending(false)
+  }, [user, context, currentDate])
+
+  // ── Query principal (sem alteração na lógica original) ─────────────────────
   const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
     if (!user) return;
 
@@ -147,7 +244,7 @@ export default function TransactionsPage() {
       .match({ user_id: user.id, context: context })
       .gte('date', start)
       .lte('date', end)
-      .order('status', { ascending: true }) // 🔄 PENDENTES PRIMEIRO
+      .order('status', { ascending: true })
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
 
@@ -178,7 +275,8 @@ export default function TransactionsPage() {
     setPage(0)
     setHasMore(true)
     loadTransactions(0)
-  }, [loadTransactions])
+    loadPending()
+  }, [loadTransactions, loadPending])
 
   useEffect(() => {
     if (loadingMore || !hasMore || loading) return
@@ -189,6 +287,7 @@ export default function TransactionsPage() {
     }
   }, [scrollY, windowHeight, documentHeight, page, hasMore, loadingMore, loading, loadTransactions])
 
+  // ── Filtragem client-side (idêntica ao original) ───────────────────────────
   const filtered = transactions.filter(t => {
     let matchSearch = true;
     if (search) {
@@ -309,6 +408,11 @@ export default function TransactionsPage() {
           </div>
         ) : (
           <>
+            {/* ── Card de pendentes — aparece acima de tudo, some quando filtro já é 'pending' */}
+            {statusFilter !== 'pending' && (
+              <PendingCard txs={pendingTxs} loading={loadingPending} />
+            )}
+
             <div className="space-y-6 animate-in fade-in duration-300">
               {sortedDates.map(date => (
                 <div key={date}>
