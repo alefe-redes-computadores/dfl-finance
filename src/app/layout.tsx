@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -25,9 +24,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-      <ErrorBoundary>
-        {children}
-      </ErrorBoundary>
+      {children}
       <BottomNav />
     </div>
   )
