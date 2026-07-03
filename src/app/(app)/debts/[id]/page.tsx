@@ -5,86 +5,47 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Loader2, Check, Trash2, X, Calendar, RefreshCw,
-  TrendingUp, TrendingDown, ArrowLeftRight, Building2, User,
-  Wallet, Clock, AlertTriangle, CheckCircle2, Edit3, Plus
+  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle, RefreshCw
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { useToast } from '@/contexts/ToastContext'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { formatCurrency } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-
-// ============================================================
-// SKELETON LOADER (CORES SUAVES)
-// ============================================================
-const DebtDetailSkeleton = () => (
-  <div className="animate-pulse px-4 pt-6 space-y-4">
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
-        <div className="space-y-2 flex-1">
-          <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-3 w-28 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-        <div className="h-7 w-24 bg-gray-200 dark:bg-slate-700 rounded-full" />
-      </div>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700 text-center">
-          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
-          <div className="h-6 w-24 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
-        </div>
-        <div className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700 text-center">
-          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
-          <div className="h-6 w-24 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
-        </div>
-      </div>
-      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-1/2" />
-      </div>
-      <div className="h-3 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl mb-2">
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-gray-200 dark:bg-slate-600 rounded" />
-            <div className="h-3 w-32 bg-gray-100 dark:bg-slate-600/50 rounded" />
-          </div>
-          <div className="w-6 h-6 bg-gray-200 dark:bg-slate-600 rounded" />
-        </div>
-      ))}
-    </div>
-  </div>
-)
+import { formatCurrency } from '@/lib/utils'
 
 export default function DebtDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
   const { showToast } = useToast()
-  const { success, error, vibrate } = useHapticFeedback()
+  const { success, error } = useHapticFeedback()
 
   const [debt, setDebt] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [saving, setSaving] = useState(false)
-
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // WhatsApp
+  const [whatsAppNumber, setWhatsAppNumber] = useState('')
+  const [whatsAppMessage, setWhatsAppMessage] = useState('')
+
+  // Pagamento
   const [payAmount, setPayAmount] = useState('0,00')
   const [payAmountNum, setPayAmountNum] = useState(0)
-  const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [payAccountId, setPayAccountId] = useState('')
   const [payNote, setPayNote] = useState('')
+  const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showAccModal, setShowAccModal] = useState(false)
 
+  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -130,31 +91,76 @@ export default function DebtDetailPage() {
     const { data: debtData } = await supabase
       .from('debts')
       .select('*')
-      .eq('id', id)
-      .eq('user_id', user.id)
+      .match({ id: id, user_id: user.id })
       .single()
 
-    if (!debtData) {
-      router.push('/debts')
-      return
+    if (debtData) {
+      setDebt(debtData)
+      setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
     }
-
-    setDebt(debtData)
 
     const { data: payData } = await supabase
       .from('transactions')
       .select('*')
       .eq('debt_id', id)
-      .eq('user_id', user.id)
-      .eq('type', 'income')
       .order('date', { ascending: false })
 
     setPayments(Array.isArray(payData) ? payData : [])
+
+    const { data: accData } = await supabase
+      .from('accounts')
+      .select('id, name, color, balance')
+      .match({ user_id: user.id, context: debtData?.context || 'dfl' })
+
+    setAccounts(Array.isArray(accData) ? accData : [])
     setLoading(false)
     setLoadingPulse(false)
   }, [id, user])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const handleDeleteDebt = async () => {
+    if (!confirm('Tem certeza que deseja excluir este registro?')) return
+    await supabase.from('debts').delete().eq('id', id)
+    showToast('Dívida excluída.', 'info')
+    router.push('/debts')
+  }
+
+  const handleDeletePayment = async (paymentId: string, amount: number) => {
+    if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
+
+    try {
+      // Excluir a transação
+      await supabase.from('transactions').delete().eq('id', paymentId)
+
+      // Recalcular total pago
+      const updatedPayments = payments.filter(p => p.id !== paymentId)
+      const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
+      const newStatus = totalPaid >= Number(debt.total_amount) ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
+      await supabase.from('debts').update({ status: newStatus }).eq('id', id)
+
+      // Se havia conta vinculada, reverter saldo (subtrair o valor)
+      const deletedPayment = payments.find(p => p.id === paymentId)
+      if (deletedPayment?.account_id) {
+        const { data: acc } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', deletedPayment.account_id)
+          .single()
+        if (acc) {
+          await supabase
+            .from('accounts')
+            .update({ balance: Number(acc.balance) - amount })
+            .eq('id', deletedPayment.account_id)
+        }
+      }
+
+      showToast('Pagamento removido.', 'info')
+      loadData()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
+  }
 
   const handlePayAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
@@ -168,106 +174,74 @@ export default function DebtDetailPage() {
     setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  const getDefaultAccount = async (): Promise<string | null> => {
-    if (!user?.id || !context) return null
-
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single()
-
-    if (error || !data) {
-      return null
-    }
-
-    return data.id
-  }
-
   const handlePayment = async () => {
-    if (!user?.id) {
-      showToast('Usuário não autenticado.', 'error')
-      error()
-      return
-    }
-
-    if (!context) {
-      showToast('Selecione um contexto (PF ou PJ) antes de registrar.', 'warning')
-      error()
-      return
-    }
-
-    if (payAmountNum <= 0) {
+    if (isSubmitting) return
+    if (!user?.id || payAmountNum <= 0) {
       showToast('Digite um valor válido.', 'warning')
       error()
       return
     }
 
-    const remaining = Number(debt.total_amount) - Number(debt.paid_amount || 0)
+    // Usar o contexto da dívida (do banco) em vez do hook
+    const debtContext = debt.context || 'dfl'
+
+    const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
+    const remaining = Number(debt.total_amount) - totalPaid
+
     if (payAmountNum > remaining) {
-      showToast('Valor excede o saldo devedor.', 'warning')
+      showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
       error()
       return
     }
 
+    setIsSubmitting(true)
     setSaving(true)
 
     try {
-      const accountId = await getDefaultAccount()
-      if (!accountId) {
-        showToast('Nenhuma conta encontrada para este contexto. Crie uma conta primeiro.', 'warning')
-        setSaving(false)
-        error()
-        return
-      }
+      const targetAccountId = payAccountId || debt.account_id || null
+      const idempotencyKey = crypto.randomUUID()
 
-      const { data: categoryData } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('context', context)
-        .eq('type', 'income')
-        .limit(1)
-        .single()
-
-      const categoryId = categoryData?.id || null
-
-      const { data: tx, error: txError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          context: context,
-          type: 'income',
-          amount: payAmountNum,
-          description: payNote || `Pagamento da dívida - ${debt.person_name}`,
-          date: payDate,
-          status: 'done',
-          affects_balance: true,
-          debt_id: id,
-          account_id: accountId,
-          category_id: categoryId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
+      // 1. Criar transação (pagamento)
+      const { error: txError } = await supabase.from('transactions').insert({
+        user_id: user.id,
+        type: 'income',
+        amount: payAmountNum,
+        description: payNote || `Pagamento de ${debt.person_name}`,
+        account_id: targetAccountId,
+        debt_id: id,
+        date: payDate,
+        status: 'done',
+        affects_balance: true,
+        context: debtContext,
+        idempotency_key: idempotencyKey,
+      })
 
       if (txError) throw txError
 
-      const newPaid = Number(debt.paid_amount || 0) + payAmountNum
-      const newStatus = newPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
+      // 2. Atualizar saldo da conta (se houver)
+      if (targetAccountId) {
+        const { data: acc } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', targetAccountId)
+          .single()
 
-      await supabase
-        .from('debts')
-        .update({
-          paid_amount: newPaid,
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
+        if (acc) {
+          await supabase
+            .from('accounts')
+            .update({ balance: Number(acc.balance) + payAmountNum })
+            .eq('id', targetAccountId)
+        }
+      }
+
+      // 3. Atualizar status da dívida
+      const newTotalPaid = totalPaid + payAmountNum
+      const newStatus = newTotalPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
+      await supabase.from('debts').update({ 
+        status: newStatus,
+        paid_amount: newTotalPaid,
+        updated_at: new Date().toISOString()
+      }).eq('id', id)
 
       success()
       showToast('✅ Pagamento registrado com sucesso!', 'success')
@@ -275,6 +249,7 @@ export default function DebtDetailPage() {
       setPayAmount('0,00')
       setPayAmountNum(0)
       setPayNote('')
+      setPayAccountId('')
       loadData()
     } catch (err: any) {
       console.error('Erro ao registrar pagamento:', err)
@@ -282,64 +257,58 @@ export default function DebtDetailPage() {
       showToast(`❌ Erro ao registrar pagamento: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSaving(false)
+      setIsSubmitting(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!id) return
-    setSaving(true)
-    try {
-      await supabase.from('debts').delete().eq('id', id)
-      showToast('Dívida excluída.', 'info')
-      router.push('/debts')
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
-    } finally {
-      setSaving(false)
-      setShowDeleteModal(false)
+  const handleSendWhatsApp = () => {
+    const number = whatsAppNumber.replace(/\D/g, '')
+    if (!number) {
+      showToast('Informe o número do WhatsApp.', 'warning')
+      return
     }
-  }
-
-  const getStatusConfig = (status: string, dueDate: string) => {
-    if (status === 'paid') return { label: 'Pago', icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' }
-    if (status === 'cancelled') return { label: 'Cancelado', icon: AlertTriangle, color: 'text-gray-500 bg-gray-100 dark:bg-slate-700' }
-    const daysUntilDue = differenceInDays(new Date(dueDate), new Date())
-    if (daysUntilDue < 0) return { label: `Atrasado ${Math.abs(daysUntilDue)}d`, icon: AlertTriangle, color: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400' }
-    if (daysUntilDue <= 7) return { label: `Vence em ${daysUntilDue}d`, icon: Clock, color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400' }
-    return { label: 'Em dia', icon: CheckCircle2, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' }
+    const url = `https://wa.me/55${number}?text=${encodeURIComponent(whatsAppMessage)}`
+    window.open(url, '_blank')
+    setShowWhatsAppModal(false)
   }
 
   if (loading) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-        <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
-          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-          <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
-          <div className="w-10" />
-        </div>
-        <DebtDetailSkeleton />
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+        <Loader2 className="animate-spin text-teal-700" size={40} />
       </div>
     )
   }
 
-  if (!debt) return null
+  if (!debt) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+        <p className="text-gray-500 dark:text-gray-400">Registro não encontrado.</p>
+      </div>
+    )
+  }
 
   const IconComp = getDynamicIcon(debt.icon || 'user')
-  const progress = Number(debt.total_amount) > 0
-    ? ((Number(debt.paid_amount || 0) / Number(debt.total_amount)) * 100)
-    : 0
-  const statusConfig = getStatusConfig(debt.status, debt.due_date)
-  const isActive = debt.status !== 'paid' && debt.status !== 'cancelled'
-  const remaining = Number(debt.total_amount) - Number(debt.paid_amount || 0)
+  const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
+  const remaining = Number(debt.total_amount) - totalPaid
+  const percent = Number(debt.total_amount) > 0 ? (totalPaid / Number(debt.total_amount)) * 100 : 0
+  const isPaid = debt.status === 'paid'
+  const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
+  const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
+
+  const selectedAcc = accounts.find(a => a.id === payAccountId)
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
+      
+      {/* Bolinha de loading */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
+      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -349,172 +318,140 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
-        <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
         </button>
+        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{debt.person_name}</h2>
         <div className="flex items-center gap-2">
-          <statusConfig.icon size={18} className={statusConfig.color.split(' ')[0]} />
-          <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100 truncate max-w-[180px]">
-            {debt.person_name || 'Dívida'}
-          </h1>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => router.push(`/debts/${id}/edit`)}
-            className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
-          >
-            <Edit3 size={18} />
+          <button onClick={() => setShowWhatsAppModal(true)} className="p-2 text-emerald-600 dark:text-emerald-400" title="Cobrar via WhatsApp">
+            <MessageCircle size={20} />
           </button>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-          >
-            <Trash2 size={18} />
+          <button onClick={() => router.push(`/debts/new?edit=${debt.id}`)} className="p-2 text-teal-700 dark:text-teal-400">
+            <Edit2 size={20} />
+          </button>
+          <button onClick={handleDeleteDebt} className="p-2 text-red-500">
+            <Trash2 size={20} />
           </button>
         </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-4 animate-in fade-in duration-300">
-        <div className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border ${
-          debt.status === 'paid' ? 'border-emerald-200 dark:border-emerald-800' :
-          debt.status === 'cancelled' ? 'border-gray-200 dark:border-gray-700' :
-          'border-gray-50 dark:border-slate-700'
-        }`}>
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${debt.color || '#14b8a6'}20`, color: debt.color || '#14b8a6' }}>
-              <IconComp size={24} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="font-bold text-[17px] text-gray-800 dark:text-gray-200 truncate">
-                  {debt.person_name}
-                </h2>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap ${statusConfig.color}`}>
-                  <statusConfig.icon size={12} />
-                  {statusConfig.label}
-                </span>
-              </div>
-              {debt.description && (
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  {debt.description}
-                </p>
-              )}
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
-                <Calendar size={10} />
-                {format(new Date(debt.due_date), "dd 'de' MMM yyyy", { locale: ptBR })}
-              </p>
-            </div>
+      {/* Card Principal */}
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}>
+            <IconComp size={24} />
           </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Total</p>
-              <p className="text-[18px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(debt.total_amount))}</p>
-            </div>
-            <div className={`text-center rounded-xl p-3 ${
-              remaining <= 0 ? 'bg-emerald-50 dark:bg-emerald-900/20' :
-              debt.status === 'cancelled' ? 'bg-gray-50 dark:bg-slate-700' :
-              'bg-orange-50 dark:bg-orange-900/20'
-            }`}>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Restante</p>
-              <p className={`text-[18px] font-bold ${
-                remaining <= 0 ? 'text-emerald-600' :
-                debt.status === 'cancelled' ? 'text-gray-500' :
-                'text-orange-600'
-              }`}>{formatCurrency(Math.max(remaining, 0))}</p>
-            </div>
-          </div>
-
-          <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
-            <div className={`h-full rounded-full transition-all duration-700 ${
-              debt.status === 'paid' ? 'bg-emerald-500' :
-              debt.status === 'cancelled' ? 'bg-gray-400' :
-              'bg-teal-500'
-            }`} style={{ width: `${Math.min(progress, 100)}%` }} />
-          </div>
-
-          <div className="flex justify-between text-[11px]">
-            <span className="text-gray-400 dark:text-gray-500 font-medium">{Math.min(progress, 100).toFixed(0)}% pago</span>
-            <span className="text-gray-400 dark:text-gray-500 font-medium">
-              {formatCurrency(Number(debt.paid_amount || 0))} / {formatCurrency(Number(debt.total_amount))}
-            </span>
+          <div>
+            <p className="font-bold text-[16px] text-gray-800 dark:text-gray-100">{debt.person_name}</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              {debt.description || 'Empréstimo'} • {debt.context === 'dfl' ? 'PJ' : 'PF'}
+              {debt.due_date && ` • Vence ${format(new Date(debt.due_date), "dd/MM/yyyy")}`}
+            </p>
           </div>
         </div>
 
-        {isActive && remaining > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Total</p>
+            <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(debt.total_amount))}</p>
+          </div>
+          <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3">
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Pago</p>
+            <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
+          </div>
+          <div className={`text-center rounded-xl p-3 ${remaining > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remaining > 0 ? 'Falta' : 'Troco'}</p>
+            <p className={`text-[15px] font-bold ${remaining > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{formatCurrency(Math.abs(remaining))}</p>
+          </div>
+        </div>
+
+        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
+          <div
+            className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'}`}
+            style={{ width: `${Math.min(percent, 100)}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[11px]">
+          <span className="text-gray-400 dark:text-gray-500 font-medium">{percent.toFixed(0)}% pago</span>
+          {isOverdue && <span className="text-red-500 font-bold">Atrasado {Math.abs(daysUntilDue)} dia(s)</span>}
+        </div>
+      </div>
+
+      {/* Botões de ação */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {!isPaid && (
           <button
             onClick={() => setShowPaymentModal(true)}
-            className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20"
+            className="bg-teal-700 text-white py-3 rounded-full font-bold text-sm"
           >
-            <Plus size={16} />
             Registrar Pagamento
           </button>
         )}
-
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-          <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <Clock size={18} className="text-gray-400" />
-            Histórico de Pagamentos
-          </h3>
-          {payments.length === 0 ? (
-            <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-6">
-              Nenhum pagamento registrado.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {payments.map(pay => (
-                <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                      <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-bold text-emerald-600">
-                        + {formatCurrency(Number(pay.amount) || 0)}
-                      </p>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                        {format(new Date(pay.date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
-                      </p>
-                    </div>
-                  </div>
-                  {pay.description && (
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 max-w-[120px] truncate">
-                      {pay.description}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={() => setShowWhatsAppModal(true)}
+          className={`${isPaid ? 'col-span-2' : ''} bg-emerald-600 text-white py-3 rounded-full font-bold text-sm flex items-center justify-center gap-2`}
+        >
+          <MessageCircle size={18} /> Cobrar via WhatsApp
+        </button>
       </div>
 
+      {/* Histórico de Pagamentos */}
+      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Pagamentos</h3>
+        {payments.length === 0 ? (
+          <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">Nenhum pagamento registrado.</p>
+        ) : (
+          <div className="space-y-2">
+            {payments.map(pay => (
+              <div key={pay.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700 rounded-xl group">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-sm text-emerald-600">+ {formatCurrency(Number(pay.amount) || 0)}</p>
+                    {pay.description && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">— {pay.description}</p>}
+                  </div>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    {format(new Date(pay.date + 'T12:00:00'), "dd 'de' MMM yyyy", { locale: ptBR })}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDeletePayment(pay.id, Number(pay.amount))}
+                  className="p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Excluir pagamento"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal Pagamento */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Registrar Pagamento</h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 p-2 hover:text-gray-600 transition-colors">
-                <X size={20} />
-              </button>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor pago</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor recebido</label>
                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
                   <span className="text-gray-400 dark:text-gray-500 font-bold">R$</span>
                   <input
                     type="text"
-                    inputMode="decimal"
+                    inputMode="numeric"
                     value={payAmount}
                     onChange={handlePayAmountChange}
                     className="bg-transparent text-lg font-bold text-gray-800 dark:text-gray-200 outline-none w-full"
                     placeholder="0,00"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Saldo devedor: {formatCurrency(Math.max(remaining, 0))}</p>
+                <p className="text-[10px] text-gray-400 mt-1">Máximo: {formatCurrency(remaining)}</p>
               </div>
 
               <div>
@@ -536,48 +473,115 @@ export default function DebtDetailPage() {
                   type="text"
                   value={payNote}
                   onChange={e => setPayNote(e.target.value)}
-                  placeholder="Ex: Pagamento parcial da dívida"
+                  placeholder="Ex: Pagamento parcial"
                   className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
                 />
               </div>
 
               <button
-                onClick={handlePayment}
-                disabled={saving || payAmountNum <= 0}
-                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+                onClick={() => setShowAccModal(true)}
+                className="w-full flex items-center justify-between bg-gray-50 dark:bg-slate-700 rounded-xl p-3"
               >
-                {saving ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Confirmar Pagamento'}
+                <div className="flex items-center gap-2">
+                  <Wallet size={16} className="text-gray-400 dark:text-gray-500" />
+                  <span className={`text-sm ${selectedAcc ? 'text-gray-800 dark:text-gray-200 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {selectedAcc ? selectedAcc.name : 'Conta de destino (opcional)'}
+                  </span>
+                </div>
+                <ChevronLeft size={16} className="text-gray-300 dark:text-gray-600 rotate-180" />
+              </button>
+
+              <button
+                onClick={handlePayment}
+                disabled={isSubmitting || payAmountNum <= 0}
+                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50"
+              >
+                {isSubmitting ? <Loader2 size={20} className="animate-spin mx-auto" /> : 'Confirmar Pagamento'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowDeleteModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-[90%] max-w-sm rounded-2xl p-6 animate-in fade-in-zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2 text-center">Excluir Dívida?</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
-              Essa ação não pode ser desfeita. Os pagamentos vinculados também serão removidos.
-            </p>
-            <div className="flex gap-3">
+      {/* Modal WhatsApp */}
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowWhatsAppModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cobrar via WhatsApp</h3>
+              <button onClick={() => setShowWhatsAppModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Número (DDD + número)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={whatsAppNumber}
+                  onChange={e => setWhatsAppNumber(e.target.value.replace(/\D/g, ''))}
+                  placeholder="11999999999"
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Mensagem</label>
+                <textarea
+                  value={whatsAppMessage}
+                  onChange={e => setWhatsAppMessage(e.target.value)}
+                  rows={3}
+                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200 resize-none"
+                />
+              </div>
+
               <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                onClick={handleSendWhatsApp}
+                className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2"
               >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={saving}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-              >
-                {saving ? <Loader2 size={18} className="animate-spin" /> : 'Excluir'}
+                <MessageCircle size={20} /> Enviar Mensagem
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal Contas */}
+      {showAccModal && (
+        <div className="fixed inset-0 z-[250] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Conta de destino</h3>
+              <button onClick={() => setShowAccModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => { setPayAccountId(''); setShowAccModal(false) }}
+                className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!payAccountId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400"><Wallet size={20} /></div>
+                <span className={`flex-1 text-left font-medium ${!payAccountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Nenhuma conta</span>
+                {!payAccountId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+              </button>
+              {accounts.map(acc => {
+                const isActive = acc.id === payAccountId
+                return (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setPayAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: acc.color || '#14b8a6' }}>{acc.name.substring(0, 2).toUpperCase()}</div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
