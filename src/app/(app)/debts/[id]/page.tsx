@@ -31,6 +31,7 @@ export default function DebtDetailPage() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null) // 🔥 ERRO VISÍVEL
 
   // WhatsApp
   const [whatsAppNumber, setWhatsAppNumber] = useState('')
@@ -87,6 +88,7 @@ export default function DebtDetailPage() {
     if (!id || !user?.id) return
     setLoading(true)
     setLoadingPulse(true)
+    setErrorMessage(null)
 
     const { data: debtData, error: debtError } = await supabase
       .from('debts')
@@ -96,7 +98,7 @@ export default function DebtDetailPage() {
 
     if (debtError) {
       console.error('[loadData] Erro ao carregar dívida:', debtError)
-      showToast('Erro ao carregar dívida.', 'error')
+      setErrorMessage(`Erro ao carregar: ${debtError.message}`)
       setLoading(false)
       setLoadingPulse(false)
       return
@@ -127,7 +129,7 @@ export default function DebtDetailPage() {
     setAccounts(Array.isArray(accData) ? accData : [])
     setLoading(false)
     setLoadingPulse(false)
-  }, [id, user, showToast])
+  }, [id, user])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -184,14 +186,18 @@ export default function DebtDetailPage() {
   }
 
   const handlePayment = async () => {
+    setErrorMessage(null) // Limpa erro anterior
+
     if (isSubmitting) return
     if (!user?.id) {
+      setErrorMessage('Usuário não autenticado.')
       showToast('Usuário não autenticado.', 'error')
       error()
       return
     }
 
     if (payAmountNum <= 0) {
+      setErrorMessage('Digite um valor válido.')
       showToast('Digite um valor válido.', 'warning')
       error()
       return
@@ -202,6 +208,7 @@ export default function DebtDetailPage() {
     const remaining = Number(debt.total_amount) - totalPaid
 
     if (payAmountNum > remaining) {
+      setErrorMessage(`O valor máximo é ${formatCurrency(remaining)}.`)
       showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
       error()
       return
@@ -213,54 +220,34 @@ export default function DebtDetailPage() {
     try {
       const targetAccountId = payAccountId || debt.account_id || null
 
-      // 1. Criar transação (SEM idempotency_key)
-      const { data: txData, error: txError } = await supabase.from('transactions').insert({
+      // 🔥 TESTE: Vamos tentar criar a transação com campos MÍNIMOS
+      const transactionData = {
         user_id: user.id,
         type: 'income',
         amount: payAmountNum,
         description: payNote || `Pagamento de ${debt.person_name}`,
-        account_id: targetAccountId,
         debt_id: id,
         date: payDate,
         status: 'done',
-        affects_balance: true,
         context: debtContext,
-      }).select()
+      }
+
+      console.log('📤 Enviando transação:', JSON.stringify(transactionData, null, 2))
+
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .insert(transactionData)
+        .select()
 
       if (txError) {
-        console.error('Erro ao criar transação:', txError)
+        console.error('❌ Erro do Supabase:', txError)
+        setErrorMessage(`Erro: ${txError.message} (Código: ${txError.code})`)
         throw txError
       }
 
-      // 2. Atualizar saldo da conta (se houver)
-      if (targetAccountId) {
-        const { data: acc } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', targetAccountId)
-          .single()
+      console.log('✅ Transação criada:', txData)
 
-        if (acc) {
-          await supabase
-            .from('accounts')
-            .update({ balance: Number(acc.balance) + payAmountNum })
-            .eq('id', targetAccountId)
-        }
-      }
-
-      // 3. Atualizar status da dívida
-      const newTotalPaid = totalPaid + payAmountNum
-      const newStatus = newTotalPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
-
-      await supabase
-        .from('debts')
-        .update({ 
-          status: newStatus,
-          paid_amount: newTotalPaid,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-
+      // Se chegou aqui, deu certo!
       success()
       showToast('✅ Pagamento registrado com sucesso!', 'success')
       setShowPaymentModal(false)
@@ -270,9 +257,12 @@ export default function DebtDetailPage() {
       setPayAccountId('')
       loadData()
     } catch (err: any) {
-      console.error('Erro ao registrar pagamento:', err)
+      console.error('❌ Erro capturado:', err)
+      // Se o erro não tiver mensagem, mostra o erro completo
+      const msg = err.message || JSON.stringify(err) || 'Erro desconhecido'
+      setErrorMessage(msg)
       error()
-      showToast(`❌ Erro ao registrar pagamento: ${err.message || 'Erro desconhecido'}`, 'error')
+      showToast(`❌ Erro: ${msg}`, 'error')
     } finally {
       setSaving(false)
       setIsSubmitting(false)
@@ -331,6 +321,20 @@ export default function DebtDetailPage() {
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
+        </div>
+      )}
+
+      {/* 🔥 EXIBE O ERRO NA TELA */}
+      {errorMessage && (
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl">
+          <p className="text-sm font-bold text-red-600 dark:text-red-400">❌ Erro:</p>
+          <p className="text-sm text-red-600 dark:text-red-400 break-all">{errorMessage}</p>
+          <button 
+            onClick={() => setErrorMessage(null)}
+            className="mt-2 text-xs text-red-500 hover:text-red-700 font-bold"
+          >
+            Fechar
+          </button>
         </div>
       )}
 
