@@ -28,7 +28,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 // ============================================================
 const ReceiptModal = dynamic(
   () => import('@/components/ReceiptModal'),
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -43,7 +43,7 @@ const ReceiptModal = dynamic(
 
 const CameraCapture = dynamic(
   () => import('@/components/CameraCapture'),
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -58,7 +58,7 @@ const CameraCapture = dynamic(
 
 const QRCodeScanner = dynamic(
   () => import('@/components/QRCodeScanner'),
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1141,7 +1141,7 @@ function NewTransactionContent() {
         <ModalFinancing
           isOpen={showFinancingModal}
           onClose={() => setShowFinancingModal(false)}
-          onSelect={(financingId: string) => {
+          onSave={(financingId: string) => {
             setFinancingId(financingId)
             setShowFinancingModal(false)
           }}
@@ -1152,7 +1152,7 @@ function NewTransactionContent() {
         <ModalEmprestimo
           isOpen={showLoanModal}
           onClose={() => setShowLoanModal(false)}
-          onSelect={(debtId: string) => {
+          onSave={(debtId: string) => {
             setDebtId(debtId)
             setShowLoanModal(false)
           }}
