@@ -324,13 +324,13 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY: Canto Esquerdo e Canto Direito (De volta ao normal!) ── */}
-      <div className="sticky top-0 z-50 bg-[#f8f9fa]/90 dark:bg-slate-900/90 backdrop-blur-md pt-8 pb-3 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
+      {/* ── HEADER STICKY: Espaçamentos severamente comprimidos (pt-2) + Blur mais forte (xl) ── */}
+      <div className="sticky top-0 z-50 bg-[#f8f9fa]/85 dark:bg-slate-900/85 backdrop-blur-xl pt-2 pb-2 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
         
-        <div className="flex items-center justify-between mb-3">
+        {/* mb-2 em vez de mb-3 */}
+        <div className="flex items-center justify-between mb-2 mt-1">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           
-          {/* Download e Seletor de Meses agrupados no canto direito */}
           <div className="flex items-center gap-2">
             <div className="relative" ref={exportMenuRef}>
               <button 
@@ -357,11 +357,13 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        <div className="mb-3">
+        {/* mb-2 em vez de mb-3 */}
+        <div className="mb-2">
           <ContextToggle />
         </div>
 
-        <div className="flex gap-2 mb-3 relative">
+        {/* mb-2 em vez de mb-3 */}
+        <div className="flex gap-2 mb-2 relative">
           <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
             <Search size={18} className="text-gray-400 dark:text-gray-500" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar transação..."
