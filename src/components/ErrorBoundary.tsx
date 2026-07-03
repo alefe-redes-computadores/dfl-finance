@@ -25,7 +25,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error('ErrorBoundary capturou:', error, errorInfo)
-    // Aqui você pode enviar para um serviço de logging (ex: Sentry)
   }
 
   handleRetry = () => {
