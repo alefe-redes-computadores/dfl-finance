@@ -56,6 +56,7 @@ export function ConciCard({
     currency: 'BRL',
   }).format(transaction.amount)
 
+  // Handlers de gestos
   const handleStart = useCallback((clientX: number, clientY: number) => {
     if (isAnimating || isLoading) return
     startX.current = clientX
@@ -110,6 +111,7 @@ export function ConciCard({
     }
   }, [isDragging, isAnimating, direction, offsetX, transaction.id, onApprove, onReject, onTap, success, error])
 
+  // Eventos de mouse
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     handleStart(e.clientX, e.clientY)
@@ -123,6 +125,7 @@ export function ConciCard({
     if (isDragging) handleEnd()
   }, [isDragging, handleEnd])
 
+  // Eventos de touch
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0]
     handleStart(touch.clientX, touch.clientY)
@@ -139,6 +142,7 @@ export function ConciCard({
     if (isDragging) handleEnd()
   }, [isDragging, handleEnd])
 
+  // Eventos globais
   useEffect(() => {
     const handleGlobalMove = (e: MouseEvent) => {
       if (isDragging && !isAnimating) handleMove(e.clientX, e.clientY)
@@ -195,6 +199,7 @@ export function ConciCard({
 
   return (
     <div className="w-full max-w-md mx-auto relative">
+      {/* Card principal */}
       <div
         ref={cardRef}
         className={cn(
@@ -212,12 +217,17 @@ export function ConciCard({
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
+        {/* Overlay de cor */}
         <div className={overlayClasses} />
+
+        {/* Ícones de aprovação/rejeição */}
         <div className={iconClasses}>
           {direction === 'right' ? <Check size={48} /> : <X size={48} />}
         </div>
 
-        <div className="p-6 space-y-5">
+        {/* Conteúdo do card */}
+        <div className="p-6 space-y-4">
+          {/* Tipo e data */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
@@ -251,23 +261,26 @@ export function ConciCard({
             </div>
           </div>
 
-          <div className="text-center">
-            <p className="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">
+          {/* Valor */}
+          <div className="text-center py-2">
+            <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
               {formattedAmount}
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {transaction.source === 'csv' && '📄 Importado via CSV'}
-              {transaction.source === 'ocr' && '📷 Reconhecido por OCR'}
-              {!transaction.source && '🖊️ Manual'}
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {transaction.source === 'csv' && '📄 CSV'}
+              {transaction.source === 'ocr' && '📷 OCR'}
+              {!transaction.source && '✏️ Manual'}
             </p>
           </div>
 
-          <div className="bg-gray-50 dark:bg-slate-700/30 rounded-2xl p-4 text-center">
-            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+          {/* Descrição */}
+          <div className="bg-gray-50 dark:bg-slate-700/30 rounded-2xl p-3 text-center">
+            <p className="text-base font-semibold text-gray-800 dark:text-gray-200">
               {transaction.description || 'Sem descrição'}
             </p>
           </div>
 
+          {/* Sugestões */}
           <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
             {transaction.categorySuggestion && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 dark:bg-teal-900/20 rounded-full text-teal-700 dark:text-teal-300">
@@ -283,42 +296,46 @@ export function ConciCard({
             )}
           </div>
 
-          <div className="text-center text-xs text-gray-400 dark:text-gray-500">
+          {/* Dica de swipe */}
+          <div className="text-center text-xs text-gray-400 dark:text-gray-500 pt-1">
             {isLast ? (
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                 Última transação da fila!
               </span>
             ) : (
-              <span>Arraste para aprovar ✅ ou descartar ❌ • Toque para editar ✏️</span>
+              <span className="whitespace-nowrap">
+                Arraste para aprovar ✅ ou descartar ❌ • Toque para editar ✏️
+              </span>
             )}
           </div>
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 right-4 flex justify-between gap-3 pointer-events-none">
+      {/* Botões fixos */}
+      <div className="flex justify-between gap-3 mt-4 px-2">
         <button
           onClick={() => onReject(transaction.id)}
           className={cn(
-            'pointer-events-auto px-6 py-3 rounded-full bg-red-500 text-white font-bold shadow-lg',
+            'flex-1 py-3 rounded-full bg-red-500 text-white font-bold shadow-lg',
             'hover:bg-red-600 active:scale-95 transition-all duration-200',
-            'flex items-center gap-2 text-sm'
+            'flex items-center justify-center gap-2 text-sm'
           )}
           disabled={isAnimating || isLoading}
         >
           <X size={18} />
-          <span className="hidden sm:inline">Descartar</span>
+          <span>Descartar</span>
         </button>
         <button
           onClick={() => onApprove(transaction.id)}
           className={cn(
-            'pointer-events-auto px-6 py-3 rounded-full bg-emerald-500 text-white font-bold shadow-lg',
+            'flex-1 py-3 rounded-full bg-emerald-500 text-white font-bold shadow-lg',
             'hover:bg-emerald-600 active:scale-95 transition-all duration-200',
-            'flex items-center gap-2 text-sm'
+            'flex items-center justify-center gap-2 text-sm'
           )}
           disabled={isAnimating || isLoading}
         >
           <Check size={18} />
-          <span className="hidden sm:inline">Aprovar</span>
+          <span>Aprovar</span>
         </button>
       </div>
     </div>
