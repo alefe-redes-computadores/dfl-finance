@@ -1132,7 +1132,6 @@ function NewTransactionContent() {
 
       {showQRScanner && (
         <QRCodeScanner
-          isOpen={showQRScanner}
           onClose={() => setShowQRScanner(false)}
           onResult={handleQRResult}
         />
