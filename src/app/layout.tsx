@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 
-// 🚨 SUSPEITOS DESATIVADOS TEMPORARIAMENTE:
+// Mantivemos desligados para testar
 // import BottomNav from '@/components/BottomNav'
 // import { ContextProvider } from '@/components/ContextToggle'
 
@@ -26,9 +26,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-      {/* Faixa de aviso para sabermos que o modo de recuperação funcionou */}
       <div className="p-4 bg-red-600 text-white text-center font-bold text-sm">
-        MODO DE RECUPERAÇÃO ATIVO
+        MODO DE RECUPERAÇÃO - TENTATIVA 2
       </div>
       {children}
     </div>
@@ -37,7 +36,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    // 🚨 ContextProvider removido temporariamente
-    <AppContent>{children}</AppContent>
+    <html lang="pt-BR">
+      <body>
+        <AppContent>{children}</AppContent>
+      </body>
+    </html>
   )
 }
