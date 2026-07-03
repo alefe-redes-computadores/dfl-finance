@@ -132,7 +132,7 @@ function HomeContent() {
   const { showToast } = useToast()
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [refreshing, setRefreshing] = useState(false)
+  const [refreshing, setRefreshing] = useState(false) // apenas para controle do pull, sem toast
 
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [previousBalance, setPreviousBalance] = useState(0)
@@ -172,7 +172,7 @@ function HomeContent() {
   const fullName = user?.user_metadata?.name || 'Álefe'
   const firstName = fullName.split(' ')[0]
 
-  // Pull to refresh
+  // Pull to refresh (sem toast, apenas a bolinha)
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -189,6 +189,7 @@ function HomeContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
+      // Recarrega dados, a bolinha já está ativa via loadingPulse dentro de loadData
       loadData().finally(() => setRefreshing(false))
     }
   }
@@ -456,15 +457,12 @@ function HomeContent() {
         // 🆕 NOTIFICAÇÃO: Melhor dia de compra (1 dia após fechamento)
         const closingDay = card.closing_day || 1
         const nextClosingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
-        // Ajusta para o próximo mês se a data de fechamento já passou
         if (today > nextClosingDate) {
           nextClosingDate.setMonth(nextClosingDate.getMonth() + 1)
         }
         const daysAfterClosing = differenceInDays(today, nextClosingDate)
-        // Se hoje é exatamente 1 dia após o fechamento
         if (daysAfterClosing === 1) {
-          // Calcula o mês de vencimento da compra feita hoje
-          const purchaseMonth = nextClosingDate.getMonth() + 2 // Fecha no próximo mês, vence no mês seguinte
+          const purchaseMonth = nextClosingDate.getMonth() + 2
           const purchaseYear = nextClosingDate.getFullYear()
           const adjustedMonth = purchaseMonth > 12 ? purchaseMonth - 12 : purchaseMonth
           const adjustedYear = purchaseMonth > 12 ? purchaseYear + 1 : purchaseYear
@@ -585,18 +583,14 @@ function HomeContent() {
 
   // 🆕 Função para ocultar um card (com UndoToast)
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
-    // Guarda a seção que está sendo removida
     const removedSection = sectionId
     const removedLabel = sectionLabel
 
-    // Remove visualmente
     setEnabledSections(prev => prev.filter(id => id !== removedSection))
 
-    // Mostra o toast com desfazer
     setUndoToast({
       message: `"${removedLabel}" ocultado`,
       onUndo: () => {
-        // Restaura o card
         setEnabledSections(prev => {
           const restored = [...prev, removedSection]
           return restored.sort((a, b) => {
@@ -605,14 +599,11 @@ function HomeContent() {
             return idxA - idxB
           })
         })
-        // Feedback de restauração
         showToast(`"${removedLabel}" restaurado`, 'success')
-        // Remove o toast
         setUndoToast(null)
       }
     })
 
-    // Persiste a mudança após 3 segundos (se não for desfeito)
     setTimeout(() => {
       setEnabledSections(current => {
         if (!current.includes(removedSection)) {
@@ -620,7 +611,6 @@ function HomeContent() {
         }
         return current
       })
-      // Fecha o toast automaticamente após a persistência
       setUndoToast(null)
     }, 3500)
   }
@@ -628,7 +618,7 @@ function HomeContent() {
   // Função para renderizar cada seção (com botão EyeOff centralizado)
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
-    const isFixed = FIXED_SECTIONS.includes(sectionId) // Cards fixos NÃO têm botão
+    const isFixed = FIXED_SECTIONS.includes(sectionId)
     
     switch (sectionId) {
       case 'balance':
@@ -1139,20 +1129,14 @@ function HomeContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
+      {/* 🔵 Bolinha de carregamento sutil (igual à home) */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
+      {/* ⚠️ REMOVIDO o toast de "Atualizando..." para não dar impressão de lentidão */}
 
       {/* 🆕 Toast com desfazer */}
       {undoToast && (
