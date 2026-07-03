@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, TrendingUp } from 'lucide-react'
+import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, TrendingUp, ChevronLeft } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -155,18 +155,36 @@ function DebtsContent() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <ContextToggle />
-        <button
-          onClick={() => router.push('/debts/new')}
-          className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
-        >
-          <Plus size={20} className="text-white" />
-        </button>
+      {/* ============================================================
+          HEADER CORRIGIDO COM SETA DE VOLTAR
+          ============================================================ */}
+      <div className="flex items-center justify-between mb-4">
+        {/* Lado esquerdo: seta de voltar + título */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
+            Quem me deve
+          </h1>
+        </div>
+
+        {/* Lado direito: ContextToggle + botão Novo */}
+        <div className="flex items-center gap-2">
+          <ContextToggle />
+          <button
+            onClick={() => router.push('/debts/new')}
+            className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
+          >
+            <Plus size={20} className="text-white" />
+          </button>
+        </div>
       </div>
 
-      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Quem me deve</h2>
-
+      {/* Cards de resumo */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
           <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
@@ -184,6 +202,7 @@ function DebtsContent() {
         </div>
       </div>
 
+      {/* Filtros */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
         <button
           onClick={() => setFilter('active')}
@@ -199,6 +218,7 @@ function DebtsContent() {
         </button>
       </div>
 
+      {/* Lista de dívidas */}
       {loading ? (
         <DebtsSkeleton />
       ) : debts.length === 0 ? (
