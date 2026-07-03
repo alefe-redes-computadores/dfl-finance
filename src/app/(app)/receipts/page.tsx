@@ -6,7 +6,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Search, Trash2, Eye, Download, FileText,
-  Image as ImageIcon, X, AlertCircle, Upload, RefreshCw
+  Image as ImageIcon, X, AlertCircle, Upload, RefreshCw,
+  ChevronDown, ChevronUp
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -34,7 +35,7 @@ export default function ReceiptsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'image' | 'pdf'>('all')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null) // 🆕 controle de expansão
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({})
@@ -42,7 +43,7 @@ export default function ReceiptsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Pull to refresh
+  // Pull to refresh (sem toast de "Atualizando...", só a bolinha)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
@@ -51,12 +52,14 @@ export default function ReceiptsPage() {
     loadReceipts()
   }, [user?.id])
 
+  // 🔄 Carrega os comprovantes com signed URLs
   const loadReceipts = async (showPulse = true) => {
     if (showPulse) setLoadingPulse(true)
     setLoading(true)
     setError('')
 
     try {
+      // Lista os arquivos do bucket
       const { data: files, error: listError } = await supabase
         .storage
         .from('receipts')
@@ -80,19 +83,24 @@ export default function ReceiptsPage() {
         return
       }
 
+      // Gera signed URLs para cada arquivo (garante acesso mesmo com bucket privado)
       const receiptsData: ReceiptFile[] = await Promise.all(files.map(async file => {
         const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.name)
-        // Tenta obter URL pública; se falhar, usa signed URL
+        const filePath = `${user.id}/${file.name}`
+
+        // Usa signed URL (válida por 1 hora)
+        const { data: signedData, error: signedError } = await supabase
+          .storage
+          .from('receipts')
+          .createSignedUrl(filePath, 3600)
+
         let url = ''
-        const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(`${user.id}/${file.name}`)
-        if (urlData?.publicUrl) {
-          url = urlData.publicUrl
+        if (signedData?.signedUrl) {
+          url = signedData.signedUrl
         } else {
-          // Fallback para signed URL
-          const { data: signedData } = await supabase.storage
-            .from('receipts')
-            .createSignedUrl(`${user.id}/${file.name}`, 3600)
-          if (signedData?.signedUrl) url = signedData.signedUrl
+          // Fallback: tenta URL pública
+          const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(filePath)
+          if (urlData?.publicUrl) url = urlData.publicUrl
         }
 
         return {
@@ -104,7 +112,7 @@ export default function ReceiptsPage() {
         }
       }))
 
-      // Buscar transações com comprovantes vinculados
+      // Busca transações vinculadas (opcional, para mostrar descrição)
       const { data: txs } = await supabase
         .from('transactions')
         .select('id, receipt_url, description, date')
@@ -211,17 +219,20 @@ export default function ReceiptsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+  const toggleExpand = (id: string) => {
+    setExpandedId(prev => prev === id ? null : id)
+  }
+
   const filteredReceipts = receipts.filter(r => {
     const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
     const matchesFilter = filter === 'all' || (filter === 'image' ? r.isImage : !r.isImage)
     return matchesSearch && matchesFilter
   })
 
-  // Contagem por tipo
   const totalImages = receipts.filter(r => r.isImage).length
   const totalPdfs = receipts.filter(r => !r.isImage).length
 
-  // Pull to refresh handlers
+  // Pull to refresh handlers (sem toast de "Atualizando...", apenas a bolinha)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -238,7 +249,7 @@ export default function ReceiptsPage() {
       if (distance > 60) {
         setRefreshing(true)
         isPulling.current = false
-        loadReceipts(false)
+        loadReceipts(false) // recarrega sem mostrar o toast
       }
     }
 
@@ -257,21 +268,14 @@ export default function ReceiptsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
+      {/* 🔵 Bolinha de carregamento sutil (igual à home) */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
+      {/* ⚠️ REMOVIDO o toast de "Atualizando..." para não dar impressão de lentidão */}
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
@@ -385,116 +389,111 @@ export default function ReceiptsPage() {
           <div className="space-y-2">
             {filteredReceipts.map(receipt => {
               const hasError = imgErrors[receipt.url] || false
+              const isExpanded = expandedId === receipt.name
 
               return (
                 <div
                   key={receipt.name}
-                  className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 hover:shadow-md transition-all"
+                  className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all"
                 >
-                  <div
-                    className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer flex items-center justify-center"
-                    onClick={() => {
-                      if (receipt.isImage && !hasError) {
-                        setPreviewUrl(receipt.url)
-                      } else {
-                        handleDownload(receipt)
-                      }
-                    }}
-                  >
-                    {receipt.isImage && !hasError ? (
-                      <img
-                        src={receipt.url}
-                        alt={receipt.name}
-                        className="w-full h-full object-cover"
-                        onError={() => {
-                          setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
-                        }}
-                      />
-                    ) : receipt.isImage ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                        <ImageIcon size={24} className="opacity-50" />
-                        <span className="text-[8px] mt-0.5">Erro</span>
-                      </div>
-                    ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center">
-                        <FileText size={24} className="text-red-400" />
-                        <span className="text-[8px] font-medium text-gray-500 mt-0.5">PDF</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                      {receipt.name}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                      {' • '}
-                      {formatFileSize(receipt.size)}
-                    </p>
-                    {receipt.transaction_desc && (
-                      <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 truncate">
-                        Vinculado a: {receipt.transaction_desc}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
+                  {/* Cabeçalho do item */}
+                  <div className="flex items-center gap-3">
+                    {/* Miniatura com proporção 1:1 e fallback melhorado */}
+                    <div
+                      className="w-14 h-14 aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer flex items-center justify-center"
                       onClick={() => {
                         if (receipt.isImage && !hasError) {
-                          setPreviewUrl(receipt.url)
+                          toggleExpand(receipt.name)
                         } else {
                           handleDownload(receipt)
                         }
                       }}
-                      className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
-                      title={receipt.isImage && !hasError ? 'Visualizar' : 'Abrir'}
                     >
-                      <Eye size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDownload(receipt)}
-                      className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
-                      title="Download"
-                    >
-                      <Download size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(receipt)}
-                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                      {receipt.isImage && !hasError ? (
+                        <img
+                          src={receipt.url}
+                          alt={receipt.name}
+                          className="w-full h-full object-cover"
+                          onError={() => {
+                            setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
+                          }}
+                        />
+                      ) : receipt.isImage ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-200 dark:bg-slate-600">
+                          <ImageIcon size={24} className="opacity-50" />
+                          <span className="text-[8px] mt-0.5">Erro</span>
+                        </div>
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-red-50 dark:bg-red-900/20">
+                          <FileText size={24} className="text-red-400" />
+                          <span className="text-[8px] font-medium text-gray-500 mt-0.5">PDF</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                        {receipt.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                        {' • '}
+                        {formatFileSize(receipt.size)}
+                      </p>
+                      {receipt.transaction_desc && (
+                        <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 truncate">
+                          Vinculado a: {receipt.transaction_desc}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {/* Botão de expandir (só para imagens) */}
+                      {receipt.isImage && !hasError && (
+                        <button
+                          onClick={() => toggleExpand(receipt.name)}
+                          className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                          title={isExpanded ? 'Recolher' : 'Expandir'}
+                        >
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDownload(receipt)}
+                        className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                        title="Download"
+                      >
+                        <Download size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(receipt)}
+                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Área de expansão (imagem em tamanho maior) */}
+                  {isExpanded && receipt.isImage && !hasError && (
+                    <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700">
+                      <img
+                        src={receipt.url}
+                        alt={receipt.name}
+                        className="w-full max-h-64 object-contain bg-gray-50 dark:bg-slate-900"
+                        onError={() => {
+                          setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
         )}
       </div>
-
-      {/* Modal de preview */}
-      {previewUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setPreviewUrl(null)}
-        >
-          <button
-            onClick={() => setPreviewUrl(null)}
-            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X size={28} />
-          </button>
-          <img
-            src={previewUrl}
-            alt="Preview"
-            className="max-w-full max-h-[85vh] object-contain rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
 
       {/* Input file oculto */}
       <input
