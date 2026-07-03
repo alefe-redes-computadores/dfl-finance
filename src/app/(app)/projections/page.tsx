@@ -8,59 +8,23 @@ import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Wallet,
   Calendar, BarChart3, LineChart, AlertCircle, Info
 } from 'lucide-react'
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
+import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
-import dynamic from 'next/dynamic'
 
-// ============================================================
-// LAZY LOADING DOS GRÁFICOS (Recharts) - FORÇANDO ANY
-// ============================================================
-const AreaChartComponent: any = dynamic(
-  () => import('recharts').then(mod => mod.AreaChart),
-  { ssr: false, loading: () => <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-
-const Area: any = dynamic(
-  () => import('recharts').then(mod => mod.Area),
-  { ssr: false }
-)
-
-const LineChartComponent: any = dynamic(
-  () => import('recharts').then(mod => mod.LineChart),
-  { ssr: false, loading: () => <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl animate-pulse" /> }
-)
-
-const Line: any = dynamic(
-  () => import('recharts').then(mod => mod.Line),
-  { ssr: false }
-)
-
-const XAxis: any = dynamic(
-  () => import('recharts').then(mod => mod.XAxis),
-  { ssr: false }
-)
-
-const YAxis: any = dynamic(
-  () => import('recharts').then(mod => mod.YAxis),
-  { ssr: false }
-)
-
-const CartesianGrid: any = dynamic(
-  () => import('recharts').then(mod => mod.CartesianGrid),
-  { ssr: false }
-)
-
-const Tooltip: any = dynamic(
-  () => import('recharts').then(mod => mod.Tooltip),
-  { ssr: false }
-)
-
-const ResponsiveContainer: any = dynamic(
-  () => import('recharts').then(mod => mod.ResponsiveContainer),
-  { ssr: false }
-)
+// ✅ Imports normais (sem lazy loading) para evitar erro de tipagem
+import {
+  AreaChart,
+  Area,
+  LineChart as ReLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts'
 
 // ============================================================
 // SKELETON LOADER
@@ -412,7 +376,7 @@ export default function ProjectionsPage() {
               </div>
               <div className="h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChartComponent data={projections}>
+                  <AreaChart data={projections}>
                     <defs>
                       <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
@@ -441,7 +405,7 @@ export default function ProjectionsPage() {
                       strokeDasharray="5 5"
                       dot={{ r: 4 }}
                     />
-                  </AreaChartComponent>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
