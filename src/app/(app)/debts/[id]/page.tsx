@@ -31,7 +31,6 @@ export default function DebtDetailPage() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null) // 🔥 ERRO VISÍVEL
 
   // WhatsApp
   const [whatsAppNumber, setWhatsAppNumber] = useState('')
@@ -88,8 +87,8 @@ export default function DebtDetailPage() {
     if (!id || !user?.id) return
     setLoading(true)
     setLoadingPulse(true)
-    setErrorMessage(null)
 
+    // 🔥 Busca a dívida ATUALIZADA
     const { data: debtData, error: debtError } = await supabase
       .from('debts')
       .select('*')
@@ -98,7 +97,6 @@ export default function DebtDetailPage() {
 
     if (debtError) {
       console.error('[loadData] Erro ao carregar dívida:', debtError)
-      setErrorMessage(`Erro ao carregar: ${debtError.message}`)
       setLoading(false)
       setLoadingPulse(false)
       return
@@ -109,6 +107,7 @@ export default function DebtDetailPage() {
       setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
     }
 
+    // 🔥 Busca os pagamentos ATUALIZADOS
     const { data: payData, error: payError } = await supabase
       .from('transactions')
       .select('*')
@@ -186,29 +185,26 @@ export default function DebtDetailPage() {
   }
 
   const handlePayment = async () => {
-    setErrorMessage(null) // Limpa erro anterior
-
     if (isSubmitting) return
+
     if (!user?.id) {
-      setErrorMessage('Usuário não autenticado.')
       showToast('Usuário não autenticado.', 'error')
       error()
       return
     }
 
     if (payAmountNum <= 0) {
-      setErrorMessage('Digite um valor válido.')
       showToast('Digite um valor válido.', 'warning')
       error()
       return
     }
 
+    // 🔥 Calcula com base no estado ATUAL
     const debtContext = debt.context || 'dfl'
     const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
     const remaining = Number(debt.total_amount) - totalPaid
 
     if (payAmountNum > remaining) {
-      setErrorMessage(`O valor máximo é ${formatCurrency(remaining)}.`)
       showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
       error()
       return
@@ -220,49 +216,72 @@ export default function DebtDetailPage() {
     try {
       const targetAccountId = payAccountId || debt.account_id || null
 
-      // 🔥 TESTE: Vamos tentar criar a transação com campos MÍNIMOS
-      const transactionData = {
-        user_id: user.id,
-        type: 'income',
-        amount: payAmountNum,
-        description: payNote || `Pagamento de ${debt.person_name}`,
-        debt_id: id,
-        date: payDate,
-        status: 'done',
-        context: debtContext,
-      }
-
-      console.log('📤 Enviando transação:', JSON.stringify(transactionData, null, 2))
-
+      // 1. Criar transação
       const { data: txData, error: txError } = await supabase
         .from('transactions')
-        .insert(transactionData)
+        .insert({
+          user_id: user.id,
+          type: 'income',
+          amount: payAmountNum,
+          description: payNote || `Pagamento de ${debt.person_name}`,
+          account_id: targetAccountId,
+          debt_id: id,
+          date: payDate,
+          status: 'done',
+          affects_balance: true,
+          context: debtContext,
+        })
         .select()
 
-      if (txError) {
-        console.error('❌ Erro do Supabase:', txError)
-        setErrorMessage(`Erro: ${txError.message} (Código: ${txError.code})`)
-        throw txError
+      if (txError) throw txError
+
+      // 2. Atualizar saldo da conta (se houver)
+      if (targetAccountId) {
+        const { data: acc } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', targetAccountId)
+          .single()
+
+        if (acc) {
+          await supabase
+            .from('accounts')
+            .update({ balance: Number(acc.balance) + payAmountNum })
+            .eq('id', targetAccountId)
+        }
       }
 
-      console.log('✅ Transação criada:', txData)
+      // 3. Atualizar status da dívida
+      const newTotalPaid = totalPaid + payAmountNum
+      const newStatus = newTotalPaid >= Number(debt.total_amount) ? 'paid' : 'partial'
 
-      // Se chegou aqui, deu certo!
-      success()
-      showToast('✅ Pagamento registrado com sucesso!', 'success')
+      await supabase
+        .from('debts')
+        .update({ 
+          status: newStatus,
+          paid_amount: newTotalPaid,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+
+      // 🔥 FECHA O MODAL
       setShowPaymentModal(false)
       setPayAmount('0,00')
       setPayAmountNum(0)
       setPayNote('')
       setPayAccountId('')
-      loadData()
+
+      // 🔥 MOSTRA O TOAST
+      success()
+      showToast('✅ Pagamento registrado com sucesso!', 'success')
+
+      // 🔥 RECARREGA OS DADOS (e força atualização)
+      await loadData()
+
     } catch (err: any) {
-      console.error('❌ Erro capturado:', err)
-      // Se o erro não tiver mensagem, mostra o erro completo
-      const msg = err.message || JSON.stringify(err) || 'Erro desconhecido'
-      setErrorMessage(msg)
+      console.error('Erro ao registrar pagamento:', err)
       error()
-      showToast(`❌ Erro: ${msg}`, 'error')
+      showToast(`❌ Erro: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSaving(false)
       setIsSubmitting(false)
@@ -296,11 +315,13 @@ export default function DebtDetailPage() {
     )
   }
 
-  const IconComp = getDynamicIcon(debt.icon || 'user')
+  // 🔥 Calcula percentual com base nos dados ATUALIZADOS
   const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
   const remaining = Number(debt.total_amount) - totalPaid
   const percent = Number(debt.total_amount) > 0 ? (totalPaid / Number(debt.total_amount)) * 100 : 0
-  const isPaid = debt.status === 'paid'
+  const isPaid = debt.status === 'paid' || remaining <= 0
+
+  const IconComp = getDynamicIcon(debt.icon || 'user')
   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
   const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
 
@@ -321,20 +342,6 @@ export default function DebtDetailPage() {
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
-        </div>
-      )}
-
-      {/* 🔥 EXIBE O ERRO NA TELA */}
-      {errorMessage && (
-        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl">
-          <p className="text-sm font-bold text-red-600 dark:text-red-400">❌ Erro:</p>
-          <p className="text-sm text-red-600 dark:text-red-400 break-all">{errorMessage}</p>
-          <button 
-            onClick={() => setErrorMessage(null)}
-            className="mt-2 text-xs text-red-500 hover:text-red-700 font-bold"
-          >
-            Fechar
-          </button>
         </div>
       )}
 
@@ -380,19 +387,23 @@ export default function DebtDetailPage() {
             <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
           </div>
           <div className={`text-center rounded-xl p-3 ${remaining > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remaining > 0 ? 'Falta' : 'Troco'}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remaining > 0 ? 'Falta' : 'Pago'}</p>
             <p className={`text-[15px] font-bold ${remaining > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{formatCurrency(Math.abs(remaining))}</p>
           </div>
         </div>
 
+        {/* 🔥 BARRA DE PROGRESSO - VERDE QUANDO PAGO */}
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
           <div
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'}`}
+            className={`h-full rounded-full transition-all duration-1000 ease-out ${
+              isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'
+            }`}
             style={{ width: `${Math.min(percent, 100)}%` }}
           />
         </div>
         <div className="flex justify-between text-[11px]">
           <span className="text-gray-400 dark:text-gray-500 font-medium">{percent.toFixed(0)}% pago</span>
+          {isPaid && <span className="text-emerald-600 font-bold">✅ Pago!</span>}
           {isOverdue && <span className="text-red-500 font-bold">Atrasado {Math.abs(daysUntilDue)} dia(s)</span>}
         </div>
       </div>
