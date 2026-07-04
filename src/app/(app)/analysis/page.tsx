@@ -40,13 +40,13 @@ import {
 } from 'recharts'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import DetailedProjectionChart from '@/components/DetailedProjectionChart'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER PARA ANÁLISES
 // ============================================================
 const AnalysisSkeleton = () => (
   <div className="space-y-6 animate-pulse">
-    {/* Cards de resumo */}
     <div className="grid grid-cols-3 gap-3">
       {[1, 2, 3].map((i) => (
         <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
@@ -59,7 +59,6 @@ const AnalysisSkeleton = () => (
       ))}
     </div>
 
-    {/* Gráfico de pizza */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       <div className="flex justify-center">
@@ -75,7 +74,6 @@ const AnalysisSkeleton = () => (
       </div>
     </div>
 
-    {/* Gráfico de barras */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-36 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       <div className="h-48 bg-gray-100 dark:bg-slate-700/50 rounded-lg" />
@@ -85,7 +83,7 @@ const AnalysisSkeleton = () => (
 
 function AnalysisContent() {
   const { user } = useAuth()
-  const { context, setContext, appMode } = useContext_()
+  const { context } = useContext_()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [previousSummary, setPreviousSummary] = useState({ income: 0, expense: 0, balance: 0 })
@@ -107,15 +105,249 @@ function AnalysisContent() {
     maiorPeso: { name: '', percent: '0' },
   })
 
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
+  // ============================================================
+  // FILTROS
+  // ============================================================
   const [filterAccount, setFilterAccount] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context },
+    orderBy: { field: 'date', direction: 'desc' },
+    realtime: true,
+  })
+
+  const { data: localCategories, loading: catLoading } = useLocalData({
+    table: 'categories',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { data: localAccounts, loading: accLoading } = useLocalData({
+    table: 'accounts',
+    filters: { context },
+    realtime: false,
+  })
+
+  // ============================================================
+  // 🔥 JOIN EM MEMÓRIA (TRANSAÇÕES + CATEGORIAS + CONTAS)
+  // ============================================================
+  const transactionsWithJoin = (localTransactions || []).map(tx => {
+    const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
+    const account = (localAccounts || []).find((a: any) => a.id === tx.account_id)
+    return {
+      ...tx,
+      categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+      accounts: account ? { name: account.name, color: account.color } : null,
+    }
+  })
+
+  // ============================================================
+  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // ============================================================
+  const loadData = useCallback(async () => {
+    if (!user?.id) return
+    setLoading(true)
+    setLoadingPulse(true)
+
+    try {
+      // 🔥 FILTRA POR PERÍODO (12 meses)
+      const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
+      const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+      const txs = transactionsWithJoin.filter(t => t.date >= start12 && t.date <= endNow)
+
+      // 🔥 MÊS ATUAL
+      const currentStart = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+      let currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
+
+      // 🔥 FILTROS (conta e categoria)
+      if (filterAccount) {
+        currentTxs = currentTxs.filter(t => t.account_id === filterAccount)
+      }
+      if (filterCategory) {
+        currentTxs = currentTxs.filter(t => t.category_id === filterCategory)
+      }
+
+      // ============================================================
+      // CÁLCULOS DO MÊS ATUAL
+      // ============================================================
+      const income = currentTxs
+        .filter(t => t.type === 'income' && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
+      const expense = currentTxs
+        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
+      setSummary({ income, expense, balance: income - expense })
+
+      // ============================================================
+      // MÊS ANTERIOR (variação)
+      // ============================================================
+      const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+      const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
+      const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
+      const prevIncome = prevTxs
+        .filter(t => t.type === 'income' && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
+      const prevExpense = prevTxs
+        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
+      setPreviousSummary({ income: prevIncome, expense: prevExpense, balance: prevIncome - prevExpense })
+
+      // ============================================================
+      // DISTRIBUIÇÃO DE GASTOS (por categoria)
+      // ============================================================
+      const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
+      currentTxs
+        .filter(t => t.type === 'expense' || t.type === 'sangria')
+        .forEach(t => {
+          const key = t.category_id ?? 'sem'
+          if (!catMap[key]) {
+            catMap[key] = {
+              name: t.categories?.name ?? 'Sem categoria',
+              color: t.categories?.color ?? '#64748b',
+              icon: t.categories?.icon ?? 'other',
+              total: 0,
+            }
+          }
+          catMap[key].total += Number(t.amount || 0)
+        })
+
+      const categoriesArray = Object.values(catMap)
+        .map((cat) => ({
+          ...cat,
+          percent: expense > 0 ? (cat.total / expense) * 100 : 0,
+        }))
+        .sort((a, b) => b.total - a.total)
+
+      setByCategory(categoriesArray)
+
+      // ============================================================
+      // FLUXO MENSAL (últimos 6 meses)
+      // ============================================================
+      const flowData: any[] = []
+      for (let i = 5; i >= 0; i--) {
+        const d = subMonths(currentDate, i)
+        const s = format(startOfMonth(d), 'yyyy-MM-dd')
+        const e = format(endOfMonth(d), 'yyyy-MM-dd')
+        const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
+        const inc = monthTxs
+          .filter(t => t.type === 'income' && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
+        const exp = monthTxs
+          .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
+        flowData.push({
+          name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
+          Receitas: inc,
+          Despesas: exp,
+        })
+      }
+      setMonthlyFlow(flowData)
+
+      // ============================================================
+      // PATRIMÔNIO (últimos 12 meses)
+      // ============================================================
+      const currentBalance = (localAccounts || []).reduce((a, c) => a + (Number(c.balance) || 0), 0)
+
+      const patrimData: any[] = []
+      let cumulative = 0
+      for (let i = 11; i >= 0; i--) {
+        const d = subMonths(currentDate, i)
+        const s = format(startOfMonth(d), 'yyyy-MM-dd')
+        const e = format(endOfMonth(d), 'yyyy-MM-dd')
+        const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
+        const inc = monthTxs
+          .filter(t => t.type === 'income' && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
+        const exp = monthTxs
+          .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
+
+        cumulative += inc - exp
+        patrimData.push({
+          name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
+          Patrimônio: currentBalance + cumulative,
+        })
+      }
+      setPatrimony(patrimData)
+
+      const first = patrimData[0]?.Patrimônio || 0
+      const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
+      setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
+
+      // ============================================================
+      // NOVOS GASTOS (categorias que não existiam no mês anterior)
+      // ============================================================
+      const prevCatIds = new Set(prevTxs.map(t => t.category_id).filter(Boolean))
+      const newOnes = currentTxs.filter(t => t.category_id && !prevCatIds.has(t.category_id))
+
+      const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
+      newOnes.forEach(t => {
+        const key = t.category_id ?? 'sem'
+        if (!newCatMap[key]) {
+          newCatMap[key] = {
+            name: t.categories?.name ?? 'Sem categoria',
+            color: t.categories?.color ?? '#64748b',
+            icon: t.categories?.icon ?? 'other',
+            total: 0,
+          }
+        }
+        newCatMap[key].total += Number(t.amount || 0)
+      })
+
+      const newCatArray = Object.values(newCatMap)
+        .map(cat => ({
+          ...cat,
+          percent: expense > 0 ? (cat.total / expense) * 100 : 0,
+        }))
+        .sort((a, b) => b.total - a.total)
+
+      setNewGastos(newCatArray)
+
+      const newTotal = newCatArray.reduce((a, c) => a + c.total, 0)
+      const newCount = newCatArray.length
+      const newAverage = newCount > 0 ? newTotal / newCount : 0
+      const maiorPesoName = newCatArray.length > 0 ? newCatArray[0].name : '-'
+      const maiorPesoPercent =
+        newCatArray.length > 0 && newTotal > 0 ? ((newCatArray[0].total / newTotal) * 100).toFixed(0) : '0'
+      setNewGastosSummary({
+        total: newTotal,
+        count: newCount,
+        average: newAverage,
+        maiorPeso: { name: maiorPesoName, percent: maiorPesoPercent },
+      })
+
+      setLoading(false)
+      setLoadingPulse(false)
+    } catch (err) {
+      console.error('Erro ao carregar análise:', err)
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }, [user, context, currentDate, filterAccount, filterCategory, transactionsWithJoin, localAccounts])
+
+  // ============================================================
+  // EFETTOS
+  // ============================================================
+  useEffect(() => {
+    if (user?.id && context) {
+      // Recarrega transações, categorias e contas em background
+      // O loadData() já usa os dados locais
+      loadData()
+    }
+  }, [user?.id, context, currentDate, filterAccount, filterCategory, loadData])
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -153,190 +385,9 @@ function AnalysisContent() {
     }
   }, [loading, refreshing])
 
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    const [{ data: accData }, { data: catData }] = await Promise.all([
-      supabase.from('accounts').select('id, name').match({ user_id: user.id, context }),
-      supabase.from('categories').select('id, name').match({ user_id: user.id, context }),
-    ])
-    setAccounts(Array.isArray(accData) ? accData : [])
-    setCategories(Array.isArray(catData) ? catData : [])
-
-    const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
-    const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-    const { data: allTxs } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color)')
-      .match({ user_id: user.id, context: context })
-      .gte('date', start12)
-      .lte('date', endNow)
-
-    const txs = Array.isArray(allTxs) ? allTxs : []
-
-    const currentStart = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    let currentTxs = txs.filter((t) => t.date >= currentStart && t.date <= currentEnd)
-
-    if (filterAccount) {
-      currentTxs = currentTxs.filter((t) => t.account_id === filterAccount)
-    }
-    if (filterCategory) {
-      currentTxs = currentTxs.filter((t) => t.category_id === filterCategory)
-    }
-
-    const income = currentTxs
-      .filter((t) => t.type === 'income' && t.status === 'done')
-      .reduce((a, t) => a + Number(t.amount || 0), 0)
-    const expense = currentTxs
-      .filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((a, t) => a + Number(t.amount || 0), 0)
-    setSummary({ income, expense, balance: income - expense })
-
-    // Mês anterior para variação
-    const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-    const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-    const prevTxs = txs.filter((t) => t.date >= prevStart && t.date <= prevEnd)
-    const prevIncome = prevTxs
-      .filter((t) => t.type === 'income' && t.status === 'done')
-      .reduce((a, t) => a + Number(t.amount || 0), 0)
-    const prevExpense = prevTxs
-      .filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((a, t) => a + Number(t.amount || 0), 0)
-    setPreviousSummary({ income: prevIncome, expense: prevExpense, balance: prevIncome - prevExpense })
-
-    const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-    currentTxs
-      .filter((t) => t.type === 'expense' || t.type === 'sangria')
-      .forEach((t) => {
-        const key = t.category_id ?? 'sem'
-        if (!catMap[key]) {
-          catMap[key] = {
-            name: t.categories?.name ?? 'Sem categoria',
-            color: t.categories?.color ?? '#64748b',
-            icon: t.categories?.icon ?? 'other',
-            total: 0,
-          }
-        }
-        catMap[key].total += Number(t.amount || 0)
-      })
-
-    const categoriesArray = Object.values(catMap)
-      .map((cat) => ({
-        ...cat,
-        percent: expense > 0 ? (cat.total / expense) * 100 : 0,
-      }))
-      .sort((a, b) => b.total - a.total)
-
-    setByCategory(categoriesArray)
-
-    const flowData: any[] = []
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(currentDate, i)
-      const s = format(startOfMonth(d), 'yyyy-MM-dd')
-      const e = format(endOfMonth(d), 'yyyy-MM-dd')
-      const monthTxs = txs.filter((t) => t.date >= s && t.date <= e)
-      const inc = monthTxs
-        .filter((t) => t.type === 'income' && t.status === 'done')
-        .reduce((a, t) => a + Number(t.amount || 0), 0)
-      const exp = monthTxs
-        .filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a, t) => a + Number(t.amount || 0), 0)
-      flowData.push({
-        name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
-        Receitas: inc,
-        Despesas: exp,
-      })
-    }
-    setMonthlyFlow(flowData)
-
-    const { data: allAccounts } = await supabase
-      .from('accounts')
-      .select('balance')
-      .match({ user_id: user.id, context: context })
-
-    const currentBalance = Array.isArray(allAccounts)
-      ? allAccounts.reduce((a, c) => a + (Number(c.balance) || 0), 0)
-      : 0
-
-    const patrimData: any[] = []
-    for (let i = 11; i >= 0; i--) {
-      const d = subMonths(currentDate, i)
-      const s = format(startOfMonth(d), 'yyyy-MM-dd')
-      const e = format(endOfMonth(d), 'yyyy-MM-dd')
-      const monthTxs = txs.filter((t) => t.date >= s && t.date <= e)
-      const inc = monthTxs
-        .filter((t) => t.type === 'income' && t.status === 'done')
-        .reduce((a, t) => a + Number(t.amount || 0), 0)
-      const exp = monthTxs
-        .filter((t) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a, t) => a + Number(t.amount || 0), 0)
-
-      patrimData.push({
-        name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
-        Patrimônio:
-          currentBalance +
-          patrimData.reduce((a, c) => a + (c.Receitas || 0) - (c.Despesas || 0), 0) +
-          inc -
-          exp,
-      })
-    }
-    setPatrimony(patrimData)
-    const first = patrimData[0]?.Patrimônio || 0
-    const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
-    setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
-
-    // Novos gastos
-    const prevCatIds = new Set(prevTxs.map((t) => t.category_id).filter(Boolean))
-    const newOnes = currentTxs.filter((t) => t.category_id && !prevCatIds.has(t.category_id))
-
-    const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-    newOnes.forEach((t) => {
-      const key = t.category_id ?? 'sem'
-      if (!newCatMap[key]) {
-        newCatMap[key] = {
-          name: t.categories?.name ?? 'Sem categoria',
-          color: t.categories?.color ?? '#64748b',
-          icon: t.categories?.icon ?? 'other',
-          total: 0,
-        }
-      }
-      newCatMap[key].total += Number(t.amount || 0)
-    })
-
-    const newCatArray = Object.values(newCatMap)
-      .map((cat) => ({
-        ...cat,
-        percent: expense > 0 ? (cat.total / expense) * 100 : 0,
-      }))
-      .sort((a, b) => b.total - a.total)
-
-    setNewGastos(newCatArray)
-
-    const newTotal = newCatArray.reduce((a, c) => a + c.total, 0)
-    const newCount = newCatArray.length
-    const newAverage = newCount > 0 ? newTotal / newCount : 0
-    const maiorPesoName = newCatArray.length > 0 ? newCatArray[0].name : '-'
-    const maiorPesoPercent =
-      newCatArray.length > 0 && newTotal > 0 ? ((newCatArray[0].total / newTotal) * 100).toFixed(0) : '0'
-    setNewGastosSummary({
-      total: newTotal,
-      count: newCount,
-      average: newAverage,
-      maiorPeso: { name: maiorPesoName, percent: maiorPesoPercent },
-    })
-
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [user, context, currentDate, filterAccount, filterCategory])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
+  // ============================================================
+  // FUNÇÕES AUXILIARES
+  // ============================================================
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -352,6 +403,9 @@ function AnalysisContent() {
   const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
   const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
 
+  // ============================================================
+  // EXPORT
+  // ============================================================
   const handleExport = (range: string) => {
     setShowExportMenu(false)
     if (!user) return
@@ -364,6 +418,9 @@ function AnalysisContent() {
     window.open(`/api/export-pdf?userId=${user.id}&context=${context}&range=${range}`, '_blank')
   }
 
+  // ============================================================
+  // FILTROS
+  // ============================================================
   const handleApplyFilters = () => {
     setShowFilterDrawer(false)
     loadData()
@@ -377,14 +434,14 @@ function AnalysisContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* 🔵 Bolinha de carregamento sutil (único indicador) */}
+      {/* 🔵 Bolinha de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* ❌ REMOVIDO: Toast de "Atualizando..." que dava impressão de lentidão */}
+      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -866,7 +923,7 @@ function AnalysisContent() {
                   className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
                 >
                   <option value="">Todas as contas</option>
-                  {accounts.map((acc) => (
+                  {(localAccounts || []).map((acc: any) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name}
                     </option>
@@ -883,7 +940,7 @@ function AnalysisContent() {
                   className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
                 >
                   <option value="">Todas as categorias</option>
-                  {categories.map((cat) => (
+                  {(localCategories || []).map((cat: any) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
                     </option>
