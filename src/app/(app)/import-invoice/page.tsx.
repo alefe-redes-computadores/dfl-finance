@@ -1,325 +1,769 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Plus, RefreshCw, CreditCard, Calendar,
-  CheckCircle2, Clock, AlertTriangle, XCircle,
-  TrendingUp, TrendingDown, Wallet, Repeat
+  ChevronLeft, Upload, FileText, Loader2, Check, X, Edit3,
+  Trash2, Download, CreditCard, Tag, Wallet,
+  ChevronRight, ArrowRightLeft, Building, HandCoins,
+  Camera, Plus, RefreshCw, AlertCircle, Sparkles, FileUp,
+  ArrowDown, ArrowUp
 } from 'lucide-react'
-import { format, differenceInDays, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import { formatCurrency } from '@/lib/utils'
+import ModalFinancing from '@/components/ModalFinancing'
+import ModalEmprestimo from '@/components/ModalEmprestimo'
+import BankLogo from '@/components/BankLogo'
+import { getDynamicIcon } from '@/lib/iconUtils'
+import MoneyInput from '@/components/MoneyInput'
+import { useLocalData } from '@/hooks/useLocalData'
+
+interface ExtractedTransaction {
+  date: string
+  description: string
+  amount: number
+  suggested_category: string
+}
 
 // ============================================================
-// SKELETON LOADER
+// SKELETON LOADER PARA EXTRAÇÃO
 // ============================================================
-const SubscriptionsSkeleton = () => (
-  <div className="space-y-3 animate-pulse">
-    <div className="grid grid-cols-2 gap-3 mb-6">
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-24 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-24 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+const ExtractionSkeleton = () => (
+  <div className="space-y-4 animate-pulse">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+          <Loader2 size={22} className="animate-spin text-teal-600 dark:text-teal-400" />
+        </div>
+        <div className="space-y-2 flex-1">
+          <div className="h-4 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
+        </div>
       </div>
     </div>
 
     {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-slate-700" />
-            <div className="space-y-2">
-              <div className="h-4 w-36 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
-            </div>
-          </div>
-          <div className="h-6 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" />
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+        <div className="flex items-start justify-between mb-3">
+          <div className="h-8 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
         </div>
-        <div className="flex justify-between">
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
+        <div className="h-4 w-3/4 bg-gray-100 dark:bg-slate-700/50 rounded mb-3" />
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-5 w-16 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
         </div>
       </div>
     ))}
   </div>
 )
 
-export default function SubscriptionsPage() {
+export default function ImportInvoicePage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
-  const [subscriptions, setSubscriptions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'active' | 'cancelled'>('all')
-
-  // Pull to refresh
+  const { showToast } = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [transactions, setTransactions] = useState<ExtractedTransaction[]>([])
+  const [importing, setImporting] = useState(false)
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
 
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadSubscriptions().finally(() => setRefreshing(false))
-    }
-  }
+  // Seletores
+  const [creditCardId, setCreditCardId] = useState('')
+  const [creditCards, setCreditCards] = useState<any[]>([])
+  const [accountId, setAccountId] = useState('')
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [categoryId, setCategoryId] = useState('')
+  const [categories, setCategories] = useState<any[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [tags, setTags] = useState<any[]>([])
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  // Opções de aplicação em massa
+  const [applyCategoryToAll, setApplyCategoryToAll] = useState(false)
+  const [applyAccountToAll, setApplyAccountToAll] = useState(false)
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
+  // Modais
+  const [showCardModal, setShowCardModal] = useState(false)
+  const [showAccModal, setShowAccModal] = useState(false)
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [showTagModal, setShowTagModal] = useState(false)
+  const [showFinancingModal, setShowFinancingModal] = useState(false)
+  const [showLoanModal, setShowLoanModal] = useState(false)
+  const [financingId, setFinancingId] = useState<string | null>(null)
+  const [debtId, setDebtId] = useState<string | null>(null)
+
+  // Detalhes adicionais
+  const [showDetails, setShowDetails] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [isRefund, setIsRefund] = useState(false)
+
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCreditCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
+    table: 'credit_cards',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
+    table: 'accounts',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
+    table: 'categories',
+    filters: { context, type: 'expense' },
+    realtime: false,
+  })
+
+  const { data: localTags, loading: tagsLoading, reload: reloadTags } = useLocalData({
+    table: 'tags',
+    filters: { context },
+    realtime: false,
+  })
+
+  // ============================================================
+  // 🔥 HOOK LOCAL PARA CRIAÇÃO
+  // ============================================================
+  const { create: createTransaction } = useLocalData({ table: 'transactions' })
+  const { create: createInvoice, update: updateInvoice } = useLocalData({ table: 'credit_invoices' })
+  const { create: createNotification } = useLocalData({ table: 'notifications' })
 
   useEffect(() => {
     if (!user?.id) return
-    loadSubscriptions()
-  }, [user?.id, context, filter])
+    reloadCards()
+    reloadAccounts()
+    reloadCategories()
+    reloadTags()
+  }, [user?.id, context])
 
-  const loadSubscriptions = async () => {
+  useEffect(() => {
+    if (localCreditCards) setCreditCards(localCreditCards)
+    if (localAccounts) setAccounts(localAccounts)
+    if (localCategories) setCategories(localCategories)
+    if (localTags) setTags(localTags)
+  }, [localCreditCards, localAccounts, localCategories, localTags])
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0]
+    if (!selectedFile || !user?.id) return
+
+    setFile(selectedFile)
     setLoading(true)
-    setLoadingPulse(true)
+    setStep('preview')
 
-    let query = supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('next_billing', { ascending: true })
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('user_id', user.id)
+      formData.append('context', context)
 
-    if (filter !== 'all') {
-      query = query.eq('status', filter)
+      const response = await fetch('/api/extract-invoice', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao extrair transações')
+      }
+
+      setTransactions(data.transactions || [])
+      showToast(`${data.transactions.length} transações encontradas.`, 'success')
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao processar arquivo', 'error')
+      setStep('upload')
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query
-    setSubscriptions(Array.isArray(data) ? data : [])
-    setLoading(false)
-    setLoadingPulse(false)
   }
 
-  const getStatusConfig = (status: string, nextBilling: string) => {
-    if (status === 'cancelled') {
-      return { label: 'Cancelada', icon: XCircle, color: 'text-gray-500 bg-gray-100 dark:bg-slate-700' }
-    }
-
-    const daysUntilBilling = differenceInDays(new Date(nextBilling), new Date())
-    
-    if (daysUntilBilling < 0) {
-      return { label: `${Math.abs(daysUntilBilling)}d atrasado`, icon: AlertTriangle, color: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400' }
-    }
-    if (daysUntilBilling <= 7) {
-      return { label: `Vence em ${daysUntilBilling}d`, icon: Clock, color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400' }
-    }
-    return { label: 'Ativa', icon: CheckCircle2, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' }
+  const updateTransaction = (index: number, field: string, value: any) => {
+    setTransactions(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
   }
 
-  const getStatusBorder = (status: string, nextBilling: string) => {
-    if (status === 'cancelled') return 'border-gray-200 dark:border-gray-700'
-    
-    const daysUntilBilling = differenceInDays(new Date(nextBilling), new Date())
-    if (daysUntilBilling < 0) return 'border-red-200 dark:border-red-800'
-    if (daysUntilBilling <= 7) return 'border-orange-200 dark:border-orange-800'
-    return 'border-gray-50 dark:border-slate-700'
+  const removeTransaction = (index: number) => {
+    setTransactions(prev => prev.filter((_, i) => i !== index))
   }
 
-  const filteredSubscriptions = subscriptions.filter(s => {
-    if (filter === 'all') return true
-    return s.status === filter
-  })
+  const handleImport = async () => {
+    if (!user?.id || transactions.length === 0) return
+    setImporting(true)
 
-  const totalMonthly = filteredSubscriptions.reduce((acc, s) => {
-    const amount = s.status === 'active' ? Number(s.amount) : 0
-    const frequency = s.frequency || 'monthly'
-    const multiplier = frequency === 'monthly' ? 1 : frequency === 'yearly' ? 1/12 : frequency === 'weekly' ? 4 : 1
-    return acc + (amount * multiplier)
-  }, 0)
+    try {
+      let invoiceId: string | null = null
 
-  const activeCount = filteredSubscriptions.filter(s => s.status === 'active').length
+      if (creditCardId) {
+        const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
 
-  const filters = [
-    { key: 'all', label: 'Todas' },
-    { key: 'active', label: 'Ativas' },
-    { key: 'cancelled', label: 'Canceladas' },
-  ]
+        // 🔥 Busca fatura existente localmente
+        const existingInvoice = await supabase
+          .from('credit_invoices')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('credit_card_id', creditCardId)
+          .eq('status', 'open')
+          .single()
+
+        if (existingInvoice.data) {
+          invoiceId = existingInvoice.data.id
+
+          const currentInvoice = await supabase
+            .from('credit_invoices')
+            .select('total_amount')
+            .eq('id', invoiceId)
+            .single()
+
+          const newTotal = (Number(currentInvoice.data?.total_amount) || 0) + totalAmount
+
+          // 🔥 Usa update() do hook local
+          await updateInvoice(invoiceId, {
+            total_amount: newTotal,
+            updated_at: new Date().toISOString(),
+          })
+        } else {
+          const today = new Date()
+          const closingDay = 10
+          const dueDay = 15
+
+          const closingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
+          if (today > closingDate) {
+            closingDate.setMonth(closingDate.getMonth() + 1)
+          }
+
+          const startDate = new Date(closingDate)
+          startDate.setMonth(startDate.getMonth() - 1)
+          startDate.setDate(closingDay + 1)
+
+          const dueDate = new Date(closingDate)
+          dueDate.setDate(dueDay)
+          if (dueDate <= closingDate) {
+            dueDate.setMonth(dueDate.getMonth() + 1)
+          }
+
+          // 🔥 Usa create() do hook local
+          const result = await createInvoice({
+            user_id: user.id,
+            credit_card_id: creditCardId,
+            closing_date: closingDate.toISOString().split('T')[0],
+            due_date: dueDate.toISOString().split('T')[0],
+            start_date: startDate.toISOString().split('T')[0],
+            end_date: closingDate.toISOString().split('T')[0],
+            total_amount: totalAmount,
+            status: 'open',
+            context,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+
+          invoiceId = result?.id || null
+        }
+      }
+
+      // 🔥 Criar transações em lote via create() do hook local
+      const payload = transactions.map((tx, index) => {
+        const catId = applyCategoryToAll ? categoryId : null
+        const accId = applyAccountToAll ? accountId : null
+
+        let finalNotes = notes
+        if (isRefund) finalNotes = `[Devolução/Estorno] ${finalNotes}`.trim()
+
+        return {
+          user_id: user.id,
+          type: 'expense',
+          amount: tx.amount,
+          description: tx.description,
+          category_id: catId,
+          account_id: accId,
+          credit_card_id: creditCardId || null,
+          invoice_id: invoiceId,
+          tag_ids: selectedTags.length > 0 ? selectedTags : null,
+          date: tx.date,
+          status: creditCardId ? 'done' : (accId ? 'done' : 'pending'),
+          context,
+          notes: finalNotes || null,
+          financing_id: financingId,
+          debt_id: debtId,
+          affects_balance: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      })
+
+      // 🔥 Loop para criar cada transação localmente
+      for (const tx of payload) {
+        await createTransaction(tx)
+      }
+
+      // 🔥 Criar notificação
+      await createNotification({
+        id: `import-${Date.now()}`,
+        user_id: user.id,
+        type: 'import_done',
+        title: 'Fatura importada',
+        subtitle: `${transactions.length} transações importadas com sucesso.`,
+        severity: 'success',
+        data: {
+          count: transactions.length,
+          card_name: creditCards.find(c => c.id === creditCardId)?.name || 'Conta'
+        },
+        read: false,
+        created_at: new Date().toISOString(),
+      })
+
+      showToast(`${transactions.length} transações importadas!`, 'success')
+      setStep('done')
+      router.refresh()
+    } catch (err: any) {
+      console.error('Erro ao importar:', err)
+      showToast(`Erro ao importar: ${err.message}`, 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const toggleTag = (id: string) => {
+    setSelectedTags(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
+  }
+
+  const selectedCard = creditCards.find(c => c.id === creditCardId)
+  const selectedAcc = accounts.find(a => a.id === accountId)
+  const selectedCat = categories.find(c => c.id === categoryId)
+
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="w-10" />
+          </div>
+          <div className="h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+        </div>
+        <div className="px-4 pt-4">
+          <ExtractionSkeleton />
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-        </div>
-      )}
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
 
-      {/* Pull to refresh */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
+      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+            <ChevronLeft size={24} />
+          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Importar Fatura</h1>
+          <div className="w-10" />
         </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-          <ChevronLeft size={24} />
-        </button>
         <ContextToggle />
-        <button
-          onClick={() => router.push('/subscriptions/new')}
-          className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
-        >
-          <Plus size={20} className="text-white" />
-        </button>
       </div>
 
-      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Assinaturas</h2>
-
-      {/* Filtros */}
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-hide">
-        {filters.map(f => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key as any)}
-            className={`px-4 py-2 rounded-full text-[12px] font-bold whitespace-nowrap transition-all border ${
-              filter === f.key
-                ? 'bg-teal-700 text-white border-teal-700 shadow-md'
-                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-            }`}
-          >
-            {f.label}
-            <span className="ml-1 text-[10px] opacity-70">
-              ({subscriptions.filter(s => f.key === 'all' || s.status === f.key).length})
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <SubscriptionsSkeleton />
-      ) : filteredSubscriptions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Repeat size={40} className="text-gray-400 dark:text-gray-500" />
-          </div>
-          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">
-            {filter === 'all' ? 'Nenhuma assinatura' : filter === 'active' ? 'Nenhuma assinatura ativa' : 'Nenhuma assinatura cancelada'}
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
-            Gerencie todas as suas assinaturas em um só lugar.
-          </p>
-          <button
-            onClick={() => router.push('/subscriptions/new')}
-            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
-          >
-            Nova assinatura
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          {/* Cards de resumo */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
-                <CreditCard size={16} className="text-teal-600 dark:text-teal-400" />
+      <div className="px-4 pt-4">
+        {step === 'upload' && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-2xl p-8 flex flex-col items-center gap-3 text-gray-500 hover:border-teal-500 hover:text-teal-600 transition-all active:scale-[0.98] bg-white dark:bg-slate-800"
+            >
+              <div className="w-16 h-16 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <FileUp size={32} className="text-teal-600 dark:text-teal-400" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Ativas</p>
-              <p className="text-[15px] font-bold text-teal-600">{activeCount}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
-                <Wallet size={16} className="text-orange-600 dark:text-orange-400" />
+              <div className="text-center">
+                <p className="font-bold text-sm">Selecionar arquivo</p>
+                <p className="text-xs text-gray-400 mt-1">PDF ou OFX da sua fatura</p>
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Gasto mensal</p>
-              <p className="text-[15px] font-bold text-orange-600">{formatCurrency(totalMonthly)}</p>
-            </div>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.ofx"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </div>
+        )}
 
-          {/* Lista */}
-          {filteredSubscriptions.map(sub => {
-            const statusConfig = getStatusConfig(sub.status, sub.next_billing)
-            const borderColor = getStatusBorder(sub.status, sub.next_billing)
-            const isActive = sub.status === 'active'
+        {step === 'preview' && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                  <FileText size={22} className="text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{file?.name}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full">
+                      <Sparkles size={12} />
+                      {transactions.length} transações encontradas
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            return (
-              <div
-                key={sub.id}
-                onClick={() => router.push(`/subscriptions/${sub.id}`)}
-                className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${borderColor}`}
-              >
-                <div className="flex items-center justify-between mb-3">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl mx-0 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+              {creditCards.length > 0 && (
+                <button
+                  onClick={() => setShowCardModal(true)}
+                  className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <CreditCard size={20} className="text-gray-400 dark:text-gray-500" />
+                    <span className={`text-sm font-medium ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {selectedCard ? selectedCard.name : 'Cartão de crédito (opcional)'}
+                    </span>
+                  </div>
+                  {selectedCard && (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); setCreditCardId('') }}
+                      className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X size={16} />
+                    </div>
+                  )}
+                </button>
+              )}
+
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50 dark:border-slate-700">
+                <button
+                  onClick={() => setShowCatModal(true)}
+                  className="flex items-center gap-4 flex-1"
+                >
+                  <Tag size={20} className="text-gray-400 dark:text-gray-500" />
+                  <span className={`text-sm font-medium ${applyCategoryToAll && selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {applyCategoryToAll && selectedCat ? selectedCat.name : 'Categoria (aplicar a todas)'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => { setApplyCategoryToAll(!applyCategoryToAll); if (!applyCategoryToAll) setShowCatModal(true) }}
+                  className={`w-11 h-6 rounded-full relative transition-colors ${applyCategoryToAll ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${applyCategoryToAll ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between px-5 py-3">
+                <button
+                  onClick={() => setShowAccModal(true)}
+                  className="flex items-center gap-4 flex-1"
+                >
+                  <Wallet size={20} className="text-gray-400 dark:text-gray-500" />
+                  <span className={`text-sm font-medium ${applyAccountToAll && selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {applyAccountToAll && selectedAcc ? selectedAcc.name : 'Conta (aplicar a todas)'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => { setApplyAccountToAll(!applyAccountToAll); if (!applyAccountToAll) setShowAccModal(true) }}
+                  className={`w-11 h-6 rounded-full relative transition-colors ${applyAccountToAll ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${applyAccountToAll ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {transactions.map((tx, index) => (
+                <div
+                  key={index}
+                  className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all active:scale-[0.98]"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <input
+                      type="date"
+                      value={tx.date}
+                      onChange={(e) => updateTransaction(index, 'date', e.target.value)}
+                      className="text-sm font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200 w-32"
+                    />
+                    <button
+                      onClick={() => removeTransaction(index)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={tx.description}
+                    onChange={(e) => updateTransaction(index, 'description', e.target.value)}
+                    className="w-full text-sm bg-transparent outline-none text-gray-700 dark:text-gray-300 mb-2"
+                    placeholder="Descrição"
+                  />
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 text-sm font-bold text-red-600">
+                      <span className="text-gray-400">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={tx.amount}
+                        onChange={(e) => updateTransaction(index, 'amount', parseFloat(e.target.value) || 0)}
+                        className="w-24 bg-transparent outline-none font-bold text-red-600"
+                      />
+                    </div>
+                    {tx.suggested_category && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                        {tx.suggested_category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2 hover:scale-105 transition-transform"
+            >
+              {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
+              {showDetails ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+            </button>
+
+            {showDetails && (
+              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="p-5 space-y-5">
+                  <button
+                    onClick={() => setShowTagModal(true)}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Tag size={20} className="text-gray-400 dark:text-gray-500" />
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                        {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-gray-300" />
+                  </button>
+
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-slate-700">
-                      <div 
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-                        style={{ backgroundColor: sub.color || '#14b8a6' }}
-                      >
-                        {sub.name?.charAt(0).toUpperCase() || 'S'}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200 truncate max-w-[160px]">
-                        {sub.name}
-                      </p>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                        {sub.frequency === 'monthly' ? 'Mensal' : 
-                         sub.frequency === 'yearly' ? 'Anual' : 
-                         sub.frequency === 'weekly' ? 'Semanal' : 'Personalizado'}
-                      </p>
-                    </div>
+                    <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
+                    <input
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Observações gerais"
+                      className="flex-1 text-sm bg-transparent outline-none text-gray-700 dark:text-gray-300"
+                    />
                   </div>
-                  <div className={`text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 ${statusConfig.color}`}>
-                    <statusConfig.icon size={12} />
-                    {statusConfig.label}
-                  </div>
-                </div>
 
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                    {formatCurrency(Number(sub.amount))}
-                  </span>
-                  <span className="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                    <Calendar size={12} />
-                    {sub.next_billing ? format(parseISO(sub.next_billing), "dd/MM/yyyy", { locale: ptBR }) : '—'}
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <ArrowRightLeft size={20} className="text-gray-400 dark:text-gray-500" />
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
+                    </div>
+                    <button
+                      onClick={() => setIsRefund(!isRefund)}
+                      className={`w-11 h-6 rounded-full relative transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isRefund ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setShowFinancingModal(true)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Building size={20} className="text-gray-400 dark:text-gray-500" />
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span>
+                    </div>
+                    <button className={`w-11 h-6 rounded-full relative transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${financingId ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setShowLoanModal(true)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <HandCoins size={20} className="text-gray-400 dark:text-gray-500" />
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span>
+                    </div>
+                    <button className={`w-11 h-6 rounded-full relative transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${debtId ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            )
-          })}
+            )}
+
+            <button
+              onClick={handleImport}
+              disabled={importing || transactions.length === 0}
+              className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] shadow-lg shadow-teal-700/20"
+            >
+              {importing ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+              {importing ? 'Importando...' : `Importar ${transactions.length} transações`}
+            </button>
+          </div>
+        )}
+
+        {step === 'done' && (
+          <div className="text-center py-12 animate-in fade-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check size={40} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Importação concluída!</h2>
+            <p className="text-gray-500 mb-6">{transactions.length} transações foram importadas com sucesso.</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => router.push('/transactions')}
+                className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors active:scale-95 shadow-lg shadow-teal-700/20"
+              >
+                Ver transações
+              </button>
+              <button
+                onClick={() => {
+                  setStep('upload')
+                  setFile(null)
+                  setTransactions([])
+                }}
+                className="bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-2xl font-bold border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-95"
+              >
+                Importar outra
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showCardModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {creditCards.map((card) => (
+                <button
+                  key={card.id}
+                  onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
+                  className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${creditCardId === card.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}>
+                    <CreditCard size={20} />
+                  </div>
+                  <span className="flex-1 text-left font-medium">{card.name}</span>
+                  {creditCardId === card.id && <Check size={20} className="text-teal-700" />}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
+
+      {showCatModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => setShowCatModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {categories.map((cat) => {
+                const IconComp = getDynamicIcon(cat.icon)
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false); setApplyCategoryToAll(true) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${categoryId === cat.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
+                      <IconComp size={20} />
+                    </div>
+                    <span className="flex-1 text-left font-medium">{cat.name}</span>
+                    {categoryId === cat.id && <Check size={20} className="text-teal-700" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => setShowAccModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  onClick={() => { setAccountId(acc.id); setShowAccModal(false); setApplyAccountToAll(true) }}
+                  className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${accountId === acc.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                >
+                  <BankLogo color={acc.color} name={acc.name} size="md" />
+                  <span className="flex-1 text-left font-medium">{acc.name}</span>
+                  {accountId === acc.id && <Check size={20} className="text-teal-700" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTagModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => setShowTagModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                  className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors active:scale-[0.98] ${selectedTags.includes(tag.id) ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                >
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                  <span className="flex-1 text-left font-medium">{tag.name}</span>
+                  {selectedTags.includes(tag.id) && <Check size={20} className="text-teal-700" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ModalFinancing
+        isOpen={showFinancingModal}
+        onClose={() => setShowFinancingModal(false)}
+        onSave={(id) => setFinancingId(id)}
+      />
+      <ModalEmprestimo
+        isOpen={showLoanModal}
+        onClose={() => setShowLoanModal(false)}
+        onSave={(id) => setDebtId(id)}
+      />
     </div>
   )
 }
