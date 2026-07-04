@@ -83,8 +83,8 @@ export default function AssistantChatPage() {
     realtime: true,
   })
 
-  const { create: createMessage } = useLocalData({ table: 'chat_history' })
-  const { create: createSession } = useLocalData({ table: 'chat_sessions' })
+  const { create: createMessage } = useLocalData({ table: 'chat_history' as any })
+  const { create: createSession } = useLocalData({ table: 'chat_sessions' as any })
 
   // ============================================================
   // PULL TO REFRESH
