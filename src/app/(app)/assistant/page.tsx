@@ -160,7 +160,7 @@ function AssistantContent() {
       for (const [catId, amount] of Object.entries(categoryExpense)) {
         if (amount > biggestCategoryAmount) {
           biggestCategoryAmount = amount
-          const cat = cats.find((c: any) => c.id === catId)
+          const cat = cats.find((c: any) => c.id === catId) as any
           biggestCategory = cat?.name || 'Sem categoria'
         }
       }
