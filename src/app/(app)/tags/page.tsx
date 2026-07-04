@@ -1,223 +1,429 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, ChevronRight, Trash2, X, Loader2 } from 'lucide-react'
-import Skeleton from '@/components/Skeleton'
-import { useToast } from '@/contexts/ToastContext'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
+import {
+  Search,
+  Plus,
+  X,
+  RefreshCw,
+  Trash2,
+  Tag,
+  Pencil,
+  Save,
+  Hash,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { LoadingSkeleton } from "@/components/Skeleton"
+import { useAuth } from "@/contexts/AuthContext"
 
-const TAG_COLORS = [
-  '#264653', '#2a9d8f', '#1d3557', '#e76f51', '#2ecc71', 
-  '#00b894', '#ff7675', '#d63031', '#fdcb6e', '#e17055',
-  '#74b9ff', '#0984e3', '#a29bfe', '#6c5ce7', '#fd79a8',
-  '#e84393', '#636e72', '#2d3436', '#fd9644', '#00cec9'
+const COLORS = [
+  "#3B82F6", // blue
+  "#10B981", // emerald
+  "#F59E0B", // amber
+  "#EF4444", // red
+  "#8B5CF6", // violet
+  "#EC4899", // pink
+  "#06B6D4", // cyan
+  "#F97316", // orange
+  "#14B8A6", // teal
+  "#6366F1", // indigo
 ]
 
 export default function TagsPage() {
-  const { user } = useAuth()
   const router = useRouter()
   const { showToast } = useToast()
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { pendingCount } = useLocalSync()
+  const { context } = useAuth()
 
-  const [context, setContext] = useState<'dfl' | 'personal'>('dfl')
-  const [loading, setLoading] = useState(true)
-
+  const [search, setSearch] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
+  const [loadingPulse, setLoadingPulse] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [editingTag, setEditingTag] = useState<any | null>(null)
-  const [name, setName] = useState('')
-  const [color, setColor] = useState(TAG_COLORS[0])
+  const [editId, setEditId] = useState<string | null>(null)
+  const [tagName, setTagName] = useState("")
+  const [tagColor, setTagColor] = useState(COLORS[0])
   const [saving, setSaving] = useState(false)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 BUSCA LOCAL DE TAGS (INDEXEDDB)
-  // ============================================================
-  const { data: localTags, loading: tagsLoading, reload: reloadTags } = useLocalData({
-    table: 'tags',
+  // Busca dados locais
+  const { data: tags, loading, refresh } = useLocalData({
+    table: 'tags' as any,
     filters: { context },
-    orderBy: { field: 'name', direction: 'asc' },
-    realtime: true,
   })
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
-  const loadTags = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
+  const { create, update, remove } = useLocalData({
+    table: 'tags' as any,
+  })
 
-    try {
-      await reloadTags()
-    } catch (err) {
-      console.error("Erro ao carregar tags:", err)
-      showToast("Erro ao carregar tags: " + (err as Error).message, 'error')
-    } finally {
-      setLoading(false)
+  // Conta transações por tag
+  const { data: transactions } = useLocalData({
+    table: 'transactions' as any,
+    filters: { context },
+  })
+
+  const transactionCountByTag = (transactions || []).reduce((acc: Record<string, number>, tx: any) => {
+    if (tx.tag_ids && Array.isArray(tx.tag_ids)) {
+      tx.tag_ids.forEach((tagId: string) => {
+        acc[tagId] = (acc[tagId] || 0) + 1
+      })
     }
-  }, [user?.id, reloadTags, showToast])
+    return acc
+  }, {})
 
-  useEffect(() => {
-    if (user?.id) { loadTags() }
-  }, [loadTags])
-
-  // ============================================================
-  // HANDLERS (COM HOOK LOCAL)
-  // ============================================================
-  function openEdit(tag: any) {
-    setEditingTag(tag)
-    setName(tag.name)
-    setColor(tag.color)
+  // Abrir formulário para edição
+  const handleEdit = (tag: any) => {
+    setEditId(tag.id)
+    setTagName(tag.name || "")
+    setTagColor(tag.color || COLORS[0])
     setShowForm(true)
   }
 
-  function openNew() {
-    setEditingTag(null)
-    setName('')
-    setColor(TAG_COLORS[0])
+  // Abrir formulário para nova tag
+  const handleNew = () => {
+    setEditId(null)
+    setTagName("")
+    setTagColor(COLORS[0])
     setShowForm(true)
   }
 
-  async function handleSave() {
-    if (!name.trim() || !user?.id) return
+  // Salvar tag
+  const handleSave = async () => {
+    if (!tagName.trim()) {
+      showToast("Informe o nome da tag", "warning")
+      errorHaptic()
+      return
+    }
+
     setSaving(true)
-
-    const payload = { user_id: user.id, context, name: name.trim(), color }
-
     try {
-      const { create, update } = useLocalData({ table: 'tags' })
-      
-      if (editingTag) {
-        await update(editingTag.id, payload)
-        showToast('Tag atualizada!', 'success')
+      const payload = {
+        name: tagName.trim(),
+        color: tagColor,
+        context,
+      }
+
+      if (editId) {
+        await update(editId, payload)
+        showToast("Tag atualizada com sucesso!", "success")
       } else {
         await create(payload)
-        showToast('Tag criada!', 'success')
+        showToast("Tag criada com sucesso!", "success")
       }
+
+      success()
       setShowForm(false)
-      loadTags()
+      setEditId(null)
+      setTagName("")
+      refresh()
     } catch (err: any) {
-      console.error("Erro ao salvar tag:", err)
-      showToast("Erro ao salvar tag: " + err.message, 'error')
+      showToast(err?.message || "Erro ao salvar tag", "error")
+      errorHaptic()
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Deseja realmente excluir esta tag?')) return
-    setSaving(true)
+  // Excluir tag
+  const handleDelete = async () => {
+    if (!deleteModal) return
     try {
-      const { remove } = useLocalData({ table: 'tags' })
-      await remove(id)
-      showToast('Tag excluída.', 'info')
-      setShowForm(false)
-      loadTags()
-    } catch (err: any) {
-      console.error("Erro ao excluir:", err)
-      showToast("Erro ao excluir: " + err.message, 'error')
-    } finally {
-      setSaving(false)
+      await remove(deleteModal)
+      showToast("Tag excluída com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      refresh()
+    } catch {
+      showToast("Erro ao excluir tag", "error")
+      errorHaptic()
     }
   }
 
-  const tags = localTags || []
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        refresh().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
+      }
+    }
+  }, [refreshing, refresh])
+
+  // Filtros
+  const filteredTags = (tags || []).filter((tag: any) => {
+    if (!search) return true
+    const s = search.toLowerCase()
+    return tag.name && tag.name.toLowerCase().includes(s)
+  })
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
-
-      <div className="bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-2 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-[17px] font-bold text-gray-800 dark:text-gray-100">Tags</h1>
-          <button onClick={openNew} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
-            <Plus size={24} />
-          </button>
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      {/* Bolinha de loading sutil */}
+      {(loadingPulse || loading || pendingCount > 0) && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
+      )}
 
-        <div className="flex bg-white dark:bg-slate-800 rounded-full p-1 border border-gray-100 dark:border-slate-700 max-w-[220px] mx-auto shadow-sm">
-          {(['dfl', 'personal'] as const).map(c => (
-            <button key={c} onClick={() => setContext(c)} className={`flex-1 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 ${context === c ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-800 dark:text-gray-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>
-              {c === 'dfl' ? 'DFL' : 'Pessoal'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="px-4 mt-6">
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton variant="rect" height="48px" count={6} />
+      {/* Pull-to-refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
-        ) : tags.length === 0 ? (
-          <div className="text-center py-20 text-gray-400 dark:text-gray-500 text-[14px]">Nenhuma tag cadastrada.</div>
-        ) : (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden">
-            {tags.map((tag: any, index: number) => (
-              <div key={tag.id} className={`flex items-center justify-between px-5 py-4 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${index !== tags.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
-                <div className="flex items-center gap-4">
-                  <div className="w-6 h-6 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: tag.color }}></div>
-                  <div><p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{tag.name}</p></div>
-                </div>
-                <div className="flex items-center gap-4 text-gray-300 dark:text-gray-600">
-                  <button onClick={(e) => { e.stopPropagation(); openEdit(tag); }} className="p-2 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
+        </div>
+      )}
+
+      {/* Header fixo */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
+        {/* Barra do topo */}
+        <div className="flex items-center justify-between pt-4 mb-3">
+          <div>
+            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
+              Tags
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Organize suas transações
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Buscar"
+            >
+              {showSearch ? <X size={18} /> : <Search size={18} />}
+            </button>
+            <button
+              onClick={handleNew}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+              aria-label="Nova tag"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        {showSearch && (
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Buscar tag..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
           </div>
         )}
       </div>
 
+      {/* Formulário de criação/edição */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col justify-end" onClick={() => setShowForm(false)}>
-          <div className="bg-white dark:bg-slate-800 flex-1 w-full max-w-md mx-auto mt-24 rounded-t-[32px] relative shadow-2xl flex flex-col animate-in slide-in-from-bottom-full duration-300" onClick={e => e.stopPropagation()}>
-
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-50 dark:border-slate-700">
-              <h2 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">{editingTag ? 'Editar Tag' : 'Nova Tag'}</h2>
-              <button onClick={() => setShowForm(false)} className="p-2 -mr-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                <X size={24} />
+        <div className="px-4 pt-3 pb-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200">
+                {editId ? "Editar Tag" : "Nova Tag"}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowForm(false)
+                  setEditId(null)
+                }}
+                className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-
-              <div className="flex justify-center mb-8">
-                <div className="inline-flex items-center gap-3 border border-gray-100 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 rounded-full px-5 py-2 shadow-sm">
-                  <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
-                  <span className="text-[15px] font-bold text-gray-700 dark:text-gray-200">{name || 'Nome da tag'}</span>
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 block">Nome</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: viagem, reembolso, ifood" className="w-full bg-transparent border-b-2 border-gray-100 dark:border-slate-600 py-3 text-[16px] outline-none focus:border-teal-600 font-bold text-gray-800 dark:text-gray-200 transition-colors placeholder:text-gray-300 dark:placeholder:text-gray-500 placeholder:font-normal" />
-              </div>
-
-              <div className="mb-8">
-                <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 block">Cor da Tag</label>
-                <div className="grid grid-cols-5 gap-4">
-                  {TAG_COLORS.map(c => (
-                    <button key={c} onClick={() => setColor(c)} className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm" style={{ backgroundColor: c, transform: color === c ? 'scale(1.15)' : 'scale(1)', boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }} />
-                  ))}
-                </div>
-              </div>
-
-              {editingTag && (
-                <div className="flex justify-center mt-10">
-                  <button onClick={() => handleDelete(editingTag.id)} className="flex items-center gap-2 text-red-500 font-bold text-[14px] py-2 px-4 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                    <Trash2 size={18} /> Excluir tag
-                  </button>
-                </div>
-              )}
+            {/* Nome */}
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                Nome da Tag
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Fixo, Variável, Essencial..."
+                value={tagName}
+                onChange={(e) => setTagName(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+                autoFocus
+              />
             </div>
 
-            <div className="p-6 bg-white dark:bg-slate-800 border-t border-gray-50 dark:border-slate-700 pb-8">
-              <button onClick={handleSave} disabled={saving || !name.trim()} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[20px] font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center h-14">
-                {saving ? <Loader2 className="animate-spin" size={24} /> : (editingTag ? 'Salvar Alterações' : 'Criar Tag')}
+            {/* Cor */}
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+                Cor
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setTagColor(color)}
+                    className={`w-8 h-8 rounded-full transition-all ${
+                      tagColor === color
+                        ? "ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-800 scale-110"
+                        : "hover:scale-105"
+                    }`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Cor ${color}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                Preview
+              </label>
+              <span
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold text-white"
+                style={{ backgroundColor: tagColor }}
+              >
+                <Hash size={10} />
+                {tagName || "Nome da tag"}
+              </span>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setShowForm(false)
+                  setEditId(null)
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors"
+              >
+                {saving ? (
+                  <RefreshCw size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )}
+                {editId ? "Atualizar" : "Criar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lista */}
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto px-4 pt-3 pb-24"
+      >
+        {loading ? (
+          <LoadingSkeleton count={6} />
+        ) : filteredTags.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Tag size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">
+              {search ? "Nenhuma tag encontrada" : "Nenhuma tag criada"}
+            </p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+              {search ? "Tente outro termo de busca" : "Toque no + para criar sua primeira tag"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredTags.map((tag: any) => {
+              const txCount = transactionCountByTag[tag.id] || 0
+              return (
+                <div
+                  key={tag.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between hover:shadow-sm transition-shadow"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: tag.color || COLORS[0] }}
+                    >
+                      <Hash size={18} className="text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                        {tag.name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {txCount} {txCount === 1 ? "transação" : "transações"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleEdit(tag)}
+                      className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-500 transition-colors"
+                      aria-label="Editar tag"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteModal(tag.id)}
+                      className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
+                      aria-label="Excluir tag"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal de exclusão */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+              Excluir Tag
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir esta tag? As transações vinculadas não serão afetadas, apenas perderão esta tag.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
+              >
+                Excluir
               </button>
             </div>
           </div>
