@@ -443,6 +443,7 @@ export default function AssistantSettingsPage() {
           </div>
         </div>
 
+
         <div className="bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/50 dark:to-emerald-950/50 rounded-[24px] p-5 border border-teal-100 dark:border-teal-800">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
