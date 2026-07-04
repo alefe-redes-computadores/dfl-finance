@@ -21,6 +21,7 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
+import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
@@ -49,7 +50,7 @@ export default function AccountDetailPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
