@@ -107,7 +107,7 @@ export default function BudgetDetailPage() {
   // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
-    table: 'budgets',
+    table: 'budgets' as any,
     filters: { id: id as string },
     realtime: true,
   })
