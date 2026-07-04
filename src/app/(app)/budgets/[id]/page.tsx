@@ -13,6 +13,9 @@ import {
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
+import { getDynamicIcon } from '@/lib/iconUtils'
 
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
@@ -86,6 +89,8 @@ export default function BudgetDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { context } = useContext_()
+  const { showToast } = useToast()
 
   const [budget, setBudget] = useState<any>(null)
   const [transactions, setTransactions] = useState<any[]>([])
@@ -97,8 +102,25 @@ export default function BudgetDetailPage() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [projection, setProjection] = useState('')
 
-  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
+    table: 'budgets',
+    filters: { id: id as string },
+    realtime: true,
+  })
 
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context },
+    orderBy: { field: 'date', direction: 'desc' },
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -136,58 +158,47 @@ export default function BudgetDetailPage() {
     }
   }, [loading, refreshing])
 
-  const getAttachmentIcon = (url: string | null) => {
-    if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
-  }
-
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const daysInMonth = differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
-    const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
+    try {
+      await Promise.all([reloadBudgets(), reloadTransactions()])
 
-    const { data: budgetData } = await supabase
-      .from('budgets')
-      .select('*, categories(name, icon, color)')
-      .match({ id: id, user_id: user.id })
-      .single()
-
-    if (budgetData) {
+      const budgetData = (localBudgets || [])[0]
+      if (!budgetData) {
+        router.push('/budgets')
+        return
+      }
       setBudget(budgetData)
 
-      let query = supabase
-        .from('transactions')
-        .select('*, categories(name, icon, color), accounts!account_id(name)')
-        .match({ user_id: user.id, context: budgetData.context })
-        .gte('date', start)
-        .lte('date', end)
-        .eq('status', 'done')
+      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+      const today = format(new Date(), 'yyyy-MM-dd')
+      const daysInMonth = differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
+      const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
+
+      let filteredTxs = (localTransactions || [])
+        .filter((tx: any) => tx.date >= start && tx.date <= end && tx.status === 'done')
 
       if (budgetData.category_id) {
-        query = query.eq('category_id', budgetData.category_id)
+        filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
       }
 
-      const { data: txsData } = await query.order('date', { ascending: false })
+      const totalSpent = filteredTxs
+        .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
+        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
 
-      const txs = Array.isArray(txsData) ? txsData : []
-      const totalSpent = txs
-        .filter(t => t.type === 'expense' || t.type === 'sangria')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
-
-      setTransactions(txs)
+      setTransactions(filteredTxs)
       setSpent(totalSpent)
 
       const remaining = Number(budgetData.amount) - totalSpent
       const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
-      
+
       if (dailyAverage > 0 && remaining > 0) {
         const projectedDays = Math.floor(remaining / dailyAverage)
         setDaysLeft(projectedDays)
@@ -204,15 +215,25 @@ export default function BudgetDetailPage() {
       } else {
         setProjection('✅ Nenhum gasto registrado ainda.')
       }
+    } catch (err) {
+      console.error('Erro ao carregar orçamento:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
     }
-
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [id, user, currentDate])
+  }, [id, user, currentDate, localBudgets, localTransactions, router])
 
   useEffect(() => { loadData() }, [loadData])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+  }
+
+  const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
   if (loading) return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
@@ -225,18 +246,13 @@ export default function BudgetDetailPage() {
     </div>
   )
 
-  if (!budget) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-      <p className="text-gray-500 dark:text-gray-400">Orçamento não encontrado.</p>
-    </div>
-  )
+  if (!budget) return null
 
-  const IconComp = ICON_MAP[budget.icon] || ICON_MAP['other']
   const remaining = Number(budget.amount) - spent
   const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
   const isOverBudget = remaining < 0
   const isWarning = percent >= 75 && percent < 100
-  const isSafe = !isOverBudget && !isWarning
+  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans px-4 pt-6 transition-colors duration-300">
@@ -282,7 +298,7 @@ export default function BudgetDetailPage() {
               : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
         }`}>
           {isOverBudget && <AlertTriangle size={10} />}
-          {isSafe && <CheckCircle size={10} />}
+          {!isOverBudget && !isWarning && <CheckCircle size={10} />}
           {isOverBudget ? 'Estourado' : isWarning ? 'Atenção' : 'Dentro do limite'}
         </span>
       </div>
@@ -340,25 +356,12 @@ export default function BudgetDetailPage() {
 
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Transações do mês</h3>
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-3 py-3 animate-pulse">
-                <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-slate-700" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
-                  <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
-                </div>
-                <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-              </div>
-            ))}
-          </div>
-        ) : transactions.length === 0 ? (
+        {transactions.length === 0 ? (
           <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-6">Nenhuma transação neste mês.</p>
         ) : (
           <div className="space-y-2">
-            {transactions.map((tx, index) => {
-              const TxIconComp = ICON_MAP[tx.categories?.icon] || ICON_MAP['other']
+            {transactions.map((tx: any, index: number) => {
+              const TxIconComp = getDynamicIcon(tx.categories?.icon || 'tag')
               const isIncomeVisual = tx.type === 'income'
               const isPending = tx.status === 'pending'
               const attachmentIcon = getAttachmentIcon(tx.receipt_url)
