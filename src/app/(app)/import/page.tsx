@@ -27,6 +27,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import MoneyInput from '@/components/MoneyInput'
+import { useLocalData } from '@/hooks/useLocalData'
 
 async function processOCR(file: File): Promise<{
   amount: string
@@ -106,15 +107,19 @@ function ImportContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // ============================================================
+  // 🔥 HOOK LOCAL PARA CRIAÇÃO DE TRANSAÇÃO
+  // ============================================================
+  const { create: createTransaction } = useLocalData({ table: 'transactions' })
+
   const handleFileSelect = async (selectedFile: File | null) => {
     if (!selectedFile) return
     setFile(selectedFile)
-    
-    // Gera preview da imagem
+
     const reader = new FileReader()
     reader.onload = (e) => setPreviewUrl(e.target?.result as string)
     reader.readAsDataURL(selectedFile)
-    
+
     setLoading(true)
     setStep('review')
 
@@ -154,29 +159,31 @@ function ImportContent() {
     setIsSubmitting(true)
     setStep('saving')
 
-    const idempotencyKey = crypto.randomUUID()
-    const payload = {
-      user_id: user.id,
-      amount: amountNum,
-      type: 'expense',
-      status: 'pending',
-      date: formData.date,
-      description: formData.description || 'Comprovante importado',
-      category_id: formData.category_id || null,
-      credit_card_id: formData.credit_card_id || null,
-      notes: formData.notes || null,
-      context,
-      idempotency_key: idempotencyKey,
-    }
+    try {
+      // 🔥 Usa create() do hook local
+      await createTransaction({
+        user_id: user.id,
+        amount: amountNum,
+        type: 'expense',
+        status: 'pending',
+        date: formData.date,
+        description: formData.description || 'Comprovante importado',
+        category_id: formData.category_id || null,
+        credit_card_id: formData.credit_card_id || null,
+        notes: formData.notes || null,
+        context,
+        affects_balance: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
 
-    const { error } = await supabase.from('transactions').insert([payload])
-    if (error) {
-      alert('Erro ao salvar: ' + error.message)
-      setStep('review')
-    } else {
       router.push('/home')
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + err.message)
+      setStep('review')
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }
 
   const handleReset = () => {
@@ -208,7 +215,6 @@ function ImportContent() {
 
       <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-6">Importar Comprovante</h1>
 
-      {/* UPLOAD */}
       {step === 'upload' && (
         <div className="space-y-4 animate-in fade-in duration-300">
           <button
@@ -246,10 +252,8 @@ function ImportContent() {
         </div>
       )}
 
-      {/* REVIEW */}
       {step === 'review' && (
         <div className="space-y-4 animate-in fade-in duration-300">
-          {/* Preview da imagem */}
           {previewUrl && (
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-3">
@@ -278,7 +282,7 @@ function ImportContent() {
                 </div>
               )}
             </div>
-            
+
             <div className="mb-4">
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor</label>
               <div className={`flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 transition-colors ${errors.amount ? 'border border-red-400' : 'focus-within:border-teal-500'}`}>
@@ -366,7 +370,6 @@ function ImportContent() {
         </div>
       )}
 
-      {/* SAVING SKELETON */}
       {step === 'saving' && <SavingSkeleton />}
     </div>
   )
