@@ -29,9 +29,6 @@ interface ExtractedTransaction {
   suggested_category: string
 }
 
-// ============================================================
-// SKELETON LOADER PARA EXTRAÇÃO
-// ============================================================
 const ExtractionSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
@@ -76,7 +73,6 @@ export default function ImportInvoicePage() {
   const [importing, setImporting] = useState(false)
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
 
-  // Seletores
   const [creditCardId, setCreditCardId] = useState('')
   const [creditCards, setCreditCards] = useState<any[]>([])
   const [accountId, setAccountId] = useState('')
@@ -86,11 +82,9 @@ export default function ImportInvoicePage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [tags, setTags] = useState<any[]>([])
 
-  // Opções de aplicação em massa
   const [applyCategoryToAll, setApplyCategoryToAll] = useState(false)
   const [applyAccountToAll, setApplyAccountToAll] = useState(false)
 
-  // Modais
   const [showCardModal, setShowCardModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showCatModal, setShowCatModal] = useState(false)
@@ -100,44 +94,40 @@ export default function ImportInvoicePage() {
   const [financingId, setFinancingId] = useState<string | null>(null)
   const [debtId, setDebtId] = useState<string | null>(null)
 
-  // Detalhes adicionais
   const [showDetails, setShowDetails] = useState(false)
   const [notes, setNotes] = useState('')
   const [isRefund, setIsRefund] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localCreditCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
-    table: 'credit_cards',
+    table: 'credit_cards' as any,
     filters: { context },
     realtime: false,
   })
 
   const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
-    table: 'accounts',
+    table: 'accounts' as any,
     filters: { context },
     realtime: false,
   })
 
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context, type: 'expense' },
     realtime: false,
   })
 
   const { data: localTags, loading: tagsLoading, reload: reloadTags } = useLocalData({
-    table: 'tags',
+    table: 'tags' as any,
     filters: { context },
     realtime: false,
   })
 
-  // ============================================================
-  // 🔥 HOOK LOCAL PARA CRIAÇÃO
-  // ============================================================
-  const { create: createTransaction } = useLocalData({ table: 'transactions' })
-  const { create: createInvoice, update: updateInvoice } = useLocalData({ table: 'credit_invoices' })
-  const { create: createNotification } = useLocalData({ table: 'notifications' })
+  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
+  const { create: createInvoice, update: updateInvoice } = useLocalData({ table: 'credit_invoices' as any })
+  const { create: createNotification } = useLocalData({ table: 'notifications' as any })
 
   useEffect(() => {
     if (!user?.id) return
@@ -211,7 +201,6 @@ export default function ImportInvoicePage() {
       if (creditCardId) {
         const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
 
-        // 🔥 Busca fatura existente localmente
         const existingInvoice = await supabase
           .from('credit_invoices')
           .select('id')
@@ -231,7 +220,6 @@ export default function ImportInvoicePage() {
 
           const newTotal = (Number(currentInvoice.data?.total_amount) || 0) + totalAmount
 
-          // 🔥 Usa update() do hook local
           await updateInvoice(invoiceId, {
             total_amount: newTotal,
             updated_at: new Date().toISOString(),
@@ -256,7 +244,6 @@ export default function ImportInvoicePage() {
             dueDate.setMonth(dueDate.getMonth() + 1)
           }
 
-          // 🔥 Usa create() do hook local
           const result = await createInvoice({
             user_id: user.id,
             credit_card_id: creditCardId,
@@ -275,7 +262,6 @@ export default function ImportInvoicePage() {
         }
       }
 
-      // 🔥 Criar transações em lote via create() do hook local
       const payload = transactions.map((tx, index) => {
         const catId = applyCategoryToAll ? categoryId : null
         const accId = applyAccountToAll ? accountId : null
@@ -305,12 +291,10 @@ export default function ImportInvoicePage() {
         }
       })
 
-      // 🔥 Loop para criar cada transação localmente
       for (const tx of payload) {
         await createTransaction(tx)
       }
 
-      // 🔥 Criar notificação
       await createNotification({
         id: `import-${Date.now()}`,
         user_id: user.id,
