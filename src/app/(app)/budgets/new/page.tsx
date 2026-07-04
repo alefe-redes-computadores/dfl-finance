@@ -48,7 +48,7 @@ function NewBudgetContent() {
   })
 
   const { data: localBudget, loading: budgetLoading, reload: reloadBudget } = useLocalData({
-    table: 'budgets',
+    table: 'budgets' as any,
     filters: { id: editId || '' },
     realtime: false,
   })
@@ -64,7 +64,7 @@ function NewBudgetContent() {
 
   useEffect(() => {
     if (editId && localBudget && localBudget.length > 0) {
-      const data = localBudget[0]
+      const data = localBudget[0] as any
       setName(data.name)
       const numValue = Number(data.amount) || 0
       setAmountNum(numValue)
@@ -114,7 +114,7 @@ function NewBudgetContent() {
     }
 
     try {
-      const { create, update } = useLocalData({ table: 'budgets' })
+      const { create, update } = useLocalData({ table: 'budgets' as any })
       
       if (editId) {
         await update(editId, payload)
