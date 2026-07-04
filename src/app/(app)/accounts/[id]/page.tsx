@@ -232,7 +232,7 @@ export default function AccountDetailPage() {
           </div>
         </div>
         <div className="flex-1 px-4 pt-4">
-          <LoadingSkeleton count={3} />
+          <Skeleton count={4} />
         </div>
       </div>
     )
