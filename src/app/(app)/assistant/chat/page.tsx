@@ -210,7 +210,7 @@ export default function AssistantChatPage() {
       })
 
       setMessages(prev => [...prev, {
-        id: userMsg?.id || Date.now().toString(),
+        id: (userMsg as any)?.id || Date.now().toString(),
         role: 'user',
         content: userMessage,
         created_at: new Date().toISOString(),
@@ -244,7 +244,7 @@ export default function AssistantChatPage() {
       })
 
       setMessages(prev => [...prev, {
-        id: assistantMsg?.id || Date.now().toString(),
+        id: (assistantMsg as any)?.id || Date.now().toString(),
         role: 'assistant',
         content: data.response,
         created_at: new Date().toISOString(),
