@@ -1,462 +1,528 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter, useParams } from "next/navigation"
 import {
-  ChevronLeft, Edit2, Trash2, Loader2, ArrowRightLeft,
-  Calendar, Clock, AlertTriangle, CheckCircle, Plus, RefreshCw,
-  Wallet, ArrowUp, ArrowDown, X, Check, Building2, User
-} from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import { useToast } from '@/contexts/ToastContext'
-import { useContext_ } from '@/components/ContextToggle'
-import { useLocalData } from '@/hooks/useLocalData'
+  ArrowLeft,
+  Save,
+  Trash2,
+  RefreshCw,
+  Pencil,
+  Wallet,
+  ArrowLeftRight,
+  Landmark,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  ChevronDown,
+  Plus,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { LoadingSkeleton } from "@/components/Skeleton"
+import { useAuth } from "@/contexts/AuthContext"
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
-const LoanDetailSkeleton = () => (
-  <div className="animate-pulse px-4 pt-6 space-y-4">
-    <div className="flex items-center justify-between mb-6">
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
-        <div className="space-y-2">
-          <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700">
-            <div className="h-3 w-12 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
-            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
-          </div>
-        ))}
-      </div>
-
-      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
-      </div>
-      <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 dark:border-slate-700 last:border-b-0">
-          <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-slate-700" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-          <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-        </div>
-      ))}
-    </div>
-  </div>
-)
+type Payment = {
+  id: string
+  loan_id: string
+  amount: number
+  date: string
+  notes?: string
+  payment_type?: string
+  created_at?: string
+}
 
 export default function LoanDetailPage() {
-  const { id } = useParams()
   const router = useRouter()
-  const { user } = useAuth()
-  const { context } = useContext_()
+  const params = useParams()
+  const loanId = params.id as string
   const { showToast } = useToast()
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { pendingCount } = useLocalSync()
+  const { context } = useAuth()
 
-  const [loan, setLoan] = useState<any>(null)
-  const [payments, setPayments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [paidAmount, setPaidAmount] = useState(0)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [payAmount, setPayAmount] = useState('0,00')
-  const [payAmountNum, setPayAmountNum] = useState(0)
-  const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [payNote, setPayNote] = useState('')
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState("")
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0])
+  const [paymentNotes, setPaymentNotes] = useState("")
+  const [savingPayment, setSavingPayment] = useState(false)
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
+  const [expandedPayments, setExpandedPayments] = useState(false)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
-  const { data: localLoans, loading: loansLoading, reload: reloadLoans } = useLocalData({
-    table: 'loans',
-    filters: { id: id as string },
-    realtime: true,
+  // Busca dados locais
+  const { data: localLoans, loading, refresh } = useLocalData({
+    table: 'loans' as any,
+    filters: { context },
   })
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
-    filters: { loan_id: id as string },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
+  const loanData = (localLoans || []).find((l: any) => l.id === loanId) as any
+
+  // Busca pagamentos vinculados
+  const { data: allPayments } = useLocalData({
+    table: 'transactions' as any,
+    filters: { context, type: 'loan_payment', loan_id: loanId },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
+  const payments = (allPayments || []) as Payment[]
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
+  const { create: createTransaction, remove: removeTransaction } = useLocalData({
+    table: 'transactions' as any,
+  })
 
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
-    }
-  }
+  const { update: updateLoan, remove: removeLoan } = useLocalData({
+    table: 'loans' as any,
+  })
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
-  const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    try {
-      await Promise.all([reloadLoans(), reloadTransactions()])
-
-      const loanData = (localLoans || [])[0]
-      if (!loanData) {
-        router.push('/loans')
-        return
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        refresh().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
       }
-      setLoan(loanData)
+    }
+  }, [refreshing, refresh])
 
-      const txs = localTransactions || []
-      setPayments(txs)
+  // Registrar pagamento
+  const handleRegisterPayment = async () => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      showToast("Informe um valor válido", "warning")
+      errorHaptic()
+      return
+    }
 
-      const totalPaid = txs
-        .filter((tx: any) => tx.type === 'income' && tx.status === 'done')
-        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-      setPaidAmount(totalPaid)
-    } catch (err) {
-      console.error('Erro ao carregar empréstimo:', err)
+    setSavingPayment(true)
+    try {
+      const totalPaid = payments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+      const newTotalPaidCents = Math.round((totalPaid + parseFloat(paymentAmount)) * 100)
+      const totalAmountCents = Math.round((loanData?.amount || 0) * 100)
+      const newStatus = newTotalPaidCents >= totalAmountCents ? "paid" : loanData?.status || "active"
+
+      await createTransaction({
+        description: `Pagamento: ${loanData?.description || "Empréstimo"}`,
+        amount: parseFloat(paymentAmount),
+        type: "loan_payment",
+        loan_id: loanId,
+        date: paymentDate || new Date().toISOString().split("T")[0],
+        notes: paymentNotes || null,
+        status: "completed",
+        account_id: null,
+        category_id: null,
+        context,
+      })
+
+      await updateLoan(loanId, { status: newStatus })
+
+      showToast("Pagamento registrado com sucesso!", "success")
+      success()
+      setShowPaymentForm(false)
+      setPaymentAmount("")
+      setPaymentNotes("")
+      refresh()
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao registrar pagamento", "error")
+      errorHaptic()
     } finally {
-      setLoading(false)
-      setLoadingPulse(false)
+      setSavingPayment(false)
     }
-  }, [id, user, localLoans, localTransactions, router])
+  }
 
-  useEffect(() => { loadData() }, [loadData])
-
-  // ============================================================
-  // HANDLERS
-  // ============================================================
-  const handleDelete = async () => {
-    if (!confirm('Excluir este empréstimo?')) return
+  // Excluir pagamento
+  const handleDeletePayment = async (paymentId: string) => {
     try {
-      const { remove } = useLocalData({ table: 'loans' })
-      await remove(id as string)
-      showToast('Empréstimo excluído.', 'info')
-      router.push('/loans')
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+      await removeTransaction(paymentId)
+      showToast("Pagamento excluído com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      refresh()
+    } catch {
+      showToast("Erro ao excluir pagamento", "error")
+      errorHaptic()
     }
   }
 
-  const handlePayment = async () => {
-    if (!user?.id || payAmountNum <= 0) {
-      showToast('Digite um valor válido.', 'warning')
-      return
-    }
-
-    const remaining = Number(loan.total_amount) - paidAmount
-    if (payAmountNum > remaining) {
-      showToast(`O valor máximo é ${formatCurrency(remaining)}.`, 'warning')
-      return
-    }
-
+  // Excluir empréstimo
+  const handleDeleteLoan = async () => {
     try {
-      const { create } = useLocalData({ table: 'transactions' })
-      await create({
-        user_id: user.id,
-        context: context || 'dfl',
-        type: 'income',
-        amount: payAmountNum,
-        description: payNote || `Pagamento de empréstimo`,
-        date: payDate,
-        status: 'done',
-        affects_balance: true,
-        loan_id: id,
-      })
-
-      const newPaid = paidAmount + payAmountNum
-      const newStatus = newPaid >= Number(loan.total_amount) ? 'completed' : 'active'
-
-      const { update } = useLocalData({ table: 'loans' })
-      await update(id as string, {
-        paid_amount: newPaid,
-        status: newStatus,
-        remaining_amount: Number(loan.total_amount) - newPaid,
-      })
-
-      showToast('Pagamento registrado!', 'success')
-      setShowPaymentModal(false)
-      setPayAmount('0,00')
-      setPayAmountNum(0)
-      setPayNote('')
-      loadData()
-    } catch (err: any) {
-      showToast(`Erro ao registrar: ${err.message}`, 'error')
+      for (const p of payments) {
+        await removeTransaction(p.id)
+      }
+      await removeLoan(loanId)
+      showToast("Empréstimo excluído com sucesso!", "success")
+      success()
+      router.back()
+    } catch {
+      showToast("Erro ao excluir empréstimo", "error")
+      errorHaptic()
     }
   }
 
-  const handlePayAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    if (!digits) {
-      setPayAmount('0,00')
-      setPayAmountNum(0)
-      return
-    }
-    const num = parseFloat(digits) / 100
-    setPayAmountNum(num)
-    setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+
+  const formatDate = (date: string | null) => {
+    if (!date) return ""
+    return new Date(date).toLocaleDateString("pt-BR")
   }
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+            <Clock size={12} /> Ativo
+          </span>
+        )
+      case "paid":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
+            <CheckCircle2 size={12} /> Pago
+          </span>
+        )
+      case "overdue":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
+            <AlertTriangle size={12} /> Atrasado
+          </span>
+        )
+      default:
+        return (
+          <span className="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+            {status}
+          </span>
+        )
+    }
+  }
 
-  if (loading) return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+  const totalPaid = payments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+  const remaining = (loanData?.amount || 0) - totalPaid
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <ArrowLeft size={20} />
+            </div>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Carregando...</h1>
+          </div>
         </div>
-      )}
-      <LoanDetailSkeleton />
-    </div>
-  )
+        <div className="flex-1 px-4 pt-4">
+          <LoadingSkeleton count={3} />
+        </div>
+      </div>
+    )
+  }
 
-  if (!loan) return null
-
-  const remaining = Number(loan.total_amount) - paidAmount
-  const percent = Number(loan.total_amount) > 0 ? (paidAmount / Number(loan.total_amount)) * 100 : 0
-  const isCompleted = remaining <= 0
-  const dueDate = loan.due_date ? new Date(loan.due_date) : null
-  const daysUntilDue = dueDate ? differenceInDays(dueDate, new Date()) : null
-  const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isCompleted
+  if (!loanData) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Empréstimo não encontrado</h1>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans px-4 pt-6 transition-colors duration-300">
-      {loadingPulse && (
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      {/* Bolinha de loading */}
+      {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
+      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/loans')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-          <ChevronLeft size={24} />
-        </button>
-        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">Empréstimo</h2>
-        <div className="flex items-center gap-2">
-          <button onClick={() => router.push(`/loans/new?edit=${loan.id}`)} className="p-2 text-gray-400 hover:text-teal-600 transition-colors">
-            <Edit2 size={18} />
-          </button>
-          <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-            <Trash2 size={18} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex justify-center mb-4">
-        <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
-          isCompleted ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-          isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-          'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-        }`}>
-          {isCompleted && <CheckCircle size={10} />}
-          {isOverdue && <AlertTriangle size={10} />}
-          {isCompleted ? 'Quitado' : isOverdue ? 'Atrasado' : 'Em andamento'}
-        </span>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4 animate-in fade-in duration-300">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-            <ArrowRightLeft size={24} className="text-teal-600 dark:text-teal-400" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-gray-500">{getContextLabel(loan.source_context)}</span>
-              <ArrowRightLeft size={12} className="text-gray-400" />
-              <span className="text-[11px] text-gray-500">{getContextLabel(loan.dest_context)}</span>
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                {loanData.description || "Empréstimo"}
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                {getStatusBadge(loanData.status)}
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatDate(loanData.date)}
+                </span>
+              </div>
             </div>
-            <p className="font-bold text-[16px] text-gray-800 dark:text-gray-100">{loan.description || 'Empréstimo'}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push(`/loans/new?edit=${loanId}`)}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Editar"
+            >
+              <Pencil size={18} />
+            </button>
+            <button
+              onClick={handleDeleteLoan}
+              className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+              aria-label="Excluir"
+            >
+              <Trash2 size={18} />
+            </button>
           </div>
         </div>
-
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Total</p>
-            <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(loan.total_amount))}</p>
-          </div>
-          <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Pago</p>
-            <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(paidAmount)}</p>
-          </div>
-          <div className={`text-center rounded-xl p-3 ${remaining > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remaining > 0 ? 'Falta' : 'Quitado'}</p>
-            <p className={`text-[15px] font-bold ${remaining > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{formatCurrency(Math.abs(remaining))}</p>
-          </div>
-        </div>
-
-        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-          <div
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${
-              isCompleted ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'
-            }`}
-            style={{ width: `${Math.min(percent, 100)}%` }}
-          />
-        </div>
-        <p className={`text-[11px] font-medium text-right ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-          {percent.toFixed(0)}% pago
-        </p>
       </div>
 
-      {!isCompleted && (
-        <button
-          onClick={() => setShowPaymentModal(true)}
-          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20 mb-4"
-        >
-          <Plus size={16} />
-          Registrar Pagamento
-        </button>
-      )}
+      {/* Conteúdo */}
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4"
+      >
+        {/* Cards de resumo */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Valor Total</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-200">
+              {formatCurrency(loanData.amount || 0)}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Restante</p>
+            <p className={`text-xl font-black ${remaining <= 0 ? "text-teal-500" : "text-orange-500"}`}>
+              {formatCurrency(Math.max(0, remaining))}
+            </p>
+          </div>
+        </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
-        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Pagamentos</h3>
-        {payments.length === 0 ? (
-          <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-6">Nenhum pagamento registrado.</p>
-        ) : (
-          <div className="space-y-2">
-            {payments.map((tx: any, index: number) => (
-              <div
-                key={tx.id}
-                className={`flex items-center justify-between p-3 ${
-                  index !== payments.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''
-                }`}
+        {/* Informações */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Landmark size={16} className="text-teal-500" />
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              {loanData.direction === "lent" ? "Emprestei" : "Peguei Emprestado"}
+            </span>
+          </div>
+          {loanData.lender && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">
+                {loanData.direction === "lent" ? "Devedor" : "Credor"}
+              </p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {loanData.lender}
+              </p>
+            </div>
+          )}
+          {loanData.due_date && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Vencimento</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {formatDate(loanData.due_date)}
+              </p>
+            </div>
+          )}
+          {loanData.interest_rate && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Taxa de Juros</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {loanData.interest_rate}% a.m.
+              </p>
+            </div>
+          )}
+          {loanData.notes && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Observações</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {loanData.notes}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Pagamentos */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-black text-slate-800 dark:text-slate-200">Pagamentos</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {payments.length} pagamento(s) — Total: {formatCurrency(totalPaid)}
+              </p>
+            </div>
+            {loanData.status !== "paid" && (
+              <button
+                onClick={() => setShowPaymentForm(!showPaymentForm)}
+                className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+                aria-label="Novo pagamento"
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-                    <ArrowUp size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">{tx.description || 'Pagamento'}</p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500">{format(new Date(tx.date), "dd 'de' MMM yyyy", { locale: ptBR })}</p>
-                  </div>
-                </div>
-                <p className="text-[14px] font-bold text-emerald-600 flex-shrink-0">
-                  + {formatCurrency(Number(tx.amount) || 0)}
-                </p>
-              </div>
-            ))}
+                <Plus size={18} />
+              </button>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Modal de Pagamento */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Registrar Pagamento</h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
-            </div>
-
-            <div className="space-y-4">
+          {/* Formulário de pagamento */}
+          {showPaymentForm && (
+            <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-3">
               <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor</label>
-                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-                  <span className="text-gray-400 dark:text-gray-500 font-bold">R$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={payAmount}
-                    onChange={handlePayAmountChange}
-                    className="bg-transparent text-lg font-bold text-gray-800 dark:text-gray-200 outline-none w-full"
-                    placeholder="0,00"
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">Restante: {formatCurrency(Math.max(remaining, 0))}</p>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Data</label>
-                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-                  <Calendar size={16} className="text-gray-400" />
-                  <input
-                    type="date"
-                    value={payDate}
-                    onChange={e => setPayDate(e.target.value)}
-                    className="bg-transparent text-sm font-bold text-gray-800 dark:text-gray-200 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Observação (opcional)</label>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                  Valor do Pagamento
+                </label>
                 <input
-                  type="text"
-                  value={payNote}
-                  onChange={e => setPayNote(e.target.value)}
-                  placeholder="Ex: Pagamento parcial"
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50"
                 />
               </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                  Data
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
+                  Observações (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Pagamento via PIX"
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowPaymentForm(false)
+                    setPaymentAmount("")
+                    setPaymentNotes("")
+                  }}
+                  className="flex-1 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleRegisterPayment}
+                  disabled={savingPayment}
+                  className="flex-1 py-2 rounded-lg bg-teal-500 hover:bg-teal-600 text-white font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {savingPayment ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Save size={14} />
+                  )}
+                  Registrar
+                </button>
+              </div>
+            </div>
+          )}
 
+          {/* Lista de pagamentos */}
+          {payments.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">
+              Nenhum pagamento registrado
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {payments.slice(0, expandedPayments ? undefined : 5).map((p: Payment) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {p.notes || `Pagamento em ${formatDate(p.date)}`}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {formatDate(p.date)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-teal-600 dark:text-teal-400">
+                      {formatCurrency(p.amount)}
+                    </span>
+                    <button
+                      onClick={() => setDeleteModal(p.id)}
+                      className="p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
+                      aria-label="Excluir pagamento"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {payments.length > 5 && (
+                <button
+                  onClick={() => setExpandedPayments(!expandedPayments)}
+                  className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold py-2"
+                >
+                  {expandedPayments ? "Ver menos" : `Ver todos (${payments.length})`}
+                  <ChevronDown size={12} className={`inline ml-1 transition-transform ${expandedPayments ? "rotate-180" : ""}`} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal de exclusão de pagamento */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+              Excluir Pagamento
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir este pagamento? O valor será revertido.
+            </p>
+            <div className="flex gap-3">
               <button
-                onClick={handlePayment}
-                disabled={payAmountNum <= 0}
-                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm"
               >
-                Confirmar Pagamento
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeletePayment(deleteModal)}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm"
+              >
+                Excluir
               </button>
             </div>
           </div>
