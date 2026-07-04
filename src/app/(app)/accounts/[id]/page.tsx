@@ -172,48 +172,49 @@ export default function AccountStatementPage() {
   const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
 
   // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
-  // ============================================================
-  const loadData = useCallback(async () => {
-    if (!id || !user || isNew) return
-    setLoading(true)
-    setLoadingPulse(true)
+// LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS) - CORRIGIDO
+// ============================================================
+const loadData = useCallback(async () => {
+  if (!id || !user || isNew) return
+  setLoading(true)
+  setLoadingPulse(true)
 
-    try {
-      await Promise.all([reloadAccounts(), reloadTransactions()])
+  try {
+    await Promise.all([reloadAccounts(), reloadTransactions()])
 
-      const acc = (localAccounts || []).find((a: any) => a.id === id)
-      if (acc) {
-        setAccount(acc)
-        setName(acc.name)
-        setColor(acc.color)
-        setAllowNegative(acc.allow_negative || false)
-        setAllAccounts((localAccounts || []).filter((a: any) => a.id !== id))
-      }
-
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-      const monthTxs = (localTransactions || [])
-        .filter((t: any) => t.date >= start && t.date <= end)
-      
-      setTransactions(monthTxs)
-
-      const income = monthTxs
-        .filter((t: any) => t.type === 'income' || (t.type === 'transfer' && t.description?.includes('de ')))
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const expense = monthTxs
-        .filter((t: any) => t.type === 'expense' || t.type === 'sangria' || (t.type === 'transfer' && t.description?.includes('para ')))
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-
-      setSummary({ income, expense })
-
-    } catch (err) {
-      console.error("Erro inesperado:", err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
+    // 🔥 CORREÇÃO: Tipagem explícita para o acc
+    const acc = (localAccounts || []).find((a: any) => a.id === id) as any
+    if (acc) {
+      setAccount(acc)
+      setName(acc.name || '')
+      setColor(acc.color || DEFAULT_COLORS[0])
+      setAllowNegative(acc.allow_negative || false)
+      setAllAccounts((localAccounts || []).filter((a: any) => a.id !== id))
     }
-  }, [id, currentDate, user, isNew, localAccounts, localTransactions, reloadAccounts, reloadTransactions])
+
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+    const monthTxs = (localTransactions || [])
+      .filter((t: any) => t.date >= start && t.date <= end)
+    
+    setTransactions(monthTxs)
+
+    const income = monthTxs
+      .filter((t: any) => t.type === 'income' || (t.type === 'transfer' && t.description?.includes('de ')))
+      .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+    const expense = monthTxs
+      .filter((t: any) => t.type === 'expense' || t.type === 'sangria' || (t.type === 'transfer' && t.description?.includes('para ')))
+      .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+
+    setSummary({ income, expense })
+
+  } catch (err) {
+    console.error("Erro inesperado:", err)
+  } finally {
+    setLoading(false)
+    setLoadingPulse(false)
+  }
+}, [id, currentDate, user, isNew, localAccounts, localTransactions, reloadAccounts, reloadTransactions])
 
   // ============================================================
   // EFETTO INICIAL
