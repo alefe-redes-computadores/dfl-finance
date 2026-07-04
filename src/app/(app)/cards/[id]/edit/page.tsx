@@ -9,6 +9,8 @@ import {
   CreditCard, Calendar, PiggyBank, Palette, DollarSign,
   Check, Loader2, X, Plus, Wallet, Trash2
 } from 'lucide-react'
+import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -18,6 +20,7 @@ export default function EditCardPage() {
   const router = useRouter()
   const params = useParams()
   const cardId = params?.id as string
+  const { showToast } = useToast()
 
   const [accounts, setAccounts] = useState<any[]>([])
 
@@ -39,43 +42,61 @@ export default function EditCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localAccounts, loading: accLoading } = useLocalData({
+    table: 'accounts',
+    filters: { context: 'dfl' },
+    realtime: false,
+  })
+
+  const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
+    table: 'credit_cards',
+    filters: { id: cardId },
+    realtime: false,
+  })
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
   useEffect(() => {
     async function loadData() {
       if (!user?.id || !cardId) return
       setLoading(true)
 
-      // Carregar contas
-      const { data: accs } = await supabase
-        .from('accounts')
-        .select('id, name, color')
-        .match({ user_id: user.id, context: 'dfl' })
-      setAccounts(Array.isArray(accs) ? accs : [])
+      try {
+        await Promise.all([reloadCards()])
+        
+        if (localAccounts) {
+          setAccounts(localAccounts)
+        }
 
-      // Carregar dados do cartão
-      const { data: cardData } = await supabase
-        .from('credit_cards')
-        .select('*')
-        .match({ id: cardId, user_id: user.id })
-        .single()
-
-      if (cardData) {
-        setName(cardData.name || '')
-        setFlag(cardData.flag || '')
-        setInstitution(cardData.institution || '')
-        setLastFour(cardData.last_four || '')
-        setClosingDay(String(cardData.closing_day || ''))
-        setDueDay(String(cardData.due_day || ''))
-        setPaymentAccountId(cardData.payment_account_id || '')
-        setColor(cardData.color || PREDEFINED_COLORS[0])
-        const limit = Number(cardData.limit_amount) || 0
-        setLimitAmount(limit.toFixed(2).replace('.', ','))
+        const cardData = (localCards || [])[0]
+        if (cardData) {
+          setName(cardData.name || '')
+          setFlag(cardData.flag || '')
+          setInstitution(cardData.institution || '')
+          setLastFour(cardData.last_four || '')
+          setClosingDay(String(cardData.closing_day || ''))
+          setDueDay(String(cardData.due_day || ''))
+          setPaymentAccountId(cardData.payment_account_id || '')
+          setColor(cardData.color || PREDEFINED_COLORS[0])
+          const limit = Number(cardData.limit_amount) || 0
+          setLimitAmount(limit.toFixed(2).replace('.', ','))
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados:', err)
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
     loadData()
-  }, [user?.id, cardId])
+  }, [user?.id, cardId, localAccounts, localCards, reloadCards])
 
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '')
     if (value === '') value = '0'
@@ -92,7 +113,7 @@ export default function EditCardPage() {
 
   async function handleSave() {
     if (!name.trim()) {
-      alert('Por favor, informe o nome do cartão.')
+      showToast('Por favor, informe o nome do cartão.', 'warning')
       return
     }
     setSaving(true)
@@ -110,17 +131,12 @@ export default function EditCardPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('credit_cards')
-        .update(payload)
-        .eq('id', cardId)
-        .eq('user_id', user!.id)
-
-      if (error) throw error
-
+      const { update } = useLocalData({ table: 'credit_cards' })
+      await update(cardId, payload)
+      showToast('Cartão atualizado!', 'success')
       router.push(`/cards/${cardId}`)
     } catch (error: any) {
-      alert(`Erro ao salvar: ${error.message}`)
+      showToast(`Erro ao salvar: ${error.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -130,18 +146,16 @@ export default function EditCardPage() {
     if (!confirm('Tem certeza que deseja excluir este cartão?')) return
     setDeleting(true)
 
-    const { error } = await supabase
-      .from('credit_cards')
-      .delete()
-      .eq('id', cardId)
-      .eq('user_id', user!.id)
-
-    if (error) {
-      alert('Erro ao excluir: ' + error.message)
-    } else {
+    try {
+      const { remove } = useLocalData({ table: 'credit_cards' })
+      await remove(cardId)
+      showToast('Cartão excluído!', 'info')
       router.push('/cards')
+    } catch (error: any) {
+      showToast(`Erro ao excluir: ${error.message}`, 'error')
+    } finally {
+      setDeleting(false)
     }
-    setDeleting(false)
   }
 
   const renderFlagIcon = (cardFlag: string) => {
@@ -188,7 +202,7 @@ export default function EditCardPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-slate-900 flex flex-col font-sans pb-24 relative transition-colors duration-300">
-      
+
       <div className="pt-6 pb-8 px-4 shadow-sm relative transition-colors duration-300" style={{ backgroundColor: color }}>
         <div className="flex items-center justify-between mb-6 text-white">
           <button onClick={() => router.back()} className="p-2 -ml-2">
@@ -216,8 +230,7 @@ export default function EditCardPage() {
       </div>
 
       <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
-        
-        {/* Bandeira */}
+
         <div className="p-4 border-b border-gray-50 dark:border-slate-700 flex flex-col gap-3">
           <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <Tag size={18} /> <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Bandeira</span>
@@ -298,7 +311,7 @@ export default function EditCardPage() {
                 style={{ backgroundColor: c }}
               />
             ))}
-            
+
             <button 
               onClick={() => {
                 setTempColor(color)
@@ -336,7 +349,6 @@ export default function EditCardPage() {
         {saving ? <Loader2 className="animate-spin" size={28} /> : <Check size={28} />}
       </button>
 
-      {/* Modal de seleção de conta */}
       {showAccountModal && (
         <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowAccountModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -379,7 +391,7 @@ export default function EditCardPage() {
         <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowColorPicker(false)}>
           <div className="bg-[#303030] dark:bg-slate-800 rounded-3xl p-6 w-full max-w-xs shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-white font-bold text-lg mb-4">Selecionar cor</h3>
-            
+
             <div className="grid grid-cols-4 gap-4 mb-6">
                {PREDEFINED_COLORS.map(c => (
                   <button 
