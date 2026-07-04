@@ -271,7 +271,7 @@ export default function AssistantChatPage() {
 
     try {
       if (sessionId) {
-        const { remove } = useLocalData({ table: 'chat_history' })
+        const { remove } = useLocalData({ table: 'chat_history' as any })
         const msgsToRemove = messages.map(m => m.id)
         for (const id of msgsToRemove) {
           await remove(id)
