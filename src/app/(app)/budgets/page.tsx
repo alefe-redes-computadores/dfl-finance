@@ -4,64 +4,39 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import * as Icons from 'lucide-react'
-import { 
-  ChevronLeft, ChevronRight, Plus, Loader2, TrendingUp, PieChart, Calendar, X,
-  RefreshCw, AlertTriangle, CheckCircle
+import {
+  ChevronLeft, Plus, Loader2, RefreshCw, 
+  AlertTriangle, CheckCircle, Clock, Tag, MoreHorizontal,
+  Eye, EyeOff, Settings2
 } from 'lucide-react'
-import { format, subMonths, addMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-
-const getDynamicIcon = (iconName: string) => {
-  if (!iconName) return Icons.Tag
-  const formattedName = iconName.charAt(0).toUpperCase() + iconName.slice(1)
-  return (Icons as any)[formattedName] || Icons.Tag
-}
+import { getDynamicIcon } from '@/lib/iconUtils'
+import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const BudgetsSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-700" />
-          <div className="space-y-2">
-            <div className="h-3 w-12 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-5 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-        </div>
-        <div className="text-right space-y-2">
-          <div className="h-3 w-10 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-          <div className="h-5 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-      </div>
-      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-3/4" />
-      </div>
-      <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-    </div>
-
+  <div className="space-y-3 animate-pulse">
     {[1, 2, 3].map((i) => (
       <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-slate-700" />
-            <div className="space-y-2">
-              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-            </div>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-slate-700" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
+            <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
           </div>
-          <div className="h-5 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" />
+          <div className="h-6 w-16 bg-gray-200 dark:bg-slate-700 rounded-full" />
         </div>
         <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
           <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
         </div>
         <div className="flex justify-between">
           <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
         </div>
       </div>
     ))}
@@ -72,16 +47,31 @@ function BudgetsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context } = useContext_()
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [budgets, setBudgets] = useState<any[]>([])
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [showCalendar, setShowCalendar] = useState(false)
-  const [calendarTransactions, setCalendarTransactions] = useState<any[]>([])
+  const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
+    table: 'budgets',
+    filters: { context },
+    orderBy: { field: 'name', direction: 'asc' },
+    realtime: true,
+  })
 
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context },
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -98,7 +88,7 @@ function BudgetsContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadBudgets().finally(() => setRefreshing(false))
+      loadData().finally(() => setRefreshing(false))
     }
   }
 
@@ -119,278 +109,176 @@ function BudgetsContent() {
     }
   }, [loading, refreshing])
 
-  const loadBudgets = useCallback(async () => {
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  const loadData = async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
+    try {
+      await Promise.all([reloadBudgets(), reloadTransactions()])
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }
 
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+  useEffect(() => {
+    if (user?.id) loadData()
+  }, [user?.id, context])
 
-    const { data: budgetsData } = await supabase
-      .from('budgets')
-      .select('*, categories(name, icon, color)')
-      .match({ user_id: user.id, context: context })
-      .order('created_at', { ascending: false })
+  // ============================================================
+  // PROCESSAMENTO EM MEMÓRIA
+  // ============================================================
+  const monthStart = format(currentMonth, 'yyyy-MM-01')
+  const monthEnd = format(currentMonth, 'yyyy-MM-31')
 
-    const { data: transactions } = await supabase
-      .from('transactions')
-      .select('category_id, amount, type, status, date, description, categories(name, icon, color)')
-      .match({ user_id: user.id, context: context })
-      .gte('date', start)
-      .lte('date', end)
-      .order('date', { ascending: false })
+  const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
+    const spent = (localTransactions || [])
+      .filter((tx: any) => 
+        tx.category_id === budget.category_id &&
+        (tx.type === 'expense' || tx.type === 'sangria') &&
+        tx.status === 'done' &&
+        tx.date >= monthStart &&
+        tx.date <= monthEnd
+      )
+      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
 
-    const txs = Array.isArray(transactions) ? transactions : []
+    const remaining = Number(budget.amount) - spent
+    const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
 
-    const budgetsWithSpent = (budgetsData || []).map(budget => {
-      const spent = txs
-        .filter(t => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
-      const remaining = Number(budget.amount) - spent
-      const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
-      return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
-    })
+    return {
+      ...budget,
+      spent,
+      remaining,
+      percent: Math.min(percent, 100)
+    }
+  })
 
-    setBudgets(budgetsWithSpent)
+  // ============================================================
+  // HANDLERS
+  // ============================================================
+  const handleDelete = async (id: string) => {
+    if (!confirm('Excluir este orçamento?')) return
+    try {
+      const { remove } = useLocalData({ table: 'budgets' })
+      await remove(id)
+      showToast('Orçamento excluído.', 'info')
+      loadData()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
+  }
 
-    const calendarTxs = txs.filter(t => t.type === 'expense' || t.type === 'sangria')
-    setCalendarTransactions(calendarTxs)
-
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [user, context, currentDate])
-
-  useEffect(() => { loadBudgets() }, [loadBudgets])
+  const handleToggleStatus = async (budget: any) => {
+    try {
+      const { update } = useLocalData({ table: 'budgets' })
+      const newStatus = budget.status === 'active' ? 'inactive' : 'active'
+      await update(budget.id, { status: newStatus })
+      showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
+      loadData()
+    } catch (err: any) {
+      showToast(`Erro: ${err.message}`, 'error')
+    }
+  }
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const totalBudgeted = budgets.reduce((a, b) => a + (Number(b.amount) || 0), 0)
-  const totalSpent = budgets.reduce((a, b) => a + (b.spent || 0), 0)
-  const totalPercent = totalBudgeted > 0 ? (totalSpent / totalBudgeted) * 100 : 0
-  const isTotalOverBudget = totalPercent >= 100
-  const isTotalWarning = totalPercent >= 75 && totalPercent < 100
-
-  const groupedByDate: Record<string, any[]> = {}
-  calendarTransactions.forEach(tx => {
-    const key = tx.date
-    if (!groupedByDate[key]) groupedByDate[key] = []
-    groupedByDate[key].push(tx)
-  })
-
-  const dateLabel = (dateStr: string) => {
-    const d = new Date(dateStr + 'T12:00:00')
-    if (isToday(d)) return 'HOJE'
-    if (isYesterday(d)) return 'ONTEM'
-    return format(d, "dd 'de' MMM", { locale: ptBR })
-  }
-
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mb-6">
-        <ContextToggle />
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowCalendar(true)}
-            className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
-          >
-            <Calendar size={18} className="text-gray-700 dark:text-gray-300" />
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+            <ChevronLeft size={24} />
           </button>
-          <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-            <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
-            <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide">{monthLabel}</span>
-            <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
-          </div>
+          <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Orçamentos</h2>
         </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Orçamentos</h2>
-        <button
-          onClick={() => router.push('/budgets/new')}
-          className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
-        >
+        <button onClick={() => router.push('/budgets/new')} className="w-9 h-9 bg-teal-700 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform">
           <Plus size={20} className="text-white" />
         </button>
       </div>
 
+      <div className="mb-4">
+        <ContextToggle />
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">‹</button>
+        <span className="font-bold text-sm text-gray-700 dark:text-gray-300 flex-1 text-center">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">›</button>
+      </div>
+
       {loading ? (
         <BudgetsSkeleton />
-      ) : budgets.length === 0 ? (
+      ) : budgetsWithSpent.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
           <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <PieChart size={40} className="text-gray-400 dark:text-gray-500" />
+            <Tag size={40} className="text-gray-400 dark:text-gray-500" />
           </div>
           <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhum orçamento</h3>
           <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
-            Crie orçamentos para controlar seus gastos por categoria e nunca mais estourar o limite.
+            Crie orçamentos para controlar seus gastos por categoria.
           </p>
-          <button
-            onClick={() => router.push('/budgets/new')}
-            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
-          >
+          <button onClick={() => router.push('/budgets/new')} className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors">
             Criar orçamento
           </button>
         </div>
       ) : (
-        <div className="animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  isTotalOverBudget 
-                    ? 'bg-red-50 dark:bg-red-900/30' 
-                    : isTotalWarning 
-                      ? 'bg-orange-50 dark:bg-orange-900/30' 
-                      : 'bg-teal-50 dark:bg-teal-900/30'
-                }`}>
-                  {isTotalOverBudget ? (
-                    <AlertTriangle size={20} className="text-red-500" />
-                  ) : isTotalWarning ? (
-                    <AlertTriangle size={20} className="text-orange-500" />
-                  ) : (
-                    <CheckCircle size={20} className="text-teal-600 dark:text-teal-400" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase">Orçado</p>
-                  <p className="text-lg font-bold text-gray-800 dark:text-gray-100">{formatCurrency(totalBudgeted)}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase">Gasto</p>
-                <p className={`text-lg font-bold ${isTotalOverBudget ? 'text-red-500' : 'text-gray-800 dark:text-gray-100'}`}>
-                  {formatCurrency(totalSpent)}
-                </p>
-              </div>
-            </div>
-            <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                  isTotalOverBudget ? 'bg-red-500' : isTotalWarning ? 'bg-orange-500' : 'bg-teal-500'
-                }`}
-                style={{ width: `${Math.min(totalPercent, 100)}%` }}
-              />
-            </div>
-            <p className={`text-[11px] font-medium text-right ${
-              isTotalOverBudget ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
-            }`}>
-              {totalPercent.toFixed(0)}% utilizado
-              {isTotalOverBudget && ' • Estourado!'}
-            </p>
-          </div>
+        <div className="space-y-3 animate-in fade-in duration-300">
+          {budgetsWithSpent.map((budget: any) => {
+            const IconComp = getDynamicIcon(budget.icon || 'tag')
+            const isActive = budget.status !== 'inactive'
+            const isWarning = budget.percent >= 80 && budget.remaining >= 0
+            const isOver = budget.remaining < 0
+            const isSafe = !isWarning && !isOver
 
-          <div className="space-y-3">
-            {budgets.map(budget => {
-              const IconComp = getDynamicIcon(budget.categories?.icon)
-              const isOverBudget = budget.remaining < 0
-              const isWarning = budget.percent >= 75 && budget.percent < 100
-              const isSafe = !isOverBudget && !isWarning
-
-              return (
-                <div
-                  key={budget.id}
-                  onClick={() => router.push(`/budgets/${budget.id}`)}
-                  className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${budget.color}20`, color: budget.color }}>
-                        <IconComp size={18} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{budget.name}</p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{budget.categories?.name || 'Todas as categorias'}</p>
-                      </div>
+            return (
+              <div key={budget.id} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${budget.color}20`, color: budget.color }}>
+                      <IconComp size={20} />
                     </div>
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
-                      isOverBudget 
-                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' 
-                        : isWarning 
-                          ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' 
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    }`}>
-                      {isOverBudget && <AlertTriangle size={10} />}
-                      {isSafe && <CheckCircle size={10} />}
-                      {isOverBudget ? 'Estourado' : isWarning ? 'Atenção' : 'Dentro do limite'}
-                    </span>
-                  </div>
-
-                  <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-                    <div
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                        isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
-                      }`}
-                      style={{ width: `${Math.min(budget.percent, 100)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">Gasto {formatCurrency(budget.spent)}</span>
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">Orçado {formatCurrency(Number(budget.amount))}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {showCalendar && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCalendar(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Compromissos do mês</h3>
-              <button onClick={() => setShowCalendar(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
-            </div>
-            {Object.keys(groupedByDate).length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">Nenhuma despesa neste mês.</p>
-            ) : (
-              <div className="space-y-6">
-                {Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a)).map(date => (
-                  <div key={date}>
-                    <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 mb-2 px-1">{dateLabel(date)}</p>
-                    <div className="space-y-2">
-                      {groupedByDate[date].map((tx: any) => {
-                        const IconComp = getDynamicIcon(tx.categories?.icon)
-                        return (
-                          <div key={tx.id} className="bg-gray-50 dark:bg-slate-700 rounded-xl p-3 flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${tx.categories?.color || '#64748b'}20`, color: tx.categories?.color || '#64748b' }}>
-                              <IconComp size={16} />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{tx.description || tx.categories?.name || 'Despesa'}</p>
-                              <p className="text-[11px] text-gray-400 dark:text-gray-500">{tx.categories?.name || 'Geral'}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-bold text-red-500">- {formatCurrency(Number(tx.amount) || 0)}</p>
-                              <p className="text-[10px] text-gray-400 dark:text-gray-500">{tx.status === 'done' ? 'Pago' : 'Pendente'}</p>
-                            </div>
-                          </div>
-                        )
-                      })}
+                    <div>
+                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{budget.name}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{budget.categories?.name || 'Geral'}</p>
                     </div>
                   </div>
-                ))}
+                  <div className="text-right">
+                    <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{formatCurrency(budget.spent)}</p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500">de {formatCurrency(Number(budget.amount))}</p>
+                  </div>
+                </div>
+
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-1.5">
+                  <div className={`h-full rounded-full transition-all duration-700 ${isOver ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(budget.percent, 100)}%` }} />
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className={`text-[11px] font-bold ${isOver ? 'text-red-500' : isWarning ? 'text-orange-500' : 'text-teal-600'}`}>
+                    {isOver ? `Estourado ${formatCurrency(Math.abs(budget.remaining))}` : `Restam ${formatCurrency(budget.remaining)}`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleToggleStatus(budget)} className="text-xs text-gray-400 hover:text-teal-600 transition-colors">
+                      {isActive ? 'Ativo' : 'Inativo'}
+                    </button>
+                    <button onClick={() => router.push(`/budgets/${budget.id}`)} className="text-gray-400 hover:text-teal-600 transition-colors">
+                      <MoreHorizontal size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            )
+          })}
         </div>
       )}
     </div>
