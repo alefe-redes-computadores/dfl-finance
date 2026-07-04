@@ -13,13 +13,13 @@ import { format, startOfMonth, endOfMonth, addMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
-    {/* Card principal */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
@@ -37,7 +37,6 @@ const CardDetailSkeleton = () => (
       </div>
     </div>
 
-    {/* Cards de resumo */}
     <div className="grid grid-cols-2 gap-3">
       <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
         <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
@@ -49,7 +48,6 @@ const CardDetailSkeleton = () => (
       </div>
     </div>
 
-    {/* Transações */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       {[1, 2, 3].map((i) => (
@@ -84,7 +82,31 @@ export default function CardDetailPage() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [paying, setPaying] = useState(false)
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
+    table: 'credit_cards',
+    filters: { id: id as string },
+    realtime: true,
+  })
+
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { credit_card_id: id as string },
+    orderBy: { field: 'date', direction: 'desc' },
+    realtime: true,
+  })
+
+  const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
+    table: 'accounts',
+    filters: { context },
+    realtime: false,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -122,44 +144,42 @@ export default function CardDetailPage() {
     }
   }, [loading, refreshing])
 
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
-    const { data: cardData } = await supabase
-      .from('credit_cards')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .single()
+    try {
+      await Promise.all([reloadCards(), reloadTransactions(), reloadAccounts()])
 
-    if (cardData) {
-      setCard(cardData)
+      const cardData = (localCards || [])[0]
+      if (cardData) {
+        setCard(cardData)
+      }
 
       const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
+      const monthTxs = (localTransactions || [])
+        .filter((t: any) => t.date >= start && t.date <= end)
 
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('*, categories(name, icon, color)')
-        .eq('credit_card_id', id)
-        .eq('user_id', user.id)
-        .gte('date', start)
-        .lte('date', end)
-        .order('date', { ascending: false })
-
-      const txsArray = Array.isArray(txs) ? txs : []
-      setTransactions(txsArray)
-      setTotalFatura(txsArray.reduce((sum, t) => sum + (Number(t.amount) || 0), 0))
+      setTransactions(monthTxs)
+      setTotalFatura(monthTxs.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0))
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
     }
-
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [id, user, currentMonth])
+  }, [id, user, currentMonth, localCards, localTransactions, localAccounts, reloadCards, reloadTransactions, reloadAccounts])
 
   useEffect(() => { loadData() }, [loadData])
 
+  // ============================================================
+  // FUNÇÕES AUXILIARES
+  // ============================================================
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -187,34 +207,32 @@ export default function CardDetailPage() {
     return brands[brand.toLowerCase()] || brand
   }
 
+  // ============================================================
+  // 🔥 PAGAR FATURA (COM HOOK LOCAL)
+  // ============================================================
   const handlePayFatura = async () => {
     if (!user?.id || !card) return
     setPaying(true)
 
     try {
-      // Buscar ou criar conta "Fatura" para débito
-      const { data: accounts } = await supabase
-        .from('accounts')
-        .select('id, balance')
-        .eq('user_id', user.id)
-        .eq('context', card.context)
-        .order('name')
-
-      const targetAccount = accounts?.[0]
+      const accounts = localAccounts || []
+      const targetAccount = accounts[0]
       if (!targetAccount) {
         showToast('Crie uma conta primeiro.', 'warning')
         setPaying(false)
         return
       }
 
-      // Atualizar saldo da conta
-      await supabase
-        .from('accounts')
-        .update({ balance: Number(targetAccount.balance) - totalFatura })
-        .eq('id', targetAccount.id)
+      const { update: updateAccount } = useLocalData({ table: 'accounts' })
+      const { create, update } = useLocalData({ table: 'transactions' })
 
-      // Criar transação de pagamento
-      await supabase.from('transactions').insert({
+      // 1. Atualizar saldo da conta
+      await updateAccount(targetAccount.id, {
+        balance: Number(targetAccount.balance) - totalFatura
+      })
+
+      // 2. Criar transação de pagamento
+      await create({
         user_id: user.id,
         type: 'expense',
         amount: totalFatura,
@@ -224,33 +242,17 @@ export default function CardDetailPage() {
         date: format(new Date(), 'yyyy-MM-dd'),
         status: 'done',
         context: card.context,
+        affects_balance: true,
       })
 
-      // Marcar transações do cartão como afetando saldo
+      // 3. Atualizar transações do cartão (afetam saldo)
       const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
-      await supabase
-        .from('transactions')
-        .update({ affects_balance: true })
-        .eq('credit_card_id', card.id)
-        .eq('user_id', user.id)
-        .gte('date', start)
-        .lte('date', end)
+      const cardTxs = (localTransactions || [])
+        .filter((t: any) => t.date >= start && t.date <= end)
 
-      // Buscar ou criar fatura
-      const { data: existingInvoice } = await supabase
-        .from('credit_invoices')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('credit_card_id', card.id)
-        .eq('status', 'open')
-        .single()
-
-      if (existingInvoice) {
-        await supabase
-          .from('credit_invoices')
-          .update({ status: 'paid', paid_amount: totalFatura, updated_at: new Date().toISOString() })
-          .eq('id', existingInvoice.id)
+      for (const tx of cardTxs) {
+        await update(tx.id, { affects_balance: true })
       }
 
       showToast('Fatura paga com sucesso!', 'success')
@@ -263,7 +265,6 @@ export default function CardDetailPage() {
     }
   }
 
-  // Skeleton enquanto carrega
   if (loading && !card) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
@@ -288,7 +289,6 @@ export default function CardDetailPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -298,14 +298,12 @@ export default function CardDetailPage() {
         </div>
       )}
 
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Header */}
       <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
         <button onClick={() => router.push('/cards')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
           <ChevronLeft size={24} />
@@ -317,11 +315,9 @@ export default function CardDetailPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4 animate-in fade-in duration-300">
-        {/* Card principal estilo banco */}
         <div className={`relative overflow-hidden bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border ${
           isNearLimit ? 'border-red-200 dark:border-red-800' : 'border-gray-100 dark:border-slate-700'
         }`}>
-          {/* Gradiente no topo */}
           <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[24px] ${
             isNearLimit ? 'bg-red-500' : limitPercent >= 70 ? 'bg-amber-500' : 'bg-teal-500'
           }`} />
@@ -346,7 +342,6 @@ export default function CardDetailPage() {
             </div>
           </div>
 
-          {/* Barra de limite */}
           <div className="mb-3">
             <div className="flex justify-between text-[11px] mb-1.5">
               <span className="font-medium text-gray-500 dark:text-gray-400">
@@ -377,7 +372,6 @@ export default function CardDetailPage() {
             </div>
           </div>
 
-          {/* Datas */}
           <div className="flex items-center gap-4 text-[11px] text-gray-400 dark:text-gray-500 mb-4">
             <div className="flex items-center gap-1.5">
               <Calendar size={12} />
@@ -390,7 +384,6 @@ export default function CardDetailPage() {
             </div>
           </div>
 
-          {/* Botão pagar fatura */}
           {totalFatura > 0 && (
             <button
               onClick={() => setShowPayModal(true)}
@@ -402,7 +395,6 @@ export default function CardDetailPage() {
           )}
         </div>
 
-        {/* Cards de resumo */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
             <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
@@ -426,7 +418,6 @@ export default function CardDetailPage() {
           </div>
         </div>
 
-        {/* Seletor de mês */}
         <div className="flex items-center justify-center gap-3">
           <button onClick={() => setCurrentMonth(prev => addMonths(prev, -1))} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             <ChevronLeft size={18} />
@@ -437,7 +428,6 @@ export default function CardDetailPage() {
           </button>
         </div>
 
-        {/* Transações do cartão */}
         <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
           <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Transações do cartão</h3>
           {transactions.length === 0 ? (
@@ -479,7 +469,6 @@ export default function CardDetailPage() {
         </div>
       </div>
 
-      {/* Modal Pagar Fatura */}
       {showPayModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPayModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
