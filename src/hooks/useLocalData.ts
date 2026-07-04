@@ -30,7 +30,7 @@ export function useLocalData<T>({
   const [error, setError] = useState<string | null>(null)
 
   // ============================================================
-  // BUSCAR DADOS LOCALMENTE
+  // BUSCAR DADOS LOCALMENTE (COM FILTROS DINÂMICOS)
   // ============================================================
   const fetchLocal = useCallback(async () => {
     if (!user?.id) return []
@@ -38,10 +38,10 @@ export function useLocalData<T>({
     try {
       let collection = db[table as keyof typeof db] as any
 
-      // Aplica filtros
+      // 🔥 FILTRO BASE: user_id (sempre obrigatório)
       let query = collection.where('user_id').equals(user.id)
 
-      // Filtros adicionais
+      // 🔥 FILTROS ADICIONAIS (dinâmicos)
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           query = query.and((item: any) => item[key] === value)
@@ -81,27 +81,24 @@ export function useLocalData<T>({
     setSyncing(true)
 
     try {
-      // Busca dados do Supabase
       let query = supabase
         .from(table)
         .select('*')
         .eq('user_id', user.id)
 
-      // Aplica filtros
+      // 🔥 FILTROS DINÂMICOS NO SUPABASE TAMBÉM
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           query = query.eq(key, value)
         }
       })
 
-      // Ordenação
       if (orderBy) {
         query = query.order(orderBy.field, {
           ascending: orderBy.direction !== 'desc',
         })
       }
 
-      // Limite
       if (limit) {
         query = query.limit(limit)
       }
@@ -111,7 +108,6 @@ export function useLocalData<T>({
       if (supabaseError) throw supabaseError
 
       if (supabaseData && supabaseData.length > 0) {
-        // Atualiza o banco local
         const tableRef = db[table as keyof typeof db] as any
 
         for (const item of supabaseData) {
@@ -123,7 +119,6 @@ export function useLocalData<T>({
           })
         }
 
-        // Remove itens locais que não existem mais no Supabase
         const localIds = (await fetchLocal()).map((item: any) => item.id)
         const supabaseIds = supabaseData.map((item: any) => item.id)
         const toRemove = localIds.filter((id: string) => !supabaseIds.includes(id))
@@ -143,21 +138,18 @@ export function useLocalData<T>({
   }, [user?.id, isOnline, table, filters, orderBy, limit, fetchLocal])
 
   // ============================================================
-  // RECARREGAR DADOS (LOCAL + SYNC)
+  // RECARREGAR DADOS
   // ============================================================
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
 
     try {
-      // 1. Busca dados locais (instantâneo)
       const localData = await fetchLocal()
       setData(localData)
 
-      // 2. Sincroniza em background (se online)
       if (isOnline) {
         await syncWithSupabase()
-        // 3. Busca novamente após sincronização
         const updatedData = await fetchLocal()
         setData(updatedData)
       }
@@ -169,7 +161,7 @@ export function useLocalData<T>({
   }, [fetchLocal, syncWithSupabase, isOnline])
 
   // ============================================================
-  // CRIAR/ATUALIZAR/DELETAR (USANDO FILA)
+  // CRUD COM FILA
   // ============================================================
   const create = useCallback(async (item: Omit<T, 'id' | 'created_at' | 'updated_at'>) => {
     if (!user?.id) return
@@ -185,14 +177,9 @@ export function useLocalData<T>({
       sync_attempts: 0,
     }
 
-    // Salva localmente
     const tableRef = db[table as keyof typeof db] as any
     await tableRef.add(newItem)
-
-    // Adiciona à fila
     await queueOperation(table, 'create', newItem.id, newItem)
-
-    // Atualiza a lista
     await reload()
   }, [user?.id, table, queueOperation, reload])
 
@@ -233,7 +220,7 @@ export function useLocalData<T>({
   }, [reload])
 
   // ============================================================
-  // REALTIME (ESCUTAR MUDANÇAS NO SUPABASE)
+  // REALTIME
   // ============================================================
   useEffect(() => {
     if (!realtime || !user?.id) return
@@ -249,7 +236,6 @@ export function useLocalData<T>({
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          // Quando houver mudança no Supabase, recarrega os dados
           reload()
         }
       )
