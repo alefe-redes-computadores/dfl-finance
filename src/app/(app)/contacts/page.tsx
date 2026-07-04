@@ -19,7 +19,8 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { LoadingSkeleton } from "@/components/Skeleton"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/lib/hooks/useAuth"
+
 
 export default function ContactsPage() {
   const router = useRouter()
