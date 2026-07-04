@@ -15,6 +15,7 @@ import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDay
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 
 const ICON_MAP: Record<string, React.ElementType> = {
