@@ -20,7 +20,6 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
-
 const COLORS = [
   "#3B82F6", // blue
   "#10B981", // emerald
