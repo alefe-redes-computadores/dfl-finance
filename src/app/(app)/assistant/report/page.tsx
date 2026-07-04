@@ -214,7 +214,7 @@ export default function AssistantReportPage() {
       const categoryMap: Record<string, { name: string; amount: number; color: string }> = {}
       expenseTxs.forEach((t: any) => {
         const catId = t.category_id || 'uncategorized'
-        const cat = cats.find((c: any) => c.id === catId)
+        const cat = cats.find((c: any) => c.id === catId) as any
         const catName = cat?.name || 'Sem categoria'
         const catColor = cat?.color || '#64748b'
         if (!categoryMap[catId]) {
