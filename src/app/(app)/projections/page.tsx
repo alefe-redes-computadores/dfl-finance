@@ -88,10 +88,10 @@ export default function ProjectionsPage() {
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
   // ============================================================
-  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB)
+  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
     orderBy: { field: 'date', direction: 'asc' },
     realtime: true,
@@ -157,7 +157,7 @@ export default function ProjectionsPage() {
   }, [user?.id, reloadTransactions])
 
   // ============================================================
-  // EFETTO PARA PROCESSAR DADOS SEMPRE QUE LOCALTRANSACTIONS MUDAR
+  // EFEITO PARA PROCESSAR DADOS SEMPRE QUE LOCALTRANSACTIONS MUDAR
   // ============================================================
   useEffect(() => {
     if (!localTransactions || localTransactions.length === 0) {
