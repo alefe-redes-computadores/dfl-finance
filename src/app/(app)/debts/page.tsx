@@ -9,6 +9,8 @@ import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+// 🔥 NOVO: Import do hook local
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
@@ -56,13 +58,114 @@ function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context } = useContext_()
-  const [debts, setDebts] = useState<any[]>([])
+  const [filter, setFilter] = useState<'active' | 'paid'>('active')
+  const [totalToReceive, setTotalToReceive] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [filter, setFilter] = useState<'active' | 'paid'>('active')
-  const [totalToReceive, setTotalToReceive] = useState(0)
 
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localDebts, loading: debtsLoading, syncing: debtsSyncing, reload: reloadDebts } = useLocalData({
+    table: 'debts',
+    filters: { context },
+    realtime: true,
+  })
+
+  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context, type: 'income' }, // Só receitas (pagamentos)
+    realtime: true,
+  })
+
+  // ============================================================
+  // 🔥 JOIN EM MEMÓRIA (DÍVIDAS + PAGAMENTOS)
+  // ============================================================
+  const consolidateDebts = useCallback(() => {
+    if (!localDebts || !localTransactions) return []
+
+    // 🔥 1. Agrupa pagamentos por debt_id
+    const paymentsByDebt: Record<string, number> = {}
+    localTransactions.forEach((tx: any) => {
+      if (tx.debt_id) {
+        paymentsByDebt[tx.debt_id] = (paymentsByDebt[tx.debt_id] || 0) + Number(tx.amount || 0)
+      }
+    })
+
+    // 🔥 2. Filtra dívidas pelo status (ativo/pago)
+    let filteredDebts = localDebts
+    if (filter === 'active') {
+      filteredDebts = localDebts.filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+    } else {
+      filteredDebts = localDebts.filter((d: any) => d.status === 'paid')
+    }
+
+    // 🔥 3. Constrói o array com progresso
+    return filteredDebts.map((debt: any) => {
+      const paidAmount = paymentsByDebt[debt.id] || 0
+      const totalAmount = Number(debt.total_amount) || 0
+      const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
+
+      return {
+        ...debt,
+        paid_amount: paidAmount,
+        percent: Math.min(percent, 100),
+      }
+    })
+  }, [localDebts, localTransactions, filter])
+
+  // ============================================================
+  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // ============================================================
+  const loadDebts = useCallback(async () => {
+    if (!user?.id) return
+    setLoading(true)
+    setLoadingPulse(true)
+
+    try {
+      // Recarrega dados do IndexedDB (já estão em background)
+      await Promise.all([reloadDebts(), reloadTransactions()])
+
+      // Os dados já estão disponíveis via localDebts e localTransactions
+      // O consolidateDebts() será chamado no useEffect abaixo
+    } catch (err) {
+      console.error('Erro ao carregar dívidas:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }, [user?.id, reloadDebts, reloadTransactions])
+
+  // ============================================================
+  // EFETTOS
+  // ============================================================
+  useEffect(() => {
+    if (user?.id && context) {
+      loadDebts()
+    }
+  }, [user?.id, context, filter, loadDebts])
+
+  // 🔥 Atualiza a lista consolidada sempre que os dados locais mudarem
+  const [debts, setDebts] = useState<any[]>([])
+  const [totalToReceiveState, setTotalToReceiveState] = useState(0)
+
+  useEffect(() => {
+    if (localDebts && localTransactions) {
+      const consolidated = consolidateDebts()
+      setDebts(consolidated)
+
+      // Calcula total a receber (apenas ativos)
+      const total = consolidated
+        .filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+        .reduce((sum: number, d: any) => sum + (Number(d.total_amount) - (d.paid_amount || 0)), 0)
+      setTotalToReceiveState(total)
+    }
+  }, [localDebts, localTransactions, filter, consolidateDebts])
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -100,66 +203,26 @@ function DebtsContent() {
     }
   }, [loading, refreshing])
 
-  const loadDebts = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    const { data: debtsData } = await supabase
-      .from('debts')
-      .select('*')
-      .match({ user_id: user.id, context: context })
-      .in('status', filter === 'paid' ? ['paid'] : ['pending', 'partial'])
-      .order('created_at', { ascending: false })
-
-    const debtsArray = Array.isArray(debtsData) ? debtsData : []
-
-    const debtsWithProgress = await Promise.all(debtsArray.map(async (debt) => {
-      const { data: payments } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('debt_id', debt.id)
-        .eq('type', 'income')
-
-      const paidAmount = (payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-      const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
-
-      return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
-    }))
-
-    setDebts(debtsWithProgress)
-    setTotalToReceive(debtsWithProgress.reduce((a, d) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [user, context, filter])
-
-  useEffect(() => { loadDebts() }, [loadDebts])
-
+  // ============================================================
+  // FUNÇÕES AUXILIARES
+  // ============================================================
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
+      {/* 🔵 Bolinha de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
+      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       {/* ============================================================
-          HEADER CORRIGIDO COM SETA DE VOLTAR
+          HEADER
           ============================================================ */}
       <div className="flex items-center justify-between mb-4">
-        {/* Lado esquerdo: seta de voltar + título */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -172,7 +235,6 @@ function DebtsContent() {
           </h1>
         </div>
 
-        {/* Lado direito: ContextToggle + botão Novo */}
         <div className="flex items-center gap-2">
           <ContextToggle />
           <button
@@ -191,7 +253,7 @@ function DebtsContent() {
             <Wallet size={16} className="text-orange-600 dark:text-orange-400" />
           </div>
           <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">A receber</p>
-          <p className="text-[15px] font-bold text-orange-600">{formatCurrency(totalToReceive)}</p>
+          <p className="text-[15px] font-bold text-orange-600">{formatCurrency(totalToReceiveState)}</p>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
           <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
