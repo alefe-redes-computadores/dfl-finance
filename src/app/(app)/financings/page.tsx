@@ -21,7 +21,7 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
-import { LoadingSkeleton, Skeleton } from "@/components/Skeleton"
+import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
 type Installment = {
