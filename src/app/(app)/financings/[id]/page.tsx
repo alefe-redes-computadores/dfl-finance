@@ -25,6 +25,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { LoadingSkeleton } from "@/components/Skeleton"
 import { useAuth } from "@/lib/hooks/useAuth"
 
+
 type Installment = {
   id: string
   financing_id: string
