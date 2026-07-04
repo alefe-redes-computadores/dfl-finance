@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, Wallet, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+// 🔥 NOVO: Import do hook local
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
@@ -32,12 +34,23 @@ export default function AccountsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
-  const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE CONTAS (INDEXEDDB)
+  // ============================================================
+  const { data: localAccounts, loading: accLoading, syncing: accSyncing, reload: reloadAccounts } = useLocalData({
+    table: 'accounts',
+    filters: { context },
+    orderBy: { field: 'name', direction: 'asc' },
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -75,26 +88,34 @@ export default function AccountsPage() {
     }
   }, [loading, refreshing])
 
-  useEffect(() => {
-    if (!user?.id) return
-    loadAccounts()
-  }, [user?.id, context])
-
+  // ============================================================
+  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // ============================================================
   const loadAccounts = async () => {
     setLoading(true)
     setLoadingPulse(true)
-    const { data } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('name')
-
-    setAccounts(Array.isArray(data) ? data : [])
-    setLoading(false)
-    setLoadingPulse(false)
+    try {
+      await reloadAccounts()
+    } catch (err) {
+      console.error('Erro ao carregar contas:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
   }
 
+  // ============================================================
+  // EFETTO INICIAL
+  // ============================================================
+  useEffect(() => {
+    if (user?.id && context) {
+      loadAccounts()
+    }
+  }, [user?.id, context])
+
+  // ============================================================
+  // FUNÇÕES AUXILIARES
+  // ============================================================
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -110,26 +131,19 @@ export default function AccountsPage() {
     return <Minus size={14} className="text-gray-400 shrink-0" />
   }
 
+  const accounts = localAccounts || []
   const totalBalance = accounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
+      {/* 🔵 Bolinha de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull to refresh indicator */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
+      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
@@ -143,7 +157,6 @@ export default function AccountsPage() {
         </div>
         <ContextToggle />
 
-        {/* Card de saldo total */}
         {!loading && accounts.length > 0 && (
           <div className="mt-4 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950 dark:to-emerald-950 rounded-2xl p-4 border border-teal-100 dark:border-teal-900 flex items-center justify-between">
             <div>
@@ -174,7 +187,7 @@ export default function AccountsPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {accounts.map(acc => {
+            {accounts.map((acc: any) => {
               const balance = Number(acc.balance) || 0
               const isZero = balance === 0
               return (
