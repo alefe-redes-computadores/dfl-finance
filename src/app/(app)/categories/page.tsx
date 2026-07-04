@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -28,14 +29,13 @@ export default function CategoriesPage() {
   const { context, appMode } = useContext_() 
   const { showToast } = useToast()
 
-  // 🔥 TRAVA DE CONTEXTO: Se estiver em personal_only, força 'personal'.
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [categories, setCategories] = useState<any[]>([])
   const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [tab, setTab] = useState<'expense'|'income'>('expense')
-  
+
   const [showForm, setShowForm] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<any | null>(null)
@@ -45,46 +45,51 @@ export default function CategoriesPage() {
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
+    table: 'categories',
+    filters: { context: effectiveContext, type: tab },
+    realtime: true,
+  })
+
+  // ============================================================
+  // INICIALIZAÇÃO
+  // ============================================================
   useEffect(() => {
     if (user) {
-      initialize()
+      ensureDefaultCategories()
+      loadCategories()
     }
-  }, [user, tab, effectiveContext]) // Reage a mudanças do contexto efetivo
-
-  async function initialize() {
-    await ensureDefaultCategories()
-    await loadCategories()
-  }
+  }, [user, tab, effectiveContext])
 
   async function ensureDefaultCategories() {
     if (!user) return
-    const { data: existing } = await supabase
-      .from('categories')
-      .select('name,type,context')
-      .match({ user_id: user.id })
-
+    
+    const existingCats = (localCategories || []).filter(c => c.context === effectiveContext)
     const existingKeys = new Set(
-      (Array.isArray(existing) ? existing : []).map(
-        c => `${c.name}-${c.type}-${c.context}`
-      )
+      existingCats.map(c => `${c.name}-${c.type}-${c.context}`)
     )
 
     const missing = DEFAULT_CATEGORIES.filter(
       cat =>
-        cat.context === effectiveContext && // Só cria as do contexto atual
+        cat.context === effectiveContext &&
         !existingKeys.has(`${cat.name}-${cat.type}-${cat.context}`)
     )
 
     if (!missing.length) return
 
     try {
-      await supabase.from('categories').insert(
-        missing.map(cat => ({
+      const { create } = useLocalData({ table: 'categories' })
+      for (const cat of missing) {
+        await create({
           ...cat,
           user_id: user.id,
           is_default: true,
-        }))
-      )
+        })
+      }
+      await reloadCategories()
     } catch (e) {
       console.error("Erro ao criar padrões:", e)
     }
@@ -92,36 +97,26 @@ export default function CategoriesPage() {
 
   async function loadCategories() {
     if (!user) return
+    await reloadCategories()
     
-    // Busca apenas as categorias do effectiveContext! (Fim do vazamento de dados)
-    const { data: mainCats } = await supabase
-      .from('categories')
-      .select('*')
-      .match({ user_id: user.id, type: tab, context: effectiveContext })
-      .is('parent_id', null)
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true })
-
-    const { data: allSubs } = await supabase
-      .from('categories')
-      .select('*')
-      .match({ user_id: user.id, type: tab, context: effectiveContext })
-      .not('parent_id', 'is', null)
-      .order('name', { ascending: true })
+    const allCats = localCategories || []
+    const mainCats = allCats.filter(c => c.type === tab && !c.parent_id)
+    const subs = allCats.filter(c => c.type === tab && c.parent_id)
 
     const subsMap: Record<string, any[]> = {}
-    if (Array.isArray(allSubs)) {
-      allSubs.forEach(sub => {
-        const key = sub.parent_id
-        if (!subsMap[key]) subsMap[key] = []
-        subsMap[key].push(sub)
-      })
-    }
+    subs.forEach(sub => {
+      const key = sub.parent_id
+      if (!subsMap[key]) subsMap[key] = []
+      subsMap[key].push(sub)
+    })
 
-    setCategories(Array.isArray(mainCats) ? mainCats : [])
+    setCategories(mainCats.sort((a, b) => (a.sort_order || 999) - (b.sort_order || 999)))
     setSubcategories(subsMap)
   }
 
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   function toggleExpand(catId: string) {
     setExpandedId(expandedId === catId ? null : catId)
   }
@@ -132,14 +127,14 @@ export default function CategoriesPage() {
     setName(cat.name)
     setColor(cat.color)
     setParentId(cat.parent_id || null)
-    
+
     if (cat.icon) {
       const formattedIcon = cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1)
       setIcon(formattedIcon)
     } else {
       setIcon('Tag')
     }
-    
+
     setShowForm(true)
   }
 
@@ -161,7 +156,7 @@ export default function CategoriesPage() {
       icon,
       color,
       type: tab,
-      context: effectiveContext, // Força salvar no contexto correto
+      context: effectiveContext,
       parent_id: parentId,
       user_id: user!.id,
       is_default: false,
@@ -169,21 +164,23 @@ export default function CategoriesPage() {
     }
 
     try {
+      const { create, update } = useLocalData({ table: 'categories' })
+      
       if (editingCategory) {
-        const { error } = await supabase.from('categories').update(payload).eq('id', editingCategory.id)
-        if (error) throw error
+        await update(editingCategory.id, payload)
+        showToast('Categoria atualizada!', 'success')
       } else {
-        const { error } = await supabase.from('categories').insert(payload)
-        if (error) throw error
+        await create(payload)
+        showToast('Categoria criada!', 'success')
       }
 
       setName('')
       setEditingCategory(null)
       setParentId(null)
       setShowForm(false)
-      loadCategories()
+      await loadCategories()
     } catch (err: any) {
-      console.error("Erro Supabase Categories:", err)
+      console.error("Erro ao salvar:", err)
       showToast(`Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
@@ -193,8 +190,15 @@ export default function CategoriesPage() {
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria?')) return
-    await supabase.from('categories').delete().eq('id', id)
-    loadCategories()
+    
+    try {
+      const { remove } = useLocalData({ table: 'categories' })
+      await remove(id)
+      showToast('Categoria excluída!', 'info')
+      await loadCategories()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
   }
 
   const FormIconComp = (Icons as any)[icon] || Icons.Tag
@@ -319,10 +323,10 @@ export default function CategoriesPage() {
           {categories.map(cat => {
             const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
             const ListIconComp = (Icons as any)[catIconName] || Icons.Tag
-            
+
             const subCount = subcategories[cat.id]?.length || 0
             const isExpanded = expandedId === cat.id
-            
+
             return (
               <div key={cat.id}>
                 <div
@@ -373,7 +377,7 @@ export default function CategoriesPage() {
                     {subcategories[cat.id]?.map((sub: any) => {
                       const subIconName = sub.icon ? sub.icon.charAt(0).toUpperCase() + sub.icon.slice(1) : 'Tag'
                       const SubIconComp = (Icons as any)[subIconName] || Icons.Tag
-                      
+
                       return (
                         <div
                           key={sub.id}
