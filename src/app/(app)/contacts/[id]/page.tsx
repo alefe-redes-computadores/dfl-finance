@@ -13,13 +13,13 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const ContactDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
-    {/* Card principal */}
     <div className="rounded-2xl p-5 bg-gray-200 dark:bg-slate-700 shadow-lg">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 bg-white/20 rounded-xl" />
@@ -40,7 +40,6 @@ const ContactDetailSkeleton = () => (
       </div>
     </div>
 
-    {/* Cards de resumo */}
     <div className="grid grid-cols-2 gap-3">
       <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 text-center">
         <div className="w-5 h-5 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
@@ -54,7 +53,6 @@ const ContactDetailSkeleton = () => (
       </div>
     </div>
 
-    {/* Lista de transações */}
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
       <div className="flex justify-between items-center px-5 py-4 border-b border-gray-50 dark:border-slate-700">
         <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
@@ -89,7 +87,26 @@ export default function ContactDetailPage() {
   const [totalToPay, setTotalToPay] = useState(0)
   const [totalToReceive, setTotalToReceive] = useState(0)
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localContact, loading: contactLoading, reload: reloadContact } = useLocalData({
+    table: 'contacts',
+    filters: { id: params.id as string },
+    realtime: true,
+  })
+
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { contact_id: params.id as string },
+    orderBy: { field: 'date', direction: 'desc' },
+    limit: 20,
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -127,11 +144,33 @@ export default function ContactDetailPage() {
     }
   }, [loading, refreshing])
 
-  const getAttachmentIcon = (url: string | null) => {
-    if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  const loadContact = async () => {
+    setLoading(true)
+    setLoadingPulse(true)
+
+    try {
+      await Promise.all([reloadContact(), reloadTransactions()])
+
+      const contactData = (localContact || [])[0]
+      if (!contactData) {
+        router.push('/contacts')
+        return
+      }
+      setContact(contactData)
+
+      const txsArray = localTransactions || []
+      setTransactions(txsArray)
+      setTotalToPay(txsArray.filter((t: any) => t.type === 'expense' && t.status === 'pending').reduce((a: number, t: any) => a + Number(t.amount), 0))
+      setTotalToReceive(txsArray.filter((t: any) => t.type === 'income' && t.status === 'pending').reduce((a: number, t: any) => a + Number(t.amount), 0))
+    } catch (err) {
+      console.error('Erro ao carregar contato:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
   }
 
   useEffect(() => {
@@ -139,42 +178,26 @@ export default function ContactDetailPage() {
     loadContact()
   }, [user?.id, params?.id])
 
-  const loadContact = async () => {
-    setLoading(true)
-    setLoadingPulse(true)
-    const { data: contactData } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('id', params.id)
-      .single()
-
-    if (!contactData) {
-      router.push('/contacts')
-      return
-    }
-    setContact(contactData)
-
-    const { data: txs } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color)')
-      .eq('contact_id', params.id)
-      .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .limit(20)
-
-    const txsArray = Array.isArray(txs) ? txs : []
-    setTransactions(txsArray)
-    setTotalToPay(txsArray.filter(t => t.type === 'expense' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0))
-    setTotalToReceive(txsArray.filter(t => t.type === 'income' && t.status === 'pending').reduce((a, t) => a + Number(t.amount), 0))
-    setLoading(false)
-    setLoadingPulse(false)
-  }
-
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   const handleDelete = async () => {
     if (!confirm('Excluir este contato?')) return
-    await supabase.from('contacts').delete().eq('id', params.id)
-    showToast('Contato excluído.', 'info')
-    router.push('/contacts')
+    try {
+      const { remove } = useLocalData({ table: 'contacts' })
+      await remove(params.id as string)
+      showToast('Contato excluído.', 'info')
+      router.push('/contacts')
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
+  }
+
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+    return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
   const formatCurrency = (val: number) =>
@@ -230,12 +253,7 @@ export default function ContactDetailPage() {
         </div>
       )}
 
-      {/* Indicador de carregamento sutil */}
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-        </div>
-      )}
+      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
@@ -313,7 +331,7 @@ export default function ContactDetailPage() {
             </div>
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-slate-700">
-              {transactions.map(tx => {
+              {transactions.map((tx: any) => {
                 const isIncome = tx.type === 'income'
                 const isPending = tx.status === 'pending'
                 const TxIconComp = getDynamicIcon(tx.categories?.icon || 'tag')
