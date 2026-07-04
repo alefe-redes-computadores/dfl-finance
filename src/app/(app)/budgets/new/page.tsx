@@ -9,6 +9,8 @@ import { ChevronLeft, Check, Loader2, X, Tag } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
+import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -17,6 +19,7 @@ function NewBudgetContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { context } = useContext_()
+  const { showToast } = useToast()
   const editId = searchParams.get('edit')
 
   const [loading, setLoading] = useState(false)
@@ -35,22 +38,33 @@ function NewBudgetContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  const loadCategories = async () => {
-    if (!user?.id) return
-    const { data } = await supabase
-      .from('categories')
-      .select('id, name, color, icon')
-      .match({ user_id: user.id, context: context })
-      .eq('type', 'expense')
-      .is('parent_id', null)
-    setCategories(Array.isArray(data) ? data : [])
-  }
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCategories, reload: reloadCategories } = useLocalData({
+    table: 'categories',
+    filters: { context, type: 'expense', parent_id: null },
+    realtime: false,
+  })
 
-  const loadBudget = async () => {
-    if (!editId || !user?.id) return
-    setLoading(true)
-    const { data } = await supabase.from('budgets').select('*').match({ id: editId, user_id: user.id }).single()
-    if (data) {
+  const { data: localBudget, loading: budgetLoading, reload: reloadBudget } = useLocalData({
+    table: 'budgets',
+    filters: { id: editId || '' },
+    realtime: false,
+  })
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  useEffect(() => {
+    if (localCategories) {
+      setCategories(localCategories)
+    }
+  }, [localCategories])
+
+  useEffect(() => {
+    if (editId && localBudget && localBudget.length > 0) {
+      const data = localBudget[0]
       setName(data.name)
       const numValue = Number(data.amount) || 0
       setAmountNum(numValue)
@@ -59,23 +73,30 @@ function NewBudgetContent() {
       setColor(data.color)
       setPeriod(data.period)
       setAccumulate(data.accumulate)
-      
+
       if (data.icon) {
         const iconName = data.icon.charAt(0).toUpperCase() + data.icon.slice(1)
         setIcon(iconName)
       }
+      setLoading(false)
+    } else if (!editId) {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [editId, localBudget])
 
   useEffect(() => {
-    loadCategories()
-    if (editId) loadBudget()
-  }, [user, context, editId])
+    if (user?.id) {
+      reloadCategories()
+      if (editId) reloadBudget()
+    }
+  }, [user?.id, editId])
 
+  // ============================================================
+  // HANDLE SAVE
+  // ============================================================
   const handleSave = async () => {
     if (!user?.id || !name.trim() || amountNum <= 0) {
-      alert('Preencha todos os campos obrigatórios.')
+      showToast('Preencha todos os campos obrigatórios.', 'warning')
       return
     }
     setSaving(true)
@@ -87,20 +108,24 @@ function NewBudgetContent() {
       amount: amountNum,
       category_id: categoryId || null,
       color,
-      icon,
+      icon: icon.toLowerCase(),
       period,
       accumulate
     }
 
     try {
+      const { create, update } = useLocalData({ table: 'budgets' })
+      
       if (editId) {
-        await supabase.from('budgets').update(payload).eq('id', editId)
+        await update(editId, payload)
+        showToast('Orçamento atualizado!', 'success')
       } else {
-        await supabase.from('budgets').insert(payload)
+        await create(payload)
+        showToast('Orçamento criado!', 'success')
       }
       router.push('/budgets')
     } catch (err: any) {
-      alert('Erro ao salvar: ' + err.message)
+      showToast(`Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -117,7 +142,7 @@ function NewBudgetContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
+
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -129,7 +154,6 @@ function NewBudgetContent() {
       </div>
 
       <div className="space-y-5">
-        {/* Valor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor do orçamento</label>
           <div className="flex items-center gap-2">
@@ -145,7 +169,6 @@ function NewBudgetContent() {
           </div>
         </div>
 
-        {/* Nome */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome</label>
           <input
@@ -157,7 +180,6 @@ function NewBudgetContent() {
           />
         </div>
 
-        {/* Categoria */}
         <button
           onClick={() => setShowCatModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -172,7 +194,6 @@ function NewBudgetContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
-        {/* Cor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
@@ -187,7 +208,6 @@ function NewBudgetContent() {
           </div>
         </div>
 
-        {/* Ícone */}
         <button
           onClick={() => setShowIconModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -204,7 +224,6 @@ function NewBudgetContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
-        {/* Período */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Período</label>
           <div className="flex gap-2">
@@ -228,7 +247,6 @@ function NewBudgetContent() {
           </div>
         </div>
 
-        {/* Acumular saldo */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
           <div>
             <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Acumular saldo</p>
@@ -243,7 +261,6 @@ function NewBudgetContent() {
         </div>
       </div>
 
-      {/* Modal Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -262,11 +279,11 @@ function NewBudgetContent() {
                 <span className={`flex-1 text-left font-medium ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Todas as categorias</span>
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
-              {categories.map(cat => {
+              {categories.map((cat: any) => {
                 const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
                 const CatIconComp = (Icons as any)[catIconName] || Icons.Tag
                 const isActive = cat.id === categoryId
-                
+
                 return (
                   <button
                     key={cat.id}
