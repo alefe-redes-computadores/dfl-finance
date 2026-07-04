@@ -68,9 +68,6 @@ async function processOCR(file: File): Promise<{
   }
 }
 
-// ============================================================
-// SKELETON LOADER PARA SALVAMENTO
-// ============================================================
 const SavingSkeleton = () => (
   <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-300">
     <div className="relative w-20 h-20 mb-6">
@@ -107,10 +104,7 @@ function ImportContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 HOOK LOCAL PARA CRIAÇÃO DE TRANSAÇÃO
-  // ============================================================
-  const { create: createTransaction } = useLocalData({ table: 'transactions' })
+  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   const handleFileSelect = async (selectedFile: File | null) => {
     if (!selectedFile) return
@@ -160,7 +154,6 @@ function ImportContent() {
     setStep('saving')
 
     try {
-      // 🔥 Usa create() do hook local
       await createTransaction({
         user_id: user.id,
         amount: amountNum,
