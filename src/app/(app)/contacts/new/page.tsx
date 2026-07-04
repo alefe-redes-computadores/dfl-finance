@@ -1,230 +1,413 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
-import { getDynamicIcon } from '@/lib/iconUtils'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
-  ChevronLeft, User, Phone, Mail, Building, Loader2, Check, X
-} from 'lucide-react'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import { useToast } from '@/contexts/ToastContext'
-import { useLocalData } from '@/hooks/useLocalData'
+  ArrowLeft,
+  Save,
+  Trash2,
+  RefreshCw,
+  User,
+  Building2,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useAuth } from "@/contexts/AuthContext"
 
-const CONTACT_COLORS = ['#14b8a6', '#8b5cf6', '#f97316', '#ef4444', '#22c55e', '#eab308', '#3b82f6', '#ec4899']
-
-export default function ContactFormPage() {
+export default function NewContactPage() {
   const router = useRouter()
-  const params = useParams()
-  const isEditing = !!params?.id
-  const { user } = useAuth()
-  const { context } = useContext_()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get("edit")
   const { showToast } = useToast()
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { context } = useAuth()
 
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const touchStartY = useRef(0)
 
-  const [name, setName] = useState('')
-  const [type, setType] = useState<'supplier' | 'customer' | 'both'>('supplier')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [notes, setNotes] = useState('')
-  const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('user')
+  const [name, setName] = useState("")
+  const [type, setType] = useState("individual")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [document, setDocument] = useState("")
+  const [company, setCompany] = useState("")
+  const [position, setPosition] = useState("")
+  const [address, setAddress] = useState("")
+  const [city, setCity] = useState("")
+  const [state, setState] = useState("")
+  const [zipCode, setZipCode] = useState("")
+  const [notes, setNotes] = useState("")
 
-  // ============================================================
-  // 🔥 BUSCA LOCAL PARA EDIÇÃO
-  // ============================================================
-  const { data: localContact, loading: contactLoading, reload: reloadContact } = useLocalData({
-    table: 'contacts',
-    filters: { id: isEditing ? params.id as string : undefined },
-    realtime: false,
+  // Busca dados locais para edição
+  const { data: localContacts } = useLocalData({
+    table: 'contacts' as any,
+    filters: { context },
   })
 
+  const contactData = localContacts?.find((c: any) => c.id === editId) as any
+
+  const { create, update } = useLocalData({
+    table: 'contacts' as any,
+  })
+
+  // Preenche formulário para edição
   useEffect(() => {
-    if (!user?.id) return
-    if (isEditing && localContact && localContact.length > 0) {
-      const contact = localContact[0]
-      setName(contact.name)
-      setType(contact.type)
-      setEmail(contact.email || '')
-      setPhone(contact.phone || '')
-      setNotes(contact.notes || '')
-      setColor(contact.color)
-      setIcon(contact.icon)
-      setLoading(false)
+    if (contactData) {
+      setName(contactData.name || "")
+      setType(contactData.type || "individual")
+      setEmail(contactData.email || "")
+      setPhone(contactData.phone || "")
+      setDocument(contactData.document || "")
+      setCompany(contactData.company || "")
+      setPosition(contactData.position || "")
+      setAddress(contactData.address || "")
+      setCity(contactData.city || "")
+      setState(contactData.state || "")
+      setZipCode(contactData.zip_code || "")
+      setNotes(contactData.notes || "")
     }
-  }, [isEditing, localContact])
+  }, [contactData])
 
-  // ============================================================
-  // HANDLE SAVE (COM HOOK LOCAL)
-  // ============================================================
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (window.scrollY <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        setTimeout(() => setRefreshing(false), 600)
+      }
+    }
+  }, [refreshing])
+
   const handleSave = async () => {
-    if (!user?.id || !name.trim()) return
-    setSaving(true)
-
-    const payload = {
-      user_id: user.id,
-      name: name.trim(),
-      type,
-      email: email || null,
-      phone: phone || null,
-      notes: notes || null,
-      color,
-      icon,
-      context,
+    if (!name.trim()) {
+      showToast("Preencha o nome do contato", "warning")
+      errorHaptic()
+      return
     }
 
+    setSaving(true)
     try {
-      const { create, update } = useLocalData({ table: 'contacts' })
-      
-      if (isEditing) {
-        await update(params.id as string, payload)
-        showToast('Contato atualizado!', 'success')
+      const payload = {
+        name: name.trim(),
+        type,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        document: document.trim() || null,
+        company: company.trim() || null,
+        position: position.trim() || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: state.trim() || null,
+        zip_code: zipCode.trim() || null,
+        notes: notes.trim() || null,
+        context,
+      }
+
+      if (editId) {
+        await update(editId, payload)
+        showToast("Contato atualizado com sucesso!", "success")
       } else {
         await create(payload)
-        showToast('Contato criado!', 'success')
+        showToast("Contato criado com sucesso!", "success")
       }
+
+      success()
       router.back()
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      showToast(err?.message || "Erro ao salvar contato", "error")
+      errorHaptic()
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
-      </div>
-    )
+  const handleDelete = async () => {
+    if (!editId) return
+    if (!confirm("Tem certeza que deseja excluir este contato?")) return
+    try {
+      const { remove } = useLocalData({ table: 'contacts' as any })
+      await remove(editId)
+      showToast("Contato excluído com sucesso!", "success")
+      success()
+      router.back()
+    } catch {
+      showToast("Erro ao excluir contato", "error")
+      errorHaptic()
+    }
   }
 
+  const contextTitle = context === "pj" ? "da Empresa" : "Pessoal"
+
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            {isEditing ? 'Editar Contato' : 'Novo Contato'}
-          </h1>
-          <div className="w-10" />
+    <div
+      className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
+      {/* Pull-to-refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
         </div>
-        <ContextToggle />
+      )}
+
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            aria-label="Voltar"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="text-center">
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">
+              {editId ? "Editar" : "Novo"} Contato
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {contextTitle}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {editId && (
+              <button
+                onClick={handleDelete}
+                className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                aria-label="Excluir"
+              >
+                <Trash2 size={20} />
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95 disabled:opacity-50"
+              aria-label="Salvar"
+            >
+              {saving ? (
+                <RefreshCw size={20} className="animate-spin" />
+              ) : (
+                <Save size={20} />
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-4">
+      {/* Formulário */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
+        {/* Tipo */}
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Tipo
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setType("individual")}
+              className={`flex-1 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
+                type === "individual"
+                  ? "bg-teal-500 text-white shadow-md shadow-teal-500/20"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+              }`}
+            >
+              <User size={16} />
+              Pessoa Física
+            </button>
+            <button
+              onClick={() => setType("company")}
+              className={`flex-1 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
+                type === "company"
+                  ? "bg-blue-500 text-white shadow-md shadow-blue-500/20"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+              }`}
+            >
+              <Building2 size={16} />
+              Pessoa Jurídica
+            </button>
+          </div>
+        </div>
+
         {/* Nome */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Nome</label>
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            {type === "company" ? "Razão Social" : "Nome Completo"}
+          </label>
           <input
             type="text"
+            placeholder={type === "company" ? "Nome da empresa" : "Nome da pessoa"}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Nome do fornecedor ou cliente"
-            className="w-full bg-transparent outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
+            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
           />
         </div>
 
-        {/* Tipo */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Tipo</label>
-          <div className="flex gap-2">
-            {[
-              { key: 'supplier', label: 'Fornecedor', icon: 'Building' },
-              { key: 'customer', label: 'Cliente', icon: 'User' },
-              { key: 'both', label: 'Ambos', icon: 'Users' },
-            ].map(opt => {
-              const IconComp = getDynamicIcon(opt.icon)
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => setType(opt.key as any)}
-                  className={`flex-1 py-3 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-colors ${
-                    type === opt.key
-                      ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
-                      : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  <IconComp size={16} />
-                  {opt.label}
-                </button>
-              )
-            })}
-          </div>
+        {/* Documento */}
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            {type === "company" ? "CNPJ" : "CPF"} (opcional)
+          </label>
+          <input
+            type="text"
+            placeholder={type === "company" ? "00.000.000/0000-00" : "000.000.000-00"}
+            value={document}
+            onChange={(e) => setDocument(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+          />
         </div>
 
         {/* Email */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Email (opcional)</label>
-          <div className="flex items-center gap-2">
-            <Mail size={16} className="text-gray-400" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@exemplo.com"
-              className="flex-1 bg-transparent outline-none text-sm text-gray-800 dark:text-gray-200"
-            />
-          </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Email (opcional)
+          </label>
+          <input
+            type="email"
+            placeholder="email@exemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+          />
         </div>
 
         {/* Telefone */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Telefone (opcional)</label>
-          <div className="flex items-center gap-2">
-            <Phone size={16} className="text-gray-400" />
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="(11) 99999-9999"
-              className="flex-1 bg-transparent outline-none text-sm text-gray-800 dark:text-gray-200"
-            />
-          </div>
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Telefone (opcional)
+          </label>
+          <input
+            type="tel"
+            placeholder="(00) 00000-0000"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+          />
         </div>
 
-        {/* Cor */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Cor</label>
-          <div className="flex flex-wrap gap-3">
-            {CONTACT_COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'scale-125 border-2 border-white shadow-md' : 'hover:scale-110'}`}
-                style={{ backgroundColor: c }}
+        {/* Campos adicionais para PF */}
+        {type === "individual" && (
+          <>
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+                Empresa (opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="Onde trabalha"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
               />
-            ))}
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+                Cargo (opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="Cargo na empresa"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Endereço */}
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Endereço (opcional)
+          </label>
+          <input
+            type="text"
+            placeholder="Rua, número, bairro"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+          />
+        </div>
+
+        {/* Cidade, Estado, CEP */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+              Cidade
+            </label>
+            <input
+              type="text"
+              placeholder="Cidade"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="w-full px-3 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+              UF
+            </label>
+            <input
+              type="text"
+              placeholder="SP"
+              maxLength={2}
+              value={state}
+              onChange={(e) => setState(e.target.value.toUpperCase())}
+              className="w-full px-3 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+              CEP
+            </label>
+            <input
+              type="text"
+              placeholder="00000-000"
+              value={zipCode}
+              onChange={(e) => setZipCode(e.target.value)}
+              className="w-full px-3 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
           </div>
         </div>
 
         {/* Observações */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Observações (opcional)</label>
-          <input
-            type="text"
+        <div>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Observações (opcional)
+          </label>
+          <textarea
+            placeholder="Detalhes adicionais..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Detalhes sobre o contato..."
-            className="w-full bg-transparent outline-none text-sm text-gray-700 dark:text-gray-300"
+            rows={3}
+            className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400 resize-none"
           />
         </div>
 
-        {/* Botão salvar */}
-        <button
-          onClick={handleSave}
-          disabled={saving || !name.trim()}
-          className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-          {saving ? 'Salvando...' : isEditing ? 'Atualizar contato' : 'Criar contato'}
-        </button>
+        {/* Botão Salvar fixo no mobile */}
+        <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-4 rounded-2xl bg-teal-500 hover:bg-teal-600 text-white font-black text-base shadow-xl shadow-teal-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <RefreshCw size={20} className="animate-spin" />
+            ) : (
+              <Save size={20} />
+            )}
+            {editId ? "Atualizar Contato" : "Criar Contato"}
+          </button>
+        </div>
       </div>
     </div>
   )
