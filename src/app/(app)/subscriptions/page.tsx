@@ -13,13 +13,14 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
 // ============================================================
 const SubscriptionsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
-    {/* Card Total Mensal */}
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -36,7 +37,6 @@ const SubscriptionsSkeleton = () => (
       </div>
     </div>
 
-    {/* Cards de Assinatura */}
     {[1, 2, 3].map((i) => (
       <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-3">
@@ -66,13 +66,25 @@ function SubscriptionsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context } = useContext_()
-  const [subscriptions, setSubscriptions] = useState<any[]>([])
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [currentDate, setCurrentDate] = useState(new Date())
   const [totalMonthly, setTotalMonthly] = useState(0)
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localSubscriptions, loading: subsLoading, reload: reloadSubscriptions } = useLocalData({
+    table: 'subscriptions',
+    filters: { context },
+    orderBy: { field: 'due_day', direction: 'asc' },
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -110,41 +122,57 @@ function SubscriptionsContent() {
     }
   }, [loading, refreshing])
 
-  const loadSubscriptions = useCallback(async () => {
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  const loadSubscriptions = async () => {
     if (!user?.id) return
     setLoading(true)
+    setLoadingPulse(true)
 
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('*, categories(name, icon, color), accounts(name)')
-      .match({ user_id: user.id, context: context })
-      .order('due_day', { ascending: true })
+    try {
+      await reloadSubscriptions()
 
-    const subs = Array.isArray(data) ? data : []
-    setSubscriptions(subs)
+      const subs = localSubscriptions || []
+      const total = subs
+        .filter((s: any) => s.status === 'active')
+        .reduce((a: number, s: any) => a + (Number(s.amount) || 0), 0)
+      setTotalMonthly(total)
+    } catch (err) {
+      console.error('Erro ao carregar assinaturas:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }
 
-    const total = subs
-      .filter(s => s.status === 'active')
-      .reduce((a, s) => a + (Number(s.amount) || 0), 0)
-    setTotalMonthly(total)
+  useEffect(() => { loadSubscriptions() }, [user?.id, context])
 
-    setLoading(false)
-  }, [user, context])
-
-  useEffect(() => { loadSubscriptions() }, [loadSubscriptions])
-
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
+  // ============================================================
+  // HANDLERS (COM HOOK LOCAL)
+  // ============================================================
   const handleToggleStatus = async (sub: any) => {
-    const newStatus = sub.status === 'active' ? 'paused' : 'active'
-    await supabase.from('subscriptions').update({ status: newStatus }).eq('id', sub.id)
-    loadSubscriptions()
+    try {
+      const { update } = useLocalData({ table: 'subscriptions' })
+      const newStatus = sub.status === 'active' ? 'paused' : 'active'
+      await update(sub.id, { status: newStatus })
+      showToast(`Assinatura ${newStatus === 'active' ? 'reativada' : 'pausada'}!`, 'success')
+      loadSubscriptions()
+    } catch (err: any) {
+      showToast(`Erro: ${err.message}`, 'error')
+    }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir esta assinatura?')) return
-    await supabase.from('subscriptions').update({ status: 'cancelled' }).eq('id', id)
-    loadSubscriptions()
+    if (!confirm('Cancelar esta assinatura?')) return
+    try {
+      const { update } = useLocalData({ table: 'subscriptions' })
+      await update(id, { status: 'cancelled' })
+      showToast('Assinatura cancelada.', 'info')
+      loadSubscriptions()
+    } catch (err: any) {
+      showToast(`Erro: ${err.message}`, 'error')
+    }
   }
 
   const handleGenerate = async (sub: any) => {
@@ -152,33 +180,41 @@ function SubscriptionsContent() {
 
     const today = new Date()
     const dueDate = new Date(today.getFullYear(), today.getMonth(), sub.due_day)
-    
+
     if (sub.last_generated) {
       const lastGen = new Date(sub.last_generated + 'T12:00:00')
       if (lastGen.getMonth() === today.getMonth() && lastGen.getFullYear() === today.getFullYear()) {
-        alert('Esta assinatura já foi gerada este mês.')
+        showToast('Esta assinatura já foi gerada este mês.', 'warning')
         return
       }
     }
 
-    const dateStr = format(dueDate, 'yyyy-MM-dd')
-    await supabase.from('transactions').insert({
-      user_id: user.id,
-      type: 'expense',
-      amount: sub.amount,
-      description: `${sub.name} (Assinatura)`,
-      category_id: sub.category_id,
-      account_id: sub.account_id,
-      date: dateStr,
-      status: 'pending',
-      context: sub.context
-    })
+    try {
+      const { create } = useLocalData({ table: 'transactions' })
+      await create({
+        user_id: user.id,
+        type: 'expense',
+        amount: sub.amount,
+        description: `${sub.name} (Assinatura)`,
+        category_id: sub.category_id,
+        account_id: sub.account_id,
+        date: format(dueDate, 'yyyy-MM-dd'),
+        status: 'pending',
+        context: sub.context,
+        affects_balance: true,
+      })
 
-    await supabase.from('subscriptions').update({ last_generated: format(today, 'yyyy-MM-dd') }).eq('id', sub.id)
+      const { update } = useLocalData({ table: 'subscriptions' })
+      await update(sub.id, { last_generated: format(today, 'yyyy-MM-dd') })
 
-    loadSubscriptions()
-    alert(`Transação gerada para "${sub.name}"!`)
+      showToast(`Transação gerada para "${sub.name}"!`, 'success')
+      loadSubscriptions()
+    } catch (err: any) {
+      showToast(`Erro: ${err.message}`, 'error')
+    }
   }
+
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const daysUntil = (dueDay: number) => {
     const today = new Date()
@@ -195,16 +231,14 @@ function SubscriptionsContent() {
     return { color: 'text-gray-400 dark:text-gray-500', bg: 'bg-transparent', icon: <Calendar size={10} />, label: `em ${days} dia(s)` }
   }
 
+  const subscriptions = localSubscriptions || []
+
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
-      {/* Pull to refresh */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
+
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
@@ -240,7 +274,6 @@ function SubscriptionsContent() {
         </div>
       ) : (
         <div className="animate-in fade-in duration-300">
-          {/* Card Total Mensal */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -255,15 +288,14 @@ function SubscriptionsContent() {
               <div className="text-right">
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase">Ativas</p>
                 <p className="text-xl font-bold text-teal-700 dark:text-teal-400">
-                  {subscriptions.filter(s => s.status === 'active').length}
+                  {subscriptions.filter((s: any) => s.status === 'active').length}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Lista de Assinaturas */}
           <div className="space-y-3">
-            {subscriptions.map(sub => {
+            {subscriptions.map((sub: any) => {
               const IconComp = getDynamicIcon(sub.icon || 'repeat')
               const isPaused = sub.status === 'paused'
               const isCancelled = sub.status === 'cancelled'
