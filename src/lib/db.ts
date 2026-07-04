@@ -21,7 +21,6 @@ export interface LocalTransaction {
   receipt_url?: string | null
   created_at: string
   updated_at: string
-  // Campos de sincronização
   sync_status: 'synced' | 'pending' | 'failed'
   sync_attempts: number
   last_sync_error?: string | null
@@ -77,7 +76,7 @@ export interface LocalSyncQueue {
   table: 'transactions' | 'accounts' | 'categories' | 'debts'
   operation: 'create' | 'update' | 'delete'
   record_id: string
-  data: any // Dados completos da operação
+  data: any
   created_at: string
   attempts: number
   last_error?: string | null
@@ -112,9 +111,6 @@ export const db = new DFLDatabase()
 // FUNÇÕES AUXILIARES
 // ============================================================
 
-/**
- * Limpa todos os dados do banco local (logout)
- */
 export async function clearAllLocalData() {
   await db.transactions.clear()
   await db.accounts.clear()
@@ -123,9 +119,6 @@ export async function clearAllLocalData() {
   await db.syncQueue.clear()
 }
 
-/**
- * Obtém itens pendentes da fila de sincronização
- */
 export async function getPendingSyncItems(userId: string) {
   return db.syncQueue
     .where('user_id')
@@ -133,9 +126,6 @@ export async function getPendingSyncItems(userId: string) {
     .sortBy('created_at')
 }
 
-/**
- * Adiciona um item à fila de sincronização
- */
 export async function addToSyncQueue(
   userId: string,
   table: LocalSyncQueue['table'],
@@ -155,16 +145,10 @@ export async function addToSyncQueue(
   })
 }
 
-/**
- * Remove um item da fila após sincronização bem-sucedida
- */
 export async function removeFromSyncQueue(id: string) {
   return db.syncQueue.delete(id)
 }
 
-/**
- * Marca um item como 'failed' com erro
- */
 export async function markSyncFailed(id: string, error: string) {
   const item = await db.syncQueue.get(id)
   if (item) {
