@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, Wallet, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-// 🔥 NOVO: Import do hook local
 import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
@@ -132,7 +131,9 @@ export default function AccountsPage() {
   }
 
   const accounts = localAccounts || []
-  const totalBalance = accounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
+  
+  // 🔥 CORREÇÃO: Tipagem explícita para o reduce
+  const totalBalance = accounts.reduce((sum: number, acc: any) => sum + (Number(acc.balance) || 0), 0)
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
@@ -142,8 +143,6 @@ export default function AccountsPage() {
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
-
-      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
