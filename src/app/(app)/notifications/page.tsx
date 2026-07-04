@@ -45,17 +45,17 @@ export default function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localNotifications, loading: notifLoading, reload: reloadNotifications } = useLocalData({
-    table: 'notifications',
+    table: 'notifications' as any,
     filters: { user_id: user?.id },
     orderBy: { field: 'created_at', direction: 'desc' },
     realtime: true,
   })
 
-  const { create: createNotification, update: updateNotification } = useLocalData({
-    table: 'notifications'
+  const { create: createNotification, update: updateNotification, remove: removeNotification } = useLocalData({
+    table: 'notifications' as any,
   })
 
   // ============================================================
@@ -163,8 +163,7 @@ export default function NotificationsPage() {
 
   const deleteNotification = async (id: string) => {
     try {
-      const { remove } = useLocalData({ table: 'notifications' })
-      await remove(id)
+      await removeNotification(id)
       showToast('Notificação removida.', 'info')
       loadNotifications()
     } catch (err: any) {
