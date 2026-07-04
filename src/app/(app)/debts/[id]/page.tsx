@@ -13,6 +13,8 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
+// 🔥 NOVO: Import do hook local
+import { useLocalData } from '@/hooks/useLocalData'
 
 export default function DebtDetailPage() {
   const { id } = useParams()
@@ -21,14 +23,58 @@ export default function DebtDetailPage() {
   const { showToast } = useToast()
   const { success, error } = useHapticFeedback()
 
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { 
+    data: localDebt, 
+    loading: debtLoading, 
+    syncing: debtSyncing, 
+    reload: reloadDebt,
+    update: updateDebt,
+    remove: removeDebt,
+  } = useLocalData({
+    table: 'debts',
+    filters: { id: id as string },
+    realtime: true,
+  })
+
+  const { 
+    data: localTransactions, 
+    loading: txLoading, 
+    syncing: txSyncing, 
+    reload: reloadTransactions,
+    create: createTransaction,
+    update: updateTransaction,
+    remove: removeTransaction,
+  } = useLocalData({
+    table: 'transactions',
+    filters: { debt_id: id as string },
+    orderBy: { field: 'date', direction: 'desc' },
+    realtime: true,
+  })
+
+  const { 
+    data: localAccounts, 
+    loading: accLoading, 
+    reload: reloadAccounts,
+  } = useLocalData({
+    table: 'accounts',
+    filters: { context: localDebt?.[0]?.context || 'dfl' },
+    realtime: false,
+  })
+
+  // ============================================================
+  // ESTADOS LOCAIS
+  // ============================================================
   const [debt, setDebt] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
-  const [accounts, setAccounts] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -86,81 +132,94 @@ export default function DebtDetailPage() {
   }, [loading, refreshing])
 
   // ============================================================
-  // LOAD DATA
+  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
   // ============================================================
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
-    const { data: debtData } = await supabase
-      .from('debts')
-      .select('*')
-      .match({ id: id, user_id: user.id })
-      .single()
+    try {
+      // Recarrega dados do IndexedDB
+      await Promise.all([reloadDebt(), reloadTransactions(), reloadAccounts()])
 
-    if (debtData) {
+      // Os dados já estão disponíveis via localDebt, localTransactions e localAccounts
+      // O useEffect abaixo vai atualizar os estados
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }, [id, user, reloadDebt, reloadTransactions, reloadAccounts])
+
+  // ============================================================
+  // EFETTOS PARA ATUALIZAR ESTADOS A PARTIR DOS DADOS LOCAIS
+  // ============================================================
+  useEffect(() => {
+    if (localDebt && localDebt.length > 0) {
+      const debtData = localDebt[0]
       setDebt(debtData)
       setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
     }
+  }, [localDebt])
 
-    const { data: payData } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('debt_id', id)
-      .order('date', { ascending: false })
+  useEffect(() => {
+    if (localTransactions) {
+      setPayments(localTransactions)
+    }
+  }, [localTransactions])
 
-    setPayments(Array.isArray(payData) ? payData : [])
-
-    const { data: accData } = await supabase
-      .from('accounts')
-      .select('id, name, color, balance')
-      .match({ user_id: user.id, context: debtData?.context || 'dfl' })
-
-    setAccounts(Array.isArray(accData) ? accData : [])
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [id, user])
-
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    if (localAccounts) {
+      setAccounts(localAccounts)
+    }
+  }, [localAccounts])
 
   // ============================================================
-  // HANDLERS
+  // HANDLERS REFATORADOS PARA USAR FUNÇÕES DO HOOK LOCAL
   // ============================================================
   const handleDeleteDebt = async () => {
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
-    await supabase.from('debts').delete().eq('id', id)
-    showToast('Dívida excluída.', 'info')
-    router.back() // 🔥 CORRIGIDO: volta para a página anterior
+    try {
+      // 🔥 Usa remove() do useLocalData
+      await removeDebt(id as string)
+      showToast('Dívida excluída.', 'info')
+      router.back()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
   }
 
   const handleDeletePayment = async (paymentId: string, amount: number) => {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
     try {
-      await supabase.from('transactions').delete().eq('id', paymentId)
+      // 🔥 Usa remove() do useLocalData para a transação
+      await removeTransaction(paymentId)
 
+      // 🔥 Recalcular total pago (em memória)
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-      
+
       const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
       const totalPaidCents = Math.round(totalPaid * 100)
       const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
-      
-      await supabase.from('debts').update({ status: newStatus }).eq('id', id)
 
+      // 🔥 Usa update() do useLocalData para atualizar a dívida
+      await updateDebt(id as string, { status: newStatus })
+
+      // Se havia conta vinculada, reverter saldo (subtrair o valor)
       const deletedPayment = payments.find(p => p.id === paymentId)
       if (deletedPayment?.account_id) {
-        const { data: acc } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', deletedPayment.account_id)
-          .single()
-        if (acc) {
-          await supabase
-            .from('accounts')
-            .update({ balance: Number(acc.balance) - amount })
-            .eq('id', deletedPayment.account_id)
+        // 🔥 Busca a conta local
+        const account = accounts.find(a => a.id === deletedPayment.account_id)
+        if (account) {
+          // 🔥 Atualiza o saldo da conta (usando updateAccount, mas não temos hook específico, então vamos usar update do useLocalData)
+          const { update: updateAccount } = useLocalData({ table: 'accounts' })
+          await updateAccount(deletedPayment.account_id, {
+            balance: Number(account.balance) - amount
+          })
         }
       }
 
@@ -184,11 +243,11 @@ export default function DebtDetailPage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE PAYMENT (GEMINI + FEEDBACKS)
+  // 🔥 HANDLE PAYMENT (REFATORADO PARA USAR HOOK LOCAL)
   // ============================================================
   const handlePayment = async () => {
     if (isSubmitting) return
-    
+
     if (!user?.id || payAmountNum <= 0) {
       showToast('Digite um valor válido.', 'warning')
       error()
@@ -199,7 +258,7 @@ export default function DebtDetailPage() {
     const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
     const totalPaidCents = Math.round(totalPaid * 100)
     const payAmountCents = Math.round(payAmountNum * 100)
-    
+
     const remainingCents = totalAmountCents - totalPaidCents
     const remaining = remainingCents / 100
 
@@ -213,42 +272,42 @@ export default function DebtDetailPage() {
     setSaving(true)
 
     try {
-      const idempotencyKey = crypto.randomUUID()
+      const targetAccountId = payAccountId || debt.account_id || null
 
-      const { error: txError } = await supabase.from('transactions').insert({
+      // 🔥 1. Criar transação localmente (via create do useLocalData)
+      const newTransaction = await createTransaction({
         user_id: user.id,
         type: 'income',
         amount: payAmountNum,
         description: payNote || `Pagamento de ${debt.person_name}`,
-        account_id: payAccountId || debt.account_id,
+        account_id: targetAccountId,
         debt_id: id,
         date: payDate,
         status: 'done',
+        affects_balance: true,
         context: debt.context,
-        idempotency_key: idempotencyKey,
       })
 
-      if (txError) throw txError
-
-      const targetAccountId = payAccountId || debt.account_id
+      // 🔥 2. Atualizar saldo da conta (se houver)
       if (targetAccountId) {
-        const { data: acc } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', targetAccountId)
-          .single()
-
-        if (acc) {
-          await supabase
-            .from('accounts')
-            .update({ balance: Number(acc.balance) + payAmountNum })
-            .eq('id', targetAccountId)
+        const account = accounts.find(a => a.id === targetAccountId)
+        if (account) {
+          const { update: updateAccount } = useLocalData({ table: 'accounts' })
+          await updateAccount(targetAccountId, {
+            balance: Number(account.balance) + payAmountNum
+          })
         }
       }
 
+      // 🔥 3. Atualizar status da dívida
       const newTotalPaidCents = totalPaidCents + payAmountCents
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
-      await supabase.from('debts').update({ status: newStatus }).eq('id', id)
+
+      await updateDebt(id as string, {
+        status: newStatus,
+        paid_amount: newTotalPaidCents / 100,
+        updated_at: new Date().toISOString()
+      })
 
       // 🔥 FEEDBACKS
       success()
@@ -270,6 +329,9 @@ export default function DebtDetailPage() {
     }
   }
 
+  // ============================================================
+  // HANDLER WHATSAPP (MANTIDO)
+  // ============================================================
   const handleSendWhatsApp = () => {
     const number = whatsAppNumber.replace(/\D/g, '')
     if (!number) {
@@ -281,6 +343,9 @@ export default function DebtDetailPage() {
     setShowWhatsAppModal(false)
   }
 
+  // ============================================================
+  // RENDERIZAÇÃO
+  // ============================================================
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
       <Loader2 className="animate-spin text-teal-700" size={40} />
@@ -294,16 +359,16 @@ export default function DebtDetailPage() {
   )
 
   const IconComp = getDynamicIcon(debt.icon || 'user')
-  
+
   const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
   const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
   const totalPaidCents = Math.round(totalPaid * 100)
   const remainingCents = totalAmountCents - totalPaidCents
   const remaining = remainingCents / 100
-  
+
   const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
   const isPaid = debt.status === 'paid' || remainingCents <= 0
-  
+
   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
   const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
 
@@ -311,7 +376,7 @@ export default function DebtDetailPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
-      
+
       {/* 🔥 BOLINHA DE LOADING */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
@@ -329,7 +394,7 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Header - 🔥 CORRIGIDO: usa router.back() */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
