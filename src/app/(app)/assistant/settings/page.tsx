@@ -14,9 +14,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 
-//
-
- ============================================================
+// ============================================================
 // SKELETON LOADER
 // ============================================================
 const SettingsSkeleton = () => (
