@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const CONTACT_COLORS = ['#14b8a6', '#8b5cf6', '#f97316', '#ef4444', '#22c55e', '#eab308', '#3b82f6', '#ec4899']
 
@@ -32,26 +33,33 @@ export default function ContactFormPage() {
   const [color, setColor] = useState('#14b8a6')
   const [icon, setIcon] = useState('user')
 
+  // ============================================================
+  // 🔥 BUSCA LOCAL PARA EDIÇÃO
+  // ============================================================
+  const { data: localContact, loading: contactLoading, reload: reloadContact } = useLocalData({
+    table: 'contacts',
+    filters: { id: isEditing ? params.id as string : undefined },
+    realtime: false,
+  })
+
   useEffect(() => {
     if (!user?.id) return
-    if (isEditing) loadContact()
-  }, [user?.id])
-
-  const loadContact = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('contacts').select('*').eq('id', params.id).single()
-    if (data) {
-      setName(data.name)
-      setType(data.type)
-      setEmail(data.email || '')
-      setPhone(data.phone || '')
-      setNotes(data.notes || '')
-      setColor(data.color)
-      setIcon(data.icon)
+    if (isEditing && localContact && localContact.length > 0) {
+      const contact = localContact[0]
+      setName(contact.name)
+      setType(contact.type)
+      setEmail(contact.email || '')
+      setPhone(contact.phone || '')
+      setNotes(contact.notes || '')
+      setColor(contact.color)
+      setIcon(contact.icon)
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [isEditing, localContact])
 
+  // ============================================================
+  // HANDLE SAVE (COM HOOK LOCAL)
+  // ============================================================
   const handleSave = async () => {
     if (!user?.id || !name.trim()) return
     setSaving(true)
@@ -69,12 +77,15 @@ export default function ContactFormPage() {
     }
 
     try {
+      const { create, update } = useLocalData({ table: 'contacts' })
+      
       if (isEditing) {
-        await supabase.from('contacts').update(payload).eq('id', params.id)
+        await update(params.id as string, payload)
+        showToast('Contato atualizado!', 'success')
       } else {
-        await supabase.from('contacts').insert(payload)
+        await create(payload)
+        showToast('Contato criado!', 'success')
       }
-      showToast(isEditing ? 'Contato atualizado!' : 'Contato criado!', 'success')
       router.back()
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
