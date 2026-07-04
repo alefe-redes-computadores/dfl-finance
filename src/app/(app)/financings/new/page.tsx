@@ -4,119 +4,127 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Check, Loader2, X, Wallet, Calendar, Tag, Building } from 'lucide-react'
+import { ChevronLeft, Check, Loader2, X, Home, Car, Briefcase, Calendar, DollarSign, Tag } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import MoneyInput from '@/components/MoneyInput'
-import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
+const ICON_NAMES = ['home', 'car', 'briefcase', 'shopping-bag', 'laptop', 'heart', 'gift', 'trending-up', 'zap', 'target']
 
 function NewFinancingContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { context } = useContext_()
-  const editId = searchParams.get('edit')
   const { showToast } = useToast()
+  const editId = searchParams.get('edit')
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [categories, setCategories] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
 
   const [name, setName] = useState('')
-  const [institution, setInstitution] = useState('')
+  const [totalAmount, setTotalAmount] = useState('0,00')
+  const [totalAmountNum, setTotalAmountNum] = useState(0)
+  const [installmentValue, setInstallmentValue] = useState('0,00')
   const [installmentValueNum, setInstallmentValueNum] = useState(0)
-  const [installmentValueFormatted, setInstallmentValueFormatted] = useState('0,00')
-  const [totalInstallments, setTotalInstallments] = useState('1')
-  const [nextDueDate, setNextDueDate] = useState('')
-  const [outstandingBalanceNum, setOutstandingBalanceNum] = useState(0)
-  const [outstandingBalanceFormatted, setOutstandingBalanceFormatted] = useState('0,00')
-  const [accountId, setAccountId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
+  const [totalInstallments, setTotalInstallments] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [icon, setIcon] = useState('home')
   const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('Home')
-  const [finContext, setFinContext] = useState<'dfl' | 'personal'>('dfl')
+  const [description, setDescription] = useState('')
 
-  const [showCatModal, setShowCatModal] = useState(false)
-  const [showAccModal, setShowAccModal] = useState(false)
-  const [showIconModal, setShowIconModal] = useState(false)
-
-  const loadData = async () => {
-    if (!user?.id) return
-    const [{ data: cats }, { data: accs }] = await Promise.all([
-      supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, context: context }).eq('type', 'expense'),
-      supabase.from('accounts').select('id, name, color').match({ user_id: user.id, context: context })
-    ])
-    setCategories(Array.isArray(cats) ? cats : [])
-    setAccounts(Array.isArray(accs) ? accs : [])
-  }
-
-  const loadFinancing = async () => {
-    if (!editId || !user?.id) return
-    setLoading(true)
-    const { data } = await supabase.from('financings').select('*').match({ id: editId, user_id: user.id }).single()
-    if (data) {
-      setName(data.name)
-      setInstitution(data.institution || '')
-      const instVal = Number(data.installment_value) || 0
-      setInstallmentValueNum(instVal)
-      setInstallmentValueFormatted(instVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-      setTotalInstallments(String(data.total_installments))
-      setNextDueDate(data.next_due_date || '')
-      const outBal = Number(data.outstanding_balance) || 0
-      setOutstandingBalanceNum(outBal)
-      setOutstandingBalanceFormatted(outBal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-      setAccountId(data.account_id || '')
-      setCategoryId(data.category_id || '')
-      setColor(data.color)
-      setIcon(data.icon ? data.icon.charAt(0).toUpperCase() + data.icon.slice(1) : 'Home')
-      setFinContext(data.context || 'dfl')
-    }
-    setLoading(false)
-  }
+  // ============================================================
+  // 🔥 BUSCA LOCAL PARA EDIÇÃO
+  // ============================================================
+  const { data: localFinancing, loading: financingLoading, reload: reloadFinancing } = useLocalData({
+    table: 'financings',
+    filters: { id: editId || '' },
+    realtime: false,
+  })
 
   useEffect(() => {
-    loadData()
-    if (editId) loadFinancing()
-  }, [user, context, editId])
+    if (editId && localFinancing && localFinancing.length > 0) {
+      const data = localFinancing[0]
+      setName(data.name || '')
+      const totalNum = Number(data.total_amount) || 0
+      setTotalAmountNum(totalNum)
+      setTotalAmount(totalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+      const installNum = Number(data.installment_value) || 0
+      setInstallmentValueNum(installNum)
+      setInstallmentValue(installNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+      setTotalInstallments(String(data.total_installments || ''))
+      setStartDate(data.start_date || '')
+      setIcon(data.icon || 'home')
+      setColor(data.color || '#14b8a6')
+      setDescription(data.description || '')
+      setLoading(false)
+    } else if (!editId) {
+      setLoading(false)
+    }
+  }, [editId, localFinancing])
+
+  // ============================================================
+  // HANDLERS
+  // ============================================================
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (num: number) => void, displaySetter: (val: string) => void) => {
+    const digits = e.target.value.replace(/\D/g, '')
+    if (!digits) {
+      displaySetter('0,00')
+      setter(0)
+      return
+    }
+    const num = parseFloat(digits) / 100
+    setter(num)
+    displaySetter(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+  }
 
   const handleSave = async () => {
-    if (!user?.id || !name.trim() || installmentValueNum <= 0) {
+    if (!user?.id || !name.trim() || totalAmountNum <= 0 || installmentValueNum <= 0 || !totalInstallments || !startDate) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
       return
     }
+
+    const totalInstall = parseInt(totalInstallments)
+    if (totalInstall <= 0) {
+      showToast('Número de parcelas inválido.', 'warning')
+      return
+    }
+
     setSaving(true)
 
     const payload = {
       user_id: user.id,
-      context: finContext,
+      context,
       name: name.trim(),
-      institution: institution || null,
+      total_amount: totalAmountNum,
       installment_value: installmentValueNum,
-      total_installments: parseInt(totalInstallments),
-      current_installment: 1,
-      next_due_date: nextDueDate || null,
-      outstanding_balance: outstandingBalanceNum,
-      account_id: accountId || null,
-      category_id: categoryId || null,
+      total_installments: totalInstall,
+      current_installment: 0,
+      start_date: startDate,
+      next_due_date: startDate,
+      icon,
       color,
-      icon
+      description: description || null,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
 
     try {
+      const { create, update } = useLocalData({ table: 'financings' })
+      
       if (editId) {
-        await supabase.from('financings').update(payload).eq('id', editId)
+        await update(editId, payload)
+        showToast('Financiamento atualizado!', 'success')
       } else {
-        await supabase.from('financings').insert(payload)
+        await create(payload)
+        showToast('Financiamento criado!', 'success')
       }
-      showToast(editId ? 'Financiamento atualizado com sucesso!' : 'Financiamento criado com sucesso!', 'success')
       router.push('/financings')
     } catch (err: any) {
-      showToast('Erro ao salvar financiamento.', 'error')
+      showToast(`Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -128,213 +136,135 @@ function NewFinancingContent() {
     </div>
   )
 
-  const selectedCat = categories.find(c => c.id === categoryId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
-  const IconComp = getDynamicIcon(icon)
-
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-slate-900 flex flex-col font-sans pb-24 relative transition-colors duration-300">
-      
-      <div className="pt-6 pb-8 px-4 shadow-sm relative transition-colors duration-300" style={{ backgroundColor: color }}>
-        <div className="flex items-center justify-between mb-6 text-white">
-          <button onClick={() => router.back()} className="p-2 -ml-2">
-            <ChevronLeft size={24} />
-          </button>
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <ChevronLeft size={24} />
+        </button>
+        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? 'Editar Financiamento' : 'Novo Financiamento'}</h2>
+        <button onClick={handleSave} disabled={saving} className="w-10 h-10 bg-teal-700 rounded-full flex items-center justify-center">
+          {saving ? <Loader2 size={20} className="text-white animate-spin" /> : <Check size={22} className="text-white" />}
+        </button>
+      </div>
+
+      <div className="space-y-5">
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Ex: Financiamento do Carro"
+            className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+          />
         </div>
-        <div>
-          <p className="text-white/80 text-[11px] font-medium uppercase tracking-wider mb-2">Nome do financiamento</p>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-8 rounded-md flex items-center justify-center border border-white/20 bg-black/10 shadow-sm">
-              <IconComp size={18} className="text-white" />
-            </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor total</label>
+          <div className="flex items-center gap-2">
+            <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
             <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Ex: Financiamento Imóvel"
-              className="bg-transparent text-white text-2xl font-light outline-none w-full placeholder:text-white/50"
-              autoFocus
+              type="text"
+              inputMode="numeric"
+              value={totalAmount}
+              onChange={(e) => handleAmountChange(e, setTotalAmountNum, setTotalAmount)}
+              placeholder="0,00"
+              className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
             />
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
-        <div className="space-y-5 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Contexto</label>
-            <div className="flex gap-2">
-              {(['dfl', 'personal'] as const).map(c => (
-                <button key={c} onClick={() => setFinContext(c)} className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${finContext === c ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
-                  {c === 'dfl' ? 'DFL' : 'Pessoal'}
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da parcela</label>
+          <div className="flex items-center gap-2">
+            <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={installmentValue}
+              onChange={(e) => handleAmountChange(e, setInstallmentValueNum, setInstallmentValue)}
+              placeholder="0,00"
+              className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
+            />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Número de parcelas</label>
+          <div className="flex items-center gap-3">
+            <Tag size={18} className="text-gray-400 dark:text-gray-500" />
+            <input
+              type="number"
+              min="1"
+              max="360"
+              value={totalInstallments}
+              onChange={e => setTotalInstallments(e.target.value)}
+              className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none w-16"
+            />
+            <span className="text-[14px] text-gray-400">parcelas</span>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Data de início</label>
+          <div className="flex items-center gap-3">
+            <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3">Ícone</p>
+          <div className="flex flex-wrap gap-3">
+            {ICON_NAMES.map(iconName => {
+              const Ico = getDynamicIcon(iconName)
+              const isSelected = icon === iconName
+              return (
+                <button
+                  key={iconName}
+                  onClick={() => setIcon(iconName)}
+                  className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                  style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
+                >
+                  <Ico size={22} />
                 </button>
-              ))}
-            </div>
+              )
+            })}
           </div>
+        </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Instituição financeira</label>
-            <div className="flex items-center gap-3">
-              <Building size={18} className="text-gray-400 dark:text-gray-500" />
-              <input type="text" value={institution} onChange={e => setInstitution(e.target.value)} placeholder="Ex: Itaú, Caixa" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da parcela</label>
-            <div className="flex items-center gap-2">
-              <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-              <MoneyInput
-                value={installmentValueNum}
-                onChange={(num, formatted) => {
-                  setInstallmentValueNum(num)
-                  setInstallmentValueFormatted(formatted)
-                }}
-                className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
+          <div className="flex flex-wrap gap-3">
+            {COLORS.map(c => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`}
+                style={{ backgroundColor: c }}
               />
-            </div>
+            ))}
           </div>
+        </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Total de parcelas</label>
-            <input type="number" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} min={1} max={360} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Próximo vencimento</label>
-            <div className="flex items-center gap-3">
-              <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
-              <input type="date" value={nextDueDate} onChange={e => setNextDueDate(e.target.value)} className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Saldo devedor</label>
-            <div className="flex items-center gap-2">
-              <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-              <MoneyInput
-                value={outstandingBalanceNum}
-                onChange={(num, formatted) => {
-                  setOutstandingBalanceNum(num)
-                  setOutstandingBalanceFormatted(formatted)
-                }}
-                className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
-              />
-            </div>
-          </div>
-
-          <button onClick={() => setShowAccModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Wallet size={18} className="text-gray-400 dark:text-gray-500" />
-              <div className="text-left">
-                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Conta para débito</span>
-                <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedAcc ? selectedAcc.name : 'Nenhuma conta'}</span>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-          </button>
-
-          <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Tag size={18} className="text-gray-400 dark:text-gray-500" />
-              <div className="text-left">
-                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span>
-                <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-          </button>
-
-          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
-            <div className="flex flex-wrap gap-3">
-              {COLORS.map(c => (
-                <button key={c} onClick={() => setColor(c)} className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />
-              ))}
-            </div>
-          </div>
-
-          <button onClick={() => setShowIconModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}20`, color: color }}>
-                <IconComp size={18} />
-              </div>
-              <div className="text-left">
-                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Ícone</span>
-                <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{icon}</span>
-              </div>
-            </div>
-            <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
-          </button>
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
+          <input
+            type="text"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Detalhes sobre o financiamento..."
+            className="w-full bg-transparent text-[14px] text-gray-700 dark:text-gray-300 outline-none placeholder:text-gray-400"
+          />
         </div>
       </div>
-
-      <button 
-        onClick={handleSave} 
-        disabled={saving}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-teal-700 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-teal-800 transition-colors disabled:opacity-50 z-50"
-      >
-        {saving ? <Loader2 className="animate-spin" size={28} /> : <Check size={28} />}
-      </button>
-
-      {showCatModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => setShowCatModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              <button onClick={() => { setCategoryId(''); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!categoryId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400"><Tag size={20} /></div>
-                <span className={`flex-1 text-left font-medium ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Geral</span>
-                {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-              </button>
-              {categories.map(cat => {
-                const CatIconComp = getDynamicIcon(cat.icon)
-                const isActive = cat.id === categoryId
-                return (
-                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><CatIconComp size={20} /></div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAccModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
-              <button onClick={() => setShowAccModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
-            </div>
-            <div className="space-y-2">
-              <button onClick={() => { setAccountId(''); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!accountId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400"><Wallet size={20} /></div>
-                <span className={`flex-1 text-left font-medium ${!accountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Nenhuma conta</span>
-                {!accountId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-              </button>
-              {accounts.map(acc => {
-                const isActive = acc.id === accountId
-                return (
-                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <BankLogo color={acc.color || '#14b8a6'} name={acc.name} size="md" />
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <IconPicker isOpen={showIconModal} onClose={() => setShowIconModal(false)} selectedIcon={icon} onSelect={setIcon} />
-
     </div>
   )
 }
