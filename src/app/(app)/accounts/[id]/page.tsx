@@ -1,878 +1,398 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter, useParams } from "next/navigation"
 import {
-  ChevronLeft, Edit2, ArrowRightLeft, Scale, ChevronRight, X, Loader2, Check, Clock,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  ArrowLeftRight as ArrowLeftRightIcon, Wallet, Search, Building, Trash2,
-  RefreshCw, TrendingDown, ArrowUp, ArrowDown, Image, Paperclip
-} from 'lucide-react'
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import BankLogo from '@/components/BankLogo'
-import { BANK_LIST } from '@/lib/BankIcons'
-import { useToast } from '@/contexts/ToastContext'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import { useLocalData } from '@/hooks/useLocalData'
+  ArrowLeft,
+  Trash2,
+  RefreshCw,
+  Pencil,
+  Wallet,
+  Building2,
+  CreditCard,
+  PiggyBank,
+  ChevronDown,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Plus,
+  Calendar,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { LoadingSkeleton } from "@/components/Skeleton"
+import { useAuth } from "@/contexts/AuthContext"
 
-const DEFAULT_COLORS = ['#dc2626', '#16a34a', '#0284c7', '#8b5cf6', '#111827', '#f59e0b', '#ec4899', '#64748b']
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse, 
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt, 
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog, 
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase, 
-  laptop: Laptop, trending: TrendingUp, shopping: ShoppingCart, 
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
+const ACCOUNT_ICONS: Record<string, any> = {
+  checking: Wallet,
+  savings: PiggyBank,
+  investment: Building2,
+  credit_card: CreditCard,
+  wallet: Wallet,
+  other: Wallet,
 }
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
-const AccountDetailSkeleton = () => (
-  <div className="animate-pulse">
-    <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-sm border-b border-gray-50 dark:border-slate-700 mb-6">
-      <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 mb-4" />
-      <div className="h-3 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
-      <div className="h-9 w-48 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      <div className="h-8 w-40 bg-gray-100 dark:bg-slate-700/50 rounded-full mb-4" />
-      <div className="flex gap-10">
-        <div className="flex flex-col items-center gap-1">
-          <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-        <div className="w-[1px] bg-gray-100 dark:bg-slate-600" />
-        <div className="flex flex-col items-center gap-1">
-          <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-      </div>
-    </div>
-    <div className="px-4 space-y-2">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
-          <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700" />
-          <div className="w-10 h-10 rounded-[12px] bg-gray-100 dark:bg-slate-700" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-3/4 bg-gray-100 dark:bg-slate-700 rounded" />
-            <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700 rounded" />
-          </div>
-          <div className="h-4 w-20 bg-gray-100 dark:bg-slate-700 rounded" />
-        </div>
-      ))}
-    </div>
-  </div>
-)
+const ACCOUNT_LABELS: Record<string, string> = {
+  checking: "Conta Corrente",
+  savings: "Poupança",
+  investment: "Investimento",
+  credit_card: "Cartão de Crédito",
+  wallet: "Carteira",
+  other: "Outro",
+}
 
-export default function AccountStatementPage() {
-  const { id } = useParams()
+export default function AccountDetailPage() {
   const router = useRouter()
-  const { user } = useAuth()
-  const { context } = useContext_()
+  const params = useParams()
+  const accountId = params.id as string
   const { showToast } = useToast()
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { pendingCount } = useLocalSync()
+  const { context } = useAuth()
 
-  const isNew = id === 'new'
-
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
-  const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
-    table: 'accounts',
-    filters: { context },
-    realtime: true,
-  })
-
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
-    filters: { account_id: isNew ? undefined : id as string },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
-  })
-
-  // ============================================================
-  // ESTADOS LOCAIS
-  // ============================================================
-  const [account, setAccount] = useState<any>(null)
-  const [allAccounts, setAllAccounts] = useState<any[]>([]) 
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [summary, setSummary] = useState({ income: 0, expense: 0 })
-  const [loading, setLoading] = useState(!isNew)
   const [loadingPulse, setLoadingPulse] = useState(false)
-  const [actionLoading, setActionLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-
-  const [showForm, setShowForm] = useState(isNew)
+  const [expandedTransactions, setExpandedTransactions] = useState(false)
+  const [showAdjustModal, setShowAdjustModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
-  const [showBalanceModal, setShowBalanceModal] = useState(false)
-  const [showDestAccModal, setShowDestAccModal] = useState(false)
+  const [adjustAmount, setAdjustAmount] = useState("")
+  const [adjustNotes, setAdjustNotes] = useState("")
+  const [transferAmount, setTransferAmount] = useState("")
+  const [transferToAccount, setTransferToAccount] = useState("")
+  const [transferNotes, setTransferNotes] = useState("")
+  const [saving, setSaving] = useState(false)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const [name, setName] = useState('')
-  const [color, setColor] = useState(DEFAULT_COLORS[0])
-  const [displayBalance, setDisplayBalance] = useState('')
-  const [balanceNum, setBalanceNum] = useState(0)
-  const [allowNegative, setAllowNegative] = useState(false)
-  const [bankSearch, setBankSearch] = useState('')
-  const [filteredBanks, setFilteredBanks] = useState<typeof BANK_LIST>([])
-  const [showBankDropdown, setShowBankDropdown] = useState(false)
-  const [selectedBank, setSelectedBank] = useState<typeof BANK_LIST[0] | null>(null)
+  // Busca dados locais
+  const { data: localAccounts, loading, refresh } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context },
+  })
 
-  const [adjustBalanceDisplay, setAdjustBalanceDisplay] = useState('')
+  const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
 
-  const [destAccountId, setDestAccountId] = useState('')
-  const [transferAmountDisplay, setTransferAmountDisplay] = useState('')
-  const [transferDate, setTransferDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [transferDesc, setTransferDesc] = useState('')
+  // Busca transações vinculadas
+  const { data: allTransactions } = useLocalData({
+    table: 'transactions' as any,
+    filters: { context, account_id: accountId },
+  })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
+  const transactions = allTransactions || []
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading || isNew) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
+  const { update: updateAccount, remove: removeAccount } = useLocalData({
+    table: 'accounts' as any,
+  })
 
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
-    }
-  }
+  const { create: createTransaction } = useLocalData({
+    table: 'transactions' as any,
+  })
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing, isNew])
-
-  const monthLabel = format(currentDate, 'MMMM \'De\' yyyy', { locale: ptBR })
-
-  // ============================================================
-// LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS) - CORRIGIDO
-// ============================================================
-const loadData = useCallback(async () => {
-  if (!id || !user || isNew) return
-  setLoading(true)
-  setLoadingPulse(true)
-
-  try {
-    await Promise.all([reloadAccounts(), reloadTransactions()])
-
-    // 🔥 CORREÇÃO: Tipagem explícita para o acc
-    const acc = (localAccounts || []).find((a: any) => a.id === id) as any
-    if (acc) {
-      setAccount(acc)
-      setName(acc.name || '')
-      setColor(acc.color || DEFAULT_COLORS[0])
-      setAllowNegative(acc.allow_negative || false)
-      setAllAccounts((localAccounts || []).filter((a: any) => a.id !== id))
-    }
-
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    const monthTxs = (localTransactions || [])
-      .filter((t: any) => t.date >= start && t.date <= end)
-    
-    setTransactions(monthTxs)
-
-    const income = monthTxs
-      .filter((t: any) => t.type === 'income' || (t.type === 'transfer' && t.description?.includes('de ')))
-      .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-    const expense = monthTxs
-      .filter((t: any) => t.type === 'expense' || t.type === 'sangria' || (t.type === 'transfer' && t.description?.includes('para ')))
-      .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-
-    setSummary({ income, expense })
-
-  } catch (err) {
-    console.error("Erro inesperado:", err)
-  } finally {
-    setLoading(false)
-    setLoadingPulse(false)
-  }
-}, [id, currentDate, user, isNew, localAccounts, localTransactions, reloadAccounts, reloadTransactions])
-
-  // ============================================================
-  // EFETTO INICIAL
-  // ============================================================
-  useEffect(() => {
-    if (user?.id && !isNew) {
-      loadData()
-    } else if (isNew) {
-      setLoading(false)
-    }
-  }, [user?.id, isNew, loadData])
-
-  // ============================================================
-  // FUNÇÕES AUXILIARES
-  // ============================================================
-  const formatMoneyInput = (value: string) => {
-    const rawValue = value.replace(/\D/g, '')
-    const num = Number(rawValue) / 100
-    return { num, display: num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-  }
-
-  const handleBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { num, display } = formatMoneyInput(e.target.value)
-    setBalanceNum(num); setDisplayBalance(display)
-  }
-
-  const handleAdjustBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAdjustBalanceDisplay(formatMoneyInput(e.target.value).display)
-  }
-
-  const handleTransferAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTransferAmountDisplay(formatMoneyInput(e.target.value).display)
-  }
-
-  const handleBankSearch = (value: string) => {
-    setBankSearch(value)
-    if (value.trim().length === 0) {
-      setFilteredBanks([])
-      setShowBankDropdown(false)
-      return
-    }
-    const filtered = BANK_LIST.filter(b =>
-      b.name.toLowerCase().includes(value.toLowerCase())
-    )
-    setFilteredBanks(filtered)
-    setShowBankDropdown(filtered.length > 0)
-  }
-
-  const selectBank = (bank: typeof BANK_LIST[0]) => {
-    setName(bank.name)
-    setColor(bank.color)
-    setSelectedBank(bank)
-    setBankSearch('')
-    setFilteredBanks([])
-    setShowBankDropdown(false)
-  }
-
-  // ============================================================
-  // 🔥 OPERAÇÕES DE ESCRITA (COM HOOK LOCAL)
-  // ============================================================
-  const handleCreateAccount = async () => {
-    if (!name.trim() || !user) {
-      showToast('Informe o nome da conta.', 'warning')
-      return
-    }
-    setActionLoading(true)
-
-    try {
-      const { create } = useLocalData({ table: 'accounts' })
-      await create({
-        user_id: user.id,
-        name: name.trim(),
-        color,
-        balance: balanceNum || 0,
-        allow_negative: allowNegative,
-        context: context,
-      })
-      showToast('Conta criada com sucesso!', 'success')
-      router.push('/accounts')
-    } catch (error: any) {
-      console.error('Erro ao criar conta:', error)
-      showToast(`Erro ao criar conta: ${error.message}`, 'error')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleSaveAccountInfo = async () => {
-    if (!name.trim() || !user) return
-    setActionLoading(true)
-
-    try {
-      if (isNew) {
-        await handleCreateAccount()
-        return
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        refresh().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
       }
-
-      const { update } = useLocalData({ table: 'accounts' })
-      await update(id as string, {
-        name: name.trim(),
-        color,
-        allow_negative: allowNegative,
-      })
-      
-      showToast('Conta atualizada com sucesso!', 'success')
-      setShowForm(false)
-      await loadData()
-    } catch (error: any) {
-      console.error('Erro ao salvar alterações:', error)
-      showToast(`Erro ao salvar: ${error.message}`, 'error')
-    } finally {
-      setActionLoading(false)
     }
-  }
+  }, [refreshing, refresh])
 
-  const handleAdjustBalanceSubmit = async () => {
-    if (!user) return
-    setActionLoading(true)
-    
-    try {
-      const rawAmount = parseFloat(adjustBalanceDisplay.replace(/\./g, '').replace(',', '.')) || 0
-      const { update } = useLocalData({ table: 'accounts' })
-      await update(id as string, { balance: rawAmount })
-      
-      showToast('Saldo ajustado com sucesso!', 'success')
-      setShowBalanceModal(false)
-      await loadData()
-    } catch (error: any) {
-      console.error('Erro ao ajustar saldo:', error)
-      showToast(`Erro ao ajustar saldo: ${error.message}`, 'error')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleTransferSubmit = async () => {
-    if (!destAccountId || !transferAmountDisplay) {
-      showToast('Preencha o destino e o valor.', 'warning')
+  // Ajustar saldo
+  const handleAdjustBalance = async () => {
+    if (!adjustAmount || parseFloat(adjustAmount) === 0) {
+      showToast("Informe um valor para ajuste", "warning")
+      errorHaptic()
       return
     }
-    if (!user) return
-    setActionLoading(true)
-
+    setSaving(true)
     try {
-      const rawAmount = parseFloat(transferAmountDisplay.replace(/\./g, '').replace(',', '.')) || 0
-      const destAcc = allAccounts.find(a => a.id === destAccountId)
-
-      if (!destAcc) {
-        showToast('Conta de destino não encontrada.', 'error')
-        setActionLoading(false)
-        return
-      }
-
-      const { update } = useLocalData({ table: 'accounts' })
-      const { create } = useLocalData({ table: 'transactions' })
-
-      await update(id as string, { balance: Number(account.balance) - rawAmount })
-      await update(destAccountId, { balance: Number(destAcc.balance) + rawAmount })
-
-      await create({
-        account_id: id,
-        type: 'transfer',
-        amount: rawAmount,
-        description: transferDesc || `Transferência para ${destAcc.name}`,
-        date: transferDate,
-        status: 'done',
-        context: account.context,
-        user_id: user.id,
-        affects_balance: true,
+      const newBalance = (accountData?.balance || 0) + parseFloat(adjustAmount)
+      await updateAccount(accountId, { balance: newBalance })
+      await createTransaction({
+        description: adjustNotes || "Ajuste de saldo",
+        amount: parseFloat(adjustAmount),
+        type: parseFloat(adjustAmount) >= 0 ? "income" : "expense",
+        account_id: accountId,
+        date: new Date().toISOString().split("T")[0],
+        status: "completed",
+        context,
       })
+      showToast("Saldo ajustado com sucesso!", "success")
+      success()
+      setShowAdjustModal(false)
+      setAdjustAmount("")
+      setAdjustNotes("")
+      refresh()
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao ajustar saldo", "error")
+      errorHaptic()
+    } finally {
+      setSaving(false)
+    }
+  }
 
-      await create({
-        account_id: destAccountId,
-        type: 'transfer',
-        amount: rawAmount,
-        description: transferDesc || `Transferência de ${account.name}`,
-        date: transferDate,
-        status: 'done',
-        context: account.context,
-        user_id: user.id,
-        affects_balance: true,
+  // Transferir
+  const handleTransfer = async () => {
+    if (!transferAmount || parseFloat(transferAmount) <= 0) {
+      showToast("Informe um valor válido", "warning")
+      errorHaptic()
+      return
+    }
+    if (!transferToAccount) {
+      showToast("Selecione a conta de destino", "warning")
+      errorHaptic()
+      return
+    }
+    setSaving(true)
+    try {
+      const amount = parseFloat(transferAmount)
+      // Saída
+      await createTransaction({
+        description: transferNotes || `Transferência para conta`,
+        amount: -amount,
+        type: "transfer_out",
+        account_id: accountId,
+        transfer_to: transferToAccount,
+        date: new Date().toISOString().split("T")[0],
+        status: "completed",
+        context,
       })
-
-      showToast('Transferência realizada com sucesso!', 'success')
+      // Entrada na outra conta
+      await createTransaction({
+        description: transferNotes || `Transferência recebida`,
+        amount: amount,
+        type: "transfer_in",
+        account_id: transferToAccount,
+        transfer_from: accountId,
+        date: new Date().toISOString().split("T")[0],
+        status: "completed",
+        context,
+      })
+      // Atualiza saldos
+      const newFromBalance = (accountData?.balance || 0) - amount
+      const toAccount = (localAccounts || []).find((a: any) => a.id === transferToAccount) as any
+      const newToBalance = (toAccount?.balance || 0) + amount
+      await updateAccount(accountId, { balance: newFromBalance })
+      await updateAccount(transferToAccount, { balance: newToBalance })
+      showToast("Transferência realizada com sucesso!", "success")
+      success()
       setShowTransferModal(false)
-      setTransferAmountDisplay('')
-      setTransferDesc('')
-      await loadData()
-    } catch (error: any) {
-      console.error('Erro ao realizar transferência:', error)
-      showToast(`Erro na transferência: ${error.message}`, 'error')
+      setTransferAmount("")
+      setTransferToAccount("")
+      setTransferNotes("")
+      refresh()
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao transferir", "error")
+      errorHaptic()
     } finally {
-      setActionLoading(false)
+      setSaving(false)
     }
   }
 
-  // ============================================================
-  // FUNÇÕES DE UI (MANTIDAS)
-  // ============================================================
-  const openEditModal = () => {
-    if (!account && !isNew) return
-    setName(account?.name || '')
-    setColor(account?.color || DEFAULT_COLORS[0])
-    setAllowNegative(account?.allow_negative || false)
-    setSelectedBank(null)
-    setBankSearch('')
-    setFilteredBanks([])
-    setShowBankDropdown(false)
-    setShowForm(true)
+  // Excluir conta
+  const handleDelete = async () => {
+    if (!confirm("Tem certeza que deseja excluir esta conta?")) return
+    try {
+      await removeAccount(accountId)
+      showToast("Conta excluída com sucesso!", "success")
+      success()
+      router.back()
+    } catch {
+      showToast("Erro ao excluir conta", "error")
+      errorHaptic()
+    }
   }
 
-  const openBalanceModal = () => {
-    if (!account) return
-    const safeBalance = Number(account.balance) || 0
-    setAdjustBalanceDisplay(safeBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-    setShowBalanceModal(true)
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+
+  const formatDate = (date: string | null) => {
+    if (!date) return ""
+    return new Date(date).toLocaleDateString("pt-BR")
   }
 
-  const getAttachmentIcon = (url: string | null) => {
-    if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
-  }
-
-  const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  // ============================================================
-  // TELA DE CRIAÇÃO
-  // ============================================================
-  if (isNew) {
+  if (loading) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
-        <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Nova Conta</h1>
-          <div className="w-10" />
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <ArrowLeft size={20} />
+            </div>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Carregando...</h1>
+          </div>
         </div>
+        <div className="flex-1 px-4 pt-4">
+          <LoadingSkeleton count={3} />
+        </div>
+      </div>
+    )
+  }
 
-        <div className="px-4 pt-6">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-slate-700">
-            <div className="flex items-center gap-4 mb-6">
-              <BankLogo color={color} name={name || 'Nova'} size="lg" />
-              <div>
-                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Criar Conta</h2>
-                <p className="text-xs text-gray-400 dark:text-gray-500">Adicione uma nova conta bancária</p>
-              </div>
-            </div>
-
-            <div className="relative mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Buscar banco</label>
-              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-100 dark:border-slate-600 overflow-hidden">
-                <Search size={16} className="ml-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                <input
-                  value={bankSearch}
-                  onChange={e => handleBankSearch(e.target.value)}
-                  onFocus={() => { if (filteredBanks.length > 0) setShowBankDropdown(true) }}
-                  placeholder="Digite o nome do banco..."
-                  className="w-full bg-transparent py-3 px-3 text-sm outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
-                />
-                {bankSearch && (
-                  <button onClick={() => { setBankSearch(''); setFilteredBanks([]); setShowBankDropdown(false) }} className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              {showBankDropdown && filteredBanks.length > 0 && (
-                <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl mt-1 shadow-lg z-50 max-h-48 overflow-y-auto">
-                  {filteredBanks.map(bank => (
-                    <button key={bank.key} onClick={() => selectBank(bank)} className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0">
-                      <BankLogo color={bank.color} name={bank.name} size="sm" />
-                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{bank.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Nome da conta</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Minha Conta Principal" className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors" />
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Saldo inicial</label>
-              <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-xl flex items-center gap-2 border border-gray-100 dark:border-slate-600">
-                <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-                <input type="text" inputMode="numeric" value={displayBalance} onChange={handleBalanceChange} placeholder="0,00" className="w-full bg-transparent text-2xl font-light text-gray-800 dark:text-gray-200 outline-none" />
-              </div>
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
-              <div className="flex flex-wrap gap-3">
-                {DEFAULT_COLORS.map(c => (
-                  <button key={c} onClick={() => setColor(c)} className="w-9 h-9 rounded-full transition-all duration-200" style={{ backgroundColor: c, transform: color === c ? 'scale(1.2)' : 'scale(1)', boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }} />
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
-              <div>
-                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500">Limite / Cheque especial</p>
-              </div>
-              <button onClick={() => setAllowNegative(!allowNegative)} className={`w-12 h-7 rounded-full relative transition-colors ${allowNegative ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${allowNegative ? 'right-1' : 'left-1'}`} />
-              </button>
-            </div>
-
-            <button onClick={handleSaveAccountInfo} disabled={actionLoading || !name.trim()} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center">
-              {actionLoading ? <Loader2 className="animate-spin" size={24} /> : 'Criar Conta'}
+  if (!accountData) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <ArrowLeft size={20} />
             </button>
+            <h1 className="text-lg font-black">Conta não encontrada</h1>
           </div>
         </div>
       </div>
     )
   }
 
-  // ============================================================
-  // LOADING / ERRO
-  // ============================================================
-  if (loading && !account) return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20">
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-        </div>
-      )}
-      <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200"><ChevronLeft size={24} /></button>
-        <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Detalhes da Conta</h1>
-        <div className="w-10" />
-      </div>
-      <AccountDetailSkeleton />
-    </div>
+  const Icon = ACCOUNT_ICONS[accountData.type] || Wallet
+
+  const sortedTransactions = [...transactions].sort((a: any, b: any) =>
+    new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
   )
 
-  if (!account) return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 flex items-center justify-center p-6">
-      <div className="text-center">
-        <Wallet size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-        <p className="text-gray-500 dark:text-gray-400 mb-4">Conta não encontrada.</p>
-        <button onClick={() => router.push('/accounts')} className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold">
-          Ver todas as contas
-        </button>
-      </div>
-    </div>
-  )
-
-  const safeBalance = Number(account.balance) || 0
-  const selectedDestAcc = allAccounts.find(a => a.id === destAccountId)
-
-  // ============================================================
-  // RENDERIZAÇÃO PRINCIPAL
-  // ============================================================
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans relative transition-colors duration-300">
-      {loadingPulse && (
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
-
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 sticky top-0 z-10 border-b border-gray-50 dark:border-slate-700">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 dark:hover:text-gray-400 transition-colors"><ChevronLeft size={24} /></button>
-        <h1 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">Detalhes da Conta</h1>
-        <div className="flex items-center gap-3 text-teal-700 dark:text-teal-400">
-          <button onClick={() => setShowTransferModal(true)} className="p-1 hover:text-teal-800 dark:hover:text-teal-300 transition-colors"><ArrowRightLeft size={20} /></button>
-          <button onClick={openBalanceModal} className="p-1 hover:text-teal-800 dark:hover:text-teal-300 transition-colors"><Scale size={20} /></button>
-          <button onClick={openEditModal} className="p-1 hover:text-teal-800 dark:hover:text-teal-300 transition-colors"><Edit2 size={20} /></button>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-8 flex flex-col items-center shadow-sm border-b border-gray-50 dark:border-slate-700 mb-6">
-        <BankLogo color={account.color || '#f97316'} name={account.name} size="lg" />
-        <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-4">{account.name}</p>
-        <div className="flex items-center gap-2">
-          <p className="text-[32px] font-light text-gray-800 dark:text-gray-100 mb-6">{formatCurrency(safeBalance)}</p>
-        </div>
-        {safeBalance > 0 && (
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold mb-4">
-            <TrendingUp size={12} />
-            Saldo positivo
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100 truncate max-w-[180px]">
+              {accountData.name}
+            </h1>
           </div>
-        )}
-        {safeBalance < 0 && (
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold mb-4">
-            <TrendingDown size={12} />
-            Saldo negativo
-          </div>
-        )}
-        {safeBalance === 0 && (
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 text-xs font-bold mb-4">
-            <Wallet size={12} />
-            Saldo zerado
-          </div>
-        )}
-
-        <div className="flex items-center justify-between w-full max-w-[240px] bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 shadow-sm rounded-full p-1.5 mb-8">
-          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={16} /></button>
-          <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize">{monthLabel}</span>
-          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={16} /></button>
-        </div>
-
-        <div className="flex w-full justify-center gap-10 px-6">
-          <div className="text-center">
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold tracking-wider uppercase mb-1">Entradas</p>
-            <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(summary.income)}</p>
-          </div>
-          <div className="w-[1px] bg-gray-100 dark:bg-slate-600"></div>
-          <div className="text-center">
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold tracking-wider uppercase mb-1">Saídas</p>
-            <p className="text-[15px] font-bold text-red-500">{formatCurrency(summary.expense)}</p>
+          <div className="flex gap-2">
+            <button onClick={() => router.push(`/accounts/new?edit=${accountId}`)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              <Pencil size={18} />
+            </button>
+            <button onClick={handleDelete} className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors">
+              <Trash2 size={18} />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="px-4">
-        <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-3 px-1">Extrato do Mês</h3>
-        {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3 animate-pulse">
-                <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700" />
-                <div className="w-10 h-10 rounded-[12px] bg-gray-100 dark:bg-slate-700" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-3/4 bg-gray-100 dark:bg-slate-700 rounded" />
-                  <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700 rounded" />
-                </div>
-                <div className="h-4 w-20 bg-gray-100 dark:bg-slate-700 rounded" />
-              </div>
-            ))}
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-center">
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 ${(accountData.balance || 0) >= 0 ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"}`}>
+            <Icon size={28} />
           </div>
-        ) : transactions.length === 0 ? (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-50 dark:border-slate-700 p-10 text-center shadow-sm">
-             <p className="text-sm text-gray-400 dark:text-gray-500">Nenhuma movimentação neste mês.</p>
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700 overflow-hidden py-2">
-            {transactions.map((tx: any, index: number) => {
-               const isTransferIn = tx.type === 'transfer' && tx.description?.includes('de ');
-               const isIncomeVisual = tx.type === 'income' || isTransferIn;
-               const isPending = tx.status === 'pending';
-               const IconComp = tx.type === 'transfer' ? ArrowLeftRightIcon : (ICON_MAP[tx.categories?.icon] || ICON_MAP['other'])
-               const attachmentIcon = getAttachmentIcon(tx.receipt_url)
-
-               return (
-                <div 
-                  key={tx.id} 
-                  onClick={() => router.push(`/transactions/${tx.id}`)}
-                  className={`flex items-center justify-between px-4 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== transactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
-                >
-                  {isPending ? (
-                    <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                      <Clock size={12} className="text-red-400" />
-                    </div>
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                      <Check size={12} className="text-emerald-500" />
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                    <div className="w-10 h-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0" style={{ backgroundColor: tx.categories?.color ? `${tx.categories.color}20` : '#f3f4f6', color: tx.categories?.color || '#64748b' }}>
-                      <IconComp size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 uppercase tracking-tight truncate">{tx.description || tx.categories?.name}</p>
-                        {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
-                      </div>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
-                    </div>
-                  </div>
-
-                  <div className="text-right flex-shrink-0">
-                    <p className={`text-[14px] font-bold ${isIncomeVisual ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {isIncomeVisual ? '+' : '-'} {formatCurrency(Number(tx.amount) || 0)}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ============================================================
-          MODAIS (COMPLETOS)
-      ============================================================ */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-4 mb-6">
-              {selectedBank ? (
-                <BankLogo color={selectedBank.color} name={selectedBank.name} size="lg" />
-              ) : (
-                <BankLogo color={color} name={name || account?.name || '??'} size="lg" />
-              )}
-              <div className="flex-1">
-                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Editar Conta</h2>
-                <p className="text-xs text-gray-400 dark:text-gray-500">Altere nome, cor e configurações</p>
-              </div>
-              <button onClick={() => setShowForm(false)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 self-start">
-                <X size={20}/>
-              </button>
-            </div>
-
-            <div className="relative mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Buscar banco</label>
-              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-100 dark:border-slate-600 overflow-hidden">
-                <Search size={16} className="ml-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                <input
-                  value={bankSearch}
-                  onChange={e => handleBankSearch(e.target.value)}
-                  onFocus={() => { if (filteredBanks.length > 0) setShowBankDropdown(true) }}
-                  placeholder="Digite o nome do banco..."
-                  className="w-full bg-transparent py-3 px-3 text-sm outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
-                />
-                {bankSearch && (
-                  <button onClick={() => { setBankSearch(''); setFilteredBanks([]); setShowBankDropdown(false) }} className="p-2 mr-1 text-gray-400 dark:text-gray-500 hover:text-gray-600">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              {showBankDropdown && filteredBanks.length > 0 && (
-                <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl mt-1 shadow-lg z-50 max-h-48 overflow-y-auto">
-                  {filteredBanks.map(bank => (
-                    <button key={bank.key} onClick={() => selectBank(bank)} className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border-b border-gray-50 dark:border-slate-600 last:border-b-0">
-                      <BankLogo color={bank.color} name={bank.name} size="sm" />
-                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{bank.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Nome da conta</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Minha Conta Principal" className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl py-3 px-4 text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-teal-500 transition-colors" />
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Cor</label>
-              <div className="flex flex-wrap gap-3">
-                {DEFAULT_COLORS.map(c => (
-                  <button key={c} onClick={() => setColor(c)} className="w-9 h-9 rounded-full transition-all duration-200" style={{ backgroundColor: c, transform: color === c ? 'scale(1.2)' : 'scale(1)', boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }} />
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between mb-8 bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
-              <div>
-                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Permitir saldo negativo</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500">Limite / Cheque especial</p>
-              </div>
-              <button onClick={() => setAllowNegative(!allowNegative)} className={`w-12 h-7 rounded-full relative transition-colors ${allowNegative ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${allowNegative ? 'right-1' : 'left-1'}`} />
-              </button>
-            </div>
-
-            <button onClick={handleSaveAccountInfo} disabled={actionLoading || !name.trim()} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-2xl font-bold text-[15px] disabled:opacity-50 transition-colors shadow-lg shadow-teal-700/20 flex justify-center items-center">
-              {actionLoading ? <Loader2 className="animate-spin" size={24} /> : 'Salvar Alterações'}
-            </button>
-          </div>
+          <p className="text-3xl font-black text-slate-800 dark:text-slate-200">{formatCurrency(accountData.balance || 0)}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{ACCOUNT_LABELS[accountData.type] || accountData.type}{accountData.bank ? ` — ${accountData.bank}` : ""}</p>
         </div>
-      )}
 
-      {showBalanceModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowBalanceModal(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between mb-8">
-              <div>
-                <h2 className="font-bold text-xl text-gray-800 dark:text-gray-100">Ajustar Saldo</h2>
-                <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">Atualize o saldo real da conta no banco.</p>
-              </div>
-              <button onClick={() => setShowBalanceModal(false)} className="text-gray-400 dark:text-gray-500"><X size={20}/></button>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-[20px] mb-8 flex items-center gap-2 border border-gray-100 dark:border-slate-600">
-               <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-               <input type="text" inputMode="numeric" value={adjustBalanceDisplay} onChange={handleAdjustBalanceChange} className="w-full bg-transparent text-3xl font-light text-gray-800 dark:text-gray-200 outline-none" />
-            </div>
-            <button onClick={handleAdjustBalanceSubmit} disabled={actionLoading} className="w-full bg-gray-900 dark:bg-slate-700 text-white py-4 rounded-[20px] font-bold flex justify-center items-center shadow-lg">
-              {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Confirmar Novo Saldo'}
-            </button>
-          </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowAdjustModal(true)} className="flex-1 py-3 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors">
+            Ajustar Saldo
+          </button>
+          <button onClick={() => setShowTransferModal(true)} className="flex-1 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-colors">
+            Transferir
+          </button>
         </div>
-      )}
 
-      {showTransferModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowTransferModal(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-t-[32px] sm:rounded-[24px] w-full max-w-sm p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between mb-8">
-              <div>
-                <h2 className="font-bold text-xl text-gray-800 dark:text-gray-100">Transferência</h2>
-                <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">Saindo de: <span className="font-bold text-gray-700 dark:text-gray-300">{account.name}</span></p>
-              </div>
-              <button onClick={() => setShowTransferModal(false)} className="text-gray-400 dark:text-gray-500"><X size={20}/></button>
-            </div>
-
-            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Conta de Destino</label>
-            <button onClick={() => setShowDestAccModal(true)} className="w-full flex items-center justify-between bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[16px] mb-4 text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none shadow-sm">
-              <span className={selectedDestAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}>
-                {selectedDestAcc ? selectedDestAcc.name : 'Selecione o destino...'}
-              </span>
-              <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-            </button>
-
-            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 mt-4">Valor da Transferência</label>
-            <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-[16px] mb-4 flex items-center gap-2 border border-gray-100 dark:border-slate-600">
-               <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-               <input type="text" inputMode="numeric" value={transferAmountDisplay} onChange={handleTransferAmountChange} placeholder="0,00" className="w-full bg-transparent text-2xl font-light text-gray-800 dark:text-gray-200 outline-none" />
-            </div>
-
-            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 mt-4">Data</label>
-            <input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} className="w-full bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[16px] mb-4 text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none shadow-sm" />
-
-            <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 mt-4">Descrição (Opcional)</label>
-            <input type="text" value={transferDesc} onChange={(e) => setTransferDesc(e.target.value)} placeholder="Ex: Pagamento" className="w-full bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[16px] mb-8 text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none shadow-sm" />
-
-            <button onClick={handleTransferSubmit} disabled={actionLoading} className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[20px] font-bold flex justify-center items-center shadow-lg shadow-teal-700/20">
-              {actionLoading ? <Loader2 className="animate-spin" size={20} /> : 'Efetuar Transferência'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showDestAccModal && (
-        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50" onClick={() => setShowDestAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Conta de Destino</h3>
-              <button onClick={() => setShowDestAccModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
-            </div>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+          <h3 className="font-black text-slate-800 dark:text-slate-200 mb-3">Transações</h3>
+          {sortedTransactions.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">Nenhuma transação nesta conta</p>
+          ) : (
             <div className="space-y-2">
-              {allAccounts.map(acc => {
-                const isActive = acc.id === destAccountId
-                return (
-                  <button key={acc.id} onClick={() => { setDestAccountId(acc.id); setShowDestAccModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <BankLogo color={acc.color} name={acc.name} size="md" />
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                  </button>
-                )
-              })}
-              {allAccounts.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma conta disponível.</p>}
+              {sortedTransactions.slice(0, expandedTransactions ? undefined : 5).map((tx: any) => (
+                <div key={tx.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {(tx.amount || 0) >= 0 ? <ArrowUpCircle size={16} className="text-teal-500 flex-shrink-0" /> : <ArrowDownCircle size={16} className="text-red-500 flex-shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{tx.description || "Sem descrição"}</p>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(tx.date)}</span>
+                    </div>
+                  </div>
+                  <span className={`font-bold text-sm flex-shrink-0 ${(tx.amount || 0) >= 0 ? "text-teal-600 dark:text-teal-400" : "text-red-500"}`}>{formatCurrency(tx.amount || 0)}</span>
+                </div>
+              ))}
+              {sortedTransactions.length > 5 && (
+                <button onClick={() => setExpandedTransactions(!expandedTransactions)} className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold py-2">
+                  {expandedTransactions ? "Ver menos" : `Ver todas (${sortedTransactions.length})`}
+                  <ChevronDown size={12} className={`inline ml-1 transition-transform ${expandedTransactions ? "rotate-180" : ""}`} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal Ajuste */}
+      {showAdjustModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAdjustModal(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4">Ajustar Saldo</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Valor (+ ou -)</label>
+                <input type="number" step="0.01" placeholder="0,00" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Observação</label>
+                <input type="text" placeholder="Motivo do ajuste" value={adjustNotes} onChange={(e) => setAdjustNotes(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowAdjustModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm">Cancelar</button>
+                <button onClick={handleAdjustBalance} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-sm disabled:opacity-50">{saving ? "Salvando..." : "Ajustar"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Transferência */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowTransferModal(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4">Transferir</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Valor</label>
+                <input type="number" step="0.01" placeholder="0,00" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Conta Destino</label>
+                <select value={transferToAccount} onChange={(e) => setTransferToAccount(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50">
+                  <option value="">Selecione...</option>
+                  {(localAccounts || []).filter((a: any) => a.id !== accountId).map((a: any) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Observação</label>
+                <input type="text" placeholder="Descrição" value={transferNotes} onChange={(e) => setTransferNotes(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowTransferModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm">Cancelar</button>
+                <button onClick={handleTransfer} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm disabled:opacity-50">{saving ? "Transferindo..." : "Transferir"}</button>
+              </div>
             </div>
           </div>
         </div>
