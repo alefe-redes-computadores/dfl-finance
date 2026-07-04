@@ -13,6 +13,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
@@ -66,9 +67,20 @@ export default function ImportCSVPage() {
   const [importedCount, setImportedCount] = useState(0)
   const [errorCount, setErrorCount] = useState(0)
   const [status, setStatus] = useState<'idle' | 'processing' | 'ready' | 'importing' | 'done' | 'error'>('idle')
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
+    table: 'categories',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { create: createTransaction } = useLocalData({ table: 'transactions' })
 
   // ============================================================
   // PROCESSAR CSV
@@ -77,7 +89,6 @@ export default function ImportCSVPage() {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
 
-    // Validar extensão
     const validExtensions = ['.csv', '.tsv', '.txt']
     const fileExt = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase()
     if (!validExtensions.includes(fileExt)) {
@@ -85,7 +96,6 @@ export default function ImportCSVPage() {
       return
     }
 
-    // Validar tamanho (max 5MB)
     if (selectedFile.size > 5 * 1024 * 1024) {
       showToast('Arquivo muito grande (máx 5MB).', 'warning')
       return
@@ -122,17 +132,13 @@ export default function ImportCSVPage() {
       return
     }
 
-    // Detectar separador
-    const firstLine = lines[0]
     let separator = ','
-    if (firstLine.includes('\t')) separator = '\t'
-    else if (firstLine.includes(';')) separator = ';'
+    if (lines[0].includes('\t')) separator = '\t'
+    else if (lines[0].includes(';')) separator = ';'
 
-    // Extrair headers
     const headerRow = lines[0].split(separator).map(h => h.trim())
     setHeaders(headerRow)
 
-    // Extrair dados (máx 10 linhas para preview)
     const dataRows = lines.slice(1, 11).map(line => {
       const values = line.split(separator).map(v => v.trim())
       const obj: Record<string, string> = {}
@@ -185,7 +191,6 @@ export default function ImportCSVPage() {
     setLoadingPulse(true)
 
     try {
-      // Parse completo do arquivo
       const lines = fileContent.split('\n').filter(line => line.trim() !== '')
       const headerRow = headers
       let separator = ','
@@ -201,7 +206,6 @@ export default function ImportCSVPage() {
         return obj
       })
 
-      // Mapeamento de colunas (exemplo: "Data", "Descrição", "Valor", "Tipo")
       const colMap = {
         date: findColumn(headerRow, ['Data', 'Dia', 'Date']),
         description: findColumn(headerRow, ['Descrição', 'Descricao', 'Description', 'Observação', 'Observacao']),
@@ -214,28 +218,27 @@ export default function ImportCSVPage() {
       let successCount = 0
       let failCount = 0
 
+      // Buscar categorias locais para match
+      const categories = localCategories || []
+
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i]
         setImportProgress(((i + 1) / dataRows.length) * 100)
 
         try {
-          // Extrair dados
           const dateStr = colMap.date !== -1 ? row[headerRow[colMap.date]] : ''
           const description = colMap.description !== -1 ? row[headerRow[colMap.description]] : ''
           const amountStr = colMap.amount !== -1 ? row[headerRow[colMap.amount]] : ''
           const typeRaw = colMap.type !== -1 ? row[headerRow[colMap.type]] : ''
           const categoryName = colMap.category !== -1 ? row[headerRow[colMap.category]] : ''
 
-          // Validar dados obrigatórios
           if (!dateStr || !description || !amountStr) {
             failCount++
             continue
           }
 
-          // Converter data
           let date = new Date(dateStr)
           if (isNaN(date.getTime())) {
-            // Tentar formatos alternativos (dd/mm/yyyy, mm/dd/yyyy, etc)
             const parts = dateStr.split(/[\/\-.]/)
             if (parts.length === 3) {
               const day = parseInt(parts[0])
@@ -249,14 +252,12 @@ export default function ImportCSVPage() {
             continue
           }
 
-          // Converter valor
           const amount = parseFloat(amountStr.replace(',', '.').replace(/[^0-9.-]+/g, ''))
           if (isNaN(amount) || amount <= 0) {
             failCount++
             continue
           }
 
-          // Determinar tipo
           let type: 'income' | 'expense' | 'transfer' = 'expense'
           const typeLower = typeRaw.toLowerCase()
           if (typeLower.includes('receita') || typeLower.includes('income') || typeLower.includes('entrada')) {
@@ -265,42 +266,30 @@ export default function ImportCSVPage() {
             type = 'transfer'
           }
 
-          // Buscar categoria pelo nome
+          // Buscar categoria localmente
           let categoryId = null
           if (categoryName) {
-            const { data: catData } = await supabase
-              .from('categories')
-              .select('id')
-              .eq('user_id', user.id)
-              .eq('name', categoryName)
-              .single()
-            if (catData) categoryId = catData.id
+            const found = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase())
+            if (found) categoryId = found.id
           }
 
-          // Inserir transação
-          const { error } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: user.id,
-              context: context,
-              type: type,
-              amount: amount,
-              description: description,
-              date: format(date, 'yyyy-MM-dd'),
-              status: 'done',
-              affects_balance: true,
-              category_id: categoryId,
-              notes: colMap.notes !== -1 ? row[headerRow[colMap.notes]] : null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+          // 🔥 Usa create() do hook local
+          await createTransaction({
+            user_id: user.id,
+            context: context,
+            type: type,
+            amount: amount,
+            description: description,
+            date: format(date, 'yyyy-MM-dd'),
+            status: 'done',
+            affects_balance: true,
+            category_id: categoryId,
+            notes: colMap.notes !== -1 ? row[headerRow[colMap.notes]] : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
 
-          if (error) {
-            failCount++
-            console.error('Erro ao inserir:', error)
-          } else {
-            successCount++
-          }
+          successCount++
         } catch (err) {
           failCount++
           console.error('Erro na linha:', row, err)
@@ -363,14 +352,12 @@ export default function ImportCSVPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
@@ -383,7 +370,6 @@ export default function ImportCSVPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        {/* Upload Area */}
         <div className="bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-slate-700 text-center animate-in fade-in duration-300">
           {status === 'idle' || status === 'error' ? (
             <>
@@ -453,7 +439,6 @@ export default function ImportCSVPage() {
           )}
         </div>
 
-        {/* Preview */}
         {status === 'ready' && previewData.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700 animate-in fade-in duration-300">
             <div className="flex items-center justify-between mb-4">
@@ -509,7 +494,6 @@ export default function ImportCSVPage() {
           </div>
         )}
 
-        {/* Progresso da Importação */}
         {status === 'importing' && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700 animate-in fade-in duration-300">
             <div className="flex items-center justify-between mb-3">
@@ -522,7 +506,6 @@ export default function ImportCSVPage() {
           </div>
         )}
 
-        {/* Resultado */}
         {status === 'done' && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-emerald-200 dark:border-emerald-800 animate-in fade-in duration-300">
             <div className="flex items-center gap-3 mb-4">
@@ -555,7 +538,6 @@ export default function ImportCSVPage() {
           </div>
         )}
 
-        {/* Ajuda */}
         <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700">
           <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
             <FileText size={16} className="text-gray-400" />
@@ -570,7 +552,6 @@ export default function ImportCSVPage() {
           </div>
           <button
             onClick={() => {
-              // Download de modelo CSV
               const headers = ['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria']
               const sample = '2024-01-15,Supermercado,250.50,Despesa,Alimentação'
               const csv = headers.join(',') + '\n' + sample
