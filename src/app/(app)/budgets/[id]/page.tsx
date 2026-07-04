@@ -170,7 +170,7 @@ export default function BudgetDetailPage() {
     try {
       await Promise.all([reloadBudgets(), reloadTransactions()])
 
-      const budgetData = (localBudgets || [])[0]
+      const budgetData = (localBudgets || [])[0] as any
       if (!budgetData) {
         router.push('/budgets')
         return
