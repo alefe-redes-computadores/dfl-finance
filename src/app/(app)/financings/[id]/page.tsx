@@ -1,484 +1,499 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter, useParams } from "next/navigation"
 import {
-  ChevronLeft, Edit2, Trash2, Loader2, Home, Car, Briefcase,
-  Calendar, Clock, AlertTriangle, CheckCircle, Plus, RefreshCw,
-  ArrowDown, X, Check, Image, Paperclip
-} from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import { getDynamicIcon } from '@/lib/iconUtils'
-import { useToast } from '@/contexts/ToastContext'
-import { useContext_ } from '@/components/ContextToggle'
-import { useLocalData } from '@/hooks/useLocalData'
+  ArrowLeft,
+  Save,
+  Trash2,
+  RefreshCw,
+  Pencil,
+  Car,
+  Home,
+  Percent,
+  ChevronDown,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Building2,
+  Calendar,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { LoadingSkeleton } from "@/components/Skeleton"
+import { useAuth } from "@/contexts/AuthContext"
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
-const FinancingDetailSkeleton = () => (
-  <div className="animate-pulse px-4 pt-6 space-y-4">
-    <div className="flex items-center justify-between mb-6">
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
-        <div className="space-y-2">
-          <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700">
-            <div className="h-3 w-12 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
-            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
-          </div>
-        ))}
-      </div>
-
-      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
-      </div>
-      <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 dark:border-slate-700 last:border-b-0">
-          <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-slate-700" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-          <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-        </div>
-      ))}
-    </div>
-  </div>
-)
+type Installment = {
+  id: string
+  financing_id: string
+  amount: number
+  due_date: string
+  paid: boolean
+  paid_date?: string
+  number: number
+}
 
 export default function FinancingDetailPage() {
-  const { id } = useParams()
   const router = useRouter()
-  const { user } = useAuth()
-  const { context } = useContext_()
+  const params = useParams()
+  const financingId = params.id as string
   const { showToast } = useToast()
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { pendingCount } = useLocalSync()
+  const { context } = useAuth()
 
-  const [financing, setFinancing] = useState<any>(null)
-  const [payments, setPayments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [paidInstallments, setPaidInstallments] = useState(0)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [payAmount, setPayAmount] = useState('0,00')
-  const [payAmountNum, setPayAmountNum] = useState(0)
-  const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [payNote, setPayNote] = useState('')
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
+  const [expandedInstallments, setExpandedInstallments] = useState(false)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
-  const { data: localFinancings, loading: financingsLoading, reload: reloadFinancings } = useLocalData({
-    table: 'financings',
-    filters: { id: id as string },
-    realtime: true,
+  // Busca dados locais
+  const { data: localFinancings, loading, refresh } = useLocalData({
+    table: 'financings' as any,
+    filters: { context },
   })
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
-    filters: { financing_id: id as string },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
+  const financingData = (localFinancings || []).find((f: any) => f.id === financingId) as any
+
+  // Busca parcelas vinculadas
+  const { data: allInstallments } = useLocalData({
+    table: 'transactions' as any,
+    filters: { context, type: 'financing_installment', financing_id: financingId },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
+  const installments = (allInstallments || []) as Installment[]
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
+  const { update: updateFinancing, remove: removeFinancing } = useLocalData({
+    table: 'financings' as any,
+  })
 
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
-    }
-  }
+  const { update: updateTransaction, remove: removeTransaction } = useLocalData({
+    table: 'transactions' as any,
+  })
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
-  const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    try {
-      await Promise.all([reloadFinancings(), reloadTransactions()])
-
-      const financingData = (localFinancings || [])[0]
-      if (!financingData) {
-        router.push('/financings')
-        return
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        refresh().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
       }
-      setFinancing(financingData)
-
-      const txs = localTransactions || []
-      setPayments(txs)
-
-      const paid = txs
-        .filter((tx: any) => tx.type === 'expense' && tx.status === 'done')
-        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-
-      const installmentValue = Number(financingData.installment_value)
-      const paidCount = installmentValue > 0 ? Math.floor(paid / installmentValue) : 0
-      setPaidInstallments(Math.min(paidCount, Number(financingData.total_installments)))
-    } catch (err) {
-      console.error('Erro ao carregar financiamento:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
     }
-  }, [id, user, localFinancings, localTransactions, router])
+  }, [refreshing, refresh])
 
-  useEffect(() => { loadData() }, [loadData])
-
-  // ============================================================
-  // HANDLERS
-  // ============================================================
-  const handleDelete = async () => {
-    if (!confirm('Excluir este financiamento?')) return
+  // Pagar parcela
+  const handlePayInstallment = async (installment: Installment) => {
     try {
-      const { remove } = useLocalData({ table: 'financings' })
-      await remove(id as string)
-      showToast('Financiamento excluído.', 'info')
-      router.push('/financings')
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
-    }
-  }
-
-  const handlePayment = async () => {
-    if (!user?.id || payAmountNum <= 0) {
-      showToast('Digite um valor válido.', 'warning')
-      return
-    }
-
-    const installmentValue = Number(financing.installment_value)
-    if (payAmountNum !== installmentValue) {
-      showToast(`O valor da parcela é ${formatCurrency(installmentValue)}.`, 'warning')
-      return
-    }
-
-    const totalPaid = paidInstallments + 1
-    if (totalPaid > Number(financing.total_installments)) {
-      showToast('Todas as parcelas já foram pagas.', 'warning')
-      return
-    }
-
-    try {
-      const { create } = useLocalData({ table: 'transactions' })
-      await create({
-        user_id: user.id,
-        context: context || 'dfl',
-        type: 'expense',
-        amount: payAmountNum,
-        description: payNote || `Parcela ${totalPaid}/${financing.total_installments} - ${financing.name}`,
-        date: payDate,
-        status: 'done',
-        affects_balance: true,
-        financing_id: id,
+      await updateTransaction(installment.id, {
+        paid: true,
+        paid_date: new Date().toISOString().split("T")[0],
       })
 
-      const { update } = useLocalData({ table: 'financings' })
-      await update(id as string, {
-        current_installment: totalPaid,
-        next_due_date: addMonths(new Date(payDate), 1).toISOString().split('T')[0],
+      // Verifica se todas as parcelas foram pagas
+      const updatedInstallments = installments.map((i: Installment) =>
+        i.id === installment.id ? { ...i, paid: true } : i
+      )
+      const allPaid = updatedInstallments.every((i: Installment) => i.paid)
+      if (allPaid) {
+        await updateFinancing(financingId, { status: "paid" })
+      }
+
+      showToast("Parcela paga com sucesso!", "success")
+      success()
+      refresh()
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao pagar parcela", "error")
+      errorHaptic()
+    }
+  }
+
+  // Desfazer pagamento
+  const handleUndoPayment = async (installment: Installment) => {
+    try {
+      await updateTransaction(installment.id, {
+        paid: false,
+        paid_date: null,
       })
 
-      showToast('Parcela registrada!', 'success')
-      setShowPaymentModal(false)
-      setPayAmount('0,00')
-      setPayAmountNum(0)
-      setPayNote('')
-      loadData()
+      if (financingData?.status === "paid") {
+        await updateFinancing(financingId, { status: "active" })
+      }
+
+      showToast("Pagamento desfeito com sucesso!", "success")
+      success()
+      refresh()
     } catch (err: any) {
-      showToast(`Erro ao registrar: ${err.message}`, 'error')
+      showToast(err?.message || "Erro ao desfazer pagamento", "error")
+      errorHaptic()
     }
   }
 
-  const addMonths = (date: Date, months: number) => {
-    const d = new Date(date)
-    d.setMonth(d.getMonth() + months)
-    return d
-  }
-
-  const handlePayAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
-    if (!digits) {
-      setPayAmount('0,00')
-      setPayAmountNum(0)
-      return
+  // Excluir parcela
+  const handleDeleteInstallment = async (installmentId: string) => {
+    try {
+      await removeTransaction(installmentId)
+      showToast("Parcela excluída com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      refresh()
+    } catch {
+      showToast("Erro ao excluir parcela", "error")
+      errorHaptic()
     }
-    const num = parseFloat(digits) / 100
-    setPayAmountNum(num)
-    setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  const getAttachmentIcon = (url: string | null) => {
-    if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+  // Excluir financiamento
+  const handleDeleteFinancing = async () => {
+    try {
+      for (const inst of installments) {
+        await removeTransaction(inst.id)
+      }
+      await removeFinancing(financingId)
+      showToast("Financiamento excluído com sucesso!", "success")
+      success()
+      router.back()
+    } catch {
+      showToast("Erro ao excluir financiamento", "error")
+      errorHaptic()
+    }
   }
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  if (loading) return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+  const formatDate = (date: string | null) => {
+    if (!date) return ""
+    return new Date(date).toLocaleDateString("pt-BR")
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+            <Clock size={12} /> Ativo
+          </span>
+        )
+      case "paid":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
+            <CheckCircle2 size={12} /> Quitado
+          </span>
+        )
+      case "overdue":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
+            <AlertTriangle size={12} /> Atrasado
+          </span>
+        )
+      default:
+        return (
+          <span className="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+            {status}
+          </span>
+        )
+    }
+  }
+
+  const getAssetIcon = (type: string) => {
+    switch (type) {
+      case "vehicle":
+        return <Car size={20} className="text-teal-500" />
+      case "property":
+        return <Home size={20} className="text-teal-500" />
+      default:
+        return <Percent size={20} className="text-teal-500" />
+    }
+  }
+
+  const paidInstallments = installments.filter((i: Installment) => i.paid)
+  const totalPaid = paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0)
+  const remaining = (financingData?.total_amount || 0) - totalPaid
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <ArrowLeft size={20} />
+            </div>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Carregando...</h1>
+          </div>
         </div>
-      )}
-      <FinancingDetailSkeleton />
-    </div>
-  )
+        <div className="flex-1 px-4 pt-4">
+          <LoadingSkeleton count={3} />
+        </div>
+      </div>
+    )
+  }
 
-  if (!financing) return null
-
-  const IconComp = getDynamicIcon(financing.icon || 'home')
-  const totalInstallments = Number(financing.total_installments)
-  const percent = totalInstallments > 0 ? (paidInstallments / totalInstallments) * 100 : 0
-  const isCompleted = paidInstallments >= totalInstallments
-  const isOverdue = financing.next_due_date && differenceInDays(new Date(financing.next_due_date), new Date()) < 0 && !isCompleted
-  const remainingInstallments = totalInstallments - paidInstallments
+  if (!financingData) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Financiamento não encontrado</h1>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans px-4 pt-6 transition-colors duration-300">
-      {loadingPulse && (
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      {/* Bolinha de loading */}
+      {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
+      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/financings')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-          <ChevronLeft size={24} />
-        </button>
-        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{financing.name}</h2>
-        <div className="flex items-center gap-2">
-          <button onClick={() => router.push(`/financings/new?edit=${financing.id}`)} className="p-2 text-gray-400 hover:text-teal-600 transition-colors">
-            <Edit2 size={18} />
-          </button>
-          <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-            <Trash2 size={18} />
-          </button>
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                {financingData.description || "Financiamento"}
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                {getStatusBadge(financingData.status)}
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatDate(financingData.start_date)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push(`/financings/new?edit=${financingId}`)}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Editar"
+            >
+              <Pencil size={18} />
+            </button>
+            <button
+              onClick={handleDeleteFinancing}
+              className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+              aria-label="Excluir"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-center mb-4">
-        <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
-          isCompleted ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-          isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-          'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-        }`}>
-          {isCompleted && <CheckCircle size={10} />}
-          {isOverdue && <AlertTriangle size={10} />}
-          {isCompleted ? 'Quitado' : isOverdue ? 'Atrasado' : `${percent.toFixed(0)}%`}
-        </span>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4 animate-in fade-in duration-300">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${financing.color}20`, color: financing.color }}>
-            <IconComp size={24} />
+      {/* Conteúdo */}
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4"
+      >
+        {/* Cards de resumo */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Valor Total</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-200">
+              {formatCurrency(financingData.total_amount || 0)}
+            </p>
           </div>
-          <div>
-            <p className="font-bold text-[16px] text-gray-800 dark:text-gray-100">{financing.name}</p>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500">
-              {formatCurrency(Number(financing.installment_value))} • {totalInstallments} parcelas
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Restante</p>
+            <p className={`text-xl font-black ${remaining <= 0 ? "text-teal-500" : "text-orange-500"}`}>
+              {formatCurrency(Math.max(0, remaining))}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Valor</p>
-            <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(financing.installment_value))}</p>
+        {/* Informações */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            {getAssetIcon(financingData.asset_type)}
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              {financingData.asset_type === "vehicle" ? "Veículo" : financingData.asset_type === "property" ? "Imóvel" : "Outro"}
+            </span>
           </div>
-          <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Pagas</p>
-            <p className="text-[15px] font-bold text-emerald-600">{paidInstallments}</p>
+          {financingData.asset && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Bem</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{financingData.asset}</p>
+            </div>
+          )}
+          {financingData.bank && (
+            <div className="flex items-center gap-2">
+              <Building2 size={16} className="text-slate-400" />
+              <span className="text-sm text-slate-600 dark:text-slate-400">{financingData.bank}</span>
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Parcelas</p>
+              <p className="font-bold text-slate-800 dark:text-slate-200">{financingData.installments_count}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Valor Parcela</p>
+              <p className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(financingData.installment_amount || 0)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Juros</p>
+              <p className="font-bold text-slate-800 dark:text-slate-200">
+                {financingData.interest_rate ? `${financingData.interest_rate}%` : "-"}
+              </p>
+            </div>
           </div>
-          <div className={`text-center rounded-xl p-3 ${remainingInstallments > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">{remainingInstallments > 0 ? 'Faltam' : 'Quitado'}</p>
-            <p className={`text-[15px] font-bold ${remainingInstallments > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{remainingInstallments}</p>
-          </div>
+          {financingData.start_date && (
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-slate-400" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Início: {formatDate(financingData.start_date)}
+              </span>
+            </div>
+          )}
+          {financingData.first_due_date && (
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-slate-400" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                1º Vencimento: {formatDate(financingData.first_due_date)}
+              </span>
+            </div>
+          )}
+          {financingData.notes && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Observações</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{financingData.notes}</p>
+            </div>
+          )}
         </div>
 
-        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-          <div
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${
-              isCompleted ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'
-            }`}
-            style={{ width: `${Math.min(percent, 100)}%` }}
-          />
-        </div>
-        <p className={`text-[11px] font-medium text-right ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-          {percent.toFixed(0)}% pago
-        </p>
-      </div>
+        {/* Parcelas */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-black text-slate-800 dark:text-slate-200">Parcelas</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {paidInstallments.length}/{installments.length} pagas — {formatCurrency(totalPaid)}
+              </p>
+            </div>
+          </div>
 
-      {!isCompleted && (
-        <button
-          onClick={() => setShowPaymentModal(true)}
-          className="w-full bg-teal-700 text-white py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20 mb-4"
-        >
-          <Plus size={16} />
-          Pagar Parcela {paidInstallments + 1}/{totalInstallments}
-        </button>
-      )}
-
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
-        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Pagamentos</h3>
-        {payments.length === 0 ? (
-          <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-6">Nenhum pagamento registrado.</p>
-        ) : (
-          <div className="space-y-2">
-            {payments.map((tx: any, index: number) => {
-              const attachmentIcon = getAttachmentIcon(tx.receipt_url)
-              return (
-                <div
-                  key={tx.id}
-                  className={`flex items-center justify-between p-3 ${
-                    index !== payments.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50 dark:bg-red-900/20 text-red-500">
-                      <ArrowDown size={16} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">{tx.description || 'Parcela'}</p>
-                        {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
+          {installments.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">
+              Nenhuma parcela gerada. As parcelas são geradas automaticamente ao criar o financiamento.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {installments
+                .sort((a: Installment, b: Installment) => a.number - b.number)
+                .slice(0, expandedInstallments ? undefined : 5)
+                .map((inst: Installment) => (
+                  <div
+                    key={inst.id}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2.5 transition-colors ${
+                      inst.paid
+                        ? "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800"
+                        : "bg-slate-50 dark:bg-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <button
+                        onClick={() => inst.paid ? handleUndoPayment(inst) : handlePayInstallment(inst)}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                          inst.paid
+                            ? "bg-teal-500 border-teal-500 text-white"
+                            : "border-slate-300 dark:border-slate-600 hover:border-teal-500"
+                        }`}
+                      >
+                        {inst.paid && <CheckCircle2 size={14} />}
+                      </button>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold truncate ${inst.paid ? "text-teal-700 dark:text-teal-300" : "text-slate-800 dark:text-slate-200"}`}>
+                          Parcela #{inst.number}
+                        </p>
+                        <p className={`text-xs ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500 dark:text-slate-400"}`}>
+                          {formatDate(inst.due_date)}
+                          {inst.paid && inst.paid_date && ` — Pago em ${formatDate(inst.paid_date)}`}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{format(new Date(tx.date), "dd 'de' MMM yyyy", { locale: ptBR })}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-bold ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500"}`}>
+                        {formatCurrency(inst.amount)}
+                      </span>
+                      <button
+                        onClick={() => setDeleteModal(inst.id)}
+                        className="p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
+                        aria-label="Excluir parcela"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
-                  <p className="text-[14px] font-bold text-red-500 flex-shrink-0">
-                    - {formatCurrency(Number(tx.amount) || 0)}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        )}
+                ))}
+              {installments.length > 5 && (
+                <button
+                  onClick={() => setExpandedInstallments(!expandedInstallments)}
+                  className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold py-2"
+                >
+                  {expandedInstallments ? "Ver menos" : `Ver todas (${installments.length})`}
+                  <ChevronDown size={12} className={`inline ml-1 transition-transform ${expandedInstallments ? "rotate-180" : ""}`} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Modal de Pagamento */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Pagar Parcela</h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Valor da parcela</label>
-                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-                  <span className="text-gray-400 dark:text-gray-500 font-bold">R$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={payAmount}
-                    onChange={handlePayAmountChange}
-                    className="bg-transparent text-lg font-bold text-gray-800 dark:text-gray-200 outline-none w-full"
-                    placeholder="0,00"
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">Valor esperado: {formatCurrency(Number(financing.installment_value))}</p>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Data</label>
-                <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-                  <Calendar size={16} className="text-gray-400" />
-                  <input
-                    type="date"
-                    value={payDate}
-                    onChange={e => setPayDate(e.target.value)}
-                    className="bg-transparent text-sm font-bold text-gray-800 dark:text-gray-200 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase mb-2 block">Observação (opcional)</label>
-                <input
-                  type="text"
-                  value={payNote}
-                  onChange={e => setPayNote(e.target.value)}
-                  placeholder="Ex: Parcela {n}/{total}"
-                  className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
-                />
-              </div>
-
+      {/* Modal de exclusão de parcela */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+              Excluir Parcela
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir esta parcela? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-3">
               <button
-                onClick={handlePayment}
-                disabled={payAmountNum <= 0}
-                className="w-full bg-teal-700 text-white py-4 rounded-xl font-bold disabled:opacity-50 hover:bg-teal-800 transition-colors"
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm"
               >
-                Confirmar Pagamento
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeleteInstallment(deleteModal)}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm"
+              >
+                Excluir
               </button>
             </div>
           </div>
