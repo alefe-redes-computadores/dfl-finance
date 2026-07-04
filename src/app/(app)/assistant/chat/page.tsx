@@ -161,7 +161,7 @@ export default function AssistantChatPage() {
       }
 
       if (localMessages) {
-        setMessages(localMessages)
+        setMessages(localMessages as Message[])
       }
     } catch (err) {
       console.error('Erro ao carregar chat:', err)
