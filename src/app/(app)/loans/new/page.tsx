@@ -11,7 +11,8 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/lib/hooks/useAuth"
+
 
 export default function NewLoanPage() {
   const router = useRouter()
