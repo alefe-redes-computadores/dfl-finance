@@ -196,7 +196,7 @@ export default function AssistantChatPage() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        currentSessionId = result?.id || null
+        currentSessionId = (result as any)?.id || null
         setSessionId(currentSessionId)
       }
 
