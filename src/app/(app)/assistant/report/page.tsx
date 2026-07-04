@@ -253,7 +253,8 @@ export default function AssistantReportPage() {
           balance: monthlyMap[key].income - monthlyMap[key].expense,
         }))
 
-      const insights = []
+      const insights: { type: 'positive' | 'negative' | 'neutral'; message: string }[] = []
+
       if (income > expense) {
         insights.push({
           type: 'positive',
