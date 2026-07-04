@@ -13,6 +13,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
@@ -46,12 +47,23 @@ export default function ContactsPage() {
   const { user } = useAuth()
   const { context } = useContext_()
   const { showToast } = useToast()
-  const [contacts, setContacts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE CONTATOS (INDEXEDDB)
+  // ============================================================
+  const { data: localContacts, loading: contactsLoading, reload: reloadContacts } = useLocalData({
+    table: 'contacts',
+    filters: { context },
+    orderBy: { field: 'name', direction: 'asc' },
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -89,32 +101,43 @@ export default function ContactsPage() {
     }
   }, [loading, refreshing])
 
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  const loadContacts = async () => {
+    setLoading(true)
+    setLoadingPulse(true)
+    try {
+      await reloadContacts()
+    } catch (err) {
+      console.error('Erro ao carregar contatos:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }
+
   useEffect(() => {
     if (!user?.id) return
     loadContacts()
   }, [user?.id, context])
 
-  const loadContacts = async () => {
-    setLoading(true)
-    setLoadingPulse(true)
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .order('name', { ascending: true })
-
-    setContacts(Array.isArray(data) ? data : [])
-    setLoading(false)
-    setLoadingPulse(false)
-  }
-
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir este contato?')) return
-    await supabase.from('contacts').delete().eq('id', id)
-    showToast('Contato excluído.', 'info')
-    loadContacts()
+    try {
+      const { remove } = useLocalData({ table: 'contacts' })
+      await remove(id)
+      showToast('Contato excluído.', 'info')
+      loadContacts()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
   }
+
+  const contacts = localContacts || []
 
   const getTypeLabel = (type: string) => {
     switch (type) {
@@ -143,15 +166,7 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Pull to refresh */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
+      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
@@ -188,7 +203,7 @@ export default function ContactsPage() {
           </div>
         ) : (
           <div className="space-y-2 animate-in fade-in duration-300">
-            {contacts.map(contact => {
+            {contacts.map((contact: any) => {
               const IconComp = getDynamicIcon(contact.icon || 'user')
               return (
                 <div
