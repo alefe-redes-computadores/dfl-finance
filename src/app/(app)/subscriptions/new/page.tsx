@@ -6,16 +6,17 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Check, Loader2, X, Tag, Wallet,
-  Calendar
+  Calendar, Repeat
 } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const ICON_NAMES = [
-  'home', 'utensils', 'car', 'heart', 'graduation-cap', 'gamepad-2', 'shirt',
-  'smile', 'repeat', 'wrench', 'dog', 'file-text', 'shield', 'gift', 'briefcase',
+  'repeat', 'home', 'utensils', 'car', 'heart', 'graduation-cap', 'gamepad-2', 'shirt',
+  'smile', 'wrench', 'dog', 'file-text', 'shield', 'gift', 'briefcase',
   'laptop', 'trending-up', 'shopping-cart', 'receipt', 'zap', 'music', 'more-horizontal',
   'target', 'piggy-bank'
 ]
@@ -27,8 +28,8 @@ function NewSubscriptionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { context } = useContext_()
-  const editId = searchParams.get('edit')
   const { showToast } = useToast()
+  const editId = searchParams.get('edit')
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -47,21 +48,38 @@ function NewSubscriptionContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
 
-  const loadData = async () => {
-    if (!user?.id) return
-    const [{ data: cats }, { data: accs }] = await Promise.all([
-      supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, context: context }).eq('type', 'expense'),
-      supabase.from('accounts').select('id, name, color').match({ user_id: user.id, context: context })
-    ])
-    setCategories(Array.isArray(cats) ? cats : [])
-    setAccounts(Array.isArray(accs) ? accs : [])
-  }
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCategories, reload: reloadCategories } = useLocalData({
+    table: 'categories',
+    filters: { context, type: 'expense' },
+    realtime: false,
+  })
 
-  const loadSubscription = async () => {
-    if (!editId || !user?.id) return
-    setLoading(true)
-    const { data } = await supabase.from('subscriptions').select('*').match({ id: editId, user_id: user.id }).single()
-    if (data) {
+  const { data: localAccounts, reload: reloadAccounts } = useLocalData({
+    table: 'accounts',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { data: localSubscription, loading: subLoading, reload: reloadSubscription } = useLocalData({
+    table: 'subscriptions',
+    filters: { id: editId || '' },
+    realtime: false,
+  })
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  useEffect(() => {
+    if (localCategories) setCategories(localCategories)
+    if (localAccounts) setAccounts(localAccounts)
+  }, [localCategories, localAccounts])
+
+  useEffect(() => {
+    if (editId && localSubscription && localSubscription.length > 0) {
+      const data = localSubscription[0]
       setName(data.name)
       setAmountNum(Number(data.amount))
       setAmount(Number(data.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
@@ -70,15 +88,23 @@ function NewSubscriptionContent() {
       setAccountId(data.account_id || '')
       setColor(data.color)
       setIcon(data.icon)
+      setLoading(false)
+    } else if (!editId) {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [editId, localSubscription])
 
   useEffect(() => {
-    loadData()
-    if (editId) loadSubscription()
-  }, [user, context, editId])
+    if (user?.id) {
+      reloadCategories()
+      reloadAccounts()
+      if (editId) reloadSubscription()
+    }
+  }, [user?.id, editId])
 
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
@@ -107,19 +133,25 @@ function NewSubscriptionContent() {
       category_id: categoryId || null,
       account_id: accountId || null,
       color,
-      icon
+      icon,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
 
     try {
+      const { create, update } = useLocalData({ table: 'subscriptions' })
+      
       if (editId) {
-        await supabase.from('subscriptions').update(payload).eq('id', editId)
+        await update(editId, payload)
+        showToast('Assinatura atualizada!', 'success')
       } else {
-        await supabase.from('subscriptions').insert(payload)
+        await create(payload)
+        showToast('Assinatura criada!', 'success')
       }
-      showToast(editId ? 'Assinatura atualizada com sucesso!' : 'Assinatura criada com sucesso!', 'success')
       router.push('/subscriptions')
     } catch (err: any) {
-      showToast('Erro ao salvar assinatura.', 'error')
+      showToast(`Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -133,12 +165,11 @@ function NewSubscriptionContent() {
 
   const selectedCat = categories.find(c => c.id === categoryId)
   const selectedAcc = accounts.find(a => a.id === accountId)
-
   const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      
+
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -272,7 +303,7 @@ function NewSubscriptionContent() {
                 <span className={`flex-1 text-left font-medium ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Geral</span>
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
-              {categories.map(cat => {
+              {categories.map((cat: any) => {
                 const CatIconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
@@ -310,7 +341,7 @@ function NewSubscriptionContent() {
                 <span className={`flex-1 text-left font-medium ${!accountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Nenhuma conta</span>
                 {!accountId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
-              {accounts.map(acc => {
+              {accounts.map((acc: any) => {
                 const isActive = acc.id === accountId
                 return (
                   <button
