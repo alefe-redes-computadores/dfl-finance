@@ -57,7 +57,7 @@ function BudgetsContent() {
   // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
-    table: 'budgets',
+    table: 'budgets' as any,
     filters: { context },
     orderBy: { field: 'name', direction: 'asc' },
     realtime: true,
@@ -164,7 +164,7 @@ function BudgetsContent() {
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir este orçamento?')) return
     try {
-      const { remove } = useLocalData({ table: 'budgets' })
+      const { remove } = useLocalData({ table: 'budgets' as any })
       await remove(id)
       showToast('Orçamento excluído.', 'info')
       loadData()
@@ -175,7 +175,7 @@ function BudgetsContent() {
 
   const handleToggleStatus = async (budget: any) => {
     try {
-      const { update } = useLocalData({ table: 'budgets' })
+      const { update } = useLocalData({ table: 'budgets' as any })
       const newStatus = budget.status === 'active' ? 'inactive' : 'active'
       await update(budget.id, { status: newStatus })
       showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
