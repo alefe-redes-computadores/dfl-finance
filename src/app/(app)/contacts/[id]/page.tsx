@@ -123,7 +123,7 @@ export default function ContactDetailPage() {
           </div>
         </div>
         <div className="flex-1 px-4 pt-4">
-          <LoadingSkeleton count={3} />
+          <Skeleton count={3} />
         </div>
       </div>
     )
