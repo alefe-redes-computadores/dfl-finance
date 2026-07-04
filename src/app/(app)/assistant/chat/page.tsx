@@ -77,7 +77,7 @@ export default function AssistantChatPage() {
   // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { data: localMessages, loading: msgLoading, reload: reloadMessages } = useLocalData({
-    table: 'chat_history',
+  table: 'chat_history' as any,
     filters: { user_id: user?.id, session_id: sessionId || '' },
     orderBy: { field: 'created_at', direction: 'asc' },
     realtime: true,
