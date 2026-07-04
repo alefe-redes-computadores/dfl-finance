@@ -201,12 +201,12 @@ export default function AssistantReportPage() {
       const biggestIncome = incomeTxs.reduce(
         (max: any, t: any) => (Number(t.amount) > max.amount ? t : max),
         { description: '', amount: 0, date: '' }
-      )
+      ) as any
 
       const biggestExpense = expenseTxs.reduce(
         (max: any, t: any) => (Number(t.amount) > max.amount ? t : max),
         { description: '', amount: 0, date: '' }
-      )
+      ) as any
 
       const dayDiff = differenceInDays(now, startDate) || 1
       const averageDaily = (income - expense) / dayDiff
