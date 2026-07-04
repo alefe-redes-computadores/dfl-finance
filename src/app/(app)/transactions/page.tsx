@@ -16,6 +16,8 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import BankLogo from '@/components/BankLogo'
 import { useScrollPosition } from '@/hooks/useScrollPosition'
 import { TransactionItem } from '@/components/transactions/TransactionItem'
+// 🔥 NOVO: Import do hook local
+import { useLocalData } from '@/hooks/useLocalData'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -156,9 +158,6 @@ export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, appMode } = useContext_()
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [pendingTxs, setPendingTxs] = useState<any[]>([])
-  const [loadingPending, setLoadingPending] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -171,13 +170,114 @@ export default function TransactionsPage() {
 
   const [search, setSearch] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
 
   const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
+  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (COM FILTROS DE CONTEXTO E TIPO)
+  const startMonth = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+  const endMonth = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
+  // Filtros para o useLocalData
+  const localFilters: Record<string, any> = {
+    context: context,
+  }
+
+  if (filter !== 'all') {
+    localFilters.type = filter
+  }
+
+  if (statusFilter !== 'all') {
+    localFilters.status = statusFilter
+  }
+
+  const {
+    data: localTransactions,
+    loading,
+    syncing,
+    reload: reloadTransactions,
+  } = useLocalData({
+    table: 'transactions',
+    filters: localFilters,
+    orderBy: { field: 'date', direction: 'desc' },
+    realtime: true,
+  })
+
+  // 🔥 BUSCA CATEGORIAS E CONTAS LOCALMENTE (para JOIN em memória)
+  const { data: localCategories } = useLocalData({
+    table: 'categories',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { data: localAccounts } = useLocalData({
+    table: 'accounts',
+    filters: { context },
+    realtime: false,
+  })
+
+  // 🔥 JOIN EM MEMÓRIA (compatível com o formato antigo)
+  const transactionsWithJoin = (localTransactions || []).map(tx => {
+    const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
+    const account = (localAccounts || []).find((a: any) => a.id === tx.account_id)
+    return {
+      ...tx,
+      categories: category
+        ? { name: category.name, icon: category.icon, color: category.color }
+        : null,
+      accounts: account
+        ? { name: account.name, color: account.color }
+        : null,
+    }
+  })
+
+  // 🔥 FILTROS ADICIONAIS (data e search)
+  const filtered = transactionsWithJoin.filter(t => {
+    // Filtro de data (mês atual)
+    if (t.date < startMonth || t.date > endMonth) return false
+
+    // Filtro de busca
+    if (search) {
+      const desc = String(t.description || '').toLowerCase()
+      const cat = String(t.categories?.name || '').toLowerCase()
+      const term = search.toLowerCase()
+      if (!desc.includes(term) && !cat.includes(term)) return false
+    }
+
+    return true
+  })
+
+  // 🔥 SEPARAR PENDENTES (para o card)
+  const pendingTxs = filtered.filter(t => t.status === 'pending')
+  const doneTxs = filtered.filter(t => t.status === 'done')
+
+  // 🔥 TRANSAÇÕES EXIBIDAS (baseado no filtro de status)
+  const displayTxs = statusFilter === 'pending' ? pendingTxs : doneTxs
+
+  // Agrupamento por data
+  const grouped = groupByDate(displayTxs)
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+
+  // ============================================================
+  // EFETTO PARA SINCRONIZAR EM BACKGROUND
+  // ============================================================
+  useEffect(() => {
+    if (user?.id && context) {
+      reloadTransactions()
+    }
+  }, [user?.id, context, currentDate, filter, statusFilter, reloadTransactions])
+
+  // ============================================================
+  // EFETTO PARA ATUALIZAR A BOLINHA
+  // ============================================================
+  useEffect(() => {
+    setLoadingPulse(loading || syncing)
+  }, [loading, syncing])
+
+  // ============================================================
+  // HANDLERS DE FILTRO E EXPORT (mantidos iguais)
+  // ============================================================
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -203,106 +303,6 @@ export default function TransactionsPage() {
 
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
-  const loadPending = useCallback(async () => {
-    if (!user) return
-    setLoadingPending(true)
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-    const { data } = await supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color), accounts!account_id(name, color)')
-      .match({ user_id: user.id, context: context, status: 'pending' })
-      .gte('date', start)
-      .lte('date', end)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
-
-    setPendingTxs(Array.isArray(data) ? data : [])
-    setLoadingPending(false)
-  }, [user, context, currentDate])
-
-  const loadTransactions = useCallback(async (pageNum = 0, append = false) => {
-    if (!user) return;
-
-    if (pageNum === 0) setLoading(true)
-    else setLoadingMore(true)
-    setLoadingPulse(true)
-
-    const from = pageNum * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-    let query = supabase
-      .from('transactions')
-      .select('*, categories(name, icon, color), accounts!account_id(name, color)', { count: 'exact' })
-      .match({ user_id: user.id, context: context })
-      .gte('date', start)
-      .lte('date', end)
-      .order('status', { ascending: true })
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
-
-    if (filter !== 'all') query = query.eq('type', filter)
-
-    const { data, count, error } = await query
-
-    if (error) {
-      console.error("Erro na listagem de transações:", error)
-    }
-
-    const txs = Array.isArray(data) ? data : []
-
-    if (append) {
-      setTransactions(prev => [...prev, ...txs])
-    } else {
-      setTransactions(txs)
-    }
-
-    const totalLoaded = append ? (pageNum + 1) * PAGE_SIZE : txs.length
-    setHasMore(count ? totalLoaded < count : txs.length === PAGE_SIZE)
-    setLoading(false)
-    setLoadingMore(false)
-    setLoadingPulse(false)
-  }, [context, currentDate, filter, user])
-
-  useEffect(() => {
-    setPage(0)
-    setHasMore(true)
-    loadTransactions(0)
-    loadPending()
-  }, [loadTransactions, loadPending])
-
-  useEffect(() => {
-    if (loadingMore || !hasMore || loading) return
-    if (scrollY + windowHeight >= documentHeight - 200) {
-      const nextPage = page + 1
-      setPage(nextPage)
-      loadTransactions(nextPage, true)
-    }
-  }, [scrollY, windowHeight, documentHeight, page, hasMore, loadingMore, loading, loadTransactions])
-
-  const filtered = transactions.filter(t => {
-    let matchSearch = true;
-    if (search) {
-      const desc = String(t.description || '').toLowerCase();
-      const cat = String(t.categories?.name || '').toLowerCase();
-      const term = search.toLowerCase();
-      matchSearch = desc.includes(term) || cat.includes(term);
-    }
-
-    let matchStatus = true;
-    if (statusFilter !== 'all') {
-      matchStatus = t.status === statusFilter;
-    }
-
-    return matchSearch && matchStatus;
-  })
-
-  const grouped = groupByDate(filtered)
-  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
-
   const filters: { key: Filter; label: string; icon: React.ReactNode }[] = [
     { key: 'all', label: 'Todas', icon: <Layers size={14} /> },
     { key: 'income', label: 'Receitas', icon: <ArrowUp size={14} /> },
@@ -313,7 +313,7 @@ export default function TransactionsPage() {
   const handleExport = (range: string) => {
     setShowExportMenu(false)
     if (!user) return
-    window.open(`/api/export-transactions?userId=${user.id}&context=${context}&range=${range}`, '_blank')
+    window.open(`/api/export-transactions?userId=${user.id}&context={context}&range=${range}`, '_blank')
   }
 
   return (
@@ -324,13 +324,12 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY: Espaçamentos severamente comprimidos (pt-2) + Blur mais forte (xl) ── */}
+      {/* ── HEADER STICKY ── */}
       <div className="sticky top-0 z-50 bg-[#f8f9fa]/85 dark:bg-slate-900/85 backdrop-blur-xl pt-2 pb-2 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
-        
-        {/* mb-2 em vez de mb-3 */}
+
         <div className="flex items-center justify-between mb-2 mt-1">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
-          
+
           <div className="flex items-center gap-2">
             <div className="relative" ref={exportMenuRef}>
               <button 
@@ -357,12 +356,10 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* mb-2 em vez de mb-3 */}
         <div className="mb-2">
           <ContextToggle />
         </div>
 
-        {/* mb-2 em vez de mb-3 */}
         <div className="flex gap-2 mb-2 relative">
           <div className="flex-1 flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[16px] px-4 py-3 shadow-sm">
             <Search size={18} className="text-gray-400 dark:text-gray-500" />
@@ -403,7 +400,7 @@ export default function TransactionsPage() {
       <div className="px-4 pt-3">
         {loading ? (
           <TransactionsSkeleton />
-        ) : filtered.length === 0 && !loadingMore ? (
+        ) : displayTxs.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-gray-400 dark:text-gray-500 animate-in fade-in duration-300">
             <ReceiptText size={48} className="mb-4 opacity-20" />
             <p className="text-[15px] font-bold text-gray-500 dark:text-gray-400">Nenhuma transação</p>
@@ -411,8 +408,8 @@ export default function TransactionsPage() {
           </div>
         ) : (
           <>
-            {statusFilter !== 'pending' && (
-              <PendingCard txs={pendingTxs} loading={loadingPending} />
+            {statusFilter !== 'pending' && pendingTxs.length > 0 && (
+              <PendingCard txs={pendingTxs} loading={false} />
             )}
 
             <div className="space-y-6 animate-in fade-in duration-300">
@@ -433,13 +430,10 @@ export default function TransactionsPage() {
               ))}
             </div>
 
-            {loadingMore && (
-              <div className="flex justify-center py-6">
-                <Loader2 className="animate-spin text-teal-700" size={24} />
+            {syncing && (
+              <div className="flex justify-center py-2">
+                <span className="text-xs text-gray-400">Sincronizando...</span>
               </div>
-            )}
-            {!hasMore && filtered.length > 0 && (
-              <p className="text-center text-xs font-medium text-gray-400 py-6">Todas as transações carregadas</p>
             )}
           </>
         )}
