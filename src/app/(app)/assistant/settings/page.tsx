@@ -84,6 +84,7 @@ export default function AssistantSettingsPage() {
     email_summary: false,
     language: 'pt-BR',
     theme_preference: 'system',
+    share_usage_data: false,
   })
 
   // ============================================================
@@ -148,6 +149,7 @@ export default function AssistantSettingsPage() {
           email_summary: data.email_summary ?? false,
           language: data.language || 'pt-BR',
           theme_preference: data.theme_preference || 'system',
+          share_usage_data: data.share_usage_data ?? false,
         })
       }
     } catch (err) {
@@ -437,14 +439,13 @@ export default function AssistantSettingsPage() {
               </div>
               <button
                 onClick={() => toggleSetting('share_usage_data')}
-                className="w-11 h-6 rounded-full bg-gray-300 dark:bg-gray-600 relative"
+                className={`w-11 h-6 rounded-full relative transition-colors ${settings.share_usage_data ? 'bg-teal-700' : 'bg-gray-300 dark:bg-gray-600'}`}
               >
-                <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform" />
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${settings.share_usage_data ? 'right-1' : 'left-1'}`} />
               </button>
             </div>
           </div>
         </div>
-
 
         <div className="bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/50 dark:to-emerald-950/50 rounded-[24px] p-5 border border-teal-100 dark:border-teal-800">
           <div className="flex items-start gap-3">
