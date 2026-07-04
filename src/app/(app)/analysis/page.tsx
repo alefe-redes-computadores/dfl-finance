@@ -255,7 +255,7 @@ function AnalysisContent() {
       // ============================================================
       // PATRIMÔNIO (últimos 12 meses)
       // ============================================================
-      const currentBalance = (localAccounts || []).reduce((a, c) => a + (Number(c.balance) || 0), 0)
+      const currentBalance = (localAccounts || []).reduce((a: number, c: any) => a + (Number(c.balance) || 0), 0)
 
       const patrimData: any[] = []
       let cumulative = 0
