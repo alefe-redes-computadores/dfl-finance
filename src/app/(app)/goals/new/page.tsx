@@ -1,351 +1,352 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { ChevronLeft, Check, Loader2, X, Target, Calendar, DollarSign } from 'lucide-react'
+import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import {
-  ChevronLeft, Target, Loader2, Check, X,
-  Tag, Wallet, ChevronDown, Plus
-} from 'lucide-react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
-const GOAL_COLORS = ['#14b8a6', '#8b5cf6', '#f97316', '#ef4444', '#22c55e', '#eab308', '#ec4899']
+const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
+const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
 
-export default function GoalFormPage() {
-  const router = useRouter()
-  const params = useParams()
-  const isEditing = !!params?.id
+function NewGoalContent() {
   const { user } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { context } = useContext_()
   const { showToast } = useToast()
+  const editId = searchParams.get('edit')
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [categories, setCategories] = useState<any[]>([])
 
   const [name, setName] = useState('')
-  const [targetAmount, setTargetAmount] = useState('')
+  const [targetAmount, setTargetAmount] = useState('0,00')
+  const [targetAmountNum, setTargetAmountNum] = useState(0)
   const [deadline, setDeadline] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [color, setColor] = useState('#14b8a6')
   const [icon, setIcon] = useState('target')
-  const [notes, setNotes] = useState('')
-  const [sourceType, setSourceType] = useState<'manual' | 'category' | 'tag' | 'account'>('manual')
-  const [categoryId, setCategoryId] = useState('')
-  const [tagId, setTagId] = useState('')
-  const [accountId, setAccountId] = useState('')
-
-  const [categories, setCategories] = useState<any[]>([])
-  const [tags, setTags] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
+  const [initialContribution, setInitialContribution] = useState('0,00')
+  const [initialContributionNum, setInitialContributionNum] = useState(0)
+  const [description, setDescription] = useState('')
 
   const [showCatModal, setShowCatModal] = useState(false)
-  const [showTagModal, setShowTagModal] = useState(false)
-  const [showAccModal, setShowAccModal] = useState(false)
+  const [showIconModal, setShowIconModal] = useState(false)
+
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCategories, reload: reloadCategories } = useLocalData({
+    table: 'categories',
+    filters: { context },
+    realtime: false,
+  })
+
+  const { data: localGoal, loading: goalLoading, reload: reloadGoal } = useLocalData({
+    table: 'goals',
+    filters: { id: editId || '' },
+    realtime: false,
+  })
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  useEffect(() => {
+    if (localCategories) {
+      setCategories(localCategories)
+    }
+  }, [localCategories])
 
   useEffect(() => {
-    if (!user?.id) return
-    loadData()
-    if (isEditing) loadGoal()
-  }, [user?.id, context])
-
-  const loadData = async () => {
-    const [{ data: cats }, { data: tgs }, { data: accs }] = await Promise.all([
-      supabase.from('categories').select('id, name, icon, color').eq('user_id', user.id).eq('context', context).eq('type', 'expense'),
-      supabase.from('tags').select('id, name, color').eq('user_id', user.id).eq('context', context).order('name'),
-      supabase.from('accounts').select('id, name, color').eq('user_id', user.id).eq('context', context).order('name'),
-    ])
-    setCategories(cats || [])
-    setTags(tgs || [])
-    setAccounts(accs || [])
-  }
-
-  const loadGoal = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('goals').select('*').eq('id', params.id).single()
-    if (data) {
+    if (editId && localGoal && localGoal.length > 0) {
+      const data = localGoal[0]
       setName(data.name)
-      setTargetAmount(Number(data.target_amount).toFixed(2).replace('.', ','))
+      const numValue = Number(data.target_amount) || 0
+      setTargetAmountNum(numValue)
+      setTargetAmount(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setDeadline(data.deadline || '')
-      setColor(data.color)
-      setIcon(data.icon)
-      setNotes(data.notes || '')
-      setSourceType(data.tag_id ? 'tag' : data.category_id ? 'category' : data.account_id ? 'account' : 'manual')
       setCategoryId(data.category_id || '')
-      setTagId(data.tag_id || '')
-      setAccountId(data.account_id || '')
+      setColor(data.color)
+      setIcon(data.icon || 'target')
+      setDescription(data.description || '')
+      setLoading(false)
+    } else if (!editId) {
+      setLoading(false)
     }
-    setLoading(false)
+  }, [editId, localGoal])
+
+  useEffect(() => {
+    if (user?.id) {
+      reloadCategories()
+      if (editId) reloadGoal()
+    }
+  }, [user?.id, editId])
+
+  // ============================================================
+  // HANDLERS
+  // ============================================================
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (num: number) => void, displaySetter: (val: string) => void) => {
+    const digits = e.target.value.replace(/\D/g, '')
+    if (!digits) {
+      displaySetter('0,00')
+      setter(0)
+      return
+    }
+    const num = parseFloat(digits) / 100
+    setter(num)
+    displaySetter(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
   const handleSave = async () => {
-    if (!user?.id) return
-    const rawAmount = parseFloat(targetAmount.replace(',', '.'))
-    if (!name.trim() || isNaN(rawAmount) || rawAmount <= 0) {
-      showToast('Preencha nome e valor alvo.', 'warning')
+    if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
+      showToast('Preencha todos os campos obrigatórios.', 'warning')
       return
     }
     setSaving(true)
 
-    const payload: any = {
+    const payload = {
       user_id: user.id,
+      context,
       name: name.trim(),
-      target_amount: rawAmount,
-      deadline: deadline || null,
+      target_amount: targetAmountNum,
+      deadline,
+      category_id: categoryId || null,
       color,
       icon,
-      notes: notes || null,
-      category_id: sourceType === 'category' ? categoryId : null,
-      tag_id: sourceType === 'tag' ? tagId : null,
-      account_id: sourceType === 'account' ? accountId : null,
-      context,
+      description: description || null,
+      status: 'active',
     }
 
     try {
-      if (isEditing) {
-        await supabase.from('goals').update(payload).eq('id', params.id)
+      const { create, update } = useLocalData({ table: 'goals' })
+      
+      let goalId: string | undefined
+      if (editId) {
+        await update(editId, payload)
+        goalId = editId
+        showToast('Meta atualizada!', 'success')
       } else {
-        await supabase.from('goals').insert(payload)
+        const result = await create(payload)
+        goalId = result?.id
+        showToast('Meta criada!', 'success')
       }
-      showToast(isEditing ? 'Meta atualizada!' : 'Meta criada!', 'success')
-      router.back()
+
+      // Se houver contribuição inicial, registrar
+      if (initialContributionNum > 0 && goalId) {
+        const { create: createTx } = useLocalData({ table: 'transactions' })
+        await createTx({
+          user_id: user.id,
+          context,
+          type: 'income',
+          amount: initialContributionNum,
+          description: `Contribuição inicial para ${name.trim()}`,
+          date: format(new Date(), 'yyyy-MM-dd'),
+          status: 'done',
+          affects_balance: true,
+          goal_id: goalId,
+        })
+      }
+
+      router.push('/goals')
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      showToast(`Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-700" size={40} />
-      </div>
-    )
-  }
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const selectedCat = categories.find(c => c.id === categoryId)
-  const selectedTag = tags.find(t => t.id === tagId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+      <Loader2 className="animate-spin text-teal-700" size={40} />
+    </div>
+  )
+
+  const selectedCat = categories.find((c: any) => c.id === categoryId)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            {isEditing ? 'Editar Meta' : 'Nova Meta'}
-          </h1>
-          <div className="w-10" />
-        </div>
-        <ContextToggle />
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+          <ChevronLeft size={24} />
+        </button>
+        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? 'Editar Meta' : 'Nova Meta'}</h2>
+        <button onClick={handleSave} disabled={saving} className="w-10 h-10 bg-teal-700 rounded-full flex items-center justify-center">
+          {saving ? <Loader2 size={20} className="text-white animate-spin" /> : <Check size={22} className="text-white" />}
+        </button>
       </div>
 
-      <div className="px-4 pt-4 space-y-4">
-        {/* Nome */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Nome da meta</label>
+      <div className="space-y-5">
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome da meta</label>
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Reserva de Emergência"
-            className="w-full bg-transparent outline-none font-bold text-gray-800 dark:text-gray-200 text-lg"
+            onChange={e => setName(e.target.value)}
+            placeholder="Ex: Viagem para Orlando"
+            className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
           />
         </div>
 
-        {/* Valor alvo */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Valor alvo</label>
-          <div className="flex items-center gap-1 text-2xl font-bold text-teal-600">
-            <span className="text-gray-400">R$</span>
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da meta</label>
+          <div className="flex items-center gap-2">
+            <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
             <input
               type="text"
+              inputMode="numeric"
               value={targetAmount}
-              onChange={(e) => setTargetAmount(e.target.value)}
+              onChange={(e) => handleAmountChange(e, setTargetAmountNum, setTargetAmount)}
               placeholder="0,00"
-              className="w-full bg-transparent outline-none font-bold text-teal-600"
+              className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
             />
           </div>
         </div>
 
-        {/* Prazo */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Prazo (opcional)</label>
-          <input
-            type="date"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-            className="w-full bg-transparent outline-none font-medium text-gray-800 dark:text-gray-200"
-          />
-        </div>
-
-        {/* Fonte de progresso */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Fonte do progresso</label>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {[
-              { key: 'manual', label: 'Manual' },
-              { key: 'category', label: 'Categoria' },
-              { key: 'tag', label: 'Tag' },
-              { key: 'account', label: 'Conta' },
-            ].map(opt => (
-              <button
-                key={opt.key}
-                onClick={() => setSourceType(opt.key as any)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
-                  sourceType === opt.key
-                    ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 text-teal-800 dark:text-teal-300'
-                    : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Data limite</label>
+          <div className="flex items-center gap-3">
+            <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
+            <input
+              type="date"
+              value={deadline}
+              onChange={e => setDeadline(e.target.value)}
+              className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none"
+            />
           </div>
-
-          {sourceType === 'category' && (
-            <button onClick={() => setShowCatModal(true)} className="w-full flex items-center gap-3 py-2 text-sm">
-              <Tag size={16} className="text-gray-400" />
-              <span className={selectedCat ? 'font-medium text-gray-800 dark:text-gray-200' : 'text-gray-400'}>
-                {selectedCat?.name || 'Selecionar categoria'}
-              </span>
-            </button>
-          )}
-          {sourceType === 'tag' && (
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center gap-3 py-2 text-sm">
-              <Tag size={16} className="text-gray-400" />
-              <span className={selectedTag ? 'font-medium text-gray-800 dark:text-gray-200' : 'text-gray-400'}>
-                {selectedTag?.name || 'Selecionar tag'}
-              </span>
-            </button>
-          )}
-          {sourceType === 'account' && (
-            <button onClick={() => setShowAccModal(true)} className="w-full flex items-center gap-3 py-2 text-sm">
-              <Wallet size={16} className="text-gray-400" />
-              <span className={selectedAcc ? 'font-medium text-gray-800 dark:text-gray-200' : 'text-gray-400'}>
-                {selectedAcc?.name || 'Selecionar conta'}
-              </span>
-            </button>
-          )}
         </div>
 
-        {/* Cor */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Cor</label>
+        <button
+          onClick={() => setShowCatModal(true)}
+          className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <Target size={18} className="text-gray-400 dark:text-gray-500" />
+            <div className="text-left">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span>
+              <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span>
+            </div>
+          </div>
+          <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
+        </button>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
-            {GOAL_COLORS.map(c => (
+            {COLORS.map(c => (
               <button
                 key={c}
                 onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'scale-125 border-2 border-white shadow-md' : 'hover:scale-110'}`}
+                className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`}
                 style={{ backgroundColor: c }}
               />
             ))}
           </div>
         </div>
 
-        {/* Observações */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-          <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Observações (opcional)</label>
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Detalhes sobre a meta..."
-            className="w-full bg-transparent outline-none text-sm text-gray-700 dark:text-gray-300"
-          />
-        </div>
-
-        {/* Botão salvar */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {saving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-          {saving ? 'Salvando...' : isEditing ? 'Atualizar meta' : 'Criar meta'}
-        </button>
-      </div>
-
-      {/* Modais de seleção */}
-      {showCatModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg">Categorias</h3>
-              <button onClick={() => setShowCatModal(false)} className="p-1"><X size={20} className="text-gray-400" /></button>
-            </div>
-            {categories.map(cat => {
-              const IconComp = getDynamicIcon(cat.icon)
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3">Ícone</p>
+          <div className="flex flex-wrap gap-3">
+            {ICON_NAMES.map(iconName => {
+              const Ico = getDynamicIcon(iconName)
+              const isSelected = icon === iconName
               return (
                 <button
-                  key={cat.id}
-                  onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
-                  className={`w-full p-3 flex items-center gap-3 rounded-2xl transition-colors ${categoryId === cat.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  key={iconName}
+                  onClick={() => setIcon(iconName)}
+                  className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                  style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
                 >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
-                    <IconComp size={16} />
-                  </div>
-                  <span className="font-medium text-sm">{cat.name}</span>
-                  {categoryId === cat.id && <Check size={16} className="text-teal-700 ml-auto" />}
+                  <Ico size={22} />
                 </button>
               )
             })}
           </div>
         </div>
-      )}
 
-      {showTagModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg">Tags</h3>
-              <button onClick={() => setShowTagModal(false)} className="p-1"><X size={20} className="text-gray-400" /></button>
-            </div>
-            {tags.map(tag => (
-              <button
-                key={tag.id}
-                onClick={() => { setTagId(tag.id); setShowTagModal(false) }}
-                className={`w-full p-3 flex items-center gap-3 rounded-2xl transition-colors ${tagId === tag.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-              >
-                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                <span className="font-medium text-sm">{tag.name}</span>
-                {tagId === tag.id && <Check size={16} className="text-teal-700 ml-auto" />}
-              </button>
-            ))}
-          </div>
+        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
+          <input
+            type="text"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Detalhes sobre a meta..."
+            className="w-full bg-transparent text-[14px] text-gray-700 dark:text-gray-300 outline-none placeholder:text-gray-400"
+          />
         </div>
-      )}
 
-      {showAccModal && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg">Contas</h3>
-              <button onClick={() => setShowAccModal(false)} className="p-1"><X size={20} className="text-gray-400" /></button>
+        {!editId && (
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Contribuição inicial (opcional)</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={initialContribution}
+                onChange={(e) => handleAmountChange(e, setInitialContributionNum, setInitialContribution)}
+                placeholder="0,00"
+                className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
+              />
             </div>
-            {accounts.map(acc => (
+            <p className="text-[10px] text-gray-400 mt-1">Valor já guardado para esta meta.</p>
+          </div>
+        )}
+      </div>
+
+      {showCatModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => setShowCatModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
               <button
-                key={acc.id}
-                onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
-                className={`w-full p-3 flex items-center gap-3 rounded-2xl transition-colors ${accountId === acc.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                onClick={() => { setCategoryId(''); setShowCatModal(false) }}
+                className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!categoryId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
               >
-                <BankLogo color={acc.color} name={acc.name} size="sm" />
-                <span className="font-medium text-sm">{acc.name}</span>
-                {accountId === acc.id && <Check size={16} className="text-teal-700 ml-auto" />}
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400"><Target size={20} /></div>
+                <span className={`flex-1 text-left font-medium ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Geral</span>
+                {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
-            ))}
+              {categories.map((cat: any) => {
+                const CatIconComp = getDynamicIcon(cat.icon)
+                const isActive = cat.id === categoryId
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
+                      <CatIconComp size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+export default function NewGoalPage() {
+  return (
+    <ContextProvider>
+      <NewGoalContent />
+    </ContextProvider>
   )
 }
