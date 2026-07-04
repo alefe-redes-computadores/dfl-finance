@@ -14,10 +14,8 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
-// 🔥 NOVO: Import do hook local
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ✅ Imports normais (sem lazy loading)
 import {
   BarChart,
   Bar,
@@ -34,9 +32,6 @@ import {
   Line
 } from 'recharts'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const ReportsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     <div className="grid grid-cols-3 gap-3">
@@ -75,9 +70,6 @@ const ReportsSkeleton = () => (
   </div>
 )
 
-// ============================================================
-// MODAL DE EXPORTAÇÃO (MELHORADO)
-// ============================================================
 function ExportModal({ isOpen, onClose, onExport }: { isOpen: boolean; onClose: () => void; onExport: (format: 'pdf' | 'csv') => void }) {
   if (!isOpen) return null
 
@@ -129,10 +121,10 @@ export default function ReportsPage() {
   const [showExportModal, setShowExportModal] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB)
+  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
     orderBy: { field: 'date', direction: 'asc' },
     realtime: true,
@@ -175,9 +167,6 @@ export default function ReportsPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
-  // ============================================================
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
@@ -193,21 +182,14 @@ export default function ReportsPage() {
     }
   }, [user?.id, reloadTransactions])
 
-  // ============================================================
-  // EFETTO INICIAL
-  // ============================================================
   useEffect(() => {
     if (user?.id && context) {
       loadData()
     }
   }, [user?.id, context, loadData])
 
-  // ============================================================
-  // PROCESSAMENTO DE DADOS (MANTIDO 100% IGUAL)
-  // ============================================================
   const transactions = localTransactions || []
 
-  // Filtro por período
   const endDate = new Date()
   const startDate = subMonths(endDate, parseInt(period))
   const filteredByPeriod = transactions.filter((t: any) => {
@@ -215,12 +197,10 @@ export default function ReportsPage() {
     return txDate >= startDate && txDate <= endDate
   })
 
-  // Filtro por tipo
   const filteredTransactions = filterType === 'all'
     ? filteredByPeriod
     : filteredByPeriod.filter((t: any) => t.type === filterType)
 
-  // Totais
   const totalIncome = filteredByPeriod
     .filter((t: any) => t.type === 'income')
     .reduce((acc: number, t: any) => acc + Number(t.amount), 0)
@@ -231,7 +211,6 @@ export default function ReportsPage() {
 
   const balance = totalIncome - totalExpense
 
-  // Categorias (top 6)
   const categoryData = filteredTransactions.reduce((acc: any[], t: any) => {
     const categoryName = t.categories?.name || 'Outros'
     const existing = acc.find(item => item.name === categoryName)
@@ -245,7 +224,6 @@ export default function ReportsPage() {
 
   const COLORS = ['#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-  // Evolução mensal
   const monthlyData = filteredByPeriod.reduce((acc: any[], t: any) => {
     const monthKey = format(new Date(t.date), 'yyyy-MM')
     const existing = acc.find(item => item.month === monthKey)
@@ -263,7 +241,6 @@ export default function ReportsPage() {
     return acc
   }, []).sort((a, b) => a.month.localeCompare(b.month))
 
-  // Saldo diário (últimos 30 dias)
   const dailyData = (() => {
     const today = new Date()
     const start = subMonths(today, 1)
@@ -283,16 +260,10 @@ export default function ReportsPage() {
     })
   })()
 
-  // ============================================================
-  // EXPORTAÇÃO (MELHORADA)
-  // ============================================================
   const handleExport = (format: 'pdf' | 'csv') => {
     showToast(`📄 Exportação em ${format.toUpperCase()} estará disponível em breve.`, 'info')
   }
 
-  // ============================================================
-  // CONFIGURAÇÕES DE UI
-  // ============================================================
   const periods = [
     { key: '1m', label: '1 mês' },
     { key: '3m', label: '3 meses' },
@@ -522,7 +493,6 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* 🔥 MODAL DE EXPORTAÇÃO (MELHORADO) */}
       <ExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
