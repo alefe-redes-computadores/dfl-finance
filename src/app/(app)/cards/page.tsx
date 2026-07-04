@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, CreditCard, RefreshCw, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // SKELETON LOADER
@@ -40,12 +41,29 @@ export default function CardsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
-  const [cards, setCards] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
 
-  // Pull to refresh
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // ============================================================
+  const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
+    table: 'credit_cards',
+    filters: { context, is_archived: false },
+    orderBy: { field: 'created_at', direction: 'desc' },
+    realtime: true,
+  })
+
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context },
+    realtime: true,
+  })
+
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -83,46 +101,49 @@ export default function CardsPage() {
     }
   }, [loading, refreshing])
 
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
+  const loadCards = async () => {
+    setLoading(true)
+    setLoadingPulse(true)
+
+    try {
+      await Promise.all([reloadCards(), reloadTransactions()])
+    } catch (err) {
+      console.error('Erro ao carregar cartões:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }
+
   useEffect(() => {
     if (!user?.id) return
     loadCards()
   }, [user?.id, context])
 
-  const loadCards = async () => {
-    setLoading(true)
-    setLoadingPulse(true)
+  // ============================================================
+  // PROCESSAMENTO EM MEMÓRIA (ELIMINANDO N+1)
+  // ============================================================
+  const today = new Date()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
 
-    // Busca cartões de crédito
-    const { data: creditCards } = await supabase
-      .from('credit_cards')
-      .select('*')
-      .match({ user_id: user.id, context: context, is_archived: false })
-      .order('created_at', { ascending: false })
+  // 🔥 Agrupa transações por credit_card_id (em memória)
+  const transactionsByCard = (localTransactions || [])
+    .filter((tx: any) => tx.credit_card_id && tx.date >= startOfMonth && tx.date <= endOfMonth)
+    .reduce((acc: Record<string, number>, tx: any) => {
+      const cardId = tx.credit_card_id
+      acc[cardId] = (acc[cardId] || 0) + Number(tx.amount || 0)
+      return acc
+    }, {})
 
-    const cardsArray = Array.isArray(creditCards) ? creditCards : []
-
-    // Para cada cartão, busca o total da fatura atual
-    const today = new Date()
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
-
-    const cardsWithInvoice = await Promise.all(cardsArray.map(async (card) => {
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('credit_card_id', card.id)
-        .eq('user_id', user.id)
-        .gte('date', startOfMonth)
-        .lte('date', endOfMonth)
-
-      const faturaAtual = (txs || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
-      return { ...card, faturaAtual }
-    }))
-
-    setCards(cardsWithInvoice)
-    setLoading(false)
-    setLoadingPulse(false)
-  }
+  // 🔥 Enriquecendo os cartões com a fatura calculada em memória
+  const cardsWithInvoice = (localCards || []).map((card: any) => ({
+    ...card,
+    faturaAtual: transactionsByCard[card.id] || 0,
+  }))
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -163,7 +184,7 @@ export default function CardsPage() {
         </div>
       )}
 
-      {/* Indicador de carregamento sutil no canto */}
+      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
@@ -176,7 +197,7 @@ export default function CardsPage() {
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            Cartões {cards.length > 0 && `(${cards.length})`}
+            Cartões {cardsWithInvoice.length > 0 && `(${cardsWithInvoice.length})`}
           </h1>
           <button onClick={() => router.push('/cards/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
             <Plus size={24} />
@@ -188,7 +209,7 @@ export default function CardsPage() {
       <div className="px-4 pt-4 space-y-4">
         {loading ? (
           <CardsSkeleton />
-        ) : cards.length === 0 ? (
+        ) : cardsWithInvoice.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
               <CreditCard size={40} className="text-gray-400 dark:text-gray-500" />
@@ -205,7 +226,7 @@ export default function CardsPage() {
             </button>
           </div>
         ) : (
-          cards.map((card, index) => {
+          cardsWithInvoice.map((card: any, index: number) => {
             const limitPercent = getLimitPercent(card.faturaAtual || 0, Number(card.credit_limit) || 0)
             const limitColor = getLimitColor(limitPercent)
             const available = (Number(card.credit_limit) || 0) - (card.faturaAtual || 0)
@@ -221,12 +242,10 @@ export default function CardsPage() {
                 }`}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                {/* Gradiente sutil no topo */}
                 <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[24px] ${
                   isNearLimit ? 'bg-red-500' : limitPercent >= 70 ? 'bg-amber-500' : 'bg-teal-500'
                 }`} />
 
-                {/* Header do card */}
                 <div className="flex items-center justify-between mb-4 mt-1">
                   <div className="flex items-center gap-3">
                     <div
@@ -255,7 +274,6 @@ export default function CardsPage() {
                   )}
                 </div>
 
-                {/* Barra de limite estilizada */}
                 <div className="mb-3">
                   <div className="flex justify-between text-[11px] mb-1.5">
                     <span className="font-medium text-gray-500 dark:text-gray-400">
@@ -286,7 +304,6 @@ export default function CardsPage() {
                   </div>
                 </div>
 
-                {/* Datas */}
                 <div className="flex items-center gap-4 text-[11px] text-gray-400 dark:text-gray-500">
                   <span>Fecha dia {card.closing_day}</span>
                   <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
