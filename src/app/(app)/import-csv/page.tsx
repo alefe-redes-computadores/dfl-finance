@@ -15,9 +15,6 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const PreviewSkeleton = () => (
   <div className="animate-pulse space-y-4">
     <div className="flex items-center justify-between mb-4">
@@ -71,20 +68,14 @@ export default function ImportCSVPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context },
     realtime: false,
   })
 
-  const { create: createTransaction } = useLocalData({ table: 'transactions' })
+  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
-  // ============================================================
-  // PROCESSAR CSV
-  // ============================================================
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
@@ -155,9 +146,6 @@ export default function ImportCSVPage() {
     showToast(`Arquivo carregado: ${dataRows.length} linhas de preview (${lines.length - 1} no total)`, 'success')
   }
 
-  // ============================================================
-  // RESET
-  // ============================================================
   const handleReset = () => {
     setFile(null)
     setFileContent('')
@@ -172,9 +160,6 @@ export default function ImportCSVPage() {
     }
   }
 
-  // ============================================================
-  // IMPORTAR
-  // ============================================================
   const handleImport = async () => {
     if (!user?.id) {
       showToast('Sessão expirada.', 'error')
@@ -218,7 +203,6 @@ export default function ImportCSVPage() {
       let successCount = 0
       let failCount = 0
 
-      // Buscar categorias locais para match
       const categories = localCategories || []
 
       for (let i = 0; i < dataRows.length; i++) {
@@ -266,14 +250,12 @@ export default function ImportCSVPage() {
             type = 'transfer'
           }
 
-          // Buscar categoria localmente
           let categoryId = null
           if (categoryName) {
             const found = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase())
             if (found) categoryId = found.id
           }
 
-          // 🔥 Usa create() do hook local
           await createTransaction({
             user_id: user.id,
             context: context,
@@ -315,9 +297,6 @@ export default function ImportCSVPage() {
     }
   }
 
-  // ============================================================
-  // UTILITÁRIOS
-  // ============================================================
   const findColumn = (headers: string[], possibleNames: string[]): number => {
     for (const name of possibleNames) {
       const idx = headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()))
