@@ -77,7 +77,7 @@ export default function AssistantChatPage() {
   // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { data: localMessages, loading: msgLoading, reload: reloadMessages } = useLocalData({
-  table: 'chat_history' as any,
+    table: 'chat_history' as any,
     filters: { user_id: user?.id, session_id: sessionId || '' },
     orderBy: { field: 'created_at', direction: 'asc' },
     realtime: true,
@@ -145,7 +145,6 @@ export default function AssistantChatPage() {
     setLoadingPulse(true)
 
     try {
-      // Buscar ou criar sessão ativa
       const { data: session } = await supabase
         .from('chat_sessions')
         .select('id')
@@ -186,7 +185,6 @@ export default function AssistantChatPage() {
     setIsSending(true)
 
     try {
-      // Criar sessão se não existir
       let currentSessionId = sessionId
       if (!currentSessionId) {
         const result = await createSession({
@@ -200,7 +198,6 @@ export default function AssistantChatPage() {
         setSessionId(currentSessionId)
       }
 
-      // Salvar mensagem do usuário
       const userMsg = await createMessage({
         user_id: user.id,
         session_id: currentSessionId,
@@ -216,7 +213,6 @@ export default function AssistantChatPage() {
         created_at: new Date().toISOString(),
       }])
 
-      // Chamar API do assistente
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -233,7 +229,6 @@ export default function AssistantChatPage() {
         throw new Error(data.error || 'Erro ao processar mensagem')
       }
 
-      // Salvar resposta do assistente
       const assistantMsg = await createMessage({
         user_id: user.id,
         session_id: currentSessionId,
