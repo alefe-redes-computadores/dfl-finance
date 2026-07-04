@@ -12,6 +12,8 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
+// 🔥 NOVO: Import do hook local
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ✅ Imports normais (sem lazy loading)
 import {
@@ -85,6 +87,16 @@ export default function ProjectionsPage() {
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m')
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB)
+  // ============================================================
+  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context },
+    orderBy: { field: 'date', direction: 'asc' },
+    realtime: true,
+  })
+
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -122,27 +134,58 @@ export default function ProjectionsPage() {
     }
   }, [loading, refreshing])
 
+  // ============================================================
+  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // ============================================================
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
+    try {
+      // Recarrega transações do IndexedDB
+      await reloadTransactions()
+
+      // Os dados já estão disponíveis via localTransactions
+      // O useEffect abaixo vai processar os dados
+    } catch (err) {
+      console.error('Erro ao carregar transações:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }, [user?.id, reloadTransactions])
+
+  // ============================================================
+  // EFETTO PARA PROCESSAR DADOS SEMPRE QUE LOCALTRANSACTIONS MUDAR
+  // ============================================================
+  useEffect(() => {
+    if (!localTransactions || localTransactions.length === 0) {
+      setProjections([])
+      setLoading(false)
+      setLoadingPulse(false)
+      return
+    }
+
     const endDate = new Date()
     const startDate = subMonths(endDate, 6)
 
-    const { data: transactions } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .gte('date', format(startDate, 'yyyy-MM-dd'))
-      .lte('date', format(endDate, 'yyyy-MM-dd'))
-      .order('date', { ascending: true })
+    // 🔥 FILTRA TRANSAÇÕES PELO PERÍODO (últimos 6 meses)
+    const filtered = localTransactions.filter((tx: any) => {
+      const txDate = new Date(tx.date)
+      return txDate >= startDate && txDate <= endDate
+    })
 
-    const txArray = Array.isArray(transactions) ? transactions : []
+    if (filtered.length === 0) {
+      setProjections([])
+      setLoading(false)
+      setLoadingPulse(false)
+      return
+    }
 
+    // 🔥 AGRUPAMENTO POR MÊS (MANTIDO IGUAL AO ORIGINAL)
     const months = new Map()
-    txArray.forEach(tx => {
+    filtered.forEach((tx: any) => {
       const month = format(new Date(tx.date), 'yyyy-MM')
       if (!months.has(month)) {
         months.set(month, { income: 0, expense: 0 })
@@ -165,11 +208,13 @@ export default function ProjectionsPage() {
     const avgIncome = totalIncome / months.size
     const avgExpense = totalExpense / months.size
 
+    // 🔥 SALDO ATUAL (CÁLCULO CUMULATIVO)
     let currentBalance = 0
-    txArray.forEach(tx => {
+    filtered.forEach((tx: any) => {
       currentBalance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)
     })
 
+    // 🔥 PROJEÇÃO (MANTIDA IGUAL AO ORIGINAL)
     const monthsToProject = parseInt(period)
     const projectionData = []
     let balance = currentBalance
@@ -205,10 +250,20 @@ export default function ProjectionsPage() {
     setProjections(projectionData)
     setLoading(false)
     setLoadingPulse(false)
-  }, [user, context, period, scenario])
+  }, [localTransactions, period, scenario])
 
-  useEffect(() => { loadData() }, [loadData])
+  // ============================================================
+  // CARREGA DADOS INICIALMENTE
+  // ============================================================
+  useEffect(() => {
+    if (user?.id && context) {
+      loadData()
+    }
+  }, [user?.id, context, loadData])
 
+  // ============================================================
+  // CONFIGURAÇÕES DE UI
+  // ============================================================
   const periods = [
     { key: '3m', label: '3 meses' },
     { key: '6m', label: '6 meses' },
