@@ -7,12 +7,15 @@ import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Wallet,
   Calendar, Filter, Download, FileText, FileSpreadsheet,
-  BarChart3, PieChart, LineChart, Loader2
+  BarChart3, PieChart, LineChart, Loader2, X
 } from 'lucide-react'
 import { format, subMonths, eachDayOfInterval } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
+// 🔥 NOVO: Import do hook local
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ✅ Imports normais (sem lazy loading)
 import {
@@ -72,16 +75,68 @@ const ReportsSkeleton = () => (
   </div>
 )
 
+// ============================================================
+// MODAL DE EXPORTAÇÃO (MELHORADO)
+// ============================================================
+function ExportModal({ isOpen, onClose, onExport }: { isOpen: boolean; onClose: () => void; onExport: (format: 'pdf' | 'csv') => void }) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Exportar Relatório</h3>
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          Escolha o formato para exportar o relatório do período selecionado.
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => { onExport('pdf'); onClose() }}
+            className="flex-1 bg-teal-700 text-white py-4 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2"
+          >
+            <FileText size={18} />
+            PDF
+          </button>
+          <button
+            onClick={() => { onExport('csv'); onClose() }}
+            className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-4 rounded-xl font-bold text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex items-center justify-center gap-2"
+          >
+            <FileSpreadsheet size={18} />
+            CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ReportsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context } = useContext_()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [transactions, setTransactions] = useState<any[]>([])
   const [period, setPeriod] = useState<'1m' | '3m' | '6m' | '12m'>('3m')
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
+  const [showExportModal, setShowExportModal] = useState(false)
+
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB)
+  // ============================================================
+  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
+    table: 'transactions',
+    filters: { context },
+    orderBy: { field: 'date', direction: 'asc' },
+    realtime: true,
+  })
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -120,46 +175,64 @@ export default function ReportsPage() {
     }
   }, [loading, refreshing])
 
+  // ============================================================
+  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // ============================================================
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
-    const endDate = new Date()
-    const startDate = subMonths(endDate, parseInt(period))
+    try {
+      await reloadTransactions()
+    } catch (err) {
+      console.error('Erro ao carregar transações:', err)
+    } finally {
+      setLoading(false)
+      setLoadingPulse(false)
+    }
+  }, [user?.id, reloadTransactions])
 
-    const { data } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('context', context)
-      .gte('date', format(startDate, 'yyyy-MM-dd'))
-      .lte('date', format(endDate, 'yyyy-MM-dd'))
-      .order('date', { ascending: true })
+  // ============================================================
+  // EFETTO INICIAL
+  // ============================================================
+  useEffect(() => {
+    if (user?.id && context) {
+      loadData()
+    }
+  }, [user?.id, context, loadData])
 
-    setTransactions(Array.isArray(data) ? data : [])
-    setLoading(false)
-    setLoadingPulse(false)
-  }, [user, context, period])
+  // ============================================================
+  // PROCESSAMENTO DE DADOS (MANTIDO 100% IGUAL)
+  // ============================================================
+  const transactions = localTransactions || []
 
-  useEffect(() => { loadData() }, [loadData])
+  // Filtro por período
+  const endDate = new Date()
+  const startDate = subMonths(endDate, parseInt(period))
+  const filteredByPeriod = transactions.filter((t: any) => {
+    const txDate = new Date(t.date)
+    return txDate >= startDate && txDate <= endDate
+  })
 
-  // Dados processados
-  const filteredTransactions = filterType === 'all' 
-    ? transactions 
-    : transactions.filter(t => t.type === filterType)
+  // Filtro por tipo
+  const filteredTransactions = filterType === 'all'
+    ? filteredByPeriod
+    : filteredByPeriod.filter((t: any) => t.type === filterType)
 
-  const totalIncome = transactions
-    .filter(t => t.type === 'income')
-    .reduce((acc, t) => acc + Number(t.amount), 0)
+  // Totais
+  const totalIncome = filteredByPeriod
+    .filter((t: any) => t.type === 'income')
+    .reduce((acc: number, t: any) => acc + Number(t.amount), 0)
 
-  const totalExpense = transactions
-    .filter(t => t.type === 'expense')
-    .reduce((acc, t) => acc + Number(t.amount), 0)
+  const totalExpense = filteredByPeriod
+    .filter((t: any) => t.type === 'expense')
+    .reduce((acc: number, t: any) => acc + Number(t.amount), 0)
 
   const balance = totalIncome - totalExpense
 
-  const categoryData = filteredTransactions.reduce((acc: any[], t) => {
+  // Categorias (top 6)
+  const categoryData = filteredTransactions.reduce((acc: any[], t: any) => {
     const categoryName = t.categories?.name || 'Outros'
     const existing = acc.find(item => item.name === categoryName)
     if (existing) {
@@ -172,7 +245,8 @@ export default function ReportsPage() {
 
   const COLORS = ['#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-  const monthlyData = transactions.reduce((acc: any[], t) => {
+  // Evolução mensal
+  const monthlyData = filteredByPeriod.reduce((acc: any[], t: any) => {
     const monthKey = format(new Date(t.date), 'yyyy-MM')
     const existing = acc.find(item => item.month === monthKey)
     if (existing) {
@@ -189,16 +263,17 @@ export default function ReportsPage() {
     return acc
   }, []).sort((a, b) => a.month.localeCompare(b.month))
 
+  // Saldo diário (últimos 30 dias)
   const dailyData = (() => {
-    const endDate = new Date()
-    const startDate = subMonths(endDate, 1)
-    const days = eachDayOfInterval({ start: startDate, end: endDate })
-    
+    const today = new Date()
+    const start = subMonths(today, 1)
+    const days = eachDayOfInterval({ start, end: today })
+
     return days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd')
-      const dayTransactions = transactions.filter(t => t.date === dayStr)
-      const income = dayTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0)
-      const expense = dayTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0)
+      const dayTransactions = filteredByPeriod.filter((t: any) => t.date === dayStr)
+      const income = dayTransactions.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + Number(t.amount), 0)
+      const expense = dayTransactions.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + Number(t.amount), 0)
       return {
         date: format(day, 'dd/MM'),
         income,
@@ -208,10 +283,16 @@ export default function ReportsPage() {
     })
   })()
 
+  // ============================================================
+  // EXPORTAÇÃO (MELHORADA)
+  // ============================================================
   const handleExport = (format: 'pdf' | 'csv') => {
-    alert(`Exportando relatório em ${format.toUpperCase()}`)
+    showToast(`📄 Exportação em ${format.toUpperCase()} estará disponível em breve.`, 'info')
   }
 
+  // ============================================================
+  // CONFIGURAÇÕES DE UI
+  // ============================================================
   const periods = [
     { key: '1m', label: '1 mês' },
     { key: '3m', label: '3 meses' },
@@ -298,7 +379,7 @@ export default function ReportsPage() {
 
         {loading ? (
           <ReportsSkeleton />
-        ) : transactions.length === 0 ? (
+        ) : filteredByPeriod.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
             <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
               <BarChart3 size={40} className="text-gray-400 dark:text-gray-500" />
@@ -430,23 +511,23 @@ export default function ReportsPage() {
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => handleExport('pdf')}
+                onClick={() => setShowExportModal(true)}
                 className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2"
               >
-                <FileText size={16} />
-                PDF
-              </button>
-              <button
-                onClick={() => handleExport('csv')}
-                className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-3 rounded-xl font-bold text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <FileSpreadsheet size={16} />
-                CSV
+                <Download size={16} />
+                Exportar
               </button>
             </div>
           </div>
         )}
       </div>
+
+      {/* 🔥 MODAL DE EXPORTAÇÃO (MELHORADO) */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExport={handleExport}
+      />
     </div>
   )
 }
