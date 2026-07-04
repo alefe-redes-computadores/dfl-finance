@@ -1,22 +1,21 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import {
-  ArrowLeft,
-  Save,
-  Trash2,
-  RefreshCw,
-  Pencil,
-  Car,
-  Home,
-  Percent,
+  ArrowUpDown,
+  Search,
+  Plus,
+  X,
   ChevronDown,
+  RefreshCw,
+  Trash2,
   CheckCircle2,
   AlertTriangle,
   Clock,
-  Building2,
-  Calendar,
+  Car,
+  Home,
+  Percent,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -24,7 +23,6 @@ import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-
 
 type Installment = {
   id: string
@@ -36,45 +34,71 @@ type Installment = {
   number: number
 }
 
-export default function FinancingDetailPage() {
+export default function FinancingsPage() {
   const router = useRouter()
-  const params = useParams()
-  const financingId = params.id as string
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useAuth()
+  const { user, context, appMode } = useAuth()
 
+  const [search, setSearch] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
+  const [sortBy, setSortBy] = useState("updated_at")
+  const [sortOrder, setSortOrder] = useState("desc")
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
-  const [expandedInstallments, setExpandedInstallments] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Busca dados locais
-  const { data: localFinancings, loading, refresh } = useLocalData({
+  const { data: financings, loading, refresh } = useLocalData({
     table: 'financings' as any,
     filters: { context },
   })
 
-  const financingData = (localFinancings || []).find((f: any) => f.id === financingId) as any
-
-  // Busca parcelas vinculadas
+  // Busca parcelas vinculadas (todos de uma vez)
   const { data: allInstallments } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, type: 'financing_installment', financing_id: financingId },
+    filters: { context, type: 'financing_installment' },
   })
 
-  const installments = (allInstallments || []) as Installment[]
+  // Agrupa parcelas por financing_id
+  const installmentsByFinancing = (allInstallments || []).reduce((acc: Record<string, Installment[]>, inst: any) => {
+    if (inst.financing_id) {
+      if (!acc[inst.financing_id]) acc[inst.financing_id] = []
+      acc[inst.financing_id].push(inst)
+    }
+    return acc
+  }, {})
 
-  const { update: updateFinancing, remove: removeFinancing } = useLocalData({
+  // Remove financiamento
+  const { remove } = useLocalData({
     table: 'financings' as any,
   })
 
-  const { update: updateTransaction, remove: removeTransaction } = useLocalData({
-    table: 'transactions' as any,
-  })
+  const handleDelete = async () => {
+    if (!deleteModal) return
+    try {
+      // Remove também as parcelas vinculadas
+      const installments = installmentsByFinancing[deleteModal] || []
+      const { remove: removeTransaction } = useLocalData({
+        table: 'transactions' as any,
+      })
+      for (const inst of installments) {
+        await removeTransaction(inst.id)
+      }
+      await remove(deleteModal)
+      showToast("Financiamento excluído com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      refresh()
+    } catch {
+      showToast("Erro ao excluir financiamento", "error")
+      errorHaptic()
+    }
+  }
 
   // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -93,82 +117,26 @@ export default function FinancingDetailPage() {
     }
   }, [refreshing, refresh])
 
-  // Pagar parcela
-  const handlePayInstallment = async (installment: Installment) => {
-    try {
-      await updateTransaction(installment.id, {
-        paid: true,
-        paid_date: new Date().toISOString().split("T")[0],
-      })
+  // Filtros e ordenação
+  const filteredFinancings = (financings || []).filter((fin: any) => {
+    if (!search) return true
+    const s = search.toLowerCase()
+    return (
+      (fin.description && fin.description.toLowerCase().includes(s)) ||
+      (fin.bank && fin.bank.toLowerCase().includes(s)) ||
+      (fin.asset && fin.asset.toLowerCase().includes(s)) ||
+      (fin.notes && fin.notes.toLowerCase().includes(s))
+    )
+  })
 
-      // Verifica se todas as parcelas foram pagas
-      const updatedInstallments = installments.map((i: Installment) =>
-        i.id === installment.id ? { ...i, paid: true } : i
-      )
-      const allPaid = updatedInstallments.every((i: Installment) => i.paid)
-      if (allPaid) {
-        await updateFinancing(financingId, { status: "paid" })
-      }
-
-      showToast("Parcela paga com sucesso!", "success")
-      success()
-      refresh()
-    } catch (err: any) {
-      showToast(err?.message || "Erro ao pagar parcela", "error")
-      errorHaptic()
+  const sortedFinancings = [...filteredFinancings].sort((a: any, b: any) => {
+    let valA = a[sortBy] || ""
+    let valB = b[sortBy] || ""
+    if (sortBy === "total_amount" || sortBy === "remaining_amount") {
+      return sortOrder === "desc" ? Number(b[sortBy]) - Number(a[sortBy]) : Number(a[sortBy]) - Number(b[sortBy])
     }
-  }
-
-  // Desfazer pagamento
-  const handleUndoPayment = async (installment: Installment) => {
-    try {
-      await updateTransaction(installment.id, {
-        paid: false,
-        paid_date: null,
-      })
-
-      if (financingData?.status === "paid") {
-        await updateFinancing(financingId, { status: "active" })
-      }
-
-      showToast("Pagamento desfeito com sucesso!", "success")
-      success()
-      refresh()
-    } catch (err: any) {
-      showToast(err?.message || "Erro ao desfazer pagamento", "error")
-      errorHaptic()
-    }
-  }
-
-  // Excluir parcela
-  const handleDeleteInstallment = async (installmentId: string) => {
-    try {
-      await removeTransaction(installmentId)
-      showToast("Parcela excluída com sucesso!", "success")
-      success()
-      setDeleteModal(null)
-      refresh()
-    } catch {
-      showToast("Erro ao excluir parcela", "error")
-      errorHaptic()
-    }
-  }
-
-  // Excluir financiamento
-  const handleDeleteFinancing = async () => {
-    try {
-      for (const inst of installments) {
-        await removeTransaction(inst.id)
-      }
-      await removeFinancing(financingId)
-      showToast("Financiamento excluído com sucesso!", "success")
-      success()
-      router.back()
-    } catch {
-      showToast("Erro ao excluir financiamento", "error")
-      errorHaptic()
-    }
-  }
+    return sortOrder === "desc" ? String(valB).localeCompare(String(valA)) : String(valA).localeCompare(String(valB))
+  })
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -210,54 +178,17 @@ export default function FinancingDetailPage() {
   const getAssetIcon = (type: string) => {
     switch (type) {
       case "vehicle":
-        return <Car size={20} className="text-teal-500" />
+        return <Car size={16} className="text-teal-500 flex-shrink-0" />
       case "property":
-        return <Home size={20} className="text-teal-500" />
+        return <Home size={16} className="text-teal-500 flex-shrink-0" />
       default:
-        return <Percent size={20} className="text-teal-500" />
+        return <Percent size={16} className="text-teal-500 flex-shrink-0" />
     }
-  }
-
-  const paidInstallments = installments.filter((i: Installment) => i.paid)
-  const totalPaid = paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0)
-  const remaining = (financingData?.total_amount || 0) - totalPaid
-
-  if (loading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <ArrowLeft size={20} />
-            </div>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Carregando...</h1>
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <LoadingSkeleton count={3} />
-        </div>
-      </div>
-    )
-  }
-
-  if (!financingData) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Financiamento não encontrado</h1>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {/* Bolinha de loading */}
+      {/* Bolinha de loading sutil */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
@@ -274,225 +205,254 @@ export default function FinancingDetailPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">
-                {financingData.description || "Financiamento"}
-              </h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                {getStatusBadge(financingData.status)}
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {formatDate(financingData.start_date)}
-                </span>
-              </div>
-            </div>
+      {/* Header fixo */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
+        {/* Barra do topo */}
+        <div className="flex items-center justify-between pt-4 mb-3">
+          <div>
+            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
+              Financiamentos
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {appMode === "personal_only" ? "Pessoais" : "Empresariais e Pessoais"}
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => router.push(`/financings/new?edit=${financingId}`)}
+              onClick={() => setShowSearch(!showSearch)}
               className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              aria-label="Editar"
+              aria-label="Buscar"
             >
-              <Pencil size={18} />
+              {showSearch ? <X size={18} /> : <Search size={18} />}
             </button>
             <button
-              onClick={handleDeleteFinancing}
-              className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
-              aria-label="Excluir"
+              onClick={() =>
+                setSortOrder(sortOrder === "desc" ? "asc" : "desc")
+              }
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Ordenar"
             >
-              <Trash2 size={18} />
+              <ArrowUpDown size={18} />
+            </button>
+            <button
+              onClick={() => router.push("/financings/new")}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+              aria-label="Novo financiamento"
+            >
+              <Plus size={18} />
             </button>
           </div>
         </div>
+
+        {/* Search */}
+        {showSearch && (
+          <div className="relative mb-2">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Buscar financiamento..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
+          </div>
+        )}
+
+        {/* Filtros */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setSortBy("updated_at")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              sortBy === "updated_at"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Recentes
+          </button>
+          <button
+            onClick={() => setSortBy("total_amount")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              sortBy === "total_amount"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Valor
+          </button>
+          <button
+            onClick={() => setSortBy("start_date")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              sortBy === "start_date"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Início
+          </button>
+        </div>
       </div>
 
-      {/* Conteúdo */}
+      {/* Lista */}
       <div
         ref={scrollRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4"
+        className="flex-1 overflow-y-auto px-4 pt-3 pb-24"
       >
-        {/* Cards de resumo */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Valor Total</p>
-            <p className="text-xl font-black text-slate-800 dark:text-slate-200">
-              {formatCurrency(financingData.total_amount || 0)}
-            </p>
+        {loading ? (
+          <Skeleton count={4} />
+        ) : sortedFinancings.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Percent size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">Nenhum financiamento</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Toque no + para adicionar</p>
           </div>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Restante</p>
-            <p className={`text-xl font-black ${remaining <= 0 ? "text-teal-500" : "text-orange-500"}`}>
-              {formatCurrency(Math.max(0, remaining))}
-            </p>
-          </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedFinancings.map((fin: any) => {
+              const installments = installmentsByFinancing[fin.id] || []
+              const paidInstallments = installments.filter((i: Installment) => i.paid)
+              const totalPaid = paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0)
+              const remaining = (fin.total_amount || 0) - totalPaid
+              const isExpanded = expandedId === fin.id
 
-        {/* Informações */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            {getAssetIcon(financingData.asset_type)}
-            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              {financingData.asset_type === "vehicle" ? "Veículo" : financingData.asset_type === "property" ? "Imóvel" : "Outro"}
-            </span>
-          </div>
-          {financingData.asset && (
-            <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Bem</p>
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{financingData.asset}</p>
-            </div>
-          )}
-          {financingData.bank && (
-            <div className="flex items-center gap-2">
-              <Building2 size={16} className="text-slate-400" />
-              <span className="text-sm text-slate-600 dark:text-slate-400">{financingData.bank}</span>
-            </div>
-          )}
-          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="text-center">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Parcelas</p>
-              <p className="font-bold text-slate-800 dark:text-slate-200">{financingData.installments_count}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Valor Parcela</p>
-              <p className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(financingData.installment_amount || 0)}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Juros</p>
-              <p className="font-bold text-slate-800 dark:text-slate-200">
-                {financingData.interest_rate ? `${financingData.interest_rate}%` : "-"}
-              </p>
-            </div>
-          </div>
-          {financingData.start_date && (
-            <div className="flex items-center gap-2">
-              <Calendar size={14} className="text-slate-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Início: {formatDate(financingData.start_date)}
-              </span>
-            </div>
-          )}
-          {financingData.first_due_date && (
-            <div className="flex items-center gap-2">
-              <Calendar size={14} className="text-slate-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                1º Vencimento: {formatDate(financingData.first_due_date)}
-              </span>
-            </div>
-          )}
-          {financingData.notes && (
-            <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-0.5">Observações</p>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{financingData.notes}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Parcelas */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="font-black text-slate-800 dark:text-slate-200">Parcelas</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {paidInstallments.length}/{installments.length} pagas — {formatCurrency(totalPaid)}
-              </p>
-            </div>
-          </div>
-
-          {installments.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">
-              Nenhuma parcela gerada. As parcelas são geradas automaticamente ao criar o financiamento.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {installments
-                .sort((a: Installment, b: Installment) => a.number - b.number)
-                .slice(0, expandedInstallments ? undefined : 5)
-                .map((inst: Installment) => (
-                  <div
-                    key={inst.id}
-                    className={`flex items-center justify-between rounded-xl px-3 py-2.5 transition-colors ${
-                      inst.paid
-                        ? "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800"
-                        : "bg-slate-50 dark:bg-slate-800"
-                    }`}
+              return (
+                <div
+                  key={fin.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all"
+                >
+                  {/* Card principal */}
+                  <button
+                    onClick={() => router.push(`/financings/${fin.id}`)}
+                    className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <button
-                        onClick={() => inst.paid ? handleUndoPayment(inst) : handlePayInstallment(inst)}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                          inst.paid
-                            ? "bg-teal-500 border-teal-500 text-white"
-                            : "border-slate-300 dark:border-slate-600 hover:border-teal-500"
-                        }`}
-                      >
-                        {inst.paid && <CheckCircle2 size={14} />}
-                      </button>
-                      <div className="min-w-0">
-                        <p className={`text-sm font-semibold truncate ${inst.paid ? "text-teal-700 dark:text-teal-300" : "text-slate-800 dark:text-slate-200"}`}>
-                          Parcela #{inst.number}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {getAssetIcon(fin.asset_type)}
+                          <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {fin.description || "Financiamento"}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(fin.status)}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {formatDate(fin.start_date)}
+                          </span>
+                        </div>
+                        {fin.asset && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            {fin.asset}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-black text-lg text-slate-800 dark:text-slate-200">
+                          {formatCurrency(fin.total_amount || 0)}
                         </p>
-                        <p className={`text-xs ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500 dark:text-slate-400"}`}>
-                          {formatDate(inst.due_date)}
-                          {inst.paid && inst.paid_date && ` — Pago em ${formatDate(inst.paid_date)}`}
-                        </p>
+                        {fin.status === "active" && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Resta: {formatCurrency(Math.max(0, remaining))}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`font-bold ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500"}`}>
-                        {formatCurrency(inst.amount)}
-                      </span>
-                      <button
-                        onClick={() => setDeleteModal(inst.id)}
-                        className="p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
-                        aria-label="Excluir parcela"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+
+                    {fin.bank && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        Banco: {fin.bank}
+                      </p>
+                    )}
+
+                    {/* Parcelas (expandido) */}
+                    {installments.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            Parcelas ({paidInstallments.length}/{installments.length})
+                          </span>
+                          <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
+                            {formatCurrency(totalPaid)}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                          {installments.slice(0, isExpanded ? undefined : 3).map((inst: Installment) => (
+                            <div key={inst.id} className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${inst.paid ? "bg-teal-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                                <span className="text-slate-600 dark:text-slate-400">
+                                  #{inst.number} — {formatDate(inst.due_date)}
+                                </span>
+                              </div>
+                              <span className={`font-bold ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500"}`}>
+                                {formatCurrency(inst.amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {installments.length > 3 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setExpandedId(isExpanded ? null : fin.id)
+                            }}
+                            className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold mt-1 py-1"
+                          >
+                            {isExpanded ? "Ver menos" : `Ver todas (${installments.length})`}
+                            <ChevronDown size={12} className={`inline ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Ações */}
+                  <div className="px-4 pb-3 flex gap-2">
+                    <button
+                      onClick={() => router.push(`/financings/${fin.id}`)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors"
+                    >
+                      Ver Detalhes
+                    </button>
+                    <button
+                      onClick={() => setDeleteModal(fin.id)}
+                      className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                      aria-label="Excluir"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                ))}
-              {installments.length > 5 && (
-                <button
-                  onClick={() => setExpandedInstallments(!expandedInstallments)}
-                  className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold py-2"
-                >
-                  {expandedInstallments ? "Ver menos" : `Ver todas (${installments.length})`}
-                  <ChevronDown size={12} className={`inline ml-1 transition-transform ${expandedInstallments ? "rotate-180" : ""}`} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Modal de exclusão de parcela */}
+      {/* Modal de exclusão */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
-              Excluir Parcela
+              Excluir Financiamento
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-              Tem certeza que deseja excluir esta parcela? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir este financiamento e todas as suas parcelas? Esta ação não pode ser desfeita.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteModal(null)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm"
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => handleDeleteInstallment(deleteModal)}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm"
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
               >
                 Excluir
               </button>
