@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Save, RefreshCw, Loader2, Check, X,
   Bot, Settings, Sparkles, Zap, Brain, MessageSquare,
-  AlertCircle, Info, Shield, Key, Globe, Moon, Sun
+  AlertCircle, Info, Shield, Key, Globe, Moon, Sun,
+  Bell
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useTheme } from '@/contexts/ThemeContext'
