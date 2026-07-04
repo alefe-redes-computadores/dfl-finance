@@ -10,6 +10,7 @@ import {
   Check, Loader2, X, Plus, Wallet
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -20,7 +21,7 @@ export default function NewCardPage() {
   const { showToast } = useToast()
 
   const [accounts, setAccounts] = useState<any[]>([])
-  
+
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [tempColor, setTempColor] = useState('')
 
@@ -37,17 +38,20 @@ export default function NewCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE CONTAS
+  // ============================================================
+  const { data: localAccounts, loading: accLoading } = useLocalData({
+    table: 'accounts',
+    filters: { context: 'dfl' },
+    realtime: false,
+  })
+
   useEffect(() => {
-    async function loadAccounts() {
-      if (!user?.id) return
-      const { data } = await supabase
-        .from('accounts')
-        .select('id, name, color')
-        .match({ user_id: user.id, context: 'dfl' })
-      setAccounts(Array.isArray(data) ? data : [])
+    if (localAccounts) {
+      setAccounts(localAccounts)
     }
-    loadAccounts()
-  }, [user?.id])
+  }, [localAccounts])
 
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '')
@@ -85,13 +89,12 @@ export default function NewCardPage() {
     }
 
     try {
-      const { error } = await supabase.from('credit_cards').insert(payload)
-      if (error) throw error
-      
+      const { create } = useLocalData({ table: 'credit_cards' })
+      await create(payload)
       showToast('Cartão criado com sucesso!', 'success')
       router.push('/cards')
     } catch (error: any) {
-      showToast('Erro ao salvar cartão.', 'error')
+      showToast(`Erro ao salvar: ${error.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -133,7 +136,7 @@ export default function NewCardPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-slate-900 flex flex-col font-sans pb-24 relative transition-colors duration-300">
-      
+
       <div className="pt-6 pb-8 px-4 shadow-sm relative transition-colors duration-300" style={{ backgroundColor: color }}>
         <div className="flex items-center justify-between mb-6 text-white">
           <button onClick={() => router.back()} className="p-2 -ml-2">
@@ -158,7 +161,7 @@ export default function NewCardPage() {
       </div>
 
       <div className="flex-1 bg-white dark:bg-slate-800 transition-colors duration-300">
-        
+
         <div className="p-4 border-b border-gray-50 dark:border-slate-700 flex flex-col gap-3">
           <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <Tag size={18} /> <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">Bandeira</span>
@@ -239,7 +242,7 @@ export default function NewCardPage() {
                 style={{ backgroundColor: c }}
               />
             ))}
-            
+
             <button 
               onClick={() => {
                 setTempColor(color)
@@ -319,7 +322,7 @@ export default function NewCardPage() {
         <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowColorPicker(false)}>
           <div className="bg-[#303030] dark:bg-slate-800 rounded-3xl p-6 w-full max-w-xs shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-white font-bold text-lg mb-4">Selecionar cor</h3>
-            
+
             <div className="grid grid-cols-4 gap-4 mb-6">
                {PREDEFINED_COLORS.map(c => (
                   <button 
