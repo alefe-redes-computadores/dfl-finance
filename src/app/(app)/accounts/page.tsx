@@ -204,7 +204,7 @@ export default function AccountsPage() {
         className="flex-1 overflow-y-auto px-4 pt-3 pb-24"
       >
         {loading ? (
-          <LoadingSkeleton count={4} />
+          <Skeleton count={4} />
         ) : filteredAccounts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Wallet size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
