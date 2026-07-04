@@ -1,403 +1,410 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
 import {
-  ChevronLeft, Plus, Loader2,
-  Repeat, Calendar, Pause, Play, RefreshCw,
-  AlertTriangle, Clock, CheckCircle2
-} from 'lucide-react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import { getDynamicIcon } from '@/lib/iconUtils'
-import { useToast } from '@/contexts/ToastContext'
-import { useLocalData } from '@/hooks/useLocalData'
+  ArrowUpDown,
+  Search,
+  Plus,
+  X,
+  ChevronDown,
+  RefreshCw,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Repeat,
+  Calendar,
+  CreditCard,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { LoadingSkeleton, Skeleton } from "@/components/Skeleton"
+import { useAuth } from "@/contexts/AuthContext"
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
-const SubscriptionsSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-700" />
-          <div className="space-y-2">
-            <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-6 w-28 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-        </div>
-        <div className="text-right space-y-2">
-          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-          <div className="h-6 w-10 bg-gray-100 dark:bg-slate-700/50 rounded ml-auto" />
-        </div>
-      </div>
-    </div>
-
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-slate-700" />
-            <div className="space-y-2">
-              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-            </div>
-          </div>
-          <div className="text-right space-y-2">
-            <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-            <div className="h-3 w-12 bg-gray-100 dark:bg-slate-700/50 rounded ml-auto" />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1 h-9 bg-gray-200 dark:bg-slate-700 rounded-full" />
-          <div className="flex-1 h-9 bg-gray-100 dark:bg-slate-700/50 rounded-full" />
-          <div className="w-20 h-9 bg-gray-200 dark:bg-slate-700 rounded-full" />
-        </div>
-      </div>
-    ))}
-  </div>
-)
-
-function SubscriptionsContent() {
-  const { user } = useAuth()
+export default function SubscriptionsPage() {
   const router = useRouter()
-  const { context } = useContext_()
   const { showToast } = useToast()
-  const [loading, setLoading] = useState(true)
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { pendingCount } = useLocalSync()
+  const { user, context, appMode } = useAuth()
+
+  const [search, setSearch] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
+  const [sortBy, setSortBy] = useState("updated_at")
+  const [sortOrder, setSortOrder] = useState("desc")
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [totalMonthly, setTotalMonthly] = useState(0)
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
-  const { data: localSubscriptions, loading: subsLoading, reload: reloadSubscriptions } = useLocalData({
-    table: 'subscriptions',
+  // Busca dados locais
+  const { data: subscriptions, loading, refresh } = useLocalData({
+    table: 'subscriptions' as any,
     filters: { context },
-    orderBy: { field: 'due_day', direction: 'asc' },
-    realtime: true,
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
+  // Remove assinatura
+  const { remove } = useLocalData({
+    table: 'subscriptions' as any,
+  })
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadSubscriptions().finally(() => setRefreshing(false))
-    }
-  }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
-  const loadSubscriptions = async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
+  const handleDelete = async () => {
+    if (!deleteModal) return
     try {
-      await reloadSubscriptions()
-
-      const subs = localSubscriptions || []
-      const total = subs
-        .filter((s: any) => s.status === 'active')
-        .reduce((a: number, s: any) => a + (Number(s.amount) || 0), 0)
-      setTotalMonthly(total)
-    } catch (err) {
-      console.error('Erro ao carregar assinaturas:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
+      await remove(deleteModal)
+      showToast("Assinatura excluída com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      refresh()
+    } catch {
+      showToast("Erro ao excluir assinatura", "error")
+      errorHaptic()
     }
   }
 
-  useEffect(() => { loadSubscriptions() }, [user?.id, context])
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
-  // ============================================================
-  // HANDLERS (COM HOOK LOCAL)
-  // ============================================================
-  const handleToggleStatus = async (sub: any) => {
-    try {
-      const { update } = useLocalData({ table: 'subscriptions' })
-      const newStatus = sub.status === 'active' ? 'paused' : 'active'
-      await update(sub.id, { status: newStatus })
-      showToast(`Assinatura ${newStatus === 'active' ? 'reativada' : 'pausada'}!`, 'success')
-      loadSubscriptions()
-    } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Cancelar esta assinatura?')) return
-    try {
-      const { update } = useLocalData({ table: 'subscriptions' })
-      await update(id, { status: 'cancelled' })
-      showToast('Assinatura cancelada.', 'info')
-      loadSubscriptions()
-    } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
-    }
-  }
-
-  const handleGenerate = async (sub: any) => {
-    if (!user?.id) return
-
-    const today = new Date()
-    const dueDate = new Date(today.getFullYear(), today.getMonth(), sub.due_day)
-
-    if (sub.last_generated) {
-      const lastGen = new Date(sub.last_generated + 'T12:00:00')
-      if (lastGen.getMonth() === today.getMonth() && lastGen.getFullYear() === today.getFullYear()) {
-        showToast('Esta assinatura já foi gerada este mês.', 'warning')
-        return
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        refresh().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
       }
     }
+  }, [refreshing, refresh])
 
-    try {
-      const { create } = useLocalData({ table: 'transactions' })
-      await create({
-        user_id: user.id,
-        type: 'expense',
-        amount: sub.amount,
-        description: `${sub.name} (Assinatura)`,
-        category_id: sub.category_id,
-        account_id: sub.account_id,
-        date: format(dueDate, 'yyyy-MM-dd'),
-        status: 'pending',
-        context: sub.context,
-        affects_balance: true,
-      })
+  // Filtros e ordenação
+  const filteredSubscriptions = (subscriptions || []).filter((sub: any) => {
+    if (!search) return true
+    const s = search.toLowerCase()
+    return (
+      (sub.name && sub.name.toLowerCase().includes(s)) ||
+      (sub.category && sub.category.toLowerCase().includes(s)) ||
+      (sub.notes && sub.notes.toLowerCase().includes(s))
+    )
+  })
 
-      const { update } = useLocalData({ table: 'subscriptions' })
-      await update(sub.id, { last_generated: format(today, 'yyyy-MM-dd') })
+  const sortedSubscriptions = [...filteredSubscriptions].sort((a: any, b: any) => {
+    let valA = a[sortBy] || ""
+    let valB = b[sortBy] || ""
+    if (sortBy === "amount" || sortBy === "monthly_total") {
+      return sortOrder === "desc" ? Number(b[sortBy]) - Number(a[sortBy]) : Number(a[sortBy]) - Number(b[sortBy])
+    }
+    return sortOrder === "desc" ? String(valB).localeCompare(String(valA)) : String(valA).localeCompare(String(valB))
+  })
 
-      showToast(`Transação gerada para "${sub.name}"!`, 'success')
-      loadSubscriptions()
-    } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+
+  const formatDate = (date: string | null) => {
+    if (!date) return ""
+    return new Date(date).toLocaleDateString("pt-BR")
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+            <Clock size={12} /> Ativa
+          </span>
+        )
+      case "cancelled":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
+            <AlertTriangle size={12} /> Cancelada
+          </span>
+        )
+      case "paused":
+        return (
+          <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
+            <AlertTriangle size={12} /> Pausada
+          </span>
+        )
+      default:
+        return (
+          <span className="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+            {status}
+          </span>
+        )
     }
   }
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  const daysUntil = (dueDay: number) => {
-    const today = new Date()
-    const dueDate = new Date(today.getFullYear(), today.getMonth(), dueDay)
-    const diff = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return diff
+  const getBillingCycleLabel = (cycle: string) => {
+    switch (cycle) {
+      case "monthly": return "Mensal"
+      case "yearly": return "Anual"
+      case "weekly": return "Semanal"
+      case "quarterly": return "Trimestral"
+      case "semiannually": return "Semestral"
+      default: return cycle
+    }
   }
 
-  const getUrgencyInfo = (days: number) => {
-    if (days < 0) return { color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', icon: <AlertTriangle size={10} />, label: 'Venceu!' }
-    if (days === 0) return { color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', icon: <Clock size={10} />, label: 'Vence hoje' }
-    if (days <= 3) return { color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', icon: <Clock size={10} />, label: `em ${days} dia(s)` }
-    if (days <= 7) return { color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', icon: <Calendar size={10} />, label: `em ${days} dia(s)` }
-    return { color: 'text-gray-400 dark:text-gray-500', bg: 'bg-transparent', icon: <Calendar size={10} />, label: `em ${days} dia(s)` }
-  }
-
-  const subscriptions = localSubscriptions || []
+  // Calcula total mensal
+  const monthlyTotal = (subscriptions || []).reduce((sum: number, sub: any) => {
+    if (sub.status !== "active") return sum
+    let monthlyAmount = sub.amount || 0
+    switch (sub.billing_cycle) {
+      case "yearly": monthlyAmount = monthlyAmount / 12; break
+      case "weekly": monthlyAmount = monthlyAmount * 4.33; break
+      case "quarterly": monthlyAmount = monthlyAmount / 3; break
+      case "semiannually": monthlyAmount = monthlyAmount / 6; break
+    }
+    return sum + monthlyAmount
+  }, 0)
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-
-      {loadingPulse && (
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      {/* Bolinha de loading sutil */}
+      {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <ContextToggle />
-        <button
-          onClick={() => router.push('/subscriptions/new')}
-          className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
-        >
-          <Plus size={20} className="text-white" />
-        </button>
-      </div>
-
-      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Assinaturas</h2>
-
-      {loading ? (
-        <SubscriptionsSkeleton />
-      ) : subscriptions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Repeat size={40} className="text-gray-400 dark:text-gray-500" />
+      {/* Pull-to-refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
-          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhuma assinatura</h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
-            Cadastre suas contas fixas mensais e receba alertas antes do vencimento.
-          </p>
-          <button
-            onClick={() => router.push('/subscriptions/new')}
-            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
-          >
-            Criar assinatura
-          </button>
         </div>
-      ) : (
-        <div className="animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-                  <Repeat size={20} className="text-teal-700 dark:text-teal-400" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase">Total mensal</p>
-                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{formatCurrency(totalMonthly)}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase">Ativas</p>
-                <p className="text-xl font-bold text-teal-700 dark:text-teal-400">
-                  {subscriptions.filter((s: any) => s.status === 'active').length}
-                </p>
-              </div>
+      )}
+
+      {/* Header fixo */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
+        {/* Barra do topo */}
+        <div className="flex items-center justify-between pt-4 mb-3">
+          <div>
+            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
+              Assinaturas
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {appMode === "personal_only" ? "Pessoais" : "Empresariais e Pessoais"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Buscar"
+            >
+              {showSearch ? <X size={18} /> : <Search size={18} />}
+            </button>
+            <button
+              onClick={() =>
+                setSortOrder(sortOrder === "desc" ? "asc" : "desc")
+              }
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Ordenar"
+            >
+              <ArrowUpDown size={18} />
+            </button>
+            <button
+              onClick={() => router.push("/subscriptions/new")}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+              aria-label="Nova assinatura"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Card de total mensal */}
+        <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 mb-3 text-white shadow-lg shadow-teal-500/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Total Mensal</p>
+              <p className="text-2xl font-black">{formatCurrency(monthlyTotal)}</p>
+            </div>
+            <div className="bg-white/20 rounded-xl p-2">
+              <Calendar size={24} />
             </div>
           </div>
+          <p className="text-xs text-white/70 mt-1">
+            {subscriptions?.filter((s: any) => s.status === "active").length || 0} assinaturas ativas
+          </p>
+        </div>
 
+        {/* Search */}
+        {showSearch && (
+          <div className="relative mb-2">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Buscar assinatura..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
+          </div>
+        )}
+
+        {/* Filtros */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setSortBy("updated_at")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              sortBy === "updated_at"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Recentes
+          </button>
+          <button
+            onClick={() => setSortBy("amount")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              sortBy === "amount"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Valor
+          </button>
+          <button
+            onClick={() => setSortBy("name")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              sortBy === "name"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Nome
+          </button>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto px-4 pt-3 pb-24"
+      >
+        {loading ? (
+          <LoadingSkeleton count={4} />
+        ) : sortedSubscriptions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Repeat size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">Nenhuma assinatura</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Toque no + para adicionar</p>
+          </div>
+        ) : (
           <div className="space-y-3">
-            {subscriptions.map((sub: any) => {
-              const IconComp = getDynamicIcon(sub.icon || 'repeat')
-              const isPaused = sub.status === 'paused'
-              const isCancelled = sub.status === 'cancelled'
-              const isActive = sub.status === 'active'
-              const days = daysUntil(sub.due_day)
-              const urgency = getUrgencyInfo(days)
-
-              return (
-                <div
-                  key={sub.id}
-                  className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border transition-all active:scale-[0.98] ${
-                    isCancelled ? 'opacity-50 border-gray-50 dark:border-slate-700' :
-                    isPaused ? 'border-amber-200 dark:border-amber-800' :
-                    days < 0 ? 'border-red-200 dark:border-red-800' :
-                    days <= 3 ? 'border-orange-200 dark:border-orange-800' :
-                    'border-gray-50 dark:border-slate-700'
-                  }`}
+            {sortedSubscriptions.map((sub: any) => (
+              <div
+                key={sub.id}
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all"
+              >
+                {/* Card principal */}
+                <button
+                  onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
+                  className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                        isCancelled ? 'opacity-50' : ''
-                      }`} style={{ backgroundColor: `${sub.color}20`, color: sub.color }}>
-                        <IconComp size={18} />
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Repeat size={16} className="text-teal-500 flex-shrink-0" />
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                          {sub.name || "Assinatura"}
+                        </h3>
                       </div>
-                      <div>
-                        <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{sub.name}</p>
-                        <div className="flex items-center gap-1.5">
-                          {isPaused && <Pause size={12} className="text-amber-500" />}
-                          {isCancelled && <CheckCircle2 size={12} className="text-gray-400" />}
-                          <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                            {sub.categories?.name || 'Geral'} • Vence dia {sub.due_day}
-                          </p>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(sub.status)}
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          {getBillingCycleLabel(sub.billing_cycle)}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`font-bold text-[14px] ${isCancelled ? 'text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                        {formatCurrency(Number(sub.amount))}
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-black text-lg text-slate-800 dark:text-slate-200">
+                        {formatCurrency(sub.amount || 0)}
                       </p>
-                      {!isCancelled && !isPaused && (
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${urgency.color} ${urgency.bg} px-2 py-0.5 rounded-full mt-0.5`}>
-                          {urgency.icon}
-                          {urgency.label}
-                        </span>
-                      )}
-                      {isPaused && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full mt-0.5">
-                          <Pause size={10} />
-                          Pausada
-                        </span>
-                      )}
-                      {isCancelled && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full mt-0.5">
-                          <CheckCircle2 size={10} />
-                          Cancelada
-                        </span>
-                      )}
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        /{sub.billing_cycle === "monthly" ? "mês" : sub.billing_cycle === "yearly" ? "ano" : sub.billing_cycle}
+                      </p>
                     </div>
                   </div>
 
-                  {!isCancelled && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleGenerate(sub)}
-                        className="flex-1 bg-teal-700 text-white py-2 rounded-full text-xs font-bold hover:bg-teal-800 transition-colors active:scale-95"
-                      >
-                        Gerar agora
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(sub)}
-                        className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors active:scale-95 flex items-center justify-center gap-1 ${
-                          isPaused 
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                        }`}
-                      >
-                        {isPaused ? <Play size={12} /> : <Pause size={12} />}
-                        {isPaused ? 'Reativar' : 'Pausar'}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(sub.id)}
-                        className="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors active:scale-95"
-                      >
-                        Cancelar
-                      </button>
+                  {sub.next_due_date && (
+                    <div className="flex items-center gap-1 mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      <Calendar size={12} />
+                      <span>Próximo: {formatDate(sub.next_due_date)}</span>
                     </div>
                   )}
+
+                  {sub.category && (
+                    <span className="inline-block mt-2 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full">
+                      {sub.category}
+                    </span>
+                  )}
+                </button>
+
+                {/* Ações */}
+                <div className="px-4 pb-3 flex gap-2">
+                  <button
+                    onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => setDeleteModal(sub.id)}
+                    className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                    aria-label="Excluir"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-              )
-            })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal de exclusão */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+              Excluir Assinatura
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir esta assinatura? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
-  )
-}
-
-export default function SubscriptionsPage() {
-  return (
-    <ContextProvider>
-      <SubscriptionsContent />
-    </ContextProvider>
   )
 }
