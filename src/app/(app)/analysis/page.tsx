@@ -139,11 +139,11 @@ function AnalysisContent() {
   // ============================================================
   // 🔥 JOIN EM MEMÓRIA (TRANSAÇÕES + CATEGORIAS + CONTAS)
   // ============================================================
-  const transactionsWithJoin = (localTransactions || []).map(tx => {
-    const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
-    const account = (localAccounts || []).find((a: any) => a.id === tx.account_id)
-    return {
-      ...tx,
+  const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
+  const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
+  const account = (localAccounts || []).find((a: any) => a.id === tx.account_id)
+  return {
+    ...tx,
       categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
       accounts: account ? { name: account.name, color: account.color } : null,
     }
