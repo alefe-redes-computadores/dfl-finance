@@ -182,7 +182,7 @@ export default function AssistantSettingsPage() {
       }
 
       if (localSettings && localSettings.length > 0) {
-        await updateSettings(localSettings[0].id, payload)
+        await updateSettings((localSettings[0] as any).id, payload)
       } else {
         await createSettings(payload)
       }
