@@ -6,6 +6,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, ChevronRight, Trash2, X, Loader2 } from 'lucide-react'
 import Skeleton from '@/components/Skeleton'
+import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const TAG_COLORS = [
   '#264653', '#2a9d8f', '#1d3557', '#e76f51', '#2ecc71', 
@@ -17,8 +19,8 @@ const TAG_COLORS = [
 export default function TagsPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const { showToast } = useToast()
 
-  const [tags, setTags] = useState<any[]>([])
   const [context, setContext] = useState<'dfl' | 'personal'>('dfl')
   const [loading, setLoading] = useState(true)
 
@@ -28,29 +30,40 @@ export default function TagsPage() {
   const [color, setColor] = useState(TAG_COLORS[0])
   const [saving, setSaving] = useState(false)
 
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE TAGS (INDEXEDDB)
+  // ============================================================
+  const { data: localTags, loading: tagsLoading, reload: reloadTags } = useLocalData({
+    table: 'tags',
+    filters: { context },
+    orderBy: { field: 'name', direction: 'asc' },
+    realtime: true,
+  })
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
   const loadTags = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('tags')
-      .select('*')
-      .match({ user_id: user.id, context: context })
-      .order('name', { ascending: true })
-
-    if (error) {
-      console.error("Erro ao carregar tags:", error)
-      alert("Erro ao carregar tags: " + error.message)
+    try {
+      await reloadTags()
+    } catch (err) {
+      console.error("Erro ao carregar tags:", err)
+      showToast("Erro ao carregar tags: " + (err as Error).message, 'error')
+    } finally {
+      setLoading(false)
     }
-
-    setTags(Array.isArray(data) ? data : [])
-    setLoading(false)
-  }, [user?.id, context])
+  }, [user?.id, reloadTags, showToast])
 
   useEffect(() => {
     if (user?.id) { loadTags() }
   }, [loadTags])
 
+  // ============================================================
+  // HANDLERS (COM HOOK LOCAL)
+  // ============================================================
   function openEdit(tag: any) {
     setEditingTag(tag)
     setName(tag.name)
@@ -72,18 +85,20 @@ export default function TagsPage() {
     const payload = { user_id: user.id, context, name: name.trim(), color }
 
     try {
+      const { create, update } = useLocalData({ table: 'tags' })
+      
       if (editingTag) {
-        const { error } = await supabase.from('tags').update(payload).eq('id', editingTag.id)
-        if (error) throw error
+        await update(editingTag.id, payload)
+        showToast('Tag atualizada!', 'success')
       } else {
-        const { error } = await supabase.from('tags').insert([payload])
-        if (error) throw error
+        await create(payload)
+        showToast('Tag criada!', 'success')
       }
       setShowForm(false)
       loadTags()
     } catch (err: any) {
       console.error("Erro ao salvar tag:", err)
-      alert("Erro ao salvar tag: " + err.message)
+      showToast("Erro ao salvar tag: " + err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -93,21 +108,24 @@ export default function TagsPage() {
     if (!confirm('Deseja realmente excluir esta tag?')) return
     setSaving(true)
     try {
-      const { error } = await supabase.from('tags').delete().eq('id', id)
-      if (error) throw error
+      const { remove } = useLocalData({ table: 'tags' })
+      await remove(id)
+      showToast('Tag excluída.', 'info')
       setShowForm(false)
       loadTags()
     } catch (err: any) {
       console.error("Erro ao excluir:", err)
-      alert("Erro ao excluir: " + err.message)
+      showToast("Erro ao excluir: " + err.message, 'error')
     } finally {
       setSaving(false)
     }
   }
 
+  const tags = localTags || []
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-24 font-sans relative transition-colors duration-300">
-      
+
       <div className="bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-2 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-6">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
@@ -137,7 +155,7 @@ export default function TagsPage() {
           <div className="text-center py-20 text-gray-400 dark:text-gray-500 text-[14px]">Nenhuma tag cadastrada.</div>
         ) : (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none border border-gray-50 dark:border-slate-700 overflow-hidden">
-            {tags.map((tag, index) => (
+            {tags.map((tag: any, index: number) => (
               <div key={tag.id} className={`flex items-center justify-between px-5 py-4 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${index !== tags.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
                 <div className="flex items-center gap-4">
                   <div className="w-6 h-6 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: tag.color }}></div>
@@ -157,7 +175,7 @@ export default function TagsPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col justify-end" onClick={() => setShowForm(false)}>
           <div className="bg-white dark:bg-slate-800 flex-1 w-full max-w-md mx-auto mt-24 rounded-t-[32px] relative shadow-2xl flex flex-col animate-in slide-in-from-bottom-full duration-300" onClick={e => e.stopPropagation()}>
-            
+
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-50 dark:border-slate-700">
               <h2 className="font-bold text-[17px] text-gray-800 dark:text-gray-100">{editingTag ? 'Editar Tag' : 'Nova Tag'}</h2>
               <button onClick={() => setShowForm(false)} className="p-2 -mr-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
@@ -166,7 +184,7 @@ export default function TagsPage() {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
-              
+
               <div className="flex justify-center mb-8">
                 <div className="inline-flex items-center gap-3 border border-gray-100 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 rounded-full px-5 py-2 shadow-sm">
                   <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
