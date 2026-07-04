@@ -1,220 +1,299 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
-import { ChevronLeft, Plus, Wallet, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react'
-import BankLogo from '@/components/BankLogo'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
+import {
+  Search,
+  Plus,
+  X,
+  RefreshCw,
+  Wallet,
+  Building2,
+  CreditCard,
+  PiggyBank,
+  Trash2,
+  ChevronRight,
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { LoadingSkeleton } from "@/components/Skeleton"
+import { useAuth } from "@/contexts/AuthContext"
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
-const AccountsSkeleton = () => (
-  <div className="space-y-2 animate-pulse">
-    {[1, 2, 3, 4].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-slate-700" />
-          <div className="space-y-2">
-            <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-        </div>
-        <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
-      </div>
-    ))}
-  </div>
-)
+const ACCOUNT_ICONS: Record<string, any> = {
+  checking: Wallet,
+  savings: PiggyBank,
+  investment: Building2,
+  credit_card: CreditCard,
+  wallet: Wallet,
+  other: Wallet,
+}
+
+const ACCOUNT_LABELS: Record<string, string> = {
+  checking: "Conta Corrente",
+  savings: "Poupança",
+  investment: "Investimento",
+  credit_card: "Cartão de Crédito",
+  wallet: "Carteira",
+  other: "Outro",
+}
 
 export default function AccountsPage() {
   const router = useRouter()
-  const { user } = useAuth()
-  const { context } = useContext_()
-  const [loading, setLoading] = useState(true)
+  const { showToast } = useToast()
+  const { success, error: errorHaptic } = useHapticFeedback()
+  const { pendingCount } = useLocalSync()
+  const { user, context, appMode } = useAuth()
+
+  const [search, setSearch] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ============================================================
-  // 🔥 BUSCA LOCAL DE CONTAS (INDEXEDDB)
-  // ============================================================
-  const { data: localAccounts, loading: accLoading, syncing: accSyncing, reload: reloadAccounts } = useLocalData({
-    table: 'accounts',
+  // Busca dados locais
+  const { data: accounts, loading, refresh } = useLocalData({
+    table: 'accounts' as any,
     filters: { context },
-    orderBy: { field: 'name', direction: 'asc' },
-    realtime: true,
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
+  // Remove conta
+  const { remove } = useLocalData({
+    table: 'accounts' as any,
+  })
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadAccounts().finally(() => setRefreshing(false))
-    }
-  }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
-  // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
-  // ============================================================
-  const loadAccounts = async () => {
-    setLoading(true)
-    setLoadingPulse(true)
+  const handleDelete = async () => {
+    if (!deleteModal) return
     try {
-      await reloadAccounts()
-    } catch (err) {
-      console.error('Erro ao carregar contas:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
+      await remove(deleteModal)
+      showToast("Conta excluída com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      refresh()
+    } catch {
+      showToast("Erro ao excluir conta", "error")
+      errorHaptic()
     }
   }
 
-  // ============================================================
-  // EFETTO INICIAL
-  // ============================================================
-  useEffect(() => {
-    if (user?.id && context) {
-      loadAccounts()
-    }
-  }, [user?.id, context])
+  // Pull-to-refresh
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
-  // ============================================================
-  // FUNÇÕES AUXILIARES
-  // ============================================================
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        refresh().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
+      }
+    }
+  }, [refreshing, refresh])
+
+  // Filtros
+  const filteredAccounts = (accounts || []).filter((acc: any) => {
+    if (!search) return true
+    const s = search.toLowerCase()
+    return (
+      (acc.name && acc.name.toLowerCase().includes(s)) ||
+      (acc.bank && acc.bank.toLowerCase().includes(s)) ||
+      (acc.type && ACCOUNT_LABELS[acc.type]?.toLowerCase().includes(s))
+    )
+  })
+
   const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  const getBalanceColor = (val: number) => {
-    if (val > 0) return 'text-emerald-600 dark:text-emerald-400'
-    if (val < 0) return 'text-red-600 dark:text-red-400'
-    return 'text-gray-400 dark:text-gray-500'
-  }
-
-  const getBalanceIcon = (val: number) => {
-    if (val > 0) return <TrendingUp size={14} className="text-emerald-500 shrink-0" />
-    if (val < 0) return <TrendingDown size={14} className="text-red-500 shrink-0" />
-    return <Minus size={14} className="text-gray-400 shrink-0" />
-  }
-
-  const accounts = localAccounts || []
-  
-  // 🔥 CORREÇÃO: Tipagem explícita para o reduce
-  const totalBalance = accounts.reduce((sum: number, acc: any) => sum + (Number(acc.balance) || 0), 0)
+  // Total geral
+  const totalBalance = filteredAccounts.reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0)
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* 🔵 Bolinha de carregamento sutil */}
-      {loadingPulse && (
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      {/* Bolinha de loading sutil */}
+      {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">Contas</h1>
-          <button onClick={() => router.push('/accounts/new')} className="p-2 -mr-2 text-teal-700 dark:text-teal-400">
-            <Plus size={24} />
-          </button>
+      {/* Pull-to-refresh */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
         </div>
-        <ContextToggle />
+      )}
 
-        {!loading && accounts.length > 0 && (
-          <div className="mt-4 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950 dark:to-emerald-950 rounded-2xl p-4 border border-teal-100 dark:border-teal-900 flex items-center justify-between">
+      {/* Header fixo */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
+        {/* Barra do topo */}
+        <div className="flex items-center justify-between pt-4 mb-3">
+          <div>
+            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
+              Contas
+            </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {appMode === "personal_only" ? "Pessoais" : "Empresariais e Pessoais"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Buscar"
+            >
+              {showSearch ? <X size={18} /> : <Search size={18} />}
+            </button>
+            <button
+              onClick={() => router.push("/accounts/new")}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+              aria-label="Nova conta"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Card de saldo total */}
+        <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 mb-3 text-white shadow-lg shadow-teal-500/20">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider">Saldo Total</p>
-              <p className={`text-xl font-bold ${getBalanceColor(totalBalance)}`}>
-                {formatCurrency(totalBalance)}
-              </p>
+              <p className="text-xs font-semibold text-white/80">Saldo Total</p>
+              <p className="text-2xl font-black">{formatCurrency(totalBalance)}</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/50 flex items-center justify-center">
-              <Wallet size={20} className="text-teal-600 dark:text-teal-400" />
+            <div className="bg-white/20 rounded-xl p-2">
+              <Wallet size={24} />
             </div>
+          </div>
+          <p className="text-xs text-white/70 mt-1">
+            {filteredAccounts.length} conta(s)
+          </p>
+        </div>
+
+        {/* Search */}
+        {showSearch && (
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Buscar conta..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
           </div>
         )}
       </div>
 
-      <div className="px-4 pt-4">
+      {/* Lista */}
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto px-4 pt-3 pb-24"
+      >
         {loading ? (
-          <AccountsSkeleton />
-        ) : accounts.length === 0 ? (
-          <div className="text-center py-16">
-            <Wallet size={56} className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhuma conta</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">Adicione contas para gerenciar seu dinheiro.</p>
-            <button onClick={() => router.push('/accounts/new')}
-              className="bg-teal-700 text-white px-6 py-3 rounded-2xl font-bold hover:bg-teal-800 transition-colors">
-              Criar primeira conta
-            </button>
+          <LoadingSkeleton count={4} />
+        ) : filteredAccounts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Wallet size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">Nenhuma conta</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Toque no + para adicionar</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {accounts.map((acc: any) => {
-              const balance = Number(acc.balance) || 0
-              const isZero = balance === 0
+          <div className="space-y-3">
+            {filteredAccounts.map((acc: any) => {
+              const Icon = ACCOUNT_ICONS[acc.type] || Wallet
+              const label = ACCOUNT_LABELS[acc.type] || acc.type
               return (
-                <div key={acc.id} onClick={() => router.push(`/accounts/${acc.id}`)}
-                  className={`bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all flex items-center justify-between ${
-                    isZero ? 'opacity-70 hover:opacity-100' : ''
-                  }`}>
-                  <div className="flex items-center gap-4">
-                    <BankLogo color={acc.color} name={acc.name} size="md" />
-                    <div>
-                      <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{acc.name}</p>
-                      <div className="flex items-center gap-1.5">
-                        {getBalanceIcon(balance)}
-                        <p className={`text-[11px] font-medium ${getBalanceColor(balance)}`}>
-                          {isZero ? 'Saldo zerado' : balance > 0 ? 'Saldo positivo' : 'Saldo negativo'}
-                        </p>
-                      </div>
+                <div
+                  key={acc.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <button
+                    onClick={() => router.push(`/accounts/${acc.id}`)}
+                    className="w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                      (acc.balance || 0) >= 0
+                        ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
+                        : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                    }`}>
+                      <Icon size={22} />
                     </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                        {acc.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {label}{acc.bank ? ` — ${acc.bank}` : ""}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`font-black text-lg ${
+                        (acc.balance || 0) >= 0
+                          ? "text-teal-600 dark:text-teal-400"
+                          : "text-red-500"
+                      }`}>
+                        {formatCurrency(acc.balance || 0)}
+                      </p>
+                      <ChevronRight size={16} className="text-slate-300 dark:text-slate-600 inline" />
+                    </div>
+                  </button>
+                  <div className="px-4 pb-3 flex justify-end">
+                    <button
+                      onClick={() => setDeleteModal(acc.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
+                      aria-label="Excluir conta"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <p className={`font-bold text-sm ${getBalanceColor(balance)}`}>
-                    {formatCurrency(balance)}
-                  </p>
                 </div>
               )
             })}
           </div>
         )}
       </div>
+
+      {/* Modal de exclusão */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+              Excluir Conta
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir esta conta? As transações vinculadas não serão afetadas.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
