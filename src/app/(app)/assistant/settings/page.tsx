@@ -62,13 +62,13 @@ export default function AssistantSettingsPage() {
   // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { data: localSettings, loading: settingsLoading, reload: reloadSettings } = useLocalData({
-    table: 'user_settings',
+    table: 'user_settings' as any,
     filters: { user_id: user?.id },
     realtime: true,
   })
 
-  const { update: updateSettings } = useLocalData({ table: 'user_settings' })
-  const { create: createSettings } = useLocalData({ table: 'user_settings' })
+  const { update: updateSettings } = useLocalData({ table: 'user_settings' as any })
+  const { create: createSettings } = useLocalData({ table: 'user_settings' as any })
 
   // ============================================================
   // ESTADOS LOCAIS
@@ -136,7 +136,7 @@ export default function AssistantSettingsPage() {
       await reloadSettings()
 
       if (localSettings && localSettings.length > 0) {
-        const data = localSettings[0]
+        const data = localSettings[0] as any
         setSettings({
           ai_enabled: data.ai_enabled ?? true,
           auto_categorize: data.auto_categorize ?? true,
