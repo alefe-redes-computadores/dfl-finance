@@ -155,11 +155,8 @@ function HomeContent() {
   const firstName = fullName.split(' ')[0]
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - APENAS DADOS BRUTOS AQUI
   // ============================================================
-  const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-  const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
@@ -198,22 +195,7 @@ function HomeContent() {
   })
 
   // ============================================================
-  // 🔥 JOIN EM MEMÓRIA
-  // ============================================================
-  const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-    const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-    const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
-    return {
-      ...tx,
-      categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-      accounts: account ? { name: account.name, color: account.color } : null,
-    }
-  })
-
-  const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
-
-  // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // LOAD DATA (REFATORADO COM JOIN PROTEGIDO NO CALLBACK)
   // ============================================================
   const loadData = useCallback(async () => {
     if (!user) return
@@ -221,6 +203,22 @@ function HomeContent() {
     setLoadingPulse(true)
 
     try {
+      // 🔥 DATAS E JOIN SÃO FEITOS AQUI DENTRO PARA EVITAR LOOP
+      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
+      const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
+        const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+        const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
+        return {
+          ...tx,
+          categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+          accounts: account ? { name: account.name, color: account.color } : null,
+        }
+      })
+
+      const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
+
       const income = monthTransactions
         .filter((t: any) => t.type === 'income' && t.status === 'done')
         .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
@@ -438,7 +436,7 @@ function HomeContent() {
       setDataLoading(false)
       setLoadingPulse(false)
     }
-  }, [context, currentDate, user, monthTransactions, localAccountsData, localCards, localDebts, localFinancings])
+  }, [context, currentDate, user, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings]) // DEPENDÊNCIAS CORRIGIDAS AQUI
 
   // ============================================================
   // EFETTOS
