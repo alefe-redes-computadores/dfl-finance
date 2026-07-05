@@ -19,6 +19,7 @@ interface UseLocalDataOptions {
   realtime?: boolean
 }
 
+const globalLastFetch: Record<string, number> = {}
 
 export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime = true }: UseLocalDataOptions) {
   const { user } = useAuth()
@@ -31,12 +32,10 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
   const orderStr = JSON.stringify(orderBy || null)
 
   const fetchLocal = useCallback(async () => {
-    // Proteção: não executa no servidor
     if (typeof window === 'undefined' || !user?.id) return []
     
     try {
-      // 🚨 A CORREÇÃO DE OURO AQUI: db.table() ao invés de db[table]
-      const collection = db.table(table)
+      const collection = db[table as keyof typeof db] as any
       if (!collection) return []
       
       const pFilters = JSON.parse(filterStr)
@@ -50,7 +49,6 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
       })
 
       let res = await q.toArray()
-      
       if (pOrder) {
         res = res.sort((a: any, b: any) => {
           const av = a[pOrder.field] ?? ''
@@ -73,18 +71,14 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     const init = async () => {
       setLoading(true)
       
-      // Traz o que tem no celular instantaneamente
       const localData = await fetchLocal()
       if (isMounted) setData(localData)
 
-      // Atualiza com a internet (Trava Global Robusta para matar o loop)
       if (user?.id && typeof window !== 'undefined' && navigator.onLine) {
         const syncKey = `${table}-${filterStr}`
-        const locks = (window as any).__dfl_locks || {}
         
-        if (Date.now() - (locks[syncKey] || 0) > 5000) {
-          locks[syncKey] = Date.now()
-          ;(window as any).__dfl_locks = locks
+        if (Date.now() - (globalLastFetch[syncKey] || 0) > 5000) {
+          globalLastFetch[syncKey] = Date.now()
           
           try {
             const pFilters = JSON.parse(filterStr)
@@ -99,14 +93,13 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
             const { data: supData, error: supErr } = await query
             
             if (!supErr && supData) {
-              // 🚨 A CORREÇÃO DE OURO AQUI TAMBÉM: db.table()
-              const tableRef = db.table(table)
+              const tableRef = db[table as keyof typeof db] as any
               
               for (const item of supData) {
                 try {
                   await tableRef.put({ ...item, sync_status: 'synced', sync_attempts: 0, last_sync_error: null })
                 } catch (e) {
-                  console.warn(`Item corrompido ignorado no Dexie [${table}]:`, e)
+                  console.warn(`Ignorando erro ao salvar no Dexie [${table}]:`, e)
                 }
               }
               
@@ -127,14 +120,12 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     return () => { isMounted = false }
   }, [user?.id, table, filterStr, orderStr, limit, fetchLocal])
 
-  // Escuta os outros blocos da tela para atualizar junto sem gastar internet
   useEffect(() => {
     const handler = (e: any) => { if (e.detail === table) fetchLocal().then(setData) }
     window.addEventListener('dfl-db-update', handler)
     return () => window.removeEventListener('dfl-db-update', handler)
   }, [table, fetchLocal])
 
-  // Realtime
   useEffect(() => {
     if (!realtime || !user?.id || typeof window === 'undefined') return
     const channel = supabase.channel(`rt-${table}-${user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: table, filter: `user_id=eq.${user.id}` }, () => {
@@ -144,18 +135,18 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [realtime, user?.id, table])
 
-  // CRUD
   const create = useCallback(async (item: Omit<T, 'id' | 'created_at' | 'updated_at'>) => {
     if (!user?.id) return
     const now = new Date().toISOString()
     const newItem: any = { ...item, id: crypto.randomUUID(), user_id: user.id, created_at: now, updated_at: now, sync_status: 'pending', sync_attempts: 0 }
-    await db.table(table).add(newItem) // 🚨 Correção
+    const tableRef = db[table as keyof typeof db] as any
+    await tableRef.add(newItem)
     await queueOperation(table, 'create', newItem.id, newItem)
     const res = await fetchLocal(); setData(res)
   }, [user?.id, table, queueOperation, fetchLocal])
 
   const update = useCallback(async (id: string, updates: Partial<T>) => {
-    const tableRef = db.table(table) // 🚨 Correção
+    const tableRef = db[table as keyof typeof db] as any
     const existing = await tableRef.get(id)
     if (!existing) return
     const updatedItem = { ...existing, ...updates, updated_at: new Date().toISOString(), sync_status: 'pending' }
@@ -165,7 +156,7 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
   }, [table, queueOperation, fetchLocal])
 
   const remove = useCallback(async (id: string) => {
-    const tableRef = db.table(table) // 🚨 Correção
+    const tableRef = db[table as keyof typeof db] as any
     const existing = await tableRef.get(id)
     if (!existing) return
     await tableRef.delete(id)
