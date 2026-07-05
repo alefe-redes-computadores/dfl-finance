@@ -16,9 +16,6 @@ import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const GoalDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6 space-y-4">
     <div className="flex items-center justify-between mb-6">
@@ -87,20 +84,24 @@ export default function GoalDetailPage() {
   const [contribNote, setContribNote] = useState('')
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
-    table: 'goals',
+    table: 'goals' as any,
     filters: { id: id as string },
     realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { goal_id: id as string },
     orderBy: { field: 'date', direction: 'desc' },
     realtime: true,
   })
+
+  // Hooks CRUD no topo
+  const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
+  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -153,7 +154,7 @@ export default function GoalDetailPage() {
     try {
       await Promise.all([reloadGoals(), reloadTransactions()])
 
-      const goalData = (localGoals || [])[0]
+      const goalData = (localGoals || [])[0] as any
       if (!goalData) {
         router.push('/goals')
         return
@@ -183,8 +184,7 @@ export default function GoalDetailPage() {
   const handleDelete = async () => {
     if (!confirm('Excluir esta meta?')) return
     try {
-      const { remove } = useLocalData({ table: 'goals' })
-      await remove(id as string)
+      await removeGoal(id as string)
       showToast('Meta excluída.', 'info')
       router.push('/goals')
     } catch (err: any) {
@@ -199,8 +199,7 @@ export default function GoalDetailPage() {
     }
 
     try {
-      const { create } = useLocalData({ table: 'transactions' })
-      await create({
+      await createTransaction({
         user_id: user.id,
         context: context || 'dfl',
         type: 'income',
