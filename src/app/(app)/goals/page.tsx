@@ -15,9 +15,6 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const GoalsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     {[1, 2, 3].map((i) => (
@@ -51,20 +48,23 @@ function GoalsContent() {
   const [refreshing, setRefreshing] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
-    table: 'goals',
+    table: 'goals' as any,
     filters: { context },
     orderBy: { field: 'created_at', direction: 'desc' },
     realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
     realtime: true,
   })
+
+  // Hook remove no topo
+  const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -159,8 +159,7 @@ function GoalsContent() {
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir esta meta?')) return
     try {
-      const { remove } = useLocalData({ table: 'goals' })
-      await remove(id)
+      await removeGoal(id)
       showToast('Meta excluída.', 'info')
       loadData()
     } catch (err: any) {
