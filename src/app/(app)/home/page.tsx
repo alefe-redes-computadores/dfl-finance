@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -155,8 +155,11 @@ function HomeContent() {
   const firstName = fullName.split(' ')[0]
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - APENAS DADOS BRUTOS AQUI
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
+  const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+  const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
@@ -195,7 +198,29 @@ function HomeContent() {
   })
 
   // ============================================================
-  // LOAD DATA (REFATORADO COM JOIN PROTEGIDO NO CALLBACK)
+  // 🔥 JOIN EM MEMÓRIA — AGORA COM useMemo (evita recriação a cada render)
+  // ============================================================
+  // Chave crítica: useMemo só recalcula quando localTransactions, localCategories
+  // ou localAccountsData de fato mudarem de referência (o que só acontece quando
+  // o Dexie realmente retorna novos dados, não a cada re-render do componente).
+  const transactionsWithJoin = useMemo(() => {
+    return (localTransactions || []).map((tx: any) => {
+      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+      const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
+      return {
+        ...tx,
+        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+        accounts: account ? { name: account.name, color: account.color } : null,
+      }
+    })
+  }, [localTransactions, localCategories, localAccountsData])
+
+  const monthTransactions = useMemo(() => {
+    return transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
+  }, [transactionsWithJoin, start, end])
+
+  // ============================================================
+  // LOAD DATA (agora com dependências estáveis)
   // ============================================================
   const loadData = useCallback(async () => {
     if (!user) return
@@ -203,22 +228,6 @@ function HomeContent() {
     setLoadingPulse(true)
 
     try {
-      // 🔥 DATAS E JOIN SÃO FEITOS AQUI DENTRO PARA EVITAR LOOP
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-      const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-        const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-        const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
-        return {
-          ...tx,
-          categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-          accounts: account ? { name: account.name, color: account.color } : null,
-        }
-      })
-
-      const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
-
       const income = monthTransactions
         .filter((t: any) => t.type === 'income' && t.status === 'done')
         .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
@@ -436,10 +445,14 @@ function HomeContent() {
       setDataLoading(false)
       setLoadingPulse(false)
     }
-  }, [context, currentDate, user, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings]) // DEPENDÊNCIAS CORRIGIDAS AQUI
+    // 🔑 CORREÇÃO CRÍTICA: removidas as dependências instáveis
+    // (transactionsWithJoin, monthTransactions eram recriadas a cada render).
+    // Agora dependemos apenas dos dados brutos do IndexedDB, que só mudam
+    // quando o Dexie realmente atualiza (useLiveQuery ou reload explícito).
+  }, [context, currentDate, user, localAccountsData, localCards, localDebts, localFinancings, localTransactions, localCategories])
 
   // ============================================================
-  // EFETTOS
+  // EFEITOS
   // ============================================================
   useEffect(() => {
     if (user?.id && context) {
