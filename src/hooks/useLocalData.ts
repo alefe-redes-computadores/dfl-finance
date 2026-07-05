@@ -19,6 +19,7 @@ interface UseLocalDataOptions {
   realtime?: boolean
 }
 
+
 export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime = true }: UseLocalDataOptions) {
   const { user } = useAuth()
   const { queueOperation } = useLocalSync()
