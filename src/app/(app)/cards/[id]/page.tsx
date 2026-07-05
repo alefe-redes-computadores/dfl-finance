@@ -246,8 +246,7 @@ export default function CardDetailPage() {
       // 3. Atualizar transações do cartão (afetam saldo)
       const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
-      const cardTxs = (localTransactions || [])
-        .filter((t: any) => t.date >= start && t.date <= end)
+      const cardTxs = (localTransactions || []) as any[].filter((t: any) => t.date >= start && t.date <= end)
 
       for (const tx of cardTxs) {
         await updateTransaction(tx.id, { affects_balance: true })
