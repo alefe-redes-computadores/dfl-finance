@@ -345,6 +345,7 @@ function NewGoalContent() {
   )
 }
 
+
 export default function NewGoalPage() {
   return (
     <ContextProvider>
