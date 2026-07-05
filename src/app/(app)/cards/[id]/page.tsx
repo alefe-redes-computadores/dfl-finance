@@ -15,9 +15,6 @@ import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
@@ -83,26 +80,30 @@ export default function CardDetailPage() {
   const [paying, setPaying] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
-    table: 'credit_cards',
+    table: 'credit_cards' as any,
     filters: { id: id as string },
     realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { credit_card_id: id as string },
     orderBy: { field: 'date', direction: 'desc' },
     realtime: true,
   })
 
   const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
-    table: 'accounts',
+    table: 'accounts' as any,
     filters: { context },
     realtime: false,
   })
+
+  // Hooks CRUD no topo
+  const { update: updateAccount } = useLocalData({ table: 'accounts' as any })
+  const { create: createTransaction, update: updateTransaction } = useLocalData({ table: 'transactions' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -155,7 +156,7 @@ export default function CardDetailPage() {
     try {
       await Promise.all([reloadCards(), reloadTransactions(), reloadAccounts()])
 
-      const cardData = (localCards || [])[0]
+      const cardData = (localCards || [])[0] as any
       if (cardData) {
         setCard(cardData)
       }
@@ -216,15 +217,12 @@ export default function CardDetailPage() {
 
     try {
       const accounts = localAccounts || []
-      const targetAccount = accounts[0]
+      const targetAccount = accounts[0] as any
       if (!targetAccount) {
         showToast('Crie uma conta primeiro.', 'warning')
         setPaying(false)
         return
       }
-
-      const { update: updateAccount } = useLocalData({ table: 'accounts' })
-      const { create, update } = useLocalData({ table: 'transactions' })
 
       // 1. Atualizar saldo da conta
       await updateAccount(targetAccount.id, {
@@ -232,7 +230,7 @@ export default function CardDetailPage() {
       })
 
       // 2. Criar transação de pagamento
-      await create({
+      await createTransaction({
         user_id: user.id,
         type: 'expense',
         amount: totalFatura,
@@ -252,7 +250,7 @@ export default function CardDetailPage() {
         .filter((t: any) => t.date >= start && t.date <= end)
 
       for (const tx of cardTxs) {
-        await update(tx.id, { affects_balance: true })
+        await updateTransaction(tx.id, { affects_balance: true })
       }
 
       showToast('Fatura paga com sucesso!', 'success')
