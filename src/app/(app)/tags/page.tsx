@@ -17,20 +17,21 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
+import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
 const COLORS = [
-  "#3B82F6", // blue
-  "#10B981", // emerald
-  "#F59E0B", // amber
-  "#EF4444", // red
-  "#8B5CF6", // violet
-  "#EC4899", // pink
-  "#06B6D4", // cyan
-  "#F97316", // orange
-  "#14B8A6", // teal
-  "#6366F1", // indigo
+  "#3B82F6",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#8B5CF6",
+  "#EC4899",
+  "#06B6D4",
+  "#F97316",
+  "#14B8A6",
+  "#6366F1",
 ]
 
 export default function TagsPage() {
@@ -38,7 +39,7 @@ export default function TagsPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -54,7 +55,7 @@ export default function TagsPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Busca dados locais
-  const { data: tags, loading, refresh } = useLocalData({
+  const { data: tags, loading, reload } = useLocalData({
     table: 'tags' as any,
     filters: { context },
   })
@@ -123,7 +124,7 @@ export default function TagsPage() {
       setShowForm(false)
       setEditId(null)
       setTagName("")
-      refresh()
+      reload()
     } catch (err: any) {
       showToast(err?.message || "Erro ao salvar tag", "error")
       errorHaptic()
@@ -140,7 +141,7 @@ export default function TagsPage() {
       showToast("Tag excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
-      refresh()
+      reload()
     } catch {
       showToast("Erro ao excluir tag", "error")
       errorHaptic()
@@ -157,12 +158,12 @@ export default function TagsPage() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
-        refresh().finally(() => {
+        reload().finally(() => {
           setTimeout(() => setRefreshing(false), 600)
         })
       }
     }
-  }, [refreshing, refresh])
+  }, [refreshing, reload])
 
   // Filtros
   const filteredTags = (tags || []).filter((tag: any) => {
