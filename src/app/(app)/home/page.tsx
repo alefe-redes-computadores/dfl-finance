@@ -71,7 +71,7 @@ const HomeSkeleton = () => (
 )
 
 function HomeContent() {
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const { context, appMode } = useContext_()
   const { showToast } = useToast()
@@ -123,7 +123,13 @@ function HomeContent() {
   const { data: localFinancings } = useLocalData({ table: 'financings' as any, filters: { context, status: 'active' }, realtime: true })
   const { data: localCards } = useLocalData({ table: 'credit_cards' as any, filters: { context, is_archived: false }, realtime: true })
 
-  // 3. BLINDAGEM DE FUNÇÃO: Usa user?.id em vez de user
+  // 🛡️ MEMÓRIA CACHE: Evita que a Home dispare requisições loucas pro Supabase a todo instante
+  const lastRemoteFetchRef = useRef(0)
+  const rawLoansRef = useRef<any[]>([])
+  const rawBudgetsRef = useRef<any[]>([])
+  const rawSubsRef = useRef<any[]>([])
+  const rawReadsRef = useRef<Set<string>>(new Set())
+
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setDataLoading(true)
@@ -190,32 +196,42 @@ function HomeContent() {
       })
       setDebts(debtsWithProgress)
       setTotalToReceive(debtsWithProgress.reduce((a: number, d: any) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
-
       setFinancings(localFinancings || [])
 
-      const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
-      setLoans(Array.isArray(loansData) ? loansData : [])
+      // 🛡️ REGRAS DE CACHE: Só bate no Supabase para dados pesados 1x a cada 15 segundos
+      if (Date.now() - lastRemoteFetchRef.current > 15000) {
+        lastRemoteFetchRef.current = Date.now()
 
-      const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
-      const budgetsArray = Array.isArray(budgetsData) ? budgetsData : []
-      const budgetsWithSpent = budgetsArray.map((budget: any) => {
+        const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
+        rawLoansRef.current = Array.isArray(loansData) ? loansData : []
+
+        const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
+        rawBudgetsRef.current = Array.isArray(budgetsData) ? budgetsData : []
+
+        const { data: subsData } = await supabase.from('subscriptions').select('*, categories(name, icon, color), accounts(name)').match({ user_id: user.id, context, status: 'active' }).order('due_day', { ascending: true })
+        rawSubsRef.current = Array.isArray(subsData) ? subsData : []
+
+        const { data: reads } = await supabase.from('notification_reads').select('notification_id').eq('user_id', user.id)
+        rawReadsRef.current = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
+      }
+
+      // Aplica a matemática usando o cache instantaneamente
+      setLoans(rawLoansRef.current)
+
+      const budgetsWithSpent = rawBudgetsRef.current.map((budget: any) => {
         const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
         const remaining = Number(budget.amount) - spent
         const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
         return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
       })
       setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
-
-      const { data: subsData } = await supabase.from('subscriptions').select('*, categories(name, icon, color), accounts(name)').match({ user_id: user.id, context, status: 'active' }).order('due_day', { ascending: true })
-      setSubscriptions(Array.isArray(subsData) ? subsData : [])
+      
+      setSubscriptions(rawSubsRef.current)
 
       const today = new Date()
       const todayDay = today.getDate()
-
-      const { data: reads } = await supabase.from('notification_reads').select('notification_id').eq('user_id', user.id)
-      const readSet = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
-
       const notifs: any[] = []
+      const readSet = rawReadsRef.current
 
       cardsWithInvoice.forEach((card: any) => {
         const days = (card.due_day || 1) - todayDay
@@ -255,7 +271,6 @@ function HomeContent() {
     setLayoutLoaded(true)
   }, [user?.id, context])
 
-  // 4. BLINDAGEM NO LAYOUT
   useEffect(() => {
     if (user?.id) loadLayout()
   }, [user?.id, loadLayout])
