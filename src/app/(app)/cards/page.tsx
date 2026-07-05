@@ -8,9 +8,6 @@ import { ChevronLeft, Plus, CreditCard, RefreshCw, AlertTriangle, TrendingUp, Tr
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const CardsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     {[1, 2].map((i) => (
@@ -46,17 +43,17 @@ export default function CardsPage() {
   const [loadingPulse, setLoadingPulse] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
-    table: 'credit_cards',
+    table: 'credit_cards' as any,
     filters: { context, is_archived: false },
     orderBy: { field: 'created_at', direction: 'desc' },
     realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
     realtime: true,
   })
@@ -130,7 +127,6 @@ export default function CardsPage() {
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
 
-  // 🔥 Agrupa transações por credit_card_id (em memória)
   const transactionsByCard = (localTransactions || [])
     .filter((tx: any) => tx.credit_card_id && tx.date >= startOfMonth && tx.date <= endOfMonth)
     .reduce((acc: Record<string, number>, tx: any) => {
@@ -139,7 +135,6 @@ export default function CardsPage() {
       return acc
     }, {})
 
-  // 🔥 Enriquecendo os cartões com a fatura calculada em memória
   const cardsWithInvoice = (localCards || []).map((card: any) => ({
     ...card,
     faturaAtual: transactionsByCard[card.id] || 0,
@@ -174,7 +169,6 @@ export default function CardsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Pull to refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -184,7 +178,6 @@ export default function CardsPage() {
         </div>
       )}
 
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
