@@ -46,12 +46,17 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context: effectiveContext, type: tab },
     realtime: true,
+  })
+
+  // Hooks CRUD no topo
+  const { create: createCategory, update: updateCategory, remove: removeCategory } = useLocalData({
+    table: 'categories' as any,
   })
 
   // ============================================================
@@ -67,9 +72,9 @@ export default function CategoriesPage() {
   async function ensureDefaultCategories() {
     if (!user) return
     
-    const existingCats = (localCategories || []).filter(c => c.context === effectiveContext)
+    const existingCats = (localCategories || []).filter((c: any) => c.context === effectiveContext)
     const existingKeys = new Set(
-      existingCats.map(c => `${c.name}-${c.type}-${c.context}`)
+      existingCats.map((c: any) => `${c.name}-${c.type}-${c.context}`)
     )
 
     const missing = DEFAULT_CATEGORIES.filter(
@@ -81,9 +86,8 @@ export default function CategoriesPage() {
     if (!missing.length) return
 
     try {
-      const { create } = useLocalData({ table: 'categories' })
       for (const cat of missing) {
-        await create({
+        await createCategory({
           ...cat,
           user_id: user.id,
           is_default: true,
@@ -99,18 +103,18 @@ export default function CategoriesPage() {
     if (!user) return
     await reloadCategories()
     
-    const allCats = localCategories || []
-    const mainCats = allCats.filter(c => c.type === tab && !c.parent_id)
-    const subs = allCats.filter(c => c.type === tab && c.parent_id)
+    const allCats = (localCategories || []) as any[]
+    const mainCats = allCats.filter((c: any) => c.type === tab && !c.parent_id)
+    const subs = allCats.filter((c: any) => c.type === tab && c.parent_id)
 
     const subsMap: Record<string, any[]> = {}
-    subs.forEach(sub => {
+    subs.forEach((sub: any) => {
       const key = sub.parent_id
       if (!subsMap[key]) subsMap[key] = []
       subsMap[key].push(sub)
     })
 
-    setCategories(mainCats.sort((a, b) => (a.sort_order || 999) - (b.sort_order || 999)))
+    setCategories(mainCats.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999)))
     setSubcategories(subsMap)
   }
 
@@ -164,13 +168,11 @@ export default function CategoriesPage() {
     }
 
     try {
-      const { create, update } = useLocalData({ table: 'categories' })
-      
       if (editingCategory) {
-        await update(editingCategory.id, payload)
+        await updateCategory(editingCategory.id, payload)
         showToast('Categoria atualizada!', 'success')
       } else {
-        await create(payload)
+        await createCategory(payload)
         showToast('Categoria criada!', 'success')
       }
 
@@ -192,8 +194,7 @@ export default function CategoriesPage() {
     if (!confirm('Deseja excluir esta categoria?')) return
     
     try {
-      const { remove } = useLocalData({ table: 'categories' })
-      await remove(id)
+      await removeCategory(id)
       showToast('Categoria excluída!', 'info')
       await loadCategories()
     } catch (err: any) {
