@@ -1,7 +1,7 @@
 // src/hooks/useLocalData.ts
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -31,8 +31,6 @@ interface UseLocalDataOptions {
   realtime?: boolean
 }
 
-
-
 export function useLocalData<T>({
   table,
   filters = {},
@@ -46,6 +44,10 @@ export function useLocalData<T>({
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Cache dos filtros serializados para evitar loops
+  const filtersKey = useRef(JSON.stringify(filters))
+  const orderByKey = useRef(JSON.stringify(orderBy))
 
   // ============================================================
   // BUSCAR DADOS LOCALMENTE (COM FILTROS DINÂMICOS)
@@ -61,10 +63,8 @@ export function useLocalData<T>({
         return []
       }
 
-      // 🔥 FILTRO BASE: user_id (sempre obrigatório)
       let query = collection.where('user_id').equals(user.id)
 
-      // 🔥 FILTROS ADICIONAIS (dinâmicos)
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           query = query.and((item: any) => item[key] === value)
@@ -73,7 +73,6 @@ export function useLocalData<T>({
 
       let results = await query.toArray() as T[]
 
-      // Ordenação
       if (orderBy) {
         results = results.sort((a: any, b: any) => {
           const aVal = a[orderBy.field] ?? ''
@@ -83,7 +82,6 @@ export function useLocalData<T>({
         })
       }
 
-      // Limite
       if (limit && results.length > limit) {
         results = results.slice(0, limit)
       }
@@ -93,7 +91,7 @@ export function useLocalData<T>({
       console.error(`Erro ao buscar ${table} localmente:`, err)
       return []
     }
-  }, [user?.id, table, filters, orderBy, limit])
+  }, [user?.id, table, filtersKey.current, orderByKey.current, limit])
 
   // ============================================================
   // SINCRONIZAR COM SUPABASE (BACKGROUND)
@@ -157,7 +155,7 @@ export function useLocalData<T>({
     } finally {
       setSyncing(false)
     }
-  }, [user?.id, isOnline, table, filters, orderBy, limit, fetchLocal])
+  }, [user?.id, isOnline, table, filtersKey.current, orderByKey.current, limit, fetchLocal])
 
   // ============================================================
   // RECARREGAR DADOS
@@ -235,11 +233,25 @@ export function useLocalData<T>({
   }, [table, queueOperation, reload])
 
   // ============================================================
+  // ATUALIZA CACHE DOS FILTROS
+  // ============================================================
+  useEffect(() => {
+    const newFiltersKey = JSON.stringify(filters)
+    const newOrderByKey = JSON.stringify(orderBy)
+
+    if (newFiltersKey !== filtersKey.current || newOrderByKey !== orderByKey.current) {
+      filtersKey.current = newFiltersKey
+      orderByKey.current = newOrderByKey
+      reload()
+    }
+  }, [JSON.stringify(filters), JSON.stringify(orderBy)])
+
+  // ============================================================
   // EFETTO INICIAL
   // ============================================================
   useEffect(() => {
     reload()
-  }, [reload])
+  }, [table, user?.id])
 
   // ============================================================
   // REALTIME
@@ -266,9 +278,7 @@ export function useLocalData<T>({
     return () => {
       channel.unsubscribe()
     }
-  }, [realtime, user?.id, table, reload])
-
-
+  }, [realtime, user?.id, table])
 
   return {
     data,
