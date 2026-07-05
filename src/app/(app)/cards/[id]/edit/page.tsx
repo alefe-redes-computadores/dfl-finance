@@ -77,7 +77,7 @@ export default function EditCardPage() {
           setAccounts(localAccounts)
         }
 
-        const cardData = (localCards || [])[0]
+        const cardData = (localCards || [])[0] as any
         if (cardData) {
           setName(cardData.name || '')
           setFlag(cardData.flag || '')
