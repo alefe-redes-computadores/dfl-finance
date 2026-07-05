@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
+import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 
 
@@ -23,7 +24,7 @@ export default function NewFinancingPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -50,7 +51,7 @@ export default function NewFinancingPage() {
 
   const financingData = localFinancings?.find((f: any) => f.id === editId) as any
 
-  const { create, update } = useLocalData({
+  const { create, update, remove } = useLocalData({
     table: 'financings' as any,
   })
 
@@ -156,7 +157,6 @@ export default function NewFinancingPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este financiamento?")) return
     try {
-      const { remove } = useLocalData({ table: 'financings' as any })
       await remove(editId)
       showToast("Financiamento excluído com sucesso!", "success")
       success()
@@ -167,7 +167,7 @@ export default function NewFinancingPage() {
     }
   }
 
-  const contextTitle = context === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
 
   return (
     <div
