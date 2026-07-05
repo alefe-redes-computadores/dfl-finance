@@ -12,6 +12,7 @@ import {
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 
+
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
 
