@@ -21,6 +21,7 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
+import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
@@ -32,7 +33,7 @@ export default function ContactDetailPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -41,7 +42,7 @@ export default function ContactDetailPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Busca dados locais
-  const { data: localContacts, loading, refresh } = useLocalData({
+  const { data: localContacts, loading, reload } = useLocalData({
     table: 'contacts' as any,
     filters: { context },
   })
@@ -70,12 +71,12 @@ export default function ContactDetailPage() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
-        refresh().finally(() => {
+        reload().finally(() => {
           setTimeout(() => setRefreshing(false), 600)
         })
       }
     }
-  }, [refreshing, refresh])
+  }, [refreshing, reload])
 
   // Excluir contato
   const handleDelete = async () => {
