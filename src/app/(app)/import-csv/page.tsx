@@ -252,7 +252,7 @@ export default function ImportCSVPage() {
 
           let categoryId = null
           if (categoryName) {
-            const found = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase())
+            const found = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase()) as any
             if (found) categoryId = found.id
           }
 
