@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -19,9 +19,6 @@ interface UseLocalDataOptions {
   realtime?: boolean
 }
 
-// Controle global de tempo para evitar spam no Supabase
-const globalLastFetch: Record<string, number> = {}
-
 export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime = true }: UseLocalDataOptions) {
   const { user } = useAuth()
   const { queueOperation } = useLocalSync()
@@ -33,31 +30,40 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
   const orderStr = JSON.stringify(orderBy || null)
 
   const fetchLocal = useCallback(async () => {
-    if (!user?.id) return []
-    const collection = db[table as keyof typeof db] as any
-    if (!collection) return []
+    // Proteção: não executa no servidor
+    if (typeof window === 'undefined' || !user?.id) return []
     
-    const pFilters = JSON.parse(filterStr)
-    const pOrder = JSON.parse(orderStr)
+    try {
+      // 🚨 A CORREÇÃO DE OURO AQUI: db.table() ao invés de db[table]
+      const collection = db.table(table)
+      if (!collection) return []
+      
+      const pFilters = JSON.parse(filterStr)
+      const pOrder = JSON.parse(orderStr)
 
-    let q = collection.where('user_id').equals(user.id)
-    Object.entries(pFilters).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
-        q = q.and((item: any) => item[k] === v)
-      }
-    })
-
-    let res = await q.toArray()
-    if (pOrder) {
-      res = res.sort((a: any, b: any) => {
-        const av = a[pOrder.field] ?? ''
-        const bv = b[pOrder.field] ?? ''
-        const dir = pOrder.direction === 'desc' ? -1 : 1
-        return av > bv ? dir : av < bv ? -dir : 0
+      let q = collection.where('user_id').equals(user.id)
+      Object.entries(pFilters).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+          q = q.and((item: any) => item[k] === v)
+        }
       })
+
+      let res = await q.toArray()
+      
+      if (pOrder) {
+        res = res.sort((a: any, b: any) => {
+          const av = a[pOrder.field] ?? ''
+          const bv = b[pOrder.field] ?? ''
+          const dir = pOrder.direction === 'desc' ? -1 : 1
+          return av > bv ? dir : av < bv ? -dir : 0
+        })
+      }
+      if (limit && res.length > limit) res = res.slice(0, limit)
+      return res as T[]
+    } catch (err) {
+      console.error(`Erro ao ler do Dexie [${table}]:`, err)
+      return []
     }
-    if (limit && res.length > limit) res = res.slice(0, limit)
-    return res as T[]
   }, [user?.id, table, filterStr, orderStr, limit])
 
   useEffect(() => {
@@ -66,16 +72,18 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     const init = async () => {
       setLoading(true)
       
-      // 1. Carrega instantâneo do Dexie (Banco Local)
+      // Traz o que tem no celular instantaneamente
       const localData = await fetchLocal()
       if (isMounted) setData(localData)
 
-      // 2. Busca novidades do Supabase no fundo (Máximo 1 vez a cada 5 segundos)
-      if (user?.id && typeof navigator !== 'undefined' && navigator.onLine) {
+      // Atualiza com a internet (Trava Global Robusta para matar o loop)
+      if (user?.id && typeof window !== 'undefined' && navigator.onLine) {
         const syncKey = `${table}-${filterStr}`
+        const locks = (window as any).__dfl_locks || {}
         
-        if (Date.now() - (globalLastFetch[syncKey] || 0) > 5000) {
-          globalLastFetch[syncKey] = Date.now()
+        if (Date.now() - (locks[syncKey] || 0) > 5000) {
+          locks[syncKey] = Date.now()
+          ;(window as any).__dfl_locks = locks
           
           try {
             const pFilters = JSON.parse(filterStr)
@@ -90,22 +98,24 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
             const { data: supData, error: supErr } = await query
             
             if (!supErr && supData) {
-              const tableRef = db[table as keyof typeof db] as any
-              // Salva um por um (se um der erro, os outros salvam)
+              // 🚨 A CORREÇÃO DE OURO AQUI TAMBÉM: db.table()
+              const tableRef = db.table(table)
+              
               for (const item of supData) {
                 try {
                   await tableRef.put({ ...item, sync_status: 'synced', sync_attempts: 0, last_sync_error: null })
-                } catch (e) {}
+                } catch (e) {
+                  console.warn(`Item corrompido ignorado no Dexie [${table}]:`, e)
+                }
               }
               
               const updated = await fetchLocal()
               if (isMounted) setData(updated)
 
-              // Avisa as outras listas para atualizarem sozinhas
               window.dispatchEvent(new CustomEvent('dfl-db-update', { detail: table }))
             }
           } catch (e) {
-            console.error(e)
+            console.error(`Erro no download do Supabase [${table}]:`, e)
           }
         }
       }
@@ -116,14 +126,16 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     return () => { isMounted = false }
   }, [user?.id, table, filterStr, orderStr, limit, fetchLocal])
 
+  // Escuta os outros blocos da tela para atualizar junto sem gastar internet
   useEffect(() => {
     const handler = (e: any) => { if (e.detail === table) fetchLocal().then(setData) }
     window.addEventListener('dfl-db-update', handler)
     return () => window.removeEventListener('dfl-db-update', handler)
   }, [table, fetchLocal])
 
+  // Realtime
   useEffect(() => {
-    if (!realtime || !user?.id) return
+    if (!realtime || !user?.id || typeof window === 'undefined') return
     const channel = supabase.channel(`rt-${table}-${user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: table, filter: `user_id=eq.${user.id}` }, () => {
       fetchLocal().then(setData)
     }).subscribe()
@@ -131,18 +143,18 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [realtime, user?.id, table])
 
+  // CRUD
   const create = useCallback(async (item: Omit<T, 'id' | 'created_at' | 'updated_at'>) => {
     if (!user?.id) return
     const now = new Date().toISOString()
     const newItem: any = { ...item, id: crypto.randomUUID(), user_id: user.id, created_at: now, updated_at: now, sync_status: 'pending', sync_attempts: 0 }
-    const tableRef = db[table as keyof typeof db] as any
-    await tableRef.add(newItem)
+    await db.table(table).add(newItem) // 🚨 Correção
     await queueOperation(table, 'create', newItem.id, newItem)
     const res = await fetchLocal(); setData(res)
   }, [user?.id, table, queueOperation, fetchLocal])
 
   const update = useCallback(async (id: string, updates: Partial<T>) => {
-    const tableRef = db[table as keyof typeof db] as any
+    const tableRef = db.table(table) // 🚨 Correção
     const existing = await tableRef.get(id)
     if (!existing) return
     const updatedItem = { ...existing, ...updates, updated_at: new Date().toISOString(), sync_status: 'pending' }
@@ -152,7 +164,7 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
   }, [table, queueOperation, fetchLocal])
 
   const remove = useCallback(async (id: string) => {
-    const tableRef = db[table as keyof typeof db] as any
+    const tableRef = db.table(table) // 🚨 Correção
     const existing = await tableRef.get(id)
     if (!existing) return
     await tableRef.delete(id)
