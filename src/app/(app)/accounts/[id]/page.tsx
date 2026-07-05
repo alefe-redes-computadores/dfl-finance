@@ -25,6 +25,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
+//Comentário para compilar
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
   savings: PiggyBank,
