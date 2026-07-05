@@ -135,7 +135,7 @@ function NewGoalContent() {
         goalId = editId
         showToast('Meta atualizada!', 'success')
       } else {
-        const result = await createGoal(payload)
+        const result: any = await createGoal(payload)
         goalId = result?.id
         showToast('Meta criada!', 'success')
       }
