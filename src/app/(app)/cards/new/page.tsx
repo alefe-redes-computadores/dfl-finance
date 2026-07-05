@@ -20,6 +20,7 @@ export default function NewCardPage() {
   const router = useRouter()
   const { showToast } = useToast()
 
+
   const [accounts, setAccounts] = useState<any[]>([])
 
   const [showColorPicker, setShowColorPicker] = useState(false)
