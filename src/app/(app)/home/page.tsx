@@ -88,6 +88,7 @@ function HomeContent() {
   const [loans, setLoans] = useState<any[]>([])
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
+  const [loadingPulse, setLoadingPulse] = useState(false) // <-- Linha adicionada!
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -117,6 +118,7 @@ function HomeContent() {
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setDataLoading(true)
+    setLoadingPulse(true)
 
     try {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
@@ -225,6 +227,7 @@ function HomeContent() {
       console.error('Erro na Home:', err)
     } finally {
       setDataLoading(false)
+      setLoadingPulse(false)
     }
   }, [context, currentDate, user?.id, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
 
