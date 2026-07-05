@@ -23,6 +23,7 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
+import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
@@ -42,7 +43,8 @@ export default function LoansPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { user, context, appMode } = useAuth()
+  const { user } = useAuth()
+  const { context, appMode } = useContext_()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -56,7 +58,7 @@ export default function LoansPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Busca dados locais
-  const { data: loans, loading, refresh } = useLocalData({
+  const { data: loans, loading, reload } = useLocalData({
     table: 'loans' as any,
     filters: { context },
   })
@@ -88,6 +90,7 @@ export default function LoansPage() {
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
+      reload()
     } catch {
       showToast("Erro ao excluir empréstimo", "error")
       errorHaptic()
@@ -104,12 +107,12 @@ export default function LoansPage() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
-        refresh().finally(() => {
+        reload().finally(() => {
           setTimeout(() => setRefreshing(false), 600)
         })
       }
     }
-  }, [refreshing, refresh])
+  }, [refreshing, reload])
 
   // Filtros e ordenação
   const filteredLoans = (loans || []).filter((loan: any) => {
