@@ -99,6 +99,7 @@ export function useLocalData<T>({
       }
     }
 
+
     sync()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, table])
