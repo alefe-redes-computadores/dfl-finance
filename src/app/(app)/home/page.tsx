@@ -841,6 +841,8 @@ function HomeContent() {
         <span className="font-bold text-[15px]">Personalizar Dashboard</span>
       </button>
 
+
+
       <FAB onSave={() => loadData()} />
       <PersonalizeModal
         isOpen={showPersonalizeModal}
