@@ -88,7 +88,7 @@ function HomeContent() {
   const [loans, setLoans] = useState<any[]>([])
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false) // <-- Linha adicionada!
+  const [loadingPulse, setLoadingPulse] = useState(false)   // <-- CORREÇÃO: variável adicionada
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -136,8 +136,13 @@ function HomeContent() {
 
       const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
 
-      const income = monthTransactions.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const expense = monthTransactions.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      // Usando parseFloat para evitar NaN
+      const income = monthTransactions
+        .filter((t: any) => t.type === 'income' && t.status === 'done')
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      const expense = monthTransactions
+        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       const balance = income - expense
       setSummary({ income, expense, balance })
 
@@ -145,21 +150,29 @@ function HomeContent() {
       const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
       const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
       const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
-      const prevInc = prevMonthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const prevExp = prevMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const prevInc = prevMonthTxs
+        .filter((t: any) => t.type === 'income' && t.status === 'done')
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      const prevExp = prevMonthTxs
+        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       const prevBal = prevInc - prevExp
       setPreviousBalance(prevBal)
       setBalanceVariation(prevBal !== 0 ? ((balance - prevBal) / Math.abs(prevBal)) * 100 : (balance > 0 ? 100 : balance < 0 ? -100 : 0))
 
-      const toPay = monthTransactions.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id).reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const toReceive = monthTransactions.filter((t: any) => t.type === 'income' && t.status === 'pending').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const toPay = monthTransactions
+        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      const toReceive = monthTransactions
+        .filter((t: any) => t.type === 'income' && t.status === 'pending')
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
 
       setRecentTransactions(monthTransactions.slice(0, 5))
 
       const accsWithPrevisto = (localAccountsData || []).map((acc: any) => {
         const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
-        const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-        const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+        const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+        const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
         const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense
         return { ...acc, previsto }
       })
@@ -167,7 +180,7 @@ function HomeContent() {
 
       const cardsWithInvoice = (localCards || []).map((card: any) => {
         const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
-        const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0)
+        const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (parseFloat(t.amount) || 0), 0)
         return { ...card, faturaAtual }
       })
       setCards(cardsWithInvoice)
@@ -175,7 +188,7 @@ function HomeContent() {
 
       const debtsWithProgress = (localDebts || []).map((debt: any) => {
         const payments = monthTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
-        const paidAmount = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
+        const paidAmount = payments.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0)
         const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
         return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
       })
@@ -192,7 +205,7 @@ function HomeContent() {
           const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
           if (budgetsData) {
             const budgetsWithSpent = budgetsData.map((budget: any) => {
-              const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+              const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
               const remaining = Number(budget.amount) - spent
               const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
               return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
