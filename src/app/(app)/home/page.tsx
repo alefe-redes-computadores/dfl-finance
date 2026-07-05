@@ -849,13 +849,10 @@ function HomeContent() {
   )
 }
 
-// 🛡️ A CAPA PROTETORA: Garante que o Server Component nunca seja renderizado antes da hora
 export default function HomePage() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
-  
   if (!isClient) return <div className="min-h-screen bg-gray-50 dark:bg-slate-900" />
-  
   return (
     <ContextProvider>
       <HomeContent />
