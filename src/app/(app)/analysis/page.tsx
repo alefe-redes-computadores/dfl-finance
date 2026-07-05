@@ -79,7 +79,6 @@ const AnalysisSkeleton = () => (
 )
 
 function AnalysisContent() {
-  const [mounted, setMounted] = useState(false)
   const { user } = useAuth()
   const { context } = useContext_()
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -106,8 +105,6 @@ function AnalysisContent() {
   const [filterAccount, setFilterAccount] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
 
-  useEffect(() => { setMounted(true) }, [])
-
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
@@ -116,7 +113,7 @@ function AnalysisContent() {
   const { data: localAccounts } = useLocalData({ table: 'accounts', filters: { context }, realtime: false })
 
   const loadData = useCallback(async () => {
-    if (!user?.id || !mounted) return
+    if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
@@ -226,13 +223,13 @@ function AnalysisContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [user?.id, context, currentDate, mounted, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
+  }, [user?.id, context, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
 
   useEffect(() => {
-    if (user?.id && context && mounted) {
+    if (user?.id && context) {
       loadData()
     }
-  }, [user?.id, context, currentDate, mounted, filterAccount, filterCategory, loadData])
+  }, [user?.id, context, currentDate, filterAccount, filterCategory, loadData])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -282,7 +279,7 @@ function AnalysisContent() {
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
 
-  if (!mounted) return <AnalysisSkeleton />
+  if (loading) return <AnalysisSkeleton />
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -414,9 +411,7 @@ function AnalysisContent() {
         </button>
       </div>
 
-      {loading ? (
-        <AnalysisSkeleton />
-      ) : activeTab === 'new' ? (
+      {activeTab === 'new' ? (
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-50 dark:border-slate-700">
@@ -811,7 +806,13 @@ function AnalysisContent() {
   )
 }
 
+// 🛡️ A CAPA PROTETORA
 export default function AnalysisPage() {
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
+  
+  if (!isClient) return <div className="min-h-screen bg-gray-50 dark:bg-slate-900" />
+  
   return (
     <ContextProvider>
       <AnalysisContent />
