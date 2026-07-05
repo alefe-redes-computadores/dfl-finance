@@ -20,7 +20,6 @@ export default function NewCardPage() {
   const router = useRouter()
   const { showToast } = useToast()
 
-
   const [accounts, setAccounts] = useState<any[]>([])
 
   const [showColorPicker, setShowColorPicker] = useState(false)
@@ -39,16 +38,17 @@ export default function NewCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
- 
-
- // ============================================================
-  // 🔥 BUSCA LOCAL DE CONTAS
+  // ============================================================
+  // 🔥 BUSCA LOCAL DE CONTAS - CORRIGIDO
   // ============================================================
   const { data: localAccounts, loading: accLoading } = useLocalData({
-    table: 'accounts',
+    table: 'accounts' as any,
     filters: { context: 'dfl' },
     realtime: false,
   })
+
+  // Hook CRUD no topo
+  const { create: createCard } = useLocalData({ table: 'credit_cards' as any })
 
   useEffect(() => {
     if (localAccounts) {
@@ -92,8 +92,7 @@ export default function NewCardPage() {
     }
 
     try {
-      const { create } = useLocalData({ table: 'credit_cards' })
-      await create(payload)
+      await createCard(payload)
       showToast('Cartão criado com sucesso!', 'success')
       router.push('/cards')
     } catch (error: any) {
