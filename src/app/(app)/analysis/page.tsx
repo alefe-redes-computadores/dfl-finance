@@ -42,9 +42,6 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import DetailedProjectionChart from '@/components/DetailedProjectionChart'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER PARA ANÁLISES
-// ============================================================
 const AnalysisSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="grid grid-cols-3 gap-3">
@@ -82,6 +79,7 @@ const AnalysisSkeleton = () => (
 )
 
 function AnalysisContent() {
+  const [mounted, setMounted] = useState(false)
   const { user } = useAuth()
   const { context } = useContext_()
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -108,31 +106,17 @@ function AnalysisContent() {
   const [filterAccount, setFilterAccount] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
 
+  useEffect(() => { setMounted(true) }, [])
+
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  const { data: localTransactions } = useLocalData({
-    table: 'transactions',
-    filters: { context },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
-  })
+  const { data: localTransactions } = useLocalData({ table: 'transactions', filters: { context }, orderBy: { field: 'date', direction: 'desc' }, realtime: true })
+  const { data: localCategories } = useLocalData({ table: 'categories', filters: { context }, realtime: false })
+  const { data: localAccounts } = useLocalData({ table: 'accounts', filters: { context }, realtime: false })
 
-  const { data: localCategories } = useLocalData({
-    table: 'categories',
-    filters: { context },
-    realtime: false,
-  })
-
-  const { data: localAccounts } = useLocalData({
-    table: 'accounts',
-    filters: { context },
-    realtime: false,
-  })
-
-  // 5. BLINDAGEM DE FUNÇÃO: Usa user?.id nas dependências
   const loadData = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id || !mounted) return
     setLoading(true)
     setLoadingPulse(true)
 
@@ -242,14 +226,13 @@ function AnalysisContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [user?.id, context, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
+  }, [user?.id, context, currentDate, mounted, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
 
-  // 6. BLINDAGEM DE EFFECT
   useEffect(() => {
-    if (user?.id && context) {
+    if (user?.id && context && mounted) {
       loadData()
     }
-  }, [user?.id, context, currentDate, filterAccount, filterCategory, loadData])
+  }, [user?.id, context, currentDate, mounted, filterAccount, filterCategory, loadData])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -298,6 +281,8 @@ function AnalysisContent() {
   const handleExportPDF = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-pdf?userId=${user.id}&context=${context}&range=${range}`, '_blank') }
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
+
+  if (!mounted) return <AnalysisSkeleton />
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
