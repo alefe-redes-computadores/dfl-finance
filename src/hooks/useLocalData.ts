@@ -23,6 +23,7 @@ type AllTables =
   | 'credit_invoices' 
   | 'notifications'
 
+
 interface UseLocalDataOptions {
   table: AllTables
   filters?: Record<string, any>
