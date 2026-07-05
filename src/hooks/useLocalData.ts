@@ -170,7 +170,8 @@ export function useLocalData<T>({
     }
   }, [user?.id, isOnline, table, filterString, orderString, limit, fetchLocal])
 
-  // ============================================================
+ 
+ // ============================================================
   // RECARREGAR DADOS (NÃO BLOQUEANTE)
   // ============================================================
   const reload = useCallback(async () => {
