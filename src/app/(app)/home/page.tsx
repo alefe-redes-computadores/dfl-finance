@@ -62,17 +62,10 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
   return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400 shrink-0" /> }
 }
 
-const HomeSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
-    <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50">
-      <div className="flex flex-col items-center gap-3"><div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" /><div className="h-9 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" /><div className="h-5 w-32 bg-gray-100 dark:bg-slate-700/50 rounded-full mt-1" /></div>
-    </div>
-  </div>
-)
+const homeGlobalLastFetch: Record<string, number> = {}
 
 function HomeContent() {
-  const [mounted, setMounted] = useState(false)
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const { context, appMode } = useContext_()
   const { showToast } = useToast()
@@ -95,7 +88,6 @@ function HomeContent() {
   const [loans, setLoans] = useState<any[]>([])
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -103,7 +95,6 @@ function HomeContent() {
   const [criticalCount, setCriticalCount] = useState(0)
 
   const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_SECTION_ORDER)
-  const [layoutLoaded, setLayoutLoaded] = useState(false)
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
   const [personalizeOrder, setPersonalizeOrder] = useState<typeof ALL_SECTIONS>(ALL_SECTIONS)
   const [personalizeEnabled, setPersonalizeEnabled] = useState<Set<string>>(new Set(DEFAULT_SECTION_ORDER))
@@ -112,13 +103,9 @@ function HomeContent() {
 
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
-  useEffect(() => { setMounted(true) }, [])
-
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
-
-  const fullName = user?.user_metadata?.name || 'Álefe'
-  const firstName = fullName.split(' ')[0]
+  const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
   const { data: localTransactions } = useLocalData({ table: 'transactions' as any, filters: { context }, orderBy: { field: 'date', direction: 'desc' }, realtime: true })
   const { data: localCategories } = useLocalData({ table: 'categories' as any, filters: { context }, realtime: false })
@@ -127,16 +114,9 @@ function HomeContent() {
   const { data: localFinancings } = useLocalData({ table: 'financings' as any, filters: { context, status: 'active' }, realtime: true })
   const { data: localCards } = useLocalData({ table: 'credit_cards' as any, filters: { context, is_archived: false }, realtime: true })
 
-  const lastRemoteFetchRef = useRef(0)
-  const rawLoansRef = useRef<any[]>([])
-  const rawBudgetsRef = useRef<any[]>([])
-  const rawSubsRef = useRef<any[]>([])
-  const rawReadsRef = useRef<Set<string>>(new Set())
-
   const loadData = useCallback(async () => {
-    if (!user?.id || !mounted) return
+    if (!user?.id) return
     setDataLoading(true)
-    setLoadingPulse(true)
 
     try {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
@@ -201,78 +181,68 @@ function HomeContent() {
       setTotalToReceive(debtsWithProgress.reduce((a: number, d: any) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
       setFinancings(localFinancings || [])
 
-      if (navigator.onLine && Date.now() - lastRemoteFetchRef.current > 15000) {
-        lastRemoteFetchRef.current = Date.now()
-        const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
-        rawLoansRef.current = Array.isArray(loansData) ? loansData : []
+      if (navigator.onLine && Date.now() - (homeGlobalLastFetch['home'] || 0) > 15000) {
+        homeGlobalLastFetch['home'] = Date.now()
+        try {
+          const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
+          if (loansData) setLoans(loansData)
 
-        const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
-        rawBudgetsRef.current = Array.isArray(budgetsData) ? budgetsData : []
+          const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
+          if (budgetsData) {
+            const budgetsWithSpent = budgetsData.map((budget: any) => {
+              const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+              const remaining = Number(budget.amount) - spent
+              const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
+              return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
+            })
+            setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
+          }
 
-        const { data: subsData } = await supabase.from('subscriptions').select('*, categories(name, icon, color), accounts(name)').match({ user_id: user.id, context, status: 'active' }).order('due_day', { ascending: true })
-        rawSubsRef.current = Array.isArray(subsData) ? subsData : []
+          const { data: subsData } = await supabase.from('subscriptions').select('*, categories(name, icon, color), accounts(name)').match({ user_id: user.id, context, status: 'active' }).order('due_day', { ascending: true })
+          if (subsData) setSubscriptions(subsData)
 
-        const { data: reads } = await supabase.from('notification_reads').select('notification_id').eq('user_id', user.id)
-        rawReadsRef.current = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
+          const { data: reads } = await supabase.from('notification_reads').select('notification_id').eq('user_id', user.id)
+          const readSet = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
+          
+          const today = new Date()
+          const todayDay = today.getDate()
+          const notifs: any[] = []
+          cardsWithInvoice.forEach((card: any) => {
+            const days = (card.due_day || 1) - todayDay
+            if (days < 0) {
+              notifs.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day}`, cardId: card.id, severity: 'critical', isRead: readSet.has(`invoice-overdue-${card.id}`) })
+            } else if (days <= 3) {
+              notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
+            }
+          })
+          setNotifications(notifs)
+          setUnreadNotifications(notifs.filter((n: any) => !n.isRead).length)
+          setCriticalCount(notifs.filter((n: any) => n.severity === 'critical' && !n.isRead).length)
+        } catch (e) {}
       }
-
-      setLoans(rawLoansRef.current)
-
-      const budgetsWithSpent = rawBudgetsRef.current.map((budget: any) => {
-        const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-        const remaining = Number(budget.amount) - spent
-        const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
-        return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
-      })
-      setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
-      setSubscriptions(rawSubsRef.current)
-
-      const today = new Date()
-      const todayDay = today.getDate()
-      const notifs: any[] = []
-      const readSet = rawReadsRef.current
-
-      cardsWithInvoice.forEach((card: any) => {
-        const days = (card.due_day || 1) - todayDay
-        if (days < 0) {
-          notifs.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day}`, cardId: card.id, severity: 'critical', isRead: readSet.has(`invoice-overdue-${card.id}`) })
-        } else if (days <= 3) {
-          notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
-        }
-      })
-
-      setNotifications(notifs)
-      setUnreadNotifications(notifs.filter((n: any) => !n.isRead).length)
-      setCriticalCount(notifs.filter((n: any) => n.severity === 'critical' && !n.isRead).length)
 
     } catch (err) {
       console.error('Erro na Home:', err)
     } finally {
       setDataLoading(false)
-      setLoadingPulse(false)
     }
-  }, [context, currentDate, user?.id, mounted, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
+  }, [context, currentDate, user?.id, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
 
   useEffect(() => {
-    if (user?.id && context && mounted) {
-      loadData()
-    }
-  }, [user?.id, context, currentDate, mounted, loadData])
-
-  const loadLayout = useCallback(async () => {
-    if (!user?.id || !mounted) return
-    const { data } = await supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single()
-    if (data?.section_order) {
-      setEnabledSections(data.section_order)
-      setPersonalizeOrder(ALL_SECTIONS.filter(s => data.section_order.includes(s.id)))
-      setPersonalizeEnabled(new Set(data.section_order))
-    }
-    setLayoutLoaded(true)
-  }, [user?.id, context, mounted])
+    if (user?.id && context) loadData()
+  }, [user?.id, context, currentDate, loadData])
 
   useEffect(() => {
-    if (user?.id && mounted) loadLayout()
-  }, [user?.id, mounted, loadLayout])
+    if (user?.id) {
+      supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single().then(({ data }) => {
+        if (data?.section_order) {
+          setEnabledSections(data.section_order)
+          setPersonalizeOrder(ALL_SECTIONS.filter(s => data.section_order.includes(s.id)))
+          setPersonalizeEnabled(new Set(data.section_order))
+        }
+      })
+    }
+  }, [user?.id, context])
 
   const saveLayout = async (order: string[]) => {
     if (!user?.id) return
@@ -341,9 +311,6 @@ function HomeContent() {
   const getBalanceStyle = (val: number) => { if (val > 0) return 'text-emerald-600 font-bold'; if (val < 0) return 'text-red-500 font-bold'; return 'text-gray-800 dark:text-gray-200 font-bold' }
 
   useEffect(() => { const saved = localStorage.getItem('dfl_notifications_enabled'); setNotificationsEnabled(saved !== 'false') }, [])
-
-  // Proteção contra Server Component Error
-  if (!mounted || authLoading) return <HomeSkeleton />
 
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
@@ -435,9 +402,7 @@ function HomeContent() {
               </div>
               <div className="px-2 pb-2">
                 {loans.filter((l: any) => l.status === 'active').slice(0, 3).map((loan: any) => {
-                  const progress = Number(loan.total_amount) > 0
-                    ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100
-                    : 0
+                  const progress = Number(loan.total_amount) > 0 ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100 : 0
                   const isOverdue = loan.due_date && differenceInDays(new Date(loan.due_date), today) < 0
                   return (
                     <div key={loan.id} onClick={() => router.push(`/loans/${loan.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
@@ -459,9 +424,7 @@ function HomeContent() {
                           <div className={`h-full rounded-full transition-all duration-700 ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-[11px] text-gray-400">
-                            {loan.paid_installments}/{loan.total_installments} parcelas
-                          </span>
+                          <span className="text-[11px] text-gray-400">{loan.paid_installments}/{loan.total_installments} parcelas</span>
                           <span className="text-[11px] font-bold text-gray-500">{progress.toFixed(0)}% pago</span>
                         </div>
                       </div>
@@ -886,7 +849,13 @@ function HomeContent() {
   )
 }
 
+// 🛡️ A CAPA PROTETORA: Garante que o Server Component nunca seja renderizado antes da hora
 export default function HomePage() {
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
+  
+  if (!isClient) return <div className="min-h-screen bg-gray-50 dark:bg-slate-900" />
+  
   return (
     <ContextProvider>
       <HomeContent />
