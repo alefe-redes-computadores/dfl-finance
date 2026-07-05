@@ -25,6 +25,8 @@ type AllTables =
   | 'credit_invoices' 
   | 'notifications'
 
+const MAX_SYNC_ATTEMPTS = 3
+
 export function useLocalSync() {
   const { user } = useAuth()
   const { showToast } = useToast()
@@ -32,6 +34,7 @@ export function useLocalSync() {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [pendingCount, setPendingCount] = useState(0)
   const isSyncing = useRef(false)
+  const syncAttempts = useRef(0)
 
   // ============================================================
   // ATUALIZA STATUS DA FILA
@@ -43,12 +46,19 @@ export function useLocalSync() {
   }, [user?.id])
 
   // ============================================================
-  // PROCESSAR FILA DE SINCRONIZAÇÃO
+  // PROCESSAR FILA DE SINCRONIZAÇÃO (COM LIMITE DE TENTATIVAS)
   // ============================================================
   const processSyncQueue = useCallback(async () => {
     if (!user?.id || isSyncing.current || !isOnline) return
 
+    // Limite de tentativas para evitar loop infinito
+    if (syncAttempts.current >= MAX_SYNC_ATTEMPTS) {
+      console.warn('Limite de tentativas de sincronização atingido. Aguardando próxima janela.')
+      return
+    }
+
     isSyncing.current = true
+    syncAttempts.current++
     setSyncStatus('syncing')
 
     try {
@@ -56,6 +66,7 @@ export function useLocalSync() {
 
       if (items.length === 0) {
         setSyncStatus(isOnline ? 'online' : 'offline')
+        syncAttempts.current = 0
         isSyncing.current = false
         return
       }
@@ -101,6 +112,9 @@ export function useLocalSync() {
       // Atualiza contador
       await updatePendingCount()
 
+      // Reseta contador de tentativas se concluiu
+      syncAttempts.current = 0
+
       if (pendingCount === 0) {
         setSyncStatus(isOnline ? 'online' : 'offline')
       }
@@ -113,12 +127,24 @@ export function useLocalSync() {
   }, [user?.id, isOnline, pendingCount, updatePendingCount])
 
   // ============================================================
+  // RESETAR CONTADOR DE TENTATIVAS PERIODICAMENTE
+  // ============================================================
+  useEffect(() => {
+    const interval = setInterval(() => {
+      syncAttempts.current = 0
+    }, 30000) // Reseta a cada 30 segundos
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // ============================================================
   // ESCUTAR EVENTOS ONLINE/OFFLINE
   // ============================================================
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true)
       setSyncStatus('online')
+      syncAttempts.current = 0 // Reseta ao ficar online
       showToast('🌐 Conexão restaurada. Sincronizando...', 'info')
       processSyncQueue()
     }
@@ -162,7 +188,7 @@ export function useLocalSync() {
     await updatePendingCount()
 
     // Se estiver online, tenta sincronizar imediatamente
-    if (isOnline) {
+    if (isOnline && syncAttempts.current < MAX_SYNC_ATTEMPTS) {
       processSyncQueue()
     }
   }, [user?.id, isOnline, updatePendingCount, processSyncQueue])
@@ -177,6 +203,7 @@ export function useLocalSync() {
     }
 
     showToast('🔄 Sincronizando...', 'info')
+    syncAttempts.current = 0 // Reseta ao forçar
     await processSyncQueue()
     showToast('✅ Sincronização concluída!', 'success')
   }, [isOnline, processSyncQueue, showToast])
