@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -14,7 +14,6 @@ import {
   ChevronDown,
   ArrowUpCircle,
   ArrowDownCircle,
-  Plus,
   Calendar,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
@@ -23,7 +22,7 @@ import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
-import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -52,7 +51,6 @@ export default function AccountDetailPage() {
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
 
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [expandedTransactions, setExpandedTransactions] = useState(false)
   const [showAdjustModal, setShowAdjustModal] = useState(false)
@@ -66,48 +64,27 @@ export default function AccountDetailPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
   const { data: localAccounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
   })
 
-  const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
-
-  // Busca transações vinculadas
   const { data: allTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, account_id: accountId },
   })
 
+  const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
   const transactions = allTransactions || []
 
-  const { update: updateAccount, remove: removeAccount } = useLocalData({
-    table: 'accounts' as any,
-  })
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  const { create: createTransaction } = useLocalData({
-    table: 'transactions' as any,
-  })
+  const formatDate = (date: string | null) => {
+    if (!date) return ""
+    return new Date(date).toLocaleDateString("pt-BR")
+  }
 
-  // Pull-to-refresh
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-  }, [])
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        reload().finally(() => {
-          setTimeout(() => setRefreshing(false), 600)
-        })
-      }
-    }
-  }, [refreshing, reload])
-
-  // Ajustar saldo
   const handleAdjustBalance = async () => {
     if (!adjustAmount || parseFloat(adjustAmount) === 0) {
       showToast("Informe um valor para ajuste", "warning")
@@ -117,8 +94,11 @@ export default function AccountDetailPage() {
     setSaving(true)
     try {
       const newBalance = (accountData?.balance || 0) + parseFloat(adjustAmount)
-      await updateAccount(accountId, { balance: newBalance })
-      await createTransaction({
+      await db.table('accounts').update(accountId, { balance: newBalance })
+
+      const newTx = {
+        id: crypto.randomUUID(),
+        user_id: accountData.user_id,
         description: adjustNotes || "Ajuste de saldo",
         amount: parseFloat(adjustAmount),
         type: parseFloat(adjustAmount) >= 0 ? "income" : "expense",
@@ -126,7 +106,13 @@ export default function AccountDetailPage() {
         date: new Date().toISOString().split("T")[0],
         status: "completed",
         context,
-      })
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+      await db.table('transactions').put(newTx)
+
       showToast("Saldo ajustado com sucesso!", "success")
       success()
       setShowAdjustModal(false)
@@ -141,7 +127,6 @@ export default function AccountDetailPage() {
     }
   }
 
-  // Transferir
   const handleTransfer = async () => {
     if (!transferAmount || parseFloat(transferAmount) <= 0) {
       showToast("Informe um valor válido", "warning")
@@ -156,8 +141,10 @@ export default function AccountDetailPage() {
     setSaving(true)
     try {
       const amount = parseFloat(transferAmount)
-      // Saída
-      await createTransaction({
+
+      await db.table('transactions').put({
+        id: crypto.randomUUID(),
+        user_id: accountData.user_id,
         description: transferNotes || `Transferência para conta`,
         amount: -amount,
         type: "transfer_out",
@@ -166,9 +153,15 @@ export default function AccountDetailPage() {
         date: new Date().toISOString().split("T")[0],
         status: "completed",
         context,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
-      // Entrada na outra conta
-      await createTransaction({
+
+      await db.table('transactions').put({
+        id: crypto.randomUUID(),
+        user_id: accountData.user_id,
         description: transferNotes || `Transferência recebida`,
         amount: amount,
         type: "transfer_in",
@@ -177,13 +170,19 @@ export default function AccountDetailPage() {
         date: new Date().toISOString().split("T")[0],
         status: "completed",
         context,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
-      // Atualiza saldos
+
       const newFromBalance = (accountData?.balance || 0) - amount
       const toAccount = (localAccounts || []).find((a: any) => a.id === transferToAccount) as any
       const newToBalance = (toAccount?.balance || 0) + amount
-      await updateAccount(accountId, { balance: newFromBalance })
-      await updateAccount(transferToAccount, { balance: newToBalance })
+
+      await db.table('accounts').update(accountId, { balance: newFromBalance })
+      await db.table('accounts').update(transferToAccount, { balance: newToBalance })
+
       showToast("Transferência realizada com sucesso!", "success")
       success()
       setShowTransferModal(false)
@@ -199,11 +198,10 @@ export default function AccountDetailPage() {
     }
   }
 
-  // Excluir conta
   const handleDelete = async () => {
     if (!confirm("Tem certeza que deseja excluir esta conta?")) return
     try {
-      await removeAccount(accountId)
+      await db.table('accounts').delete(accountId)
       showToast("Conta excluída com sucesso!", "success")
       success()
       router.back()
@@ -213,13 +211,21 @@ export default function AccountDetailPage() {
     }
   }
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
-  const formatDate = (date: string | null) => {
-    if (!date) return ""
-    return new Date(date).toLocaleDateString("pt-BR")
-  }
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      const deltaY = e.touches[0].clientY - touchStartY.current
+      if (deltaY > 60 && !refreshing) {
+        setRefreshing(true)
+        reload().finally(() => {
+          setTimeout(() => setRefreshing(false), 600)
+        })
+      }
+    }
+  }, [refreshing, reload])
 
   if (loading) {
     return (
@@ -262,7 +268,7 @@ export default function AccountDetailPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {(loadingPulse || loading || pendingCount > 0) && (
+      {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
@@ -344,7 +350,6 @@ export default function AccountDetailPage() {
         </div>
       </div>
 
-      {/* Modal Ajuste */}
       {showAdjustModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAdjustModal(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -367,7 +372,6 @@ export default function AccountDetailPage() {
         </div>
       )}
 
-      {/* Modal Transferência */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowTransferModal(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
