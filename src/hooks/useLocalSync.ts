@@ -9,6 +9,22 @@ import { useToast } from '@/contexts/ToastContext'
 
 type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline'
 
+type AllTables = 
+  | 'transactions' 
+  | 'accounts' 
+  | 'categories' 
+  | 'debts' 
+  | 'loans' 
+  | 'financings' 
+  | 'subscriptions' 
+  | 'tags' 
+  | 'contacts' 
+  | 'budgets' 
+  | 'goals' 
+  | 'credit_cards' 
+  | 'credit_invoices' 
+  | 'notifications'
+
 export function useLocalSync() {
   const { user } = useAuth()
   const { showToast } = useToast()
@@ -48,60 +64,25 @@ export function useLocalSync() {
         try {
           const { table, operation, record_id, data } = item
 
+          let supabaseTable: string = table
+
+          // Mapeia tabelas do IndexedDB para tabelas do Supabase
+          if (table === 'credit_cards') supabaseTable = 'credit_cards'
+          if (table === 'credit_invoices') supabaseTable = 'credit_invoices'
+
+          const supabaseClient = supabase.from(supabaseTable)
+
           let error = null
 
-          switch (table) {
-            case 'transactions':
-              if (operation === 'create') {
-                const { error: e } = await supabase.from('transactions').insert(data)
-                error = e
-              } else if (operation === 'update') {
-                const { error: e } = await supabase.from('transactions').update(data).eq('id', record_id)
-                error = e
-              } else if (operation === 'delete') {
-                const { error: e } = await supabase.from('transactions').delete().eq('id', record_id)
-                error = e
-              }
-              break
-
-            case 'accounts':
-              if (operation === 'create') {
-                const { error: e } = await supabase.from('accounts').insert(data)
-                error = e
-              } else if (operation === 'update') {
-                const { error: e } = await supabase.from('accounts').update(data).eq('id', record_id)
-                error = e
-              } else if (operation === 'delete') {
-                const { error: e } = await supabase.from('accounts').delete().eq('id', record_id)
-                error = e
-              }
-              break
-
-            case 'categories':
-              if (operation === 'create') {
-                const { error: e } = await supabase.from('categories').insert(data)
-                error = e
-              } else if (operation === 'update') {
-                const { error: e } = await supabase.from('categories').update(data).eq('id', record_id)
-                error = e
-              } else if (operation === 'delete') {
-                const { error: e } = await supabase.from('categories').delete().eq('id', record_id)
-                error = e
-              }
-              break
-
-            case 'debts':
-              if (operation === 'create') {
-                const { error: e } = await supabase.from('debts').insert(data)
-                error = e
-              } else if (operation === 'update') {
-                const { error: e } = await supabase.from('debts').update(data).eq('id', record_id)
-                error = e
-              } else if (operation === 'delete') {
-                const { error: e } = await supabase.from('debts').delete().eq('id', record_id)
-                error = e
-              }
-              break
+          if (operation === 'create') {
+            const { error: e } = await supabaseClient.insert(data)
+            error = e
+          } else if (operation === 'update') {
+            const { error: e } = await supabaseClient.update(data).eq('id', record_id)
+            error = e
+          } else if (operation === 'delete') {
+            const { error: e } = await supabaseClient.delete().eq('id', record_id)
+            error = e
           }
 
           if (error) {
@@ -170,7 +151,7 @@ export function useLocalSync() {
    * Adiciona uma operação à fila de sincronização
    */
   const queueOperation = useCallback(async (
-    table: 'transactions' | 'accounts' | 'categories' | 'debts',
+    table: AllTables,
     operation: 'create' | 'update' | 'delete',
     recordId: string,
     data: any
