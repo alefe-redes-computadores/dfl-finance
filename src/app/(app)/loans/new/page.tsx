@@ -11,6 +11,7 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
+import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 
 
@@ -20,7 +21,7 @@ export default function NewLoanPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -28,7 +29,7 @@ export default function NewLoanPage() {
 
   const [description, setDescription] = useState("")
   const [amount, setAmount] = useState("")
-  const [direction, setDirection] = useState("lent") // lent = emprestei, borrowed = peguei
+  const [direction, setDirection] = useState("lent")
   const [lender, setLender] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [dueDate, setDueDate] = useState("")
@@ -44,7 +45,7 @@ export default function NewLoanPage() {
 
   const loanData = localLoans?.find((l: any) => l.id === editId) as any
 
-  const { create, update } = useLocalData({
+  const { create, update, remove } = useLocalData({
     table: 'loans' as any,
   })
 
@@ -127,7 +128,6 @@ export default function NewLoanPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este empréstimo?")) return
     try {
-      const { remove } = useLocalData({ table: 'loans' as any })
       await remove(editId)
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
@@ -139,7 +139,7 @@ export default function NewLoanPage() {
   }
 
   // Define o título baseado no contexto
-  const contextTitle = context === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
 
   return (
     <div
