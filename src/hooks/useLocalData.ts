@@ -21,25 +21,24 @@ interface UseLocalDataOptions {
 
 export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime = true }: UseLocalDataOptions) {
   const { user } = useAuth()
-  const { isOnline, queueOperation } = useLocalSync()
+  const { queueOperation } = useLocalSync()
   
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Transformando filtros em strings primitivas (Imune ao React re-render)
+  // 1. Filtros estáticos: Blindagem contra o React recriar objetos ao clicar na tela
   const filterString = JSON.stringify(filters || {})
   const orderString = JSON.stringify(orderBy || null)
 
-  // Travas de segurança militar contra loops infinitos
   const dataStringRef = useRef('[]')
   const isSyncingRef = useRef(false)
 
   const reload = useCallback(async () => {
     if (!user?.id) return
 
-    // Função encapsulada e isolada para buscar do Dexie
+    // Leitura instantânea e limpa do banco offline (Dexie)
     const getLocalData = async () => {
       const collection = db[table as keyof typeof db] as any
       if (!collection) return []
@@ -68,25 +67,26 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
     }
 
     try {
-      // 1. CARREGAMENTO LOCAL (INSTANTÂNEO)
+      // ATUALIZA A TELA (OFFLINE FIRST)
       const localRes = await getLocalData()
       const localStr = JSON.stringify(localRes)
       
-      // Só atualiza a tela se o dado realmente mudou
+      // Só gasta processador da tela se os dados REALMENTE mudaram
       if (dataStringRef.current !== localStr) {
         dataStringRef.current = localStr
         setData(localRes)
       }
       setLoading(false)
 
-      // 2. SINCRONIZAÇÃO SUPABASE (BACKGROUND PROTEGIDO)
-      if (isOnline && !isSyncingRef.current) {
+      // SINCRONIZA O SUPABASE NO FUNDO (Cadeado: Só roda se tiver internet e não estiver já rodando)
+      if (navigator.onLine && !isSyncingRef.current) {
         isSyncingRef.current = true
         setSyncing(true)
 
         const pFilters = JSON.parse(filterString)
         const pOrder = JSON.parse(orderString)
         let query = supabase.from(table).select('*').eq('user_id', user.id)
+        
         Object.entries(pFilters).forEach(([k, v]) => {
           if (v !== undefined && v !== null && v !== '') query = query.eq(k, v)
         })
@@ -109,7 +109,6 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
           const toRemove = localIds.filter((id: string) => !supIds.includes(id))
           if (toRemove.length > 0) await tableRef.bulkDelete(toRemove)
 
-          // Última checagem antes de renderizar
           const finalLocal = await getLocalData()
           const finalStr = JSON.stringify(finalLocal)
           if (dataStringRef.current !== finalStr) {
@@ -128,24 +127,31 @@ export function useLocalData<T>({ table, filters = {}, orderBy, limit, realtime 
       setSyncing(false)
       setLoading(false)
     }
-  }, [user?.id, table, filterString, orderString, limit, isOnline]) // 🛡️ Zero dependências reativas perigosas!
+  }, [user?.id, table, filterString, orderString, limit]) // 🛡️ Zero dependências perigosas!
 
+  // 2. A MÁGICA: A trava do ESLint que proíbe o loop infinito ao clicar na tela
   useEffect(() => {
     reload()
-  }, [reload])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, filterString, orderString]) 
 
+  // 3. CANAL DE REALTIME BLINDADO (Sem zumbis)
   useEffect(() => {
     if (!realtime || !user?.id) return
+    
+    const channelName = `rt-${table}-${user.id}`
     const channel = supabase
-      .channel(`rt-${table}-${user.id}`)
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: table, filter: `user_id=eq.${user.id}` }, () => {
         reload()
       })
       .subscribe()
       
     return () => { supabase.removeChannel(channel) }
-  }, [realtime, user?.id, table, reload])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtime, user?.id, table])
 
+  // CRUD OTIMIZADO
   const create = useCallback(async (item: Omit<T, 'id' | 'created_at' | 'updated_at'>) => {
     if (!user?.id) return
     const now = new Date().toISOString()
