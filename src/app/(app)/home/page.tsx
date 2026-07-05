@@ -201,8 +201,8 @@ function HomeContent() {
   // 🔥 JOIN EM MEMÓRIA
   // ============================================================
   const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-    const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
-    const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id)
+    const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+    const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
     return {
       ...tx,
       categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
