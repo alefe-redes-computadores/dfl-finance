@@ -21,6 +21,7 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
+import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
@@ -39,7 +40,8 @@ export default function FinancingsPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { user, context, appMode } = useAuth()
+  const { user } = useAuth()
+  const { context, appMode } = useContext_()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -53,7 +55,7 @@ export default function FinancingsPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Busca dados locais
-  const { data: financings, loading, refresh } = useLocalData({
+  const { data: financings, loading, reload } = useLocalData({
     table: 'financings' as any,
     filters: { context },
   })
@@ -78,14 +80,15 @@ export default function FinancingsPage() {
     table: 'financings' as any,
   })
 
+  // Hook removeTransaction no topo
+  const { remove: removeTransaction } = useLocalData({
+    table: 'transactions' as any,
+  })
+
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
-      // Remove também as parcelas vinculadas
       const installments = installmentsByFinancing[deleteModal] || []
-      const { remove: removeTransaction } = useLocalData({
-        table: 'transactions' as any,
-      })
       for (const inst of installments) {
         await removeTransaction(inst.id)
       }
@@ -93,7 +96,7 @@ export default function FinancingsPage() {
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
-      refresh()
+      reload()
     } catch {
       showToast("Erro ao excluir financiamento", "error")
       errorHaptic()
@@ -110,12 +113,12 @@ export default function FinancingsPage() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
-        refresh().finally(() => {
+        reload().finally(() => {
           setTimeout(() => setRefreshing(false), 600)
         })
       }
     }
-  }, [refreshing, refresh])
+  }, [refreshing, reload])
 
   // Filtros e ordenação
   const filteredFinancings = (financings || []).filter((fin: any) => {
