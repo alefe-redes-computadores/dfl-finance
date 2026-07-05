@@ -25,7 +25,6 @@ import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 
-//Comentário para compilar
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
   savings: PiggyBank,
@@ -68,7 +67,7 @@ export default function AccountDetailPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Busca dados locais
-  const { data: localAccounts, loading, refresh } = useLocalData({
+  const { data: localAccounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
   })
@@ -101,12 +100,12 @@ export default function AccountDetailPage() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
-        refresh().finally(() => {
+        reload().finally(() => {
           setTimeout(() => setRefreshing(false), 600)
         })
       }
     }
-  }, [refreshing, refresh])
+  }, [refreshing, reload])
 
   // Ajustar saldo
   const handleAdjustBalance = async () => {
@@ -133,7 +132,7 @@ export default function AccountDetailPage() {
       setShowAdjustModal(false)
       setAdjustAmount("")
       setAdjustNotes("")
-      refresh()
+      reload()
     } catch (err: any) {
       showToast(err?.message || "Erro ao ajustar saldo", "error")
       errorHaptic()
@@ -191,7 +190,7 @@ export default function AccountDetailPage() {
       setTransferAmount("")
       setTransferToAccount("")
       setTransferNotes("")
-      refresh()
+      reload()
     } catch (err: any) {
       showToast(err?.message || "Erro ao transferir", "error")
       errorHaptic()
