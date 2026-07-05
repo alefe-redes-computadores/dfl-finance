@@ -13,7 +13,6 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
-// 🔥 NOVO: Import do hook local
 import { useLocalData } from '@/hooks/useLocalData'
 
 export default function DebtDetailPage() {
@@ -24,7 +23,7 @@ export default function DebtDetailPage() {
   const { success, error } = useHapticFeedback()
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { 
     data: localDebt, 
@@ -34,7 +33,7 @@ export default function DebtDetailPage() {
     update: updateDebt,
     remove: removeDebt,
   } = useLocalData({
-    table: 'debts',
+    table: 'debts' as any,
     filters: { id: id as string },
     realtime: true,
   })
@@ -48,21 +47,26 @@ export default function DebtDetailPage() {
     update: updateTransaction,
     remove: removeTransaction,
   } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { debt_id: id as string },
     orderBy: { field: 'date', direction: 'desc' },
     realtime: true,
   })
+
+  const debtData = (localDebt || [])[0] as any
 
   const { 
     data: localAccounts, 
     loading: accLoading, 
     reload: reloadAccounts,
   } = useLocalData({
-    table: 'accounts',
-    filters: { context: localDebt?.[0]?.context || 'dfl' },
+    table: 'accounts' as any,
+    filters: { context: debtData?.context || 'dfl' },
     realtime: false,
   })
+
+  // Hook para update de conta no topo
+  const { update: updateAccount } = useLocalData({ table: 'accounts' as any })
 
   // ============================================================
   // ESTADOS LOCAIS
@@ -132,7 +136,7 @@ export default function DebtDetailPage() {
   }, [loading, refreshing])
 
   // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // LOAD DATA
   // ============================================================
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
@@ -140,11 +144,7 @@ export default function DebtDetailPage() {
     setLoadingPulse(true)
 
     try {
-      // Recarrega dados do IndexedDB
       await Promise.all([reloadDebt(), reloadTransactions(), reloadAccounts()])
-
-      // Os dados já estão disponíveis via localDebt, localTransactions e localAccounts
-      // O useEffect abaixo vai atualizar os estados
     } catch (err) {
       console.error('Erro ao carregar dados:', err)
     } finally {
@@ -154,11 +154,11 @@ export default function DebtDetailPage() {
   }, [id, user, reloadDebt, reloadTransactions, reloadAccounts])
 
   // ============================================================
-  // EFETTOS PARA ATUALIZAR ESTADOS A PARTIR DOS DADOS LOCAIS
+  // EFEITOS PARA ATUALIZAR ESTADOS
   // ============================================================
   useEffect(() => {
     if (localDebt && localDebt.length > 0) {
-      const debtData = localDebt[0]
+      const debtData = localDebt[0] as any
       setDebt(debtData)
       setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
     }
@@ -177,12 +177,11 @@ export default function DebtDetailPage() {
   }, [localAccounts])
 
   // ============================================================
-  // HANDLERS REFATORADOS PARA USAR FUNÇÕES DO HOOK LOCAL
+  // HANDLERS
   // ============================================================
   const handleDeleteDebt = async () => {
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
     try {
-      // 🔥 Usa remove() do useLocalData
       await removeDebt(id as string)
       showToast('Dívida excluída.', 'info')
       router.back()
@@ -195,10 +194,8 @@ export default function DebtDetailPage() {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
     try {
-      // 🔥 Usa remove() do useLocalData para a transação
       await removeTransaction(paymentId)
 
-      // 🔥 Recalcular total pago (em memória)
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
 
@@ -206,17 +203,12 @@ export default function DebtDetailPage() {
       const totalPaidCents = Math.round(totalPaid * 100)
       const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
 
-      // 🔥 Usa update() do useLocalData para atualizar a dívida
       await updateDebt(id as string, { status: newStatus })
 
-      // Se havia conta vinculada, reverter saldo (subtrair o valor)
       const deletedPayment = payments.find(p => p.id === paymentId)
       if (deletedPayment?.account_id) {
-        // 🔥 Busca a conta local
         const account = accounts.find(a => a.id === deletedPayment.account_id)
         if (account) {
-          // 🔥 Atualiza o saldo da conta (usando updateAccount, mas não temos hook específico, então vamos usar update do useLocalData)
-          const { update: updateAccount } = useLocalData({ table: 'accounts' })
           await updateAccount(deletedPayment.account_id, {
             balance: Number(account.balance) - amount
           })
@@ -242,9 +234,6 @@ export default function DebtDetailPage() {
     setPayAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // ============================================================
-  // 🔥 HANDLE PAYMENT (REFATORADO PARA USAR HOOK LOCAL)
-  // ============================================================
   const handlePayment = async () => {
     if (isSubmitting) return
 
@@ -274,8 +263,7 @@ export default function DebtDetailPage() {
     try {
       const targetAccountId = payAccountId || debt.account_id || null
 
-      // 🔥 1. Criar transação localmente (via create do useLocalData)
-      const newTransaction = await createTransaction({
+      await createTransaction({
         user_id: user.id,
         type: 'income',
         amount: payAmountNum,
@@ -288,18 +276,15 @@ export default function DebtDetailPage() {
         context: debt.context,
       })
 
-      // 🔥 2. Atualizar saldo da conta (se houver)
       if (targetAccountId) {
         const account = accounts.find(a => a.id === targetAccountId)
         if (account) {
-          const { update: updateAccount } = useLocalData({ table: 'accounts' })
           await updateAccount(targetAccountId, {
             balance: Number(account.balance) + payAmountNum
           })
         }
       }
 
-      // 🔥 3. Atualizar status da dívida
       const newTotalPaidCents = totalPaidCents + payAmountCents
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
 
@@ -309,7 +294,6 @@ export default function DebtDetailPage() {
         updated_at: new Date().toISOString()
       })
 
-      // 🔥 FEEDBACKS
       success()
       showToast('✅ Pagamento registrado com sucesso!', 'success')
 
@@ -329,9 +313,6 @@ export default function DebtDetailPage() {
     }
   }
 
-  // ============================================================
-  // HANDLER WHATSAPP (MANTIDO)
-  // ============================================================
   const handleSendWhatsApp = () => {
     const number = whatsAppNumber.replace(/\D/g, '')
     if (!number) {
@@ -343,9 +324,6 @@ export default function DebtDetailPage() {
     setShowWhatsAppModal(false)
   }
 
-  // ============================================================
-  // RENDERIZAÇÃO
-  // ============================================================
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
       <Loader2 className="animate-spin text-teal-700" size={40} />
@@ -377,14 +355,12 @@ export default function DebtDetailPage() {
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-32 font-sans px-4 pt-6 transition-colors duration-300">
 
-      {/* 🔥 BOLINHA DE LOADING */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* 🔥 PULL TO REFRESH */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -394,7 +370,6 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -413,7 +388,6 @@ export default function DebtDetailPage() {
         </div>
       </div>
 
-      {/* Card Principal */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}>
@@ -456,7 +430,6 @@ export default function DebtDetailPage() {
         </div>
       </div>
 
-      {/* Botões de ação */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {!isPaid && (
           <button
@@ -474,7 +447,6 @@ export default function DebtDetailPage() {
         </button>
       </div>
 
-      {/* Histórico de Pagamentos */}
       <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
         <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Histórico de Pagamentos</h3>
         {payments.length === 0 ? (
@@ -505,7 +477,6 @@ export default function DebtDetailPage() {
         )}
       </div>
 
-      {/* Modal Pagamento */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowPaymentModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
@@ -580,7 +551,6 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Modal WhatsApp */}
       {showWhatsAppModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowWhatsAppModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
@@ -623,7 +593,6 @@ export default function DebtDetailPage() {
         </div>
       )}
 
-      {/* Modal Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[250] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
