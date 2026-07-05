@@ -43,18 +43,23 @@ export default function EditCardPage() {
   const [showAccountModal, setShowAccountModal] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localAccounts, loading: accLoading } = useLocalData({
-    table: 'accounts',
+    table: 'accounts' as any,
     filters: { context: 'dfl' },
     realtime: false,
   })
 
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
-    table: 'credit_cards',
+    table: 'credit_cards' as any,
     filters: { id: cardId },
     realtime: false,
+  })
+
+  // Hook CRUD no topo (não dentro de função)
+  const { update: updateCard, remove: removeCard } = useLocalData({
+    table: 'credit_cards' as any,
   })
 
   // ============================================================
@@ -131,8 +136,7 @@ export default function EditCardPage() {
     }
 
     try {
-      const { update } = useLocalData({ table: 'credit_cards' })
-      await update(cardId, payload)
+      await updateCard(cardId, payload)
       showToast('Cartão atualizado!', 'success')
       router.push(`/cards/${cardId}`)
     } catch (error: any) {
@@ -147,8 +151,7 @@ export default function EditCardPage() {
     setDeleting(true)
 
     try {
-      const { remove } = useLocalData({ table: 'credit_cards' })
-      await remove(cardId)
+      await removeCard(cardId)
       showToast('Cartão excluído!', 'info')
       router.push('/cards')
     } catch (error: any) {
