@@ -27,6 +27,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
 }
 
+
 // ============================================================
 // SKELETON LOADER
 // ============================================================
