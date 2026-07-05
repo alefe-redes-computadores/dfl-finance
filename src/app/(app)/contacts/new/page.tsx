@@ -147,7 +147,7 @@ export default function NewContactPage() {
     }
   }
 
-  const contextTitle = context === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
 
   return (
     <div
