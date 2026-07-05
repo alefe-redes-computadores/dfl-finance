@@ -7,8 +7,24 @@ import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { useLocalSync } from './useLocalSync'
 
+type AllTables = 
+  | 'transactions' 
+  | 'accounts' 
+  | 'categories' 
+  | 'debts' 
+  | 'loans' 
+  | 'financings' 
+  | 'subscriptions' 
+  | 'tags' 
+  | 'contacts' 
+  | 'budgets' 
+  | 'goals' 
+  | 'credit_cards' 
+  | 'credit_invoices' 
+  | 'notifications'
+
 interface UseLocalDataOptions {
-  table: 'transactions' | 'accounts' | 'categories' | 'debts'
+  table: AllTables
   filters?: Record<string, any>
   orderBy?: { field: string; direction?: 'asc' | 'desc' }
   limit?: number
@@ -37,6 +53,11 @@ export function useLocalData<T>({
 
     try {
       let collection = db[table as keyof typeof db] as any
+
+      if (!collection || !collection.where) {
+        console.warn(`Tabela ${table} não encontrada no IndexedDB`)
+        return []
+      }
 
       // 🔥 FILTRO BASE: user_id (sempre obrigatório)
       let query = collection.where('user_id').equals(user.id)
