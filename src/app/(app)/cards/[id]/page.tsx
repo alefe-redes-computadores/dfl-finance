@@ -15,6 +15,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 
+
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
     <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
