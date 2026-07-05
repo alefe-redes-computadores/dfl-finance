@@ -33,9 +33,6 @@ import { useLocalData } from '@/hooks/useLocalData'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
-// ============================================================
-// SEÇÕES DISPONÍVEIS (para personalização)
-// ============================================================
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total' },
   { id: 'income-expense', label: 'Receitas / Despesas' },
@@ -158,44 +155,44 @@ function HomeContent() {
   const firstName = fullName.split(' ')[0]
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
   const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
     orderBy: { field: 'date', direction: 'desc' },
     realtime: true,
   })
 
   const { data: localCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context },
     realtime: false,
   })
 
   const { data: localAccountsData } = useLocalData({
-    table: 'accounts',
+    table: 'accounts' as any,
     filters: { context },
     realtime: false,
   })
 
   const { data: localDebts } = useLocalData({
-    table: 'debts',
+    table: 'debts' as any,
     filters: { context },
     realtime: true,
   })
 
   const { data: localFinancings } = useLocalData({
-    table: 'financings',
+    table: 'financings' as any,
     filters: { context, status: 'active' },
     realtime: true,
   })
 
   const { data: localCards } = useLocalData({
-    table: 'credit_cards',
+    table: 'credit_cards' as any,
     filters: { context, is_archived: false },
     realtime: true,
   })
@@ -203,7 +200,7 @@ function HomeContent() {
   // ============================================================
   // 🔥 JOIN EM MEMÓRIA
   // ============================================================
-  const transactionsWithJoin = (localTransactions || []).map(tx => {
+  const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
     const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
     const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id)
     return {
@@ -213,7 +210,7 @@ function HomeContent() {
     }
   })
 
-  const monthTransactions = transactionsWithJoin.filter(t => t.date >= start && t.date <= end)
+  const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
 
   // ============================================================
   // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
@@ -225,24 +222,24 @@ function HomeContent() {
 
     try {
       const income = monthTransactions
-        .filter(t => t.type === 'income' && t.status === 'done')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        .filter((t: any) => t.type === 'income' && t.status === 'done')
+        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const expense = monthTransactions
-        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const balance = income - expense
       setSummary({ income, expense, balance })
 
       const prevMonthDate = subMonths(currentDate, 1)
       const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
       const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
-      const prevMonthTxs = transactionsWithJoin.filter(t => t.date >= prevStart && t.date <= prevEnd)
+      const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
       const prevInc = prevMonthTxs
-        .filter(t => t.type === 'income' && t.status === 'done')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        .filter((t: any) => t.type === 'income' && t.status === 'done')
+        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const prevExp = prevMonthTxs
-        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const prevBal = prevInc - prevExp
       setPreviousBalance(prevBal)
       if (prevBal !== 0) {
@@ -252,43 +249,43 @@ function HomeContent() {
       }
 
       const toPay = monthTransactions
-        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
+        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const toReceive = monthTransactions
-        .filter(t => t.type === 'income' && t.status === 'pending')
-        .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        .filter((t: any) => t.type === 'income' && t.status === 'pending')
+        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
 
       setRecentTransactions(monthTransactions.slice(0, 5))
 
       const accsWithPrevisto = (localAccountsData || []).map((acc: any) => {
-        const accTxs = monthTransactions.filter(t => t.account_id === acc.id && t.status === 'pending')
-        const pendingIncome = accTxs.filter(t => t.type === 'income').reduce((a, t) => a + (Number(t.amount) || 0), 0)
-        const pendingExpense = accTxs.filter(t => t.type === 'expense' || t.type === 'sangria').reduce((a, t) => a + (Number(t.amount) || 0), 0)
+        const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
+        const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+        const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
         const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense
         return { ...acc, previsto }
       })
       setAccounts(accsWithPrevisto)
 
       const cardsWithInvoice = (localCards || []).map((card: any) => {
-        const cardTxs = monthTransactions.filter(t => t.credit_card_id === card.id)
-        const faturaAtual = cardTxs.reduce((acc, t) => acc + (Number(t.amount) || 0), 0)
+        const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
+        const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0)
         return { ...card, faturaAtual }
       })
       setCards(cardsWithInvoice)
       setPendings({
         toPay,
         toReceive,
-        faturas: cardsWithInvoice.reduce((acc, c) => acc + c.faturaAtual, 0)
+        faturas: cardsWithInvoice.reduce((acc: number, c: any) => acc + c.faturaAtual, 0)
       })
 
       const debtsWithProgress = (localDebts || []).map((debt: any) => {
-        const payments = monthTransactions.filter(t => t.debt_id === debt.id && t.type === 'income')
-        const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+        const payments = monthTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
+        const paidAmount = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
         const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
         return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
       })
       setDebts(debtsWithProgress)
-      setTotalToReceive(debtsWithProgress.reduce((a, d) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
+      setTotalToReceive(debtsWithProgress.reduce((a: number, d: any) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
 
       setFinancings(localFinancings || [])
 
@@ -307,15 +304,15 @@ function HomeContent() {
         .select('*, categories(name, icon, color)')
         .match({ user_id: user.id, context })
       const budgetsArray = Array.isArray(budgetsData) ? budgetsData : []
-      const budgetsWithSpent = budgetsArray.map((budget) => {
+      const budgetsWithSpent = budgetsArray.map((budget: any) => {
         const spent = monthTransactions
-          .filter(t => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-          .reduce((a, t) => a + (Number(t.amount) || 0), 0)
+          .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+          .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
         const remaining = Number(budget.amount) - spent
         const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
         return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
       })
-      setBudgets(budgetsWithSpent.sort((a, b) => b.percent - a.percent).slice(0, 3))
+      setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
 
       // Assinaturas (ainda via Supabase)
       const { data: subsData } = await supabase
@@ -335,7 +332,7 @@ function HomeContent() {
         .from('notification_reads')
         .select('notification_id')
         .eq('user_id', user.id)
-      const readSet = new Set(reads?.map(r => r.notification_id) || [])
+      const readSet = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
 
       const notifs: any[] = []
 
@@ -413,18 +410,18 @@ function HomeContent() {
         }
       })
 
-      const pendingExpenses = monthTransactions.filter(t => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
+      const pendingExpenses = monthTransactions.filter((t: any) => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
       if (pendingExpenses.length > 0) {
-        notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
+        notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
       }
 
-      const pendingIncomes = monthTransactions.filter(t => t.status === 'pending' && t.type === 'income')
+      const pendingIncomes = monthTransactions.filter((t: any) => t.status === 'pending' && t.type === 'income')
       if (pendingIncomes.length > 0) {
         notifs.push({
           id: 'pending-incomes',
           type: 'pending_income',
           title: `${pendingIncomes.length} receita(s) a receber`,
-          subtitle: `Total: R$ ${pendingIncomes.reduce((a, t) => a + (Number(t.amount) || 0), 0).toFixed(2)}`,
+          subtitle: `Total: R$ ${pendingIncomes.reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0).toFixed(2)}`,
           route: '/transactions?filter=income&status=pending',
           severity: 'info',
           isRead: readSet.has('pending-incomes')
@@ -432,8 +429,8 @@ function HomeContent() {
       }
 
       setNotifications(notifs)
-      setUnreadNotifications(notifs.filter(n => !n.isRead).length)
-      setCriticalCount(notifs.filter(n => n.severity === 'critical' && !n.isRead).length)
+      setUnreadNotifications(notifs.filter((n: any) => !n.isRead).length)
+      setCriticalCount(notifs.filter((n: any) => n.severity === 'critical' && !n.isRead).length)
 
     } catch (err) {
       console.error('Erro na Home:', err)
@@ -780,7 +777,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
-                {loans.filter(l => l.status === 'active').slice(0, 3).map(loan => {
+                {loans.filter((l: any) => l.status === 'active').slice(0, 3).map((loan: any) => {
                   const progress = Number(loan.total_amount) > 0
                     ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100
                     : 0
@@ -910,7 +907,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
-                {debts.slice(0, 3).map(debt => {
+                {debts.slice(0, 3).map((debt: any) => {
                   const IconComp = getDynamicIcon(debt.icon || 'user')
                   const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
                   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), today) : null
@@ -962,7 +959,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
-                {financings.slice(0, 3).map(fin => {
+                {financings.slice(0, 3).map((fin: any) => {
                   const IconComp = getDynamicIcon(fin.icon || 'home')
                   const remaining = fin.total_installments - fin.current_installment + 1
                   const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), today) < 0
@@ -1002,7 +999,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
-                {budgets.map(budget => {
+                {budgets.map((budget: any) => {
                   const IconComp = getDynamicIcon(budget.icon)
                   const isWarning = budget.percent >= 80 && budget.remaining >= 0
                   const isDanger = budget.remaining < 0
@@ -1044,7 +1041,7 @@ function HomeContent() {
                   <div className="p-4 text-center text-gray-400 dark:text-gray-500 text-[13px] font-medium">Nenhuma conta registada.</div>
                 ) : (
                   <>
-                    {accounts.map(acc => (
+                    {accounts.map((acc: any) => (
                       <div key={acc.id} onClick={() => router.push(`/accounts/${acc.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                         <div className="flex items-center gap-4">
                           <BankLogo color={acc.color} name={acc.name} size="md" />
@@ -1079,7 +1076,7 @@ function HomeContent() {
                     <Plus size={18} /> Adicionar cartão
                   </button>
                 ) : (
-                  cards.map(card => (
+                  cards.map((card: any) => (
                     <div key={card.id} onClick={() => router.push(`/cards/${card.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
@@ -1111,7 +1108,7 @@ function HomeContent() {
                 {recentTransactions.length === 0 ? (
                   <div className="p-4 text-center text-gray-400 dark:text-gray-500 text-[13px] font-medium">Nenhuma transação registada.</div>
                 ) : (
-                  recentTransactions.map((tx, index) => {
+                  recentTransactions.map((tx: any, index: number) => {
                     const isPending = tx.status === 'pending'
                     const IconComp = getDynamicIcon(tx.categories?.icon)
                     const attachmentIcon = getAttachmentIcon(tx.receipt_url)
@@ -1163,15 +1160,15 @@ function HomeContent() {
 
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
-          {cards.map(card => (
+          {cards.map((card: any) => (
             <InvoiceAlert key={card.id} dueDay={card.due_day} closingDay={card.closing_day} cardName={card.name} />
           ))}
         </div>
       )}
 
-      {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
+      {debts.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
         <div className="mb-4 space-y-2">
-          {debts.filter(d => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map(debt => (
+          {debts.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map((debt: any) => (
             <DebtAlert key={debt.id} personName={debt.person_name} amount={Number(debt.total_amount) - (debt.paid_amount || 0)} dueDate={debt.due_date} debtId={debt.id} />
           ))}
         </div>
