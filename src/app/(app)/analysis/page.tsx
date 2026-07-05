@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
@@ -137,7 +137,22 @@ function AnalysisContent() {
   })
 
   // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS COM JOIN PROTEGIDO)
+  // 🔥 JOIN EM MEMÓRIA — AGORA COM useMemo (evita recriação a cada render)
+  // ============================================================
+  const transactionsWithJoin = useMemo(() => {
+    return (localTransactions || []).map((tx: any) => {
+      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+      const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
+      return {
+        ...tx,
+        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+        accounts: account ? { name: account.name, color: account.color } : null,
+      }
+    })
+  }, [localTransactions, localCategories, localAccounts])
+
+  // ============================================================
+  // LOAD DATA (agora com dependências estáveis)
   // ============================================================
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -145,44 +160,33 @@ function AnalysisContent() {
     setLoadingPulse(true)
 
     try {
-      // 🔥 JOIN EM MEMÓRIA (Múltiplas tabelas)
-      const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-        const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-        const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
-        return {
-          ...tx,
-          categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-          accounts: account ? { name: account.name, color: account.color } : null,
-        }
-      })
-
       // 🔥 FILTRA POR PERÍODO (12 meses)
       const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
       const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-      const txs = transactionsWithJoin.filter((t: any) => t.date >= start12 && t.date <= endNow)
+      const txs = transactionsWithJoin.filter(t => t.date >= start12 && t.date <= endNow)
 
       // 🔥 MÊS ATUAL
       const currentStart = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const currentEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-      let currentTxs = txs.filter((t: any) => t.date >= currentStart && t.date <= currentEnd)
+      let currentTxs = txs.filter(t => t.date >= currentStart && t.date <= currentEnd)
 
       // 🔥 FILTROS (conta e categoria)
       if (filterAccount) {
-        currentTxs = currentTxs.filter((t: any) => t.account_id === filterAccount)
+        currentTxs = currentTxs.filter(t => t.account_id === filterAccount)
       }
       if (filterCategory) {
-        currentTxs = currentTxs.filter((t: any) => t.category_id === filterCategory)
+        currentTxs = currentTxs.filter(t => t.category_id === filterCategory)
       }
 
       // ============================================================
       // CÁLCULOS DO MÊS ATUAL
       // ============================================================
       const income = currentTxs
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+        .filter(t => t.type === 'income' && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
       const expense = currentTxs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
       setSummary({ income, expense, balance: income - expense })
 
       // ============================================================
@@ -190,13 +194,13 @@ function AnalysisContent() {
       // ============================================================
       const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
       const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-      const prevTxs = txs.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
+      const prevTxs = txs.filter(t => t.date >= prevStart && t.date <= prevEnd)
       const prevIncome = prevTxs
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+        .filter(t => t.type === 'income' && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
       const prevExpense = prevTxs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+        .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a, t) => a + Number(t.amount || 0), 0)
       setPreviousSummary({ income: prevIncome, expense: prevExpense, balance: prevIncome - prevExpense })
 
       // ============================================================
@@ -204,8 +208,8 @@ function AnalysisContent() {
       // ============================================================
       const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
       currentTxs
-        .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
-        .forEach((t: any) => {
+        .filter(t => t.type === 'expense' || t.type === 'sangria')
+        .forEach(t => {
           const key = t.category_id ?? 'sem'
           if (!catMap[key]) {
             catMap[key] = {
@@ -235,13 +239,13 @@ function AnalysisContent() {
         const d = subMonths(currentDate, i)
         const s = format(startOfMonth(d), 'yyyy-MM-dd')
         const e = format(endOfMonth(d), 'yyyy-MM-dd')
-        const monthTxs = txs.filter((t: any) => t.date >= s && t.date <= e)
+        const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
         const inc = monthTxs
-          .filter((t: any) => t.type === 'income' && t.status === 'done')
-          .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+          .filter(t => t.type === 'income' && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
         const exp = monthTxs
-          .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-          .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+          .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
         flowData.push({
           name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
           Receitas: inc,
@@ -261,13 +265,13 @@ function AnalysisContent() {
         const d = subMonths(currentDate, i)
         const s = format(startOfMonth(d), 'yyyy-MM-dd')
         const e = format(endOfMonth(d), 'yyyy-MM-dd')
-        const monthTxs = txs.filter((t: any) => t.date >= s && t.date <= e)
+        const monthTxs = txs.filter(t => t.date >= s && t.date <= e)
         const inc = monthTxs
-          .filter((t: any) => t.type === 'income' && t.status === 'done')
-          .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+          .filter(t => t.type === 'income' && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
         const exp = monthTxs
-          .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-          .reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
+          .filter(t => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+          .reduce((a, t) => a + Number(t.amount || 0), 0)
 
         cumulative += inc - exp
         patrimData.push({
@@ -284,11 +288,11 @@ function AnalysisContent() {
       // ============================================================
       // NOVOS GASTOS (categorias que não existiam no mês anterior)
       // ============================================================
-      const prevCatIds = new Set(prevTxs.map((t: any) => t.category_id).filter(Boolean))
-      const newOnes = currentTxs.filter((t: any) => t.category_id && !prevCatIds.has(t.category_id))
+      const prevCatIds = new Set(prevTxs.map(t => t.category_id).filter(Boolean))
+      const newOnes = currentTxs.filter(t => t.category_id && !prevCatIds.has(t.category_id))
 
       const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-      newOnes.forEach((t: any) => {
+      newOnes.forEach(t => {
         const key = t.category_id ?? 'sem'
         if (!newCatMap[key]) {
           newCatMap[key] = {
@@ -330,15 +334,16 @@ function AnalysisContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
+    // 🔑 CORREÇÃO CRÍTICA: substituído `transactionsWithJoin` por suas
+    // dependências brutas — o array já é estável via useMemo acima,
+    // mas mantemos as fontes primárias como fonte da verdade.
   }, [user, context, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
 
   // ============================================================
-  // EFETTOS
+  // EFEITOS
   // ============================================================
   useEffect(() => {
     if (user?.id && context) {
-      // Recarrega transações, categorias e contas em background
-      // O loadData() já usa os dados locais
       loadData()
     }
   }, [user?.id, context, currentDate, filterAccount, filterCategory, loadData])
@@ -438,8 +443,6 @@ function AnalysisContent() {
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
-
-      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
