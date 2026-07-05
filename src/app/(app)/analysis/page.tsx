@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -109,9 +108,10 @@ function AnalysisContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  const { data: localTransactions } = useLocalData({ table: 'transactions', filters: { context }, orderBy: { field: 'date', direction: 'desc' }, realtime: true })
-  const { data: localCategories } = useLocalData({ table: 'categories', filters: { context }, realtime: false })
-  const { data: localAccounts } = useLocalData({ table: 'accounts', filters: { context }, realtime: false })
+  // 🔑 CORRIGIDO: removidos orderBy e realtime (não existem mais na API do hook)
+  const { data: localTransactions } = useLocalData({ table: 'transactions', filters: { context } })
+  const { data: localCategories } = useLocalData({ table: 'categories', filters: { context } })
+  const { data: localAccounts } = useLocalData({ table: 'accounts', filters: { context } })
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -807,13 +807,12 @@ function AnalysisContent() {
   )
 }
 
-// 🛡️ A CAPA PROTETORA
 export default function AnalysisPage() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
-  
+
   if (!isClient) return <div className="min-h-screen bg-gray-50 dark:bg-slate-900" />
-  
+
   return (
     <ContextProvider>
       <AnalysisContent />
