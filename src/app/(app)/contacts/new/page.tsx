@@ -13,6 +13,7 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
+import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 
 
@@ -22,7 +23,7 @@ export default function NewContactPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -52,6 +53,9 @@ export default function NewContactPage() {
   const { create, update } = useLocalData({
     table: 'contacts' as any,
   })
+
+  // Hook remove no topo
+  const { remove } = useLocalData({ table: 'contacts' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -133,7 +137,6 @@ export default function NewContactPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este contato?")) return
     try {
-      const { remove } = useLocalData({ table: 'contacts' as any })
       await remove(editId)
       showToast("Contato excluído com sucesso!", "success")
       success()
