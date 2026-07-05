@@ -1,6 +1,5 @@
 "use client"
 
-
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -22,6 +21,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -61,14 +61,10 @@ function AccountsContent() {
     filters: { context },
   })
 
-  const { remove } = useLocalData({
-    table: 'accounts' as any,
-  })
-
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
-      await remove(deleteModal)
+      await db.table('accounts').delete(deleteModal)
       showToast("Conta excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -219,8 +215,6 @@ function AccountsContent() {
         )}
       </div>
 
-
-//Comment for buid
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
