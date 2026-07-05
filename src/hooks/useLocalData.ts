@@ -1,13 +1,11 @@
-// src/hooks/useLocalSync.ts
+// src/hooks/useLocalData.ts
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { db, addToSyncQueue, getPendingSyncItems, removeFromSyncQueue, markSyncFailed } from '@/lib/db'
-import { useToast } from '@/contexts/ToastContext'
-
-type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline'
+import { db } from '@/lib/db'
+import { useLocalSync } from './useLocalSync'
 
 type AllTables = 
   | 'transactions' 
@@ -25,184 +23,257 @@ type AllTables =
   | 'credit_invoices' 
   | 'notifications'
 
-const MAX_SYNC_ATTEMPTS = 3
+interface UseLocalDataOptions {
+  table: AllTables
+  filters?: Record<string, any>
+  orderBy?: { field: string; direction?: 'asc' | 'desc' }
+  limit?: number
+  realtime?: boolean
+}
 
-export function useLocalSync() {
+export function useLocalData<T>({
+  table,
+  filters = {},
+  orderBy,
+  limit,
+  realtime = true,
+}: UseLocalDataOptions) {
   const { user } = useAuth()
-  const { showToast } = useToast()
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
-  const [pendingCount, setPendingCount] = useState(0)
-  const isSyncing = useRef(false)
-  const syncAttempts = useRef(0)
+  const { isOnline, queueOperation } = useLocalSync()
+  const [data, setData] = useState<T[]>([])
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // ============================================================
-  // ATUALIZA STATUS DA FILA
+  // BUSCAR DADOS LOCALMENTE (COM FILTROS DINÂMICOS)
   // ============================================================
-  const updatePendingCount = useCallback(async () => {
-    if (!user?.id) return
-    const items = await getPendingSyncItems(user.id)
-    setPendingCount(items.length)
-  }, [user?.id])
-
-  // ============================================================
-  // PROCESSAR FILA DE SINCRONIZAÇÃO (COM LIMITE DE TENTATIVAS)
-  // ============================================================
-  const processSyncQueue = useCallback(async () => {
-    if (!user?.id || isSyncing.current || !isOnline) return
-
-    if (syncAttempts.current >= MAX_SYNC_ATTEMPTS) {
-      console.warn('Limite de tentativas de sincronização atingido.')
-      return
-    }
-
-    isSyncing.current = true
-    syncAttempts.current++
-    setSyncStatus('syncing')
+  const fetchLocal = useCallback(async () => {
+    if (!user?.id) return []
 
     try {
-      const items = await getPendingSyncItems(user.id)
+      let collection = db[table as keyof typeof db] as any
 
-      if (items.length === 0) {
-        setSyncStatus(isOnline ? 'online' : 'offline')
-        syncAttempts.current = 0
-        isSyncing.current = false
-        return
+      if (!collection || !collection.where) {
+        console.warn(`Tabela ${table} não encontrada no IndexedDB`)
+        return []
       }
 
-      for (const item of items) {
-        try {
-          const { table, operation, record_id, data } = item
+      // 🔥 FILTRO BASE: user_id (sempre obrigatório)
+      let query = collection.where('user_id').equals(user.id)
 
-          let supabaseTable: string = table
-          if (table === 'credit_cards') supabaseTable = 'credit_cards'
-          if (table === 'credit_invoices') supabaseTable = 'credit_invoices'
+      // 🔥 FILTROS ADICIONAIS (dinâmicos)
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          query = query.and((item: any) => item[key] === value)
+        }
+      })
 
-          const supabaseClient = supabase.from(supabaseTable)
+      let results = await query.toArray() as T[]
 
-          let error = null
+      // Ordenação
+      if (orderBy) {
+        results = results.sort((a: any, b: any) => {
+          const aVal = a[orderBy.field] ?? ''
+          const bVal = b[orderBy.field] ?? ''
+          const direction = orderBy.direction === 'desc' ? -1 : 1
+          return aVal > bVal ? direction : aVal < bVal ? -direction : 0
+        })
+      }
 
-          if (operation === 'create') {
-            const { error: e } = await supabaseClient.insert(data)
-            error = e
-          } else if (operation === 'update') {
-            const { error: e } = await supabaseClient.update(data).eq('id', record_id)
-            error = e
-          } else if (operation === 'delete') {
-            const { error: e } = await supabaseClient.delete().eq('id', record_id)
-            error = e
-          }
+      // Limite
+      if (limit && results.length > limit) {
+        results = results.slice(0, limit)
+      }
 
-          if (error) {
-            throw new Error(`Erro ao sincronizar ${table} ${operation}: ${error.message}`)
-          }
+      return results
+    } catch (err) {
+      console.error(`Erro ao buscar ${table} localmente:`, err)
+      return []
+    }
+  }, [user?.id, table, filters, orderBy, limit])
 
-          await removeFromSyncQueue(item.id)
+  // ============================================================
+  // SINCRONIZAR COM SUPABASE (BACKGROUND)
+  // ============================================================
+  const syncWithSupabase = useCallback(async () => {
+    if (!user?.id || !isOnline) return
 
-        } catch (err: any) {
-          console.error('Erro na sincronização:', err)
-          await markSyncFailed(item.id, err.message)
+    setSyncing(true)
+
+    try {
+      let query = supabase
+        .from(table)
+        .select('*')
+        .eq('user_id', user.id)
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          query = query.eq(key, value)
+        }
+      })
+
+      if (orderBy) {
+        query = query.order(orderBy.field, {
+          ascending: orderBy.direction !== 'desc',
+        })
+      }
+
+      if (limit) {
+        query = query.limit(limit)
+      }
+
+      const { data: supabaseData, error: supabaseError } = await query
+
+      if (supabaseError) throw supabaseError
+
+      if (supabaseData && supabaseData.length > 0) {
+        const tableRef = db[table as keyof typeof db] as any
+
+        for (const item of supabaseData) {
+          await tableRef.put({
+            ...item,
+            sync_status: 'synced',
+            sync_attempts: 0,
+            last_sync_error: null,
+          })
+        }
+
+        const localIds = (await fetchLocal()).map((item: any) => item.id)
+        const supabaseIds = supabaseData.map((item: any) => item.id)
+        const toRemove = localIds.filter((id: string) => !supabaseIds.includes(id))
+
+        for (const id of toRemove) {
+          await tableRef.delete(id)
         }
       }
 
-      await updatePendingCount()
-      syncAttempts.current = 0
-
-      if (pendingCount === 0) {
-        setSyncStatus(isOnline ? 'online' : 'offline')
-      }
-
-    } catch (err) {
-      console.error('Erro ao processar fila:', err)
+      setError(null)
+    } catch (err: any) {
+      console.error(`Erro ao sincronizar ${table}:`, err)
+      setError(err.message)
     } finally {
-      isSyncing.current = false
+      setSyncing(false)
     }
-  }, [user?.id, isOnline, pendingCount, updatePendingCount])
+  }, [user?.id, isOnline, table, filters, orderBy, limit, fetchLocal])
 
   // ============================================================
-  // RESETAR CONTADOR DE TENTATIVAS PERIODICAMENTE
+  // RECARREGAR DADOS
   // ============================================================
-  useEffect(() => {
-    const interval = setInterval(() => {
-      syncAttempts.current = 0
-    }, 30000)
+  const reload = useCallback(async () => {
+    setLoading(true)
+    setError(null)
 
-    return () => clearInterval(interval)
-  }, [])
+    try {
+      const localData = await fetchLocal()
+      setData(localData)
 
-  // ============================================================
-  // ESCUTAR EVENTOS ONLINE/OFFLINE
-  // ============================================================
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true)
-      setSyncStatus('online')
-      syncAttempts.current = 0
-      showToast('🌐 Conexão restaurada. Sincronizando...', 'info')
-      processSyncQueue()
+      if (isOnline) {
+        await syncWithSupabase()
+        const updatedData = await fetchLocal()
+        setData(updatedData)
+      }
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-
-    const handleOffline = () => {
-      setIsOnline(false)
-      setSyncStatus('offline')
-      showToast('📡 Modo offline ativado.', 'warning')
-    }
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    if (isOnline) {
-      processSyncQueue()
-    }
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [processSyncQueue, showToast])
+  }, [fetchLocal, syncWithSupabase, isOnline])
 
   // ============================================================
-  // FUNÇÕES EXPORTADAS
+  // CRUD COM FILA
   // ============================================================
-  const queueOperation = useCallback(async (
-    table: AllTables,
-    operation: 'create' | 'update' | 'delete',
-    recordId: string,
-    data: any
-  ) => {
+  const create = useCallback(async (item: Omit<T, 'id' | 'created_at' | 'updated_at'>) => {
     if (!user?.id) return
 
-    await addToSyncQueue(user.id, table, operation, recordId, data)
-    await updatePendingCount()
-
-    if (isOnline && syncAttempts.current < MAX_SYNC_ATTEMPTS) {
-      processSyncQueue()
-    }
-  }, [user?.id, isOnline, updatePendingCount, processSyncQueue])
-
-  const forceSync = useCallback(async () => {
-    if (!isOnline) {
-      showToast('📡 Sem conexão.', 'warning')
-      return
+    const now = new Date().toISOString()
+    const newItem: any = {
+      ...item,
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_attempts: 0,
     }
 
-    showToast('🔄 Sincronizando...', 'info')
-    syncAttempts.current = 0
-    await processSyncQueue()
-    showToast('✅ Sincronização concluída!', 'success')
-  }, [isOnline, processSyncQueue, showToast])
+    const tableRef = db[table as keyof typeof db] as any
+    await tableRef.add(newItem)
+    await queueOperation(table, 'create', newItem.id, newItem)
+    await reload()
+  }, [user?.id, table, queueOperation, reload])
 
-  const refreshPendingCount = useCallback(async () => {
-    await updatePendingCount()
-  }, [updatePendingCount])
+  const update = useCallback(async (id: string, updates: Partial<T>) => {
+    const tableRef = db[table as keyof typeof db] as any
+    const existing = await tableRef.get(id)
+
+    if (!existing) return
+
+    const updatedItem = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending',
+    }
+
+    await tableRef.put(updatedItem)
+    await queueOperation(table, 'update', id, updatedItem)
+    await reload()
+  }, [table, queueOperation, reload])
+
+  const remove = useCallback(async (id: string) => {
+    const tableRef = db[table as keyof typeof db] as any
+    const existing = await tableRef.get(id)
+
+    if (!existing) return
+
+    await tableRef.delete(id)
+    await queueOperation(table, 'delete', id, { id })
+    await reload()
+  }, [table, queueOperation, reload])
+
+  // ============================================================
+  // EFETTO INICIAL
+  // ============================================================
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  // ============================================================
+  // REALTIME
+  // ============================================================
+  useEffect(() => {
+    if (!realtime || !user?.id) return
+
+    const channel = supabase
+      .channel(`local-data-${table}-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: table,
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          reload()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [realtime, user?.id, table, reload])
 
   return {
-    syncStatus,
-    isOnline,
-    pendingCount,
-    isSyncing: isSyncing.current,
-    queueOperation,
-    forceSync,
-    refreshPendingCount,
+    data,
+    loading,
+    syncing,
+    error,
+    reload,
+    create,
+    update,
+    remove,
   }
 }
