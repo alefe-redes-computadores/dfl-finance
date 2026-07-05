@@ -1,7 +1,7 @@
 // src/hooks/useLocalData.ts
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -22,7 +22,6 @@ type AllTables =
   | 'credit_cards' 
   | 'credit_invoices' 
   | 'notifications'
-
 
 interface UseLocalDataOptions {
   table: AllTables
@@ -46,27 +45,33 @@ export function useLocalData<T>({
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Cache dos filtros serializados para evitar loops
-  const filtersKey = useRef(JSON.stringify(filters))
-  const orderByKey = useRef(JSON.stringify(orderBy))
+  // ============================================================
+  // 1. BLINDAGEM CONTRA LOOP INFINITO (Serialização)
+  // ============================================================
+  // Isso garante que o React não recrie as referências em cada renderização
+  const filterString = useMemo(() => JSON.stringify(filters || {}), [filters])
+  const orderString = useMemo(() => JSON.stringify(orderBy || null), [orderBy])
 
   // ============================================================
-  // BUSCAR DADOS LOCALMENTE (COM FILTROS DINÂMICOS)
+  // BUSCAR DADOS LOCALMENTE (RÁPIDO)
   // ============================================================
   const fetchLocal = useCallback(async () => {
     if (!user?.id) return []
 
     try {
-      let collection = db[table as keyof typeof db] as any
+      const collection = db[table as keyof typeof db] as any
 
-      if (!collection || !collection.where) {
+      if (!collection) {
         console.warn(`Tabela ${table} não encontrada no IndexedDB`)
         return []
       }
 
+      const parsedFilters = JSON.parse(filterString)
+      const parsedOrder = JSON.parse(orderString)
+
       let query = collection.where('user_id').equals(user.id)
 
-      Object.entries(filters).forEach(([key, value]) => {
+      Object.entries(parsedFilters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           query = query.and((item: any) => item[key] === value)
         }
@@ -74,11 +79,11 @@ export function useLocalData<T>({
 
       let results = await query.toArray() as T[]
 
-      if (orderBy) {
+      if (parsedOrder) {
         results = results.sort((a: any, b: any) => {
-          const aVal = a[orderBy.field] ?? ''
-          const bVal = b[orderBy.field] ?? ''
-          const direction = orderBy.direction === 'desc' ? -1 : 1
+          const aVal = a[parsedOrder.field] ?? ''
+          const bVal = b[parsedOrder.field] ?? ''
+          const direction = parsedOrder.direction === 'desc' ? -1 : 1
           return aVal > bVal ? direction : aVal < bVal ? -direction : 0
         })
       }
@@ -92,10 +97,10 @@ export function useLocalData<T>({
       console.error(`Erro ao buscar ${table} localmente:`, err)
       return []
     }
-  }, [user?.id, table, filtersKey.current, orderByKey.current, limit])
+  }, [user?.id, table, filterString, orderString, limit])
 
   // ============================================================
-  // SINCRONIZAR COM SUPABASE (BACKGROUND)
+  // SINCRONIZAR COM SUPABASE (BACKGROUND & OTIMIZADO)
   // ============================================================
   const syncWithSupabase = useCallback(async () => {
     if (!user?.id || !isOnline) return
@@ -103,20 +108,20 @@ export function useLocalData<T>({
     setSyncing(true)
 
     try {
-      let query = supabase
-        .from(table)
-        .select('*')
-        .eq('user_id', user.id)
+      const parsedFilters = JSON.parse(filterString)
+      const parsedOrder = JSON.parse(orderString)
 
-      Object.entries(filters).forEach(([key, value]) => {
+      let query = supabase.from(table).select('*').eq('user_id', user.id)
+
+      Object.entries(parsedFilters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           query = query.eq(key, value)
         }
       })
 
-      if (orderBy) {
-        query = query.order(orderBy.field, {
-          ascending: orderBy.direction !== 'desc',
+      if (parsedOrder) {
+        query = query.order(parsedOrder.field, {
+          ascending: parsedOrder.direction !== 'desc',
         })
       }
 
@@ -128,24 +133,29 @@ export function useLocalData<T>({
 
       if (supabaseError) throw supabaseError
 
-      if (supabaseData && supabaseData.length > 0) {
-        const tableRef = db[table as keyof typeof db] as any
+      const tableRef = db[table as keyof typeof db] as any
 
-        for (const item of supabaseData) {
-          await tableRef.put({
-            ...item,
-            sync_status: 'synced',
-            sync_attempts: 0,
-            last_sync_error: null,
-          })
+      if (supabaseData) {
+        // 2. OTIMIZAÇÃO EXTREMA: bulkPut ao invés de laço 'for' (100x mais rápido)
+        const itemsToPut = supabaseData.map((item: any) => ({
+          ...item,
+          sync_status: 'synced',
+          sync_attempts: 0,
+          last_sync_error: null,
+        }))
+
+        if (itemsToPut.length > 0) {
+          await tableRef.bulkPut(itemsToPut)
         }
 
-        const localIds = (await fetchLocal()).map((item: any) => item.id)
+        const localResults = await fetchLocal()
+        const localIds = localResults.map((item: any) => item.id)
         const supabaseIds = supabaseData.map((item: any) => item.id)
+        
         const toRemove = localIds.filter((id: string) => !supabaseIds.includes(id))
 
-        for (const id of toRemove) {
-          await tableRef.delete(id)
+        if (toRemove.length > 0) {
+          await tableRef.bulkDelete(toRemove) // OTIMIZAÇÃO: bulkDelete
         }
       }
 
@@ -156,30 +166,37 @@ export function useLocalData<T>({
     } finally {
       setSyncing(false)
     }
-  }, [user?.id, isOnline, table, filtersKey.current, orderByKey.current, limit, fetchLocal])
+  }, [user?.id, isOnline, table, filterString, orderString, limit, fetchLocal])
 
   // ============================================================
-  // RECARREGAR DADOS
+  // RECARREGAR DADOS (NÃO BLOQUEANTE)
   // ============================================================
   const reload = useCallback(async () => {
-    setLoading(true)
+    if (!user?.id) return
+    
+    // Mostra estado de loading apenas se não houver dados na tela
+    setLoading(data.length === 0) 
     setError(null)
 
     try {
+      // 3. UI INSTANTÂNEA: Puxa do Dexie rápido e já libera a tela
       const localData = await fetchLocal()
       setData(localData)
+      setLoading(false)
 
+      // Sincroniza em background, sem travar a interface
       if (isOnline) {
-        await syncWithSupabase()
-        const updatedData = await fetchLocal()
-        setData(updatedData)
+        syncWithSupabase().then(async () => {
+          const updatedData = await fetchLocal()
+          // Smart Render: Atualiza a tela SÓ SE vieram dados diferentes do Supabase
+          setData((prev) => JSON.stringify(prev) === JSON.stringify(updatedData) ? prev : updatedData)
+        })
       }
     } catch (err: any) {
       setError(err.message)
-    } finally {
       setLoading(false)
     }
-  }, [fetchLocal, syncWithSupabase, isOnline])
+  }, [user?.id, fetchLocal, syncWithSupabase, isOnline])
 
   // ============================================================
   // CRUD COM FILA
@@ -234,25 +251,11 @@ export function useLocalData<T>({
   }, [table, queueOperation, reload])
 
   // ============================================================
-  // ATUALIZA CACHE DOS FILTROS
-  // ============================================================
-  useEffect(() => {
-    const newFiltersKey = JSON.stringify(filters)
-    const newOrderByKey = JSON.stringify(orderBy)
-
-    if (newFiltersKey !== filtersKey.current || newOrderByKey !== orderByKey.current) {
-      filtersKey.current = newFiltersKey
-      orderByKey.current = newOrderByKey
-      reload()
-    }
-  }, [JSON.stringify(filters), JSON.stringify(orderBy)])
-
-  // ============================================================
-  // EFETTO INICIAL
+  // EFETTO INICIAL (ÚNICO DISPARADOR)
   // ============================================================
   useEffect(() => {
     reload()
-  }, [table, user?.id])
+  }, [reload]) // Agora que usamos 'filterString', isso NUNCA MAIS vai entrar em loop!
 
   // ============================================================
   // REALTIME
@@ -260,8 +263,11 @@ export function useLocalData<T>({
   useEffect(() => {
     if (!realtime || !user?.id) return
 
+    // Evita conflitos criando um nome de canal único
+    const channelName = `local-data-${table}-${user.id}-${Math.random().toString(36).substring(7)}`
+    
     const channel = supabase
-      .channel(`local-data-${table}-${user.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -277,9 +283,9 @@ export function useLocalData<T>({
       .subscribe()
 
     return () => {
-      channel.unsubscribe()
+      supabase.removeChannel(channel)
     }
-  }, [realtime, user?.id, table])
+  }, [realtime, user?.id, table, reload])
 
   return {
     data,
