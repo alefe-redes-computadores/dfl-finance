@@ -16,7 +16,6 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import BankLogo from '@/components/BankLogo'
 import { useScrollPosition } from '@/hooks/useScrollPosition'
 import { TransactionItem } from '@/components/transactions/TransactionItem'
-// 🔥 NOVO: Import do hook local
 import { useLocalData } from '@/hooks/useLocalData'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
@@ -198,7 +197,7 @@ export default function TransactionsPage() {
     syncing,
     reload: reloadTransactions,
   } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: localFilters,
     orderBy: { field: 'date', direction: 'desc' },
     realtime: true,
@@ -206,21 +205,21 @@ export default function TransactionsPage() {
 
   // 🔥 BUSCA CATEGORIAS E CONTAS LOCALMENTE (para JOIN em memória)
   const { data: localCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context },
     realtime: false,
   })
 
   const { data: localAccounts } = useLocalData({
-    table: 'accounts',
+    table: 'accounts' as any,
     filters: { context },
     realtime: false,
   })
 
   // 🔥 JOIN EM MEMÓRIA (compatível com o formato antigo)
-  const transactionsWithJoin = (localTransactions || []).map(tx => {
-    const category = (localCategories || []).find((c: any) => c.id === tx.category_id)
-    const account = (localAccounts || []).find((a: any) => a.id === tx.account_id)
+  const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
+    const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+    const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
     return {
       ...tx,
       categories: category
@@ -233,7 +232,7 @@ export default function TransactionsPage() {
   })
 
   // 🔥 FILTROS ADICIONAIS (data e search)
-  const filtered = transactionsWithJoin.filter(t => {
+  const filtered = transactionsWithJoin.filter((t: any) => {
     // Filtro de data (mês atual)
     if (t.date < startMonth || t.date > endMonth) return false
 
@@ -249,8 +248,8 @@ export default function TransactionsPage() {
   })
 
   // 🔥 SEPARAR PENDENTES (para o card)
-  const pendingTxs = filtered.filter(t => t.status === 'pending')
-  const doneTxs = filtered.filter(t => t.status === 'done')
+  const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
+  const doneTxs = filtered.filter((t: any) => t.status === 'done')
 
   // 🔥 TRANSAÇÕES EXIBIDAS (baseado no filtro de status)
   const displayTxs = statusFilter === 'pending' ? pendingTxs : doneTxs
