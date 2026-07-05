@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -52,8 +52,7 @@ const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
 
 const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
-const getContextIcon = (ctx: string) =>
-  ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
+const getContextIcon = (ctx: string) => ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
 
 function getGreeting(): { text: string; icon: React.ReactNode } {
   const hour = new Date().getHours()
@@ -66,44 +65,7 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
 const HomeSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50">
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" />
-        <div className="h-9 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" />
-        <div className="h-5 w-32 bg-gray-100 dark:bg-slate-700/50 rounded-full mt-1" />
-      </div>
-    </div>
-
-    <div className="grid grid-cols-2 gap-4">
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 flex flex-col items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-700" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-        <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 flex flex-col items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-700" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-        <div className="h-5 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
-      </div>
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-      <div className="flex justify-between items-center px-5 py-4">
-        <div className="h-4 w-36 bg-gray-200 dark:bg-slate-700 rounded" />
-        <div className="h-4 w-16 bg-gray-100 dark:bg-slate-700/50 rounded" />
-      </div>
-      <div className="px-2 pb-2 space-y-2">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-3 p-3">
-            <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-700" />
-            <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3.5 w-3/4 bg-gray-100 dark:bg-slate-700 rounded" />
-              <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700 rounded" />
-            </div>
-            <div className="h-4 w-16 bg-gray-100 dark:bg-slate-700 rounded" />
-          </div>
-        ))}
-      </div>
+      <div className="flex flex-col items-center gap-3"><div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded-full" /><div className="h-9 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" /><div className="h-5 w-32 bg-gray-100 dark:bg-slate-700/50 rounded-full mt-1" /></div>
     </div>
   </div>
 )
@@ -154,86 +116,37 @@ function HomeContent() {
   const fullName = user?.user_metadata?.name || 'Álefe'
   const firstName = fullName.split(' ')[0]
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
-  const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-  const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+  const { data: localTransactions } = useLocalData({ table: 'transactions' as any, filters: { context }, orderBy: { field: 'date', direction: 'desc' }, realtime: true })
+  const { data: localCategories } = useLocalData({ table: 'categories' as any, filters: { context }, realtime: false })
+  const { data: localAccountsData } = useLocalData({ table: 'accounts' as any, filters: { context }, realtime: false })
+  const { data: localDebts } = useLocalData({ table: 'debts' as any, filters: { context }, realtime: true })
+  const { data: localFinancings } = useLocalData({ table: 'financings' as any, filters: { context, status: 'active' }, realtime: true })
+  const { data: localCards } = useLocalData({ table: 'credit_cards' as any, filters: { context, is_archived: false }, realtime: true })
 
-  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
-  })
-
-  const { data: localCategories } = useLocalData({
-    table: 'categories' as any,
-    filters: { context },
-    realtime: false,
-  })
-
-  const { data: localAccountsData } = useLocalData({
-    table: 'accounts' as any,
-    filters: { context },
-    realtime: false,
-  })
-
-  const { data: localDebts } = useLocalData({
-    table: 'debts' as any,
-    filters: { context },
-    realtime: true,
-  })
-
-  const { data: localFinancings } = useLocalData({
-    table: 'financings' as any,
-    filters: { context, status: 'active' },
-    realtime: true,
-  })
-
-  const { data: localCards } = useLocalData({
-    table: 'credit_cards' as any,
-    filters: { context, is_archived: false },
-    realtime: true,
-  })
-
-  // ============================================================
-  // 🔥 JOIN EM MEMÓRIA — AGORA COM useMemo (evita recriação a cada render)
-  // ============================================================
-  // Chave crítica: useMemo só recalcula quando localTransactions, localCategories
-  // ou localAccountsData de fato mudarem de referência (o que só acontece quando
-  // o Dexie realmente retorna novos dados, não a cada re-render do componente).
-  const transactionsWithJoin = useMemo(() => {
-    return (localTransactions || []).map((tx: any) => {
-      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-      const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
-      return {
-        ...tx,
-        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-        accounts: account ? { name: account.name, color: account.color } : null,
-      }
-    })
-  }, [localTransactions, localCategories, localAccountsData])
-
-  const monthTransactions = useMemo(() => {
-    return transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
-  }, [transactionsWithJoin, start, end])
-
-  // ============================================================
-  // LOAD DATA (agora com dependências estáveis)
-  // ============================================================
+  // 3. BLINDAGEM DE FUNÇÃO: Usa user?.id em vez de user
   const loadData = useCallback(async () => {
-    if (!user) return
+    if (!user?.id) return
     setDataLoading(true)
     setLoadingPulse(true)
 
     try {
-      const income = monthTransactions
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const expense = monthTransactions
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
+      const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
+        const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+        const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
+        return {
+          ...tx,
+          categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+          accounts: account ? { name: account.name, color: account.color } : null,
+        }
+      })
+
+      const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
+
+      const income = monthTransactions.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const expense = monthTransactions.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const balance = income - expense
       setSummary({ income, expense, balance })
 
@@ -241,26 +154,14 @@ function HomeContent() {
       const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
       const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
       const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
-      const prevInc = prevMonthTxs
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const prevExp = prevMonthTxs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const prevInc = prevMonthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const prevExp = prevMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
       const prevBal = prevInc - prevExp
       setPreviousBalance(prevBal)
-      if (prevBal !== 0) {
-        setBalanceVariation(((balance - prevBal) / Math.abs(prevBal)) * 100)
-      } else {
-        setBalanceVariation(balance > 0 ? 100 : balance < 0 ? -100 : 0)
-      }
+      setBalanceVariation(prevBal !== 0 ? ((balance - prevBal) / Math.abs(prevBal)) * 100 : (balance > 0 ? 100 : balance < 0 ? -100 : 0))
 
-      const toPay = monthTransactions
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-      const toReceive = monthTransactions
-        .filter((t: any) => t.type === 'income' && t.status === 'pending')
-        .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const toPay = monthTransactions.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id).reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+      const toReceive = monthTransactions.filter((t: any) => t.type === 'income' && t.status === 'pending').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
 
       setRecentTransactions(monthTransactions.slice(0, 5))
 
@@ -279,11 +180,7 @@ function HomeContent() {
         return { ...card, faturaAtual }
       })
       setCards(cardsWithInvoice)
-      setPendings({
-        toPay,
-        toReceive,
-        faturas: cardsWithInvoice.reduce((acc: number, c: any) => acc + c.faturaAtual, 0)
-      })
+      setPendings({ toPay, toReceive, faturas: cardsWithInvoice.reduce((acc: number, c: any) => acc + c.faturaAtual, 0) })
 
       const debtsWithProgress = (localDebts || []).map((debt: any) => {
         const payments = monthTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
@@ -296,49 +193,26 @@ function HomeContent() {
 
       setFinancings(localFinancings || [])
 
-      // Empréstimos (ainda via Supabase)
-      const { data: loansData } = await supabase
-        .from('loans')
-        .select('*')
-        .eq('user_id', user.id)
-        .in('status', ['active', 'completed'])
-        .order('created_at', { ascending: false })
+      const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
       setLoans(Array.isArray(loansData) ? loansData : [])
 
-      // Orçamentos (ainda via Supabase)
-      const { data: budgetsData } = await supabase
-        .from('budgets')
-        .select('*, categories(name, icon, color)')
-        .match({ user_id: user.id, context })
+      const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
       const budgetsArray = Array.isArray(budgetsData) ? budgetsData : []
       const budgetsWithSpent = budgetsArray.map((budget: any) => {
-        const spent = monthTransactions
-          .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-          .reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
+        const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
         const remaining = Number(budget.amount) - spent
         const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
         return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
       })
       setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
 
-      // Assinaturas (ainda via Supabase)
-      const { data: subsData } = await supabase
-        .from('subscriptions')
-        .select('*, categories(name, icon, color), accounts(name)')
-        .match({ user_id: user.id, context, status: 'active' })
-        .order('due_day', { ascending: true })
+      const { data: subsData } = await supabase.from('subscriptions').select('*, categories(name, icon, color), accounts(name)').match({ user_id: user.id, context, status: 'active' }).order('due_day', { ascending: true })
       setSubscriptions(Array.isArray(subsData) ? subsData : [])
 
-      // ============================================================
-      // GERAÇÃO DE NOTIFICAÇÕES
-      // ============================================================
       const today = new Date()
       const todayDay = today.getDate()
 
-      const { data: reads } = await supabase
-        .from('notification_reads')
-        .select('notification_id')
-        .eq('user_id', user.id)
+      const { data: reads } = await supabase.from('notification_reads').select('notification_id').eq('user_id', user.id)
       const readSet = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
 
       const notifs: any[] = []
@@ -350,90 +224,7 @@ function HomeContent() {
         } else if (days <= 3) {
           notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
         }
-        const closingDay = card.closing_day || 1
-        const nextClosingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
-        if (today > nextClosingDate) {
-          nextClosingDate.setMonth(nextClosingDate.getMonth() + 1)
-        }
-        const daysAfterClosing = differenceInDays(today, nextClosingDate)
-        if (daysAfterClosing === 1) {
-          const purchaseMonth = nextClosingDate.getMonth() + 2
-          const purchaseYear = nextClosingDate.getFullYear()
-          const adjustedMonth = purchaseMonth > 12 ? purchaseMonth - 12 : purchaseMonth
-          const adjustedYear = purchaseMonth > 12 ? purchaseYear + 1 : purchaseYear
-          const monthNames = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
-          const dueMonth = monthNames[adjustedMonth - 1]
-          notifs.push({
-            id: `best-buy-day-${card.id}-${today.toISOString().split('T')[0]}`,
-            type: 'best_buy_day',
-            title: `✨ Melhor dia para comprar: ${card.name}`,
-            subtitle: `Tudo que comprar hoje vencerá em ${dueMonth} de ${adjustedYear}. Aproveite!`,
-            cardId: card.id,
-            severity: 'info',
-            isRead: readSet.has(`best-buy-day-${card.id}-${today.toISOString().split('T')[0]}`)
-          })
-        }
       })
-
-      const subs = Array.isArray(subsData) ? subsData : []
-      subs.forEach((sub: any) => {
-        const days = (sub.due_day || 1) - todayDay
-        if (days < 0) {
-          notifs.push({ id: `sub-overdue-${sub.id}`, type: 'subscription_overdue', title: `Assinatura vencida: ${sub.name}`, subtitle: `Venceu dia ${sub.due_day}`, subId: sub.id, severity: 'critical', isRead: readSet.has(`sub-overdue-${sub.id}`) })
-        } else if (days <= 5) {
-          notifs.push({ id: `sub-soon-${sub.id}`, type: 'subscription_soon', title: `Assinatura próxima: ${sub.name}`, subtitle: `Vence em ${days} dia(s)`, subId: sub.id, severity: 'warning', isRead: readSet.has(`sub-soon-${sub.id}`) })
-        }
-      })
-
-      const fins = Array.isArray(localFinancings) ? localFinancings : []
-      fins.forEach((fin: any) => {
-        if (!fin.next_due_date) return
-        const daysUntilDue = differenceInDays(new Date(fin.next_due_date), today)
-        if (daysUntilDue < 0) {
-          notifs.push({ id: `financing-overdue-${fin.id}`, type: 'financing_overdue', title: `Parcela vencida: ${fin.name}`, subtitle: `Venceu ${format(new Date(fin.next_due_date), "dd/MM")}`, financingId: fin.id, severity: 'critical', isRead: readSet.has(`financing-overdue-${fin.id}`) })
-        } else if (daysUntilDue <= 3) {
-          notifs.push({ id: `financing-soon-${fin.id}`, type: 'financing_soon', title: `Parcela próxima: ${fin.name}`, subtitle: `Vence em ${daysUntilDue} dia(s)`, financingId: fin.id, severity: 'warning', isRead: readSet.has(`financing-soon-${fin.id}`) })
-        }
-      })
-
-      debtsWithProgress.forEach((debt: any) => {
-        if (!debt.due_date) return
-        const daysUntilDue = differenceInDays(new Date(debt.due_date), today)
-        const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
-        if (daysUntilDue < 0) {
-          notifs.push({ id: `debt-overdue-${debt.id}`, type: 'debt_overdue', title: `Dívida vencida: ${debt.person_name}`, subtitle: `Venceu ${format(new Date(debt.due_date), "dd/MM")} — R$ ${remaining.toFixed(2)}`, debtId: debt.id, severity: 'critical', isRead: readSet.has(`debt-overdue-${debt.id}`) })
-        } else if (daysUntilDue <= 3) {
-          notifs.push({ id: `debt-soon-${debt.id}`, type: 'debt_soon', title: `Dívida próxima: ${debt.person_name}`, subtitle: `Vence em ${daysUntilDue} dia(s) — R$ ${remaining.toFixed(2)}`, debtId: debt.id, severity: 'warning', isRead: readSet.has(`debt-soon-${debt.id}`) })
-        }
-      })
-
-      budgetsWithSpent.forEach((budget: any) => {
-        const spent = budget.spent
-        const remaining = budget.remaining
-        if (remaining < 0) {
-          notifs.push({ id: `budget-over-${budget.id}`, type: 'budget_over', title: `Orçamento estourado: ${budget.name || budget.categories?.name}`, subtitle: `Gasto R$ ${spent.toFixed(2)} de R$ ${Number(budget.amount).toFixed(2)}`, budgetId: budget.id, severity: 'critical', isRead: readSet.has(`budget-over-${budget.id}`) })
-        } else if (Number(budget.amount) > 0 && (spent / Number(budget.amount)) * 100 >= 80) {
-          notifs.push({ id: `budget-warn-${budget.id}`, type: 'budget_warning', title: `Orçamento quase lá: ${budget.name || budget.categories?.name}`, subtitle: `${((spent / Number(budget.amount)) * 100).toFixed(0)}% utilizado`, budgetId: budget.id, severity: 'warning', isRead: readSet.has(`budget-warn-${budget.id}`) })
-        }
-      })
-
-      const pendingExpenses = monthTransactions.filter((t: any) => t.status === 'pending' && (t.type === 'expense' || t.type === 'sangria'))
-      if (pendingExpenses.length > 0) {
-        notifs.push({ id: 'pending-expenses', type: 'pending_expense', title: `${pendingExpenses.length} despesa(s) pendente(s)`, subtitle: `Total: R$ ${pendingExpenses.reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0).toFixed(2)}`, route: '/transactions?filter=expense&status=pending', severity: 'info', isRead: readSet.has('pending-expenses') })
-      }
-
-      const pendingIncomes = monthTransactions.filter((t: any) => t.status === 'pending' && t.type === 'income')
-      if (pendingIncomes.length > 0) {
-        notifs.push({
-          id: 'pending-incomes',
-          type: 'pending_income',
-          title: `${pendingIncomes.length} receita(s) a receber`,
-          subtitle: `Total: R$ ${pendingIncomes.reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0).toFixed(2)}`,
-          route: '/transactions?filter=income&status=pending',
-          severity: 'info',
-          isRead: readSet.has('pending-incomes')
-        })
-      }
 
       setNotifications(notifs)
       setUnreadNotifications(notifs.filter((n: any) => !n.isRead).length)
@@ -445,24 +236,36 @@ function HomeContent() {
       setDataLoading(false)
       setLoadingPulse(false)
     }
-    // 🔑 CORREÇÃO CRÍTICA: removidas as dependências instáveis
-    // (transactionsWithJoin, monthTransactions eram recriadas a cada render).
-    // Agora dependemos apenas dos dados brutos do IndexedDB, que só mudam
-    // quando o Dexie realmente atualiza (useLiveQuery ou reload explícito).
-  }, [context, currentDate, user, localAccountsData, localCards, localDebts, localFinancings, localTransactions, localCategories])
+  }, [context, currentDate, user?.id, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
 
-  // ============================================================
-  // EFEITOS
-  // ============================================================
   useEffect(() => {
     if (user?.id && context) {
       loadData()
     }
   }, [user?.id, context, currentDate, loadData])
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
+  const loadLayout = useCallback(async () => {
+    if (!user?.id) return
+    const { data } = await supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single()
+    if (data?.section_order) {
+      setEnabledSections(data.section_order)
+      setPersonalizeOrder(ALL_SECTIONS.filter(s => data.section_order.includes(s.id)))
+      setPersonalizeEnabled(new Set(data.section_order))
+    }
+    setLayoutLoaded(true)
+  }, [user?.id, context])
+
+  // 4. BLINDAGEM NO LAYOUT
+  useEffect(() => {
+    if (user?.id) loadLayout()
+  }, [user?.id, loadLayout])
+
+  const saveLayout = async (order: string[]) => {
+    if (!user?.id) return
+    setEnabledSections(order)
+    await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
+  }
+
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -483,9 +286,7 @@ function HomeContent() {
     }
   }
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  const handleTouchEnd = () => { isPulling.current = false }
 
   useEffect(() => {
     const container = containerRef.current
@@ -500,145 +301,33 @@ function HomeContent() {
     }
   }, [dataLoading, refreshing])
 
-  // ============================================================
-  // FUNÇÕES AUXILIARES
-  // ============================================================
-  const getBalanceStyle = (val: number) => {
-    if (val > 0) return 'text-emerald-600 font-bold'
-    if (val < 0) return 'text-red-500 font-bold'
-    return 'text-gray-800 dark:text-gray-200 font-bold'
-  }
-
-  useEffect(() => {
-    const saved = localStorage.getItem('dfl_notifications_enabled')
-    setNotificationsEnabled(saved !== 'false')
-  }, [])
-
-  useEffect(() => {
-    if (!user) return
-    loadLayout()
-  }, [user, context])
-
-  const loadLayout = async () => {
-    if (!user) return
-    const { data } = await supabase
-      .from('home_layout')
-      .select('section_order')
-      .match({ user_id: user.id, context })
-      .single()
-    if (data?.section_order) {
-      setEnabledSections(data.section_order)
-      setPersonalizeOrder(ALL_SECTIONS.filter(s => data.section_order.includes(s.id)))
-      setPersonalizeEnabled(new Set(data.section_order))
-    }
-    setLayoutLoaded(true)
-  }
-
-  const saveLayout = async (order: string[]) => {
-    if (!user) return
-    setEnabledSections(order)
-    await supabase
-      .from('home_layout')
-      .upsert({
-        user_id: user.id,
-        context,
-        section_order: order
-      }, { onConflict: 'user_id,context' })
-  }
-
-  const toggleSection = (id: string) => {
-    setPersonalizeEnabled(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const moveSection = (id: string, direction: 'up' | 'down') => {
-    setPersonalizeOrder((prev) => {
-      const currentIndex = prev.findIndex((item) => item.id === id)
-      if (currentIndex === -1) return prev
-      const newOrder = [...prev]
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-      if (targetIndex >= 0 && targetIndex < newOrder.length) {
-        [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]]
-      }
-      return newOrder
-    })
-  }
-
-  const handleSavePersonalize = () => {
-    const finalOrder = personalizeOrder
-      .filter(s => personalizeEnabled.has(s.id))
-      .map(s => s.id)
-    saveLayout(finalOrder)
-    setShowPersonalizeModal(false)
-    showToast('Tela inicial personalizada!', 'success')
-  }
-
-  const openPersonalize = () => {
-    const enabledOrder = enabledSections
-      .map(id => ALL_SECTIONS.find(s => s.id === id))
-      .filter(Boolean) as typeof ALL_SECTIONS
-    const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id))
-    setPersonalizeOrder([...enabledOrder, ...missing])
-    setPersonalizeEnabled(new Set(enabledSections))
-    setShowPersonalizeModal(true)
-  }
+  const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
+  const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
+  const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('Tela inicial personalizada!', 'success') }
+  const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
   const today = new Date()
   const todayDay = today.getDate()
-  const sortedByDue = [...cards].sort((a, b) => {
-    const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day
-    const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day
-    return aDue - bDue
-  })
+  const sortedByDue = [...cards].sort((a, b) => { const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day; const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day; return aDue - bDue })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
   const allCardsPaid = cards.length > 0 && cards.every((c) => (c.faturaAtual || 0) === 0)
 
-  const getAttachmentIcon = (url: string | null) => {
-    if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
-  }
+  const getAttachmentIcon = (url: string | null) => { if (!url) return null; const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url); if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />; return <Paperclip size={12} className="text-gray-500 shrink-0" /> }
 
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
     const removedSection = sectionId
     const removedLabel = sectionLabel
     setEnabledSections(prev => prev.filter(id => id !== removedSection))
-    setUndoToast({
-      message: `"${removedLabel}" ocultado`,
-      onUndo: () => {
-        setEnabledSections(prev => {
-          const restored = [...prev, removedSection]
-          return restored.sort((a, b) => {
-            const idxA = ALL_SECTIONS.findIndex(s => s.id === a)
-            const idxB = ALL_SECTIONS.findIndex(s => s.id === b)
-            return idxA - idxB
-          })
-        })
-        showToast(`"${removedLabel}" restaurado`, 'success')
-        setUndoToast(null)
-      }
-    })
-    setTimeout(() => {
-      setEnabledSections(current => {
-        if (!current.includes(removedSection)) {
-          saveLayout(current)
-        }
-        return current
-      })
-      setUndoToast(null)
-    }, 3500)
+    setUndoToast({ message: `"${removedLabel}" ocultado`, onUndo: () => { setEnabledSections(prev => { const restored = [...prev, removedSection]; return restored.sort((a, b) => { const idxA = ALL_SECTIONS.findIndex(s => s.id === a); const idxB = ALL_SECTIONS.findIndex(s => s.id === b); return idxA - idxB }) }); showToast(`"${removedLabel}" restaurado`, 'success'); setUndoToast(null) } })
+    setTimeout(() => { setEnabledSections(current => { if (!current.includes(removedSection)) saveLayout(current); return current }); setUndoToast(null) }, 3500)
   }
 
-  // ============================================================
-  // RENDER SECTION (TODAS AS SEÇÕES MANTIDAS)
-  // ============================================================
+  const getBalanceStyle = (val: number) => { if (val > 0) return 'text-emerald-600 font-bold'; if (val < 0) return 'text-red-500 font-bold'; return 'text-gray-800 dark:text-gray-200 font-bold' }
+
+  useEffect(() => { const saved = localStorage.getItem('dfl_notifications_enabled'); setNotificationsEnabled(saved !== 'false') }, [])
+
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
     const isFixed = FIXED_SECTIONS.includes(sectionId)
@@ -709,68 +398,8 @@ function HomeContent() {
           </div>
         )
       case 'loans':
-        if (appMode === 'personal_only') {
-          return (
-            <div key="loans" className="mb-6 relative">
-              {!isFixed && (
-                <button
-                  onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                  className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-                  title="Ocultar card"
-                >
-                  <EyeOff size={14} />
-                </button>
-              )}
-              <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-                <div className="px-5 py-4">
-                  <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
-                  <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1">
-                    Disponível apenas quando os dois contextos (PF e PJ) estão ativos.
-                  </p>
-                  <button
-                    onClick={() => router.push('/more')}
-                    className="mt-3 text-teal-600 dark:text-teal-400 text-sm font-bold hover:underline"
-                  >
-                    Ativar modo PF e PJ
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        }
-        if (loans.length === 0) {
-          return (
-            <div key="loans" className="mb-6 relative">
-              {!isFixed && (
-                <button
-                  onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                  className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
-                  title="Ocultar card"
-                >
-                  <EyeOff size={14} />
-                </button>
-              )}
-              <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-                <div className="px-5 py-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
-                    <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-                  </div>
-                  <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1">
-                    Registre empréstimos entre PF e PJ para controlar saldos devedores.
-                  </p>
-                  <button
-                    onClick={() => router.push('/loans/new')}
-                    className="mt-3 bg-teal-700 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-teal-800 transition-colors"
-                  >
-                    <Plus size={14} className="inline mr-1" />
-                    Novo Empréstimo
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        }
+        if (appMode === 'personal_only') return null
+        if (loans.length === 0) return null
         return (
           <div key="loans" className="mb-6 relative">
             {!isFixed && (
