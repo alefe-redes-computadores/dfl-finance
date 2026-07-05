@@ -71,10 +71,12 @@ const HomeSkeleton = () => (
 )
 
 function HomeContent() {
-  const { user } = useAuth()
+  const [mounted, setMounted] = useState(false)
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { context, appMode } = useContext_()
   const { showToast } = useToast()
+  
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
@@ -110,6 +112,8 @@ function HomeContent() {
 
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
+  useEffect(() => { setMounted(true) }, [])
+
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
 
@@ -123,7 +127,6 @@ function HomeContent() {
   const { data: localFinancings } = useLocalData({ table: 'financings' as any, filters: { context, status: 'active' }, realtime: true })
   const { data: localCards } = useLocalData({ table: 'credit_cards' as any, filters: { context, is_archived: false }, realtime: true })
 
-  // 🛡️ MEMÓRIA CACHE: Evita que a Home dispare requisições loucas pro Supabase a todo instante
   const lastRemoteFetchRef = useRef(0)
   const rawLoansRef = useRef<any[]>([])
   const rawBudgetsRef = useRef<any[]>([])
@@ -131,7 +134,7 @@ function HomeContent() {
   const rawReadsRef = useRef<Set<string>>(new Set())
 
   const loadData = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id || !mounted) return
     setDataLoading(true)
     setLoadingPulse(true)
 
@@ -198,10 +201,8 @@ function HomeContent() {
       setTotalToReceive(debtsWithProgress.reduce((a: number, d: any) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
       setFinancings(localFinancings || [])
 
-      // 🛡️ REGRAS DE CACHE: Só bate no Supabase para dados pesados 1x a cada 15 segundos
-      if (Date.now() - lastRemoteFetchRef.current > 15000) {
+      if (navigator.onLine && Date.now() - lastRemoteFetchRef.current > 15000) {
         lastRemoteFetchRef.current = Date.now()
-
         const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
         rawLoansRef.current = Array.isArray(loansData) ? loansData : []
 
@@ -215,7 +216,6 @@ function HomeContent() {
         rawReadsRef.current = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
       }
 
-      // Aplica a matemática usando o cache instantaneamente
       setLoans(rawLoansRef.current)
 
       const budgetsWithSpent = rawBudgetsRef.current.map((budget: any) => {
@@ -225,7 +225,6 @@ function HomeContent() {
         return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
       })
       setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
-      
       setSubscriptions(rawSubsRef.current)
 
       const today = new Date()
@@ -252,16 +251,16 @@ function HomeContent() {
       setDataLoading(false)
       setLoadingPulse(false)
     }
-  }, [context, currentDate, user?.id, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
+  }, [context, currentDate, user?.id, mounted, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
 
   useEffect(() => {
-    if (user?.id && context) {
+    if (user?.id && context && mounted) {
       loadData()
     }
-  }, [user?.id, context, currentDate, loadData])
+  }, [user?.id, context, currentDate, mounted, loadData])
 
   const loadLayout = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id || !mounted) return
     const { data } = await supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single()
     if (data?.section_order) {
       setEnabledSections(data.section_order)
@@ -269,11 +268,11 @@ function HomeContent() {
       setPersonalizeEnabled(new Set(data.section_order))
     }
     setLayoutLoaded(true)
-  }, [user?.id, context])
+  }, [user?.id, context, mounted])
 
   useEffect(() => {
-    if (user?.id) loadLayout()
-  }, [user?.id, loadLayout])
+    if (user?.id && mounted) loadLayout()
+  }, [user?.id, mounted, loadLayout])
 
   const saveLayout = async (order: string[]) => {
     if (!user?.id) return
@@ -342,6 +341,9 @@ function HomeContent() {
   const getBalanceStyle = (val: number) => { if (val > 0) return 'text-emerald-600 font-bold'; if (val < 0) return 'text-red-500 font-bold'; return 'text-gray-800 dark:text-gray-200 font-bold' }
 
   useEffect(() => { const saved = localStorage.getItem('dfl_notifications_enabled'); setNotificationsEnabled(saved !== 'false') }, [])
+
+  // Proteção contra Server Component Error
+  if (!mounted || authLoading) return <HomeSkeleton />
 
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
