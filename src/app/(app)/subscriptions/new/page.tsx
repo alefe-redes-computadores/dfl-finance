@@ -12,6 +12,7 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
+import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 
 
@@ -43,7 +44,7 @@ export default function NewSubscriptionPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useAuth()
+  const { context } = useContext_()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -66,7 +67,7 @@ export default function NewSubscriptionPage() {
 
   const subscriptionData = localSubscriptions?.find((s: any) => s.id === editId) as any
 
-  const { create, update } = useLocalData({
+  const { create, update, remove } = useLocalData({
     table: 'subscriptions' as any,
   })
 
@@ -147,7 +148,6 @@ export default function NewSubscriptionPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir esta assinatura?")) return
     try {
-      const { remove } = useLocalData({ table: 'subscriptions' as any })
       await remove(editId)
       showToast("Assinatura excluída com sucesso!", "success")
       success()
@@ -158,7 +158,7 @@ export default function NewSubscriptionPage() {
     }
   }
 
-  const contextTitle = context === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
 
   return (
     <div
