@@ -38,7 +38,9 @@ export default function NewCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
-  // ============================================================
+ 
+
+ // ============================================================
   // 🔥 BUSCA LOCAL DE CONTAS
   // ============================================================
   const { data: localAccounts, loading: accLoading } = useLocalData({
