@@ -9,6 +9,7 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { format } from 'date-fns'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
@@ -40,19 +41,23 @@ function NewGoalContent() {
   const [showIconModal, setShowIconModal] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
   // ============================================================
   const { data: localCategories, reload: reloadCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context },
     realtime: false,
   })
 
   const { data: localGoal, loading: goalLoading, reload: reloadGoal } = useLocalData({
-    table: 'goals',
+    table: 'goals' as any,
     filters: { id: editId || '' },
     realtime: false,
   })
+
+  // Hooks CRUD no topo
+  const { create: createGoal, update: updateGoal } = useLocalData({ table: 'goals' as any })
+  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   // ============================================================
   // LOAD DATA
@@ -65,7 +70,7 @@ function NewGoalContent() {
 
   useEffect(() => {
     if (editId && localGoal && localGoal.length > 0) {
-      const data = localGoal[0]
+      const data = localGoal[0] as any
       setName(data.name)
       const numValue = Number(data.target_amount) || 0
       setTargetAmountNum(numValue)
@@ -124,23 +129,20 @@ function NewGoalContent() {
     }
 
     try {
-      const { create, update } = useLocalData({ table: 'goals' })
-      
       let goalId: string | undefined
       if (editId) {
-        await update(editId, payload)
+        await updateGoal(editId, payload)
         goalId = editId
         showToast('Meta atualizada!', 'success')
       } else {
-        const result = await create(payload)
+        const result = await createGoal(payload)
         goalId = result?.id
         showToast('Meta criada!', 'success')
       }
 
       // Se houver contribuição inicial, registrar
       if (initialContributionNum > 0 && goalId) {
-        const { create: createTx } = useLocalData({ table: 'transactions' })
-        await createTx({
+        await createTransaction({
           user_id: user.id,
           context,
           type: 'income',
