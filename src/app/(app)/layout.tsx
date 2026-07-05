@@ -1,39 +1,61 @@
-'use client'
+import type { Metadata } from 'next'
+import { Poppins } from 'next/font/google'
+import './globals.css'
+import { ThemeProvider } from '@/contexts/ThemeContext'
+import { ToastProvider } from '@/contexts/ToastContext'
+import Script from 'next/script'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
-import BottomNav from '@/components/BottomNav'
-import { ContextProvider } from '@/components/ContextToggle'
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
 
-function AppContent({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!loading && !user) router.replace('/login')
-  }, [user, loading, router])
-
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50">
-      <div className="w-8 h-8 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
-
-  if (!user) return null
-
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-      {children}
-      <BottomNav />
-    </div>
-  )
+export const metadata: Metadata = {
+  title: 'DFL Finance',
+  description: 'Gestão financeira completa',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'DFL Finance',
+  },
+  icons: {
+    apple: '/icon-192x192.png',
+  },
 }
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <ContextProvider>
-      <AppContent>{children}</AppContent>
-    </ContextProvider>
+    <html lang="pt-BR" className={poppins.variable}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="DFL Finance" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="theme-color" content="#0f172a" />
+        <Script 
+          src="https://cdn.jsdelivr.net/npm/eruda" 
+          strategy="beforeInteractive" 
+        />
+        <Script id="eruda-init" strategy="afterInteractive">
+          {`if (typeof eruda !== "undefined") eruda.init();`}
+        </Script>
+      </head>
+      <body className="antialiased bg-gray-50 dark:bg-slate-900">
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
+      </body>
+    </html>
   )
 }
