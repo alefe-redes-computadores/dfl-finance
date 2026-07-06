@@ -24,6 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 type Payment = {
@@ -44,6 +45,7 @@ export default function LoanDetailPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
+  const { user } = useAuth()
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -68,18 +70,13 @@ export default function LoanDetailPage() {
   // Busca pagamentos vinculados
   const { data: allPayments } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, type: 'loan_payment', loan_id: loanId },
+    filters: { context, type: 'loan_payment' },
   })
 
-  const payments = (allPayments || []) as Payment[]
+  const payments = (allPayments || []).filter((p: any) => p.loan_id === loanId) as Payment[]
 
-  const { create: createTransaction, remove: removeTransaction } = useLocalData({
-    table: 'transactions' as any,
-  })
-
-  const { update: updateLoan, remove: removeLoan } = useLocalData({
-    table: 'loans' as any,
-  })
+  // 🔥 REMOVIDOS: const { create: createTransaction, remove: removeTransaction } = useLocalData({ table: 'transactions' as any })
+  // 🔥 REMOVIDOS: const { update: updateLoan, remove: removeLoan } = useLocalData({ table: 'loans' as any })
 
   // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -98,7 +95,7 @@ export default function LoanDetailPage() {
     }
   }, [refreshing, reload])
 
-  // Registrar pagamento
+  // 🔥 CORRIGIDO: Registrar pagamento com db.table()
   const handleRegisterPayment = async () => {
     if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
       showToast("Informe um valor válido", "warning")
@@ -113,7 +110,10 @@ export default function LoanDetailPage() {
       const totalAmountCents = Math.round((loanData?.amount || 0) * 100)
       const newStatus = newTotalPaidCents >= totalAmountCents ? "paid" : loanData?.status || "active"
 
-      await createTransaction({
+      // 🔥 Criar transação de pagamento
+      await db.table('transactions').add({
+        id: crypto.randomUUID(),
+        user_id: user!.id,
         description: `Pagamento: ${loanData?.description || "Empréstimo"}`,
         amount: parseFloat(paymentAmount),
         type: "loan_payment",
@@ -124,9 +124,17 @@ export default function LoanDetailPage() {
         account_id: null,
         category_id: null,
         context,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
 
-      await updateLoan(loanId, { status: newStatus })
+      // 🔥 Atualizar status do empréstimo
+      await db.table('loans').update(loanId, { 
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
 
       showToast("Pagamento registrado com sucesso!", "success")
       success()
@@ -142,10 +150,10 @@ export default function LoanDetailPage() {
     }
   }
 
-  // Excluir pagamento
+  // 🔥 CORRIGIDO: Excluir pagamento com db.table()
   const handleDeletePayment = async (paymentId: string) => {
     try {
-      await removeTransaction(paymentId)
+      await db.table('transactions').delete(paymentId)
       showToast("Pagamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -156,13 +164,14 @@ export default function LoanDetailPage() {
     }
   }
 
-  // Excluir empréstimo
+  // 🔥 CORRIGIDO: Excluir empréstimo com db.table()
   const handleDeleteLoan = async () => {
     try {
+      // Exclui todos os pagamentos vinculados
       for (const p of payments) {
-        await removeTransaction(p.id)
+        await db.table('transactions').delete(p.id)
       }
-      await removeLoan(loanId)
+      await db.table('loans').delete(loanId)
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       router.back()
