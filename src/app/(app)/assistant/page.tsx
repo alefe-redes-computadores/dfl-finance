@@ -70,18 +70,16 @@ function AssistantContent() {
   ])
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 CORRIGIDO: Removidos realtime: true e realtime: false
   // ============================================================
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
-    realtime: true,
   })
 
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context },
-    realtime: false,
   })
 
   // ============================================================
