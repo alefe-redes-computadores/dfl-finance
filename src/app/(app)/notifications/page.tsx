@@ -12,6 +12,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 // ============================================================
 // SKELETON LOADER
@@ -45,18 +46,14 @@ export default function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localNotifications, loading: notifLoading, reload: reloadNotifications } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id },
-    orderBy: { field: 'created_at', direction: 'desc' },
-    realtime: true,
   })
 
-  const { create: createNotification, update: updateNotification, remove: removeNotification } = useLocalData({
-    table: 'notifications' as any,
-  })
+  // 🔥 REMOVIDOS: const { create: createNotification, update: updateNotification, remove: removeNotification } = useLocalData({ table: 'notifications' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -134,11 +131,14 @@ export default function NotificationsPage() {
   }, [localNotifications])
 
   // ============================================================
-  // HANDLERS
+  // 🔥 HANDLERS CORRIGIDOS
   // ============================================================
   const markAsRead = async (id: string) => {
     try {
-      await updateNotification(id, { read: true })
+      await db.table('notifications').update(id, { 
+        read: true,
+        updated_at: new Date().toISOString()
+      })
       showToast('Notificação marcada como lida.', 'info')
       loadNotifications()
     } catch (err: any) {
@@ -152,7 +152,10 @@ export default function NotificationsPage() {
     try {
       const unread = notifications.filter((n: any) => !n.read)
       for (const notif of unread) {
-        await updateNotification(notif.id, { read: true })
+        await db.table('notifications').update(notif.id, { 
+          read: true,
+          updated_at: new Date().toISOString()
+        })
       }
       showToast('Todas as notificações marcadas como lidas!', 'success')
       loadNotifications()
@@ -163,7 +166,7 @@ export default function NotificationsPage() {
 
   const deleteNotification = async (id: string) => {
     try {
-      await removeNotification(id)
+      await db.table('notifications').delete(id)
       showToast('Notificação removida.', 'info')
       loadNotifications()
     } catch (err: any) {
