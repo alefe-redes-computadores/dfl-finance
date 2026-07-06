@@ -976,14 +976,14 @@ function HomeContent() {
         onSave={handleSavePersonalize}
       />
 
-      {notificationsEnabled && (
-        <NotificationCenter
-          isOpen={showNotifications}
-          onClose={() => setShowNotifications(false)}
-          notifications={notificationsMap}
-          onReadChange={(unread) => setUnreadNotifications(unread)}
-        />
-      )}
+    {notificationsEnabled && (
+     <NotificationCenter
+     isOpen={showNotifications}
+     onClose={() => setShowNotifications(false)}
+     notifications={notificationsMap}
+     onReadChange={() => reloadNotifs()}
+    />
+    )}
     </div>
   )
 }
