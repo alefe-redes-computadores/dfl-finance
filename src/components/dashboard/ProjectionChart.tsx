@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 interface ProjectionData {
@@ -14,7 +15,7 @@ interface ProjectionChartProps {
   title?: string
 }
 
-export default function ProjectionChart({ data, title = 'Projeção de Saldo (12 meses)' }: ProjectionChartProps) {
+function ProjectionChartComponent({ data, title = 'Projeção de Saldo (12 meses)' }: ProjectionChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 text-center py-8">
@@ -108,3 +109,6 @@ export default function ProjectionChart({ data, title = 'Projeção de Saldo (12
     </div>
   )
 }
+
+// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
+export default React.memo(ProjectionChartComponent)
