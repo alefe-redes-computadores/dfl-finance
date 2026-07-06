@@ -26,6 +26,8 @@ import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -138,6 +140,102 @@ function NewTransactionContent() {
 
   const { isOnline, saveToQueue } = useOfflineQueue()
 
+  // ============================================================
+  // 🔥 CORREÇÃO: USAR useLocalData EM VEZ DE supabase DIRETO
+  // ============================================================
+  
+  // 🔥 Contas — usando o contexto atual (effectiveContext)
+  const { data: localAccounts } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context: effectiveContext },
+    orderBy: 'name',
+    orderDir: 'asc',
+  })
+
+  // 🔥 Categorias — usando o contexto atual e tipo correto
+  const { data: localCategories } = useLocalData({
+    table: 'categories' as any,
+    filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' },
+    orderBy: 'name',
+    orderDir: 'asc',
+  })
+
+  // 🔥 Tags — usando o contexto atual
+  const { data: localTags } = useLocalData({
+    table: 'tags' as any,
+    filters: { context: effectiveContext },
+    orderBy: 'name',
+    orderDir: 'asc',
+  })
+
+  // 🔥 Cartões de crédito — usando o contexto atual
+  const { data: localCreditCards } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { context: effectiveContext, is_archived: false },
+    orderBy: 'name',
+    orderDir: 'asc',
+  })
+
+  // 🔥 Contatos — usando o contexto atual
+  const { data: localContacts } = useLocalData({
+    table: 'contacts' as any,
+    filters: { context: effectiveContext },
+    orderBy: 'name',
+    orderDir: 'asc',
+  })
+
+  // 🔥 Orçamentos — usando o contexto atual
+  const { data: localBudgets } = useLocalData({
+    table: 'budgets' as any,
+    filters: { context: effectiveContext },
+  })
+
+  // 🔥 Sincroniza os dados locais com os estados
+  useEffect(() => {
+    if (localAccounts) setAccounts(localAccounts)
+  }, [localAccounts])
+
+  useEffect(() => {
+    if (localCategories) {
+      const mainCats = localCategories.filter((c: any) => !c.parent_id)
+      const subCats = localCategories.filter((c: any) => c.parent_id)
+      const subsMap: Record<string, any[]> = {}
+      subCats.forEach((sub: any) => {
+        if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
+        subsMap[sub.parent_id].push(sub)
+      })
+      setCategories(mainCats)
+      setSubcategories(subsMap)
+    }
+  }, [localCategories])
+
+  useEffect(() => {
+    if (localTags) setTags(localTags)
+  }, [localTags])
+
+  useEffect(() => {
+    if (localCreditCards) setCreditCards(localCreditCards)
+  }, [localCreditCards])
+
+  useEffect(() => {
+    if (localContacts) setContacts(localContacts)
+  }, [localContacts])
+
+  useEffect(() => {
+    if (localBudgets) setBudgets(localBudgets)
+  }, [localBudgets])
+
+  // 🔥 Atualiza o contexto quando o globalContext mudar
+  useEffect(() => {
+    setContext(effectiveContext)
+    // Limpa seleções quando o contexto muda
+    setAccountId('')
+    setCategoryId('')
+    setCreditCardId('')
+    setContactId('')
+    setSelectedTags([])
+  }, [effectiveContext])
+
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -174,72 +272,8 @@ function NewTransactionContent() {
     })
   }, [])
 
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoadingPulse(true)
-    const catType = type === 'income' ? 'income' : 'expense'
-
-    const [{ data: cats }, { data: accs }, { data: tgs }, { data: budgetsData }, { data: cardsData }, { data: contactsData }] =
-      await Promise.all([
-        supabase
-          .from('categories')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('context', context)
-          .eq('type', catType),
-        supabase
-          .from('accounts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('context', context)
-          .order('name'),
-        supabase
-          .from('tags')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('context', context)
-          .order('name'),
-        supabase
-          .from('budgets')
-          .select('*')
-          .match({ user_id: user.id, context }),
-        supabase
-          .from('credit_cards')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('context', context)
-          .eq('is_archived', false)
-          .order('name'),
-        supabase
-          .from('contacts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('context', context)
-          .order('name'),
-      ])
-
-    const allCats = Array.isArray(cats) ? cats : []
-    const mainCats = allCats.filter((c) => !c.parent_id)
-    const subCats = allCats.filter((c) => c.parent_id)
-    const subsMap: Record<string, any[]> = {}
-    subCats.forEach((sub) => {
-      if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
-      subsMap[sub.parent_id].push(sub)
-    })
-
-    setCategories(mainCats)
-    setSubcategories(subsMap)
-    setAccounts(Array.isArray(accs) ? accs : [])
-    setCreditCards(Array.isArray(cardsData) ? cardsData : [])
-    setContacts(Array.isArray(contactsData) ? contactsData : [])
-    setTags(Array.isArray(tgs) ? tgs : [])
-    setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
-    setLoadingPulse(false)
-  }, [user, context, type])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  // 🔥 Removido loadData com supabase — agora usa useLocalData diretamente
+  // O useEffect com supabase foi removido
 
   const budgetAlertMemo = useMemo(() => {
     if (!categoryId || amountNum <= 0 || type !== 'expense') {
@@ -260,10 +294,11 @@ function NewTransactionContent() {
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
+    // 🔥 Usando supabase para consulta de gastos (mantido)
     supabase
       .from('transactions')
       .select('amount')
-      .match({ user_id: user.id, context, category_id: categoryId })
+      .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
       .eq('status', 'done')
       .gte('date', start)
       .lte('date', end)
@@ -289,7 +324,7 @@ function NewTransactionContent() {
           setBudgetAlert(null)
         }
       })
-  }, [budgetAlertMemo, categoryId, amountNum, user, context])
+  }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
 
   const uploadFile = async (file: File) => {
     if (!user) return
@@ -471,12 +506,13 @@ function NewTransactionContent() {
           name: newCatName.trim(),
           icon: newCatIcon,
           color: newCatColor,
-          context,
+          context: effectiveContext,
           type: type === 'income' ? 'income' : 'expense',
         })
         .select()
         .single()
       if (error) throw error
+      // 🔥 Atualiza o estado local
       setCategories((prev) => [...prev, data])
       setCategoryId(data.id)
       setShowCreateCatModal(false)
@@ -496,7 +532,14 @@ function NewTransactionContent() {
     try {
       const { data, error } = await supabase
         .from('accounts')
-        .insert({ user_id: user.id, name: newAccName.trim(), color: newAccColor, context })
+        .insert({ 
+          user_id: user.id, 
+          name: newAccName.trim(), 
+          color: newAccColor, 
+          context: effectiveContext,
+          balance: 0,
+          is_archived: false,
+        })
         .select()
         .single()
       if (error) throw error
@@ -519,7 +562,12 @@ function NewTransactionContent() {
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ user_id: user.id, name: newTagName.trim(), color: newTagColor, context })
+        .insert({ 
+          user_id: user.id, 
+          name: newTagName.trim(), 
+          color: newTagColor, 
+          context: effectiveContext 
+        })
         .select()
         .single()
       if (error) throw error
@@ -551,7 +599,7 @@ function NewTransactionContent() {
         const { data: existingTxs } = await supabase
           .from('transactions')
           .select('amount')
-          .match({ user_id: user.id, context, category_id: categoryId })
+          .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
           .eq('status', 'done')
           .gte('date', start)
           .lte('date', end)
@@ -652,7 +700,7 @@ function NewTransactionContent() {
                 total_amount: 0,
                 paid_amount: 0,
                 status: 'open',
-                context,
+                context: effectiveContext,
               })
               .select()
               .single()
@@ -741,7 +789,7 @@ function NewTransactionContent() {
           tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: installmentDate,
           status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
-          context,
+          context: effectiveContext,
           receipt_url: i === 0 ? receiptUrl : null,
           notes: notes || null,
           recurring_group_id: recurringGroupId,
@@ -771,7 +819,7 @@ function NewTransactionContent() {
 
         if (i === 0 && isReimbursable && savedTx) {
           linkedTransactionId = savedTx.id
-          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
+          const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
           const reimbursementDesc = `Reembolso: ${finalDescription}`
 
           const { data: reimbTx, error: reimbError } = await supabase
@@ -810,7 +858,7 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, context, customInterval, customParcels, vibrate, success])
+  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -925,7 +973,7 @@ function NewTransactionContent() {
       {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
         
-        {/* 🆕 Nome da transação / Descrição (restaurado no topo) */}
+        {/* Nome da transação / Descrição */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
           <input
@@ -1030,7 +1078,6 @@ function NewTransactionContent() {
               className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent"
             />
 
-            {/* 🆕 Observações (restaurado) */}
             <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
               <FileText size={20} className="text-gray-400 dark:text-gray-500" />
               <input
@@ -1146,7 +1193,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modais */}
+      {/* Modais - mantidos com supabase para criação (funciona) */}
       {showReceiptModal && (
         <ReceiptModal
           isOpen={showReceiptModal}
@@ -1188,7 +1235,7 @@ function NewTransactionContent() {
         onSelect={setNewCatIcon}
       />
 
-      {/* Modais de criação e seleção (mantidos integrais) */}
+      {/* Modais de criação e seleção */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
