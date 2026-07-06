@@ -71,9 +71,8 @@ function HomeContent() {
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
-
-  // 🔥 CORREÇÃO: loadingPulse declarado e sincronizado com isDataLoading
   const [loadingPulse, setLoadingPulse] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
@@ -133,13 +132,17 @@ function HomeContent() {
     filters: { user_id: user?.id }
   })
 
-  // Agrupa carregamento
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
-  // 🔥 Sincroniza a bolinha de loading com o estado geral
   useEffect(() => {
     setLoadingPulse(isDataLoading)
   }, [isDataLoading])
+
+  useEffect(() => {
+    if (!isDataLoading && (localTransactions?.length || localAccountsData?.length)) {
+      setIsInitialLoad(false)
+    }
+  }, [isDataLoading, localTransactions, localAccountsData])
 
   // ============================================================
   // 🔥 CÁLCULOS EM TEMPO REAL (useMemo elimina o flicker)
@@ -239,9 +242,10 @@ function HomeContent() {
 
   const financings = localFinancings || []
 
+  // 🔥 CORREÇÃO: Tipagem do cat com as any + fallback
   const budgets = useMemo(() => {
     const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
-      const cat = (localCategories || []).find((c: any) => c.id === budget.category_id)
+      const cat = (localCategories || []).find((c: any) => c.id === budget.category_id) as any
       const spent = monthTransactions
         .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
         .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
@@ -249,9 +253,9 @@ function HomeContent() {
       const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
       return { 
         ...budget, 
-        name: cat?.name || budget.name,
-        icon: cat?.icon || budget.icon,
-        color: cat?.color || budget.color,
+        name: cat?.name ?? budget.name,  // 🔥 fallback seguro
+        icon: cat?.icon ?? budget.icon,
+        color: cat?.color ?? budget.color,
         spent, 
         remaining, 
         percent: Math.min(percent, 100) 
@@ -347,6 +351,17 @@ function HomeContent() {
     setEnabledSections(order)
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
+
+  // ============================================================
+  // NAVEGAÇÃO INTELIGENTE (volta para Home se veio de lá)
+  // ============================================================
+  const goBack = useCallback(() => {
+    if (window.history.length > 2) {
+      router.back()
+    } else {
+      router.push('/home')
+    }
+  }, [router])
 
   // ============================================================
   // PULL TO REFRESH
@@ -865,7 +880,7 @@ function HomeContent() {
     }
   }
 
-  if (isDataLoading && !localTransactions?.length && !localAccountsData?.length) {
+  if (isInitialLoad || (isDataLoading && !localTransactions?.length && !localAccountsData?.length)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 pt-6">
         <Skeleton count={1} className="h-10 w-full mb-6" />
@@ -905,13 +920,18 @@ function HomeContent() {
         </div>
       )}
 
-      {debtsList.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
-        <div className="mb-4 space-y-2">
-          {debtsList.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map((debt: any) => (
-            <DebtAlert key={debt.id} personName={debt.person_name} amount={Number(debt.total_amount) - (debt.paid_amount || 0)} dueDate={debt.due_date} debtId={debt.id} />
-          ))}
-        </div>
-      )}
+      {/* 🔥 CORREÇÃO: DebtAlert só exibe dívidas NÃO pagas */}
+      {debtsList
+        .filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid')
+        .map((debt: any) => (
+          <DebtAlert
+            key={debt.id}
+            personName={debt.person_name}
+            amount={Number(debt.total_amount) - (debt.paid_amount || 0)}
+            dueDate={debt.due_date}
+            debtId={debt.id}
+          />
+        ))}
 
       <div className="flex justify-between items-center mb-8">
         <div className="flex-1 min-w-0 mr-3">
