@@ -9,7 +9,6 @@ import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-// 🔥 NOVO: Import do hook local
 import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
@@ -65,18 +64,16 @@ function DebtsContent() {
   const [refreshing, setRefreshing] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 CORRIGIDO: Adicionado as any e removidos orderBy/realtime
   // ============================================================
   const { data: localDebts, loading: debtsLoading, syncing: debtsSyncing, reload: reloadDebts } = useLocalData({
-    table: 'debts',
+    table: 'debts' as any, // 🔥 ADICIONADO as any
     filters: { context },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
-    filters: { context, type: 'income' }, // Só receitas (pagamentos)
-    realtime: true,
+    table: 'transactions' as any, // 🔥 ADICIONADO as any
+    filters: { context, type: 'income' },
   })
 
   // ============================================================
@@ -85,7 +82,7 @@ function DebtsContent() {
   const consolidateDebts = useCallback(() => {
     if (!localDebts || !localTransactions) return []
 
-    // 🔥 1. Agrupa pagamentos por debt_id
+    // 1. Agrupa pagamentos por debt_id
     const paymentsByDebt: Record<string, number> = {}
     localTransactions.forEach((tx: any) => {
       if (tx.debt_id) {
@@ -93,7 +90,7 @@ function DebtsContent() {
       }
     })
 
-    // 🔥 2. Filtra dívidas pelo status (ativo/pago)
+    // 2. Filtra dívidas pelo status (ativo/pago)
     let filteredDebts = localDebts
     if (filter === 'active') {
       filteredDebts = localDebts.filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
@@ -101,7 +98,7 @@ function DebtsContent() {
       filteredDebts = localDebts.filter((d: any) => d.status === 'paid')
     }
 
-    // 🔥 3. Constrói o array com progresso
+    // 3. Constrói o array com progresso
     return filteredDebts.map((debt: any) => {
       const paidAmount = paymentsByDebt[debt.id] || 0
       const totalAmount = Number(debt.total_amount) || 0
@@ -116,7 +113,7 @@ function DebtsContent() {
   }, [localDebts, localTransactions, filter])
 
   // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // LOAD DATA
   // ============================================================
   const loadDebts = useCallback(async () => {
     if (!user?.id) return
@@ -124,11 +121,7 @@ function DebtsContent() {
     setLoadingPulse(true)
 
     try {
-      // Recarrega dados do IndexedDB (já estão em background)
       await Promise.all([reloadDebts(), reloadTransactions()])
-
-      // Os dados já estão disponíveis via localDebts e localTransactions
-      // O consolidateDebts() será chamado no useEffect abaixo
     } catch (err) {
       console.error('Erro ao carregar dívidas:', err)
     } finally {
@@ -146,7 +139,7 @@ function DebtsContent() {
     }
   }, [user?.id, context, filter, loadDebts])
 
-  // 🔥 Atualiza a lista consolidada sempre que os dados locais mudarem
+  // Atualiza a lista consolidada sempre que os dados locais mudarem
   const [debts, setDebts] = useState<any[]>([])
   const [totalToReceiveState, setTotalToReceiveState] = useState(0)
 
@@ -210,14 +203,11 @@ function DebtsContent() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      {/* 🔵 Bolinha de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
-
-      {/* ❌ REMOVIDO: Toast de "Atualizando..." */}
 
       {/* ============================================================
           HEADER
