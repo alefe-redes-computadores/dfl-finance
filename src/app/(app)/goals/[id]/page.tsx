@@ -15,6 +15,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const GoalDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6 space-y-4">
@@ -84,24 +85,20 @@ export default function GoalDetailPage() {
   const [contribNote, setContribNote] = useState('')
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
     table: 'goals' as any,
     filters: { id: id as string },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { goal_id: id as string },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
   })
 
-  // Hooks CRUD no topo
-  const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
-  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
+  // 🔥 REMOVIDOS: const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
+  // 🔥 REMOVIDOS: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -179,12 +176,12 @@ export default function GoalDetailPage() {
   useEffect(() => { loadData() }, [loadData])
 
   // ============================================================
-  // HANDLERS
+  // 🔥 HANDLERS CORRIGIDOS
   // ============================================================
   const handleDelete = async () => {
     if (!confirm('Excluir esta meta?')) return
     try {
-      await removeGoal(id as string)
+      await db.table('goals').delete(id as string)
       showToast('Meta excluída.', 'info')
       router.push('/goals')
     } catch (err: any) {
@@ -199,7 +196,9 @@ export default function GoalDetailPage() {
     }
 
     try {
-      await createTransaction({
+      // 🔥 CORRIGIDO: Usando db.table().add()
+      await db.table('transactions').add({
+        id: crypto.randomUUID(),
         user_id: user.id,
         context: context || 'dfl',
         type: 'income',
@@ -209,6 +208,10 @@ export default function GoalDetailPage() {
         status: 'done',
         affects_balance: true,
         goal_id: id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
 
       showToast('Contribuição registrada!', 'success')
