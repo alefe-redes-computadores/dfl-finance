@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 interface ComparisonData {
@@ -15,7 +16,7 @@ interface ComparisonChartProps {
   title?: string
 }
 
-export default function ComparisonChart({ data, title = 'Comparativo PF vs PJ' }: ComparisonChartProps) {
+function ComparisonChartComponent({ data, title = 'Comparativo PF vs PJ' }: ComparisonChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 text-center py-8">
@@ -75,3 +76,6 @@ export default function ComparisonChart({ data, title = 'Comparativo PF vs PJ' }
     </div>
   )
 }
+
+// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
+export default React.memo(ComparisonChartComponent)
