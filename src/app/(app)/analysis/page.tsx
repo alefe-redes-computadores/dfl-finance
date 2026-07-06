@@ -1,7 +1,7 @@
 'use client'
 
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import {
@@ -22,7 +22,7 @@ import {
   RefreshCw,
   Filter,
   Gauge,
-  Flame,      // ← Fire → Flame
+  Flame,
   Clock,
   Percent,
 } from 'lucide-react'
@@ -134,7 +134,7 @@ function AnalysisContent() {
     filters: { context }
   })
 
-  // 🔥 DASHBOARD METRICS (NOVO!)
+  // 🔥 DASHBOARD METRICS
   const { metrics, loading: metricsLoading, reload: reloadMetrics } = useDashboardMetrics(currentDate)
 
   const loadData = useCallback(async () => {
@@ -304,8 +304,8 @@ function AnalysisContent() {
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
 
-  // 🔥 RENDERIZA O DASHBOARD
-  const renderDashboard = () => {
+  // 🔥 OTIMIZAÇÃO: dashboardContent com useMemo (recalcula apenas quando metrics mudar)
+  const dashboardContent = useMemo(() => {
     if (metricsLoading || !metrics) {
       return (
         <div className="space-y-4">
@@ -386,7 +386,7 @@ function AnalysisContent() {
         />
       </div>
     )
-  }
+  }, [metrics, metricsLoading])
 
   if (loading) return <AnalysisSkeleton />
 
@@ -497,7 +497,7 @@ function AnalysisContent() {
 
       <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Análise</h2>
 
-      {/* 🔥 NOVAS ABAS: Dashboard, No mês, Novos gastos */}
+      {/* 🔥 ABAS */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
         <button
           onClick={() => setActiveTab('dashboard')}
@@ -531,7 +531,8 @@ function AnalysisContent() {
         </button>
       </div>
 
-      {activeTab === 'dashboard' && renderDashboard()}
+      {/* 🔥 RENDERIZA O DASHBOARD COM useMemo */}
+      {activeTab === 'dashboard' && dashboardContent}
 
       {activeTab === 'new' && (
         <div className="space-y-6 animate-in fade-in duration-300">
