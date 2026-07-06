@@ -977,16 +977,16 @@ function HomeContent() {
       />
 
     {notificationsEnabled && (
-      <NotificationCenter
-      isOpen={showNotifications}
-      onClose={() => {
+  <NotificationCenter
+    isOpen={showNotifications}
+    onClose={() => {
       setShowNotifications(false)
       reloadNotifs()
-     }}
-     notifications={notificationsMap}
-     onReadChange={() => reloadNotifs()}
-    />
-    )}
+    }}
+    notifications={notificationsMap}
+    onReadChange={() => reloadNotifs()}
+  />
+)}
     </div>
   )
 }
