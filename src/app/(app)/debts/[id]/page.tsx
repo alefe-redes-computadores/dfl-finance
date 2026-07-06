@@ -14,6 +14,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function DebtDetailPage() {
   const { id } = useParams()
@@ -30,12 +31,9 @@ export default function DebtDetailPage() {
     loading: debtLoading, 
     syncing: debtSyncing, 
     reload: reloadDebt,
-    update: updateDebt,
-    remove: removeDebt,
   } = useLocalData({
-    table: 'debts' as any,
+    table: 'debts' as any, // 🔥 ADICIONADO as any
     filters: { id: id as string },
-    realtime: true,
   })
 
   const { 
@@ -43,14 +41,9 @@ export default function DebtDetailPage() {
     loading: txLoading, 
     syncing: txSyncing, 
     reload: reloadTransactions,
-    create: createTransaction,
-    update: updateTransaction,
-    remove: removeTransaction,
   } = useLocalData({
-    table: 'transactions' as any,
+    table: 'transactions' as any, // 🔥 ADICIONADO as any
     filters: { debt_id: id as string },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
   })
 
   const debtData = (localDebt || [])[0] as any
@@ -60,13 +53,11 @@ export default function DebtDetailPage() {
     loading: accLoading, 
     reload: reloadAccounts,
   } = useLocalData({
-    table: 'accounts' as any,
+    table: 'accounts' as any, // 🔥 ADICIONADO as any
     filters: { context: debtData?.context || 'dfl' },
-    realtime: false,
   })
 
-  // Hook para update de conta no topo
-  const { update: updateAccount } = useLocalData({ table: 'accounts' as any })
+  // 🔥 REMOVIDOS: updateDebt, removeDebt, createTransaction, updateTransaction, removeTransaction, updateAccount
 
   // ============================================================
   // ESTADOS LOCAIS
@@ -182,7 +173,8 @@ export default function DebtDetailPage() {
   const handleDeleteDebt = async () => {
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
     try {
-      await removeDebt(id as string)
+      // 🔥 CORRIGIDO: Usando db.table().delete()
+      await db.table('debts').delete(id as string)
       showToast('Dívida excluída.', 'info')
       router.back()
     } catch (err: any) {
@@ -194,7 +186,8 @@ export default function DebtDetailPage() {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
     try {
-      await removeTransaction(paymentId)
+      // 🔥 CORRIGIDO: Usando db.table().delete()
+      await db.table('transactions').delete(paymentId)
 
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
@@ -203,13 +196,18 @@ export default function DebtDetailPage() {
       const totalPaidCents = Math.round(totalPaid * 100)
       const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
 
-      await updateDebt(id as string, { status: newStatus })
+      // 🔥 CORRIGIDO: Usando db.table().update()
+      await db.table('debts').update(id as string, { 
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
 
       const deletedPayment = payments.find(p => p.id === paymentId)
       if (deletedPayment?.account_id) {
         const account = accounts.find(a => a.id === deletedPayment.account_id)
         if (account) {
-          await updateAccount(deletedPayment.account_id, {
+          // 🔥 CORRIGIDO: Usando db.table().update()
+          await db.table('accounts').update(deletedPayment.account_id, {
             balance: Number(account.balance) - amount
           })
         }
@@ -263,7 +261,9 @@ export default function DebtDetailPage() {
     try {
       const targetAccountId = payAccountId || debt.account_id || null
 
-      await createTransaction({
+      // 🔥 CORRIGIDO: Usando db.table().add()
+      await db.table('transactions').add({
+        id: crypto.randomUUID(),
         user_id: user.id,
         type: 'income',
         amount: payAmountNum,
@@ -274,12 +274,17 @@ export default function DebtDetailPage() {
         status: 'done',
         affects_balance: true,
         context: debt.context,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
 
       if (targetAccountId) {
         const account = accounts.find(a => a.id === targetAccountId)
         if (account) {
-          await updateAccount(targetAccountId, {
+          // 🔥 CORRIGIDO: Usando db.table().update()
+          await db.table('accounts').update(targetAccountId, {
             balance: Number(account.balance) + payAmountNum
           })
         }
@@ -288,7 +293,8 @@ export default function DebtDetailPage() {
       const newTotalPaidCents = totalPaidCents + payAmountCents
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
 
-      await updateDebt(id as string, {
+      // 🔥 CORRIGIDO: Usando db.table().update()
+      await db.table('debts').update(id as string, {
         status: newStatus,
         paid_amount: newTotalPaidCents / 100,
         updated_at: new Date().toISOString()
