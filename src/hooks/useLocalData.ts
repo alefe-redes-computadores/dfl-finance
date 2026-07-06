@@ -130,6 +130,8 @@ export function useLocalData<T>({
     sync()
   }, [user?.id, table])
 
+//FORÇAR DEPLOY
+
   // ============================================================
   // 3. FUNÇÃO RELOAD (Força reexecução do liveQuery)
   // ============================================================
