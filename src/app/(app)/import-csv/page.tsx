@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const PreviewSkeleton = () => (
   <div className="animate-pulse space-y-4">
@@ -68,13 +69,13 @@ export default function ImportCSVPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // 🔥 CORRIGIDO: Removido realtime
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context },
-    realtime: false,
   })
 
-  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
+  // 🔥 REMOVIDO: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -160,6 +161,9 @@ export default function ImportCSVPage() {
     }
   }
 
+  // ============================================================
+  // 🔥 HANDLE IMPORT CORRIGIDO
+  // ============================================================
   const handleImport = async () => {
     if (!user?.id) {
       showToast('Sessão expirada.', 'error')
@@ -256,7 +260,9 @@ export default function ImportCSVPage() {
             if (found) categoryId = found.id
           }
 
-          await createTransaction({
+          // 🔥 CORRIGIDO: Usando db.table().add()
+          await db.table('transactions').add({
+            id: crypto.randomUUID(),
             user_id: user.id,
             context: context,
             type: type,
@@ -269,6 +275,8 @@ export default function ImportCSVPage() {
             notes: colMap.notes !== -1 ? row[headerRow[colMap.notes]] : null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
           })
 
           successCount++
