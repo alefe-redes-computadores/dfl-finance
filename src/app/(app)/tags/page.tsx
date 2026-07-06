@@ -20,6 +20,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = [
   "#3B82F6",
@@ -40,6 +41,7 @@ export default function TagsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
+  const { user } = useAuth() // 🔥 ADICIONADO
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -60,10 +62,7 @@ export default function TagsPage() {
     filters: { context },
   })
 
-
-  const { create, update, remove } = useLocalData({
-    table: 'tags' as any,
-  })
+  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'tags' as any })
 
   // Conta transações por tag
   const { data: transactions } = useLocalData({
@@ -96,7 +95,7 @@ export default function TagsPage() {
     setShowForm(true)
   }
 
-  // Salvar tag
+  // 🔥 CORRIGIDO: Salvar tag com db.table()
   const handleSave = async () => {
     if (!tagName.trim()) {
       showToast("Informe o nome da tag", "warning")
@@ -110,13 +109,21 @@ export default function TagsPage() {
         name: tagName.trim(),
         color: tagColor,
         context,
+        updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        await update(editId, payload)
+        await db.table('tags').update(editId, payload)
         showToast("Tag atualizada com sucesso!", "success")
       } else {
-        await create(payload)
+        await db.table('tags').add({
+          id: crypto.randomUUID(),
+          user_id: user!.id,
+          ...payload,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
         showToast("Tag criada com sucesso!", "success")
       }
 
@@ -133,11 +140,11 @@ export default function TagsPage() {
     }
   }
 
-  // Excluir tag
+  // 🔥 CORRIGIDO: Excluir tag com db.table().delete()
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
-      await remove(deleteModal)
+      await db.table('tags').delete(deleteModal)
       showToast("Tag excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
