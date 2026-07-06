@@ -15,6 +15,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 export default function NewContactPage() {
@@ -24,6 +25,7 @@ export default function NewContactPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { context } = useContext_()
+  const { user } = useAuth()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -50,12 +52,7 @@ export default function NewContactPage() {
 
   const contactData = localContacts?.find((c: any) => c.id === editId) as any
 
-  const { create, update } = useLocalData({
-    table: 'contacts' as any,
-  })
-
-  // Hook remove no topo
-  const { remove } = useLocalData({ table: 'contacts' as any })
+  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'contacts' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -113,13 +110,23 @@ export default function NewContactPage() {
         zip_code: zipCode.trim() || null,
         notes: notes.trim() || null,
         context,
+        updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        await update(editId, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('contacts').update(editId, payload)
         showToast("Contato atualizado com sucesso!", "success")
       } else {
-        await create(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('contacts').add({
+          id: crypto.randomUUID(),
+          user_id: user!.id,
+          ...payload,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
         showToast("Contato criado com sucesso!", "success")
       }
 
@@ -137,7 +144,8 @@ export default function NewContactPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este contato?")) return
     try {
-      await remove(editId)
+      // 🔥 CORRIGIDO: Usando db.table().delete()
+      await db.table('contacts').delete(editId)
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
