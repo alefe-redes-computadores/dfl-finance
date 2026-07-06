@@ -1,17 +1,17 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
-  Loader2, Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  PieChart, AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
+  Plus, Clock, Check, CreditCard, Wallet, Settings2,
+  AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
-  Sparkles, Calendar
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -62,8 +62,6 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
   return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400 shrink-0" /> }
 }
 
-const homeGlobalLastFetch: Record<string, number> = {}
-
 function HomeContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -74,26 +72,11 @@ function HomeContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
 
-  const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
-  const [previousBalance, setPreviousBalance] = useState(0)
-  const [balanceVariation, setBalanceVariation] = useState(0)
-  const [pendings, setPendings] = useState({ toPay: 0, toReceive: 0, faturas: 0 })
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [cards, setCards] = useState<any[]>([])
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([])
-  const [budgets, setBudgets] = useState<any[]>([])
-  const [subscriptions, setSubscriptions] = useState<any[]>([])
-  const [debts, setDebts] = useState<any[]>([])
-  const [financings, setFinancings] = useState<any[]>([])
-  const [loans, setLoans] = useState<any[]>([])
-  const [totalToReceive, setTotalToReceive] = useState(0)
-  const [dataLoading, setDataLoading] = useState(true)
+  // 🔥 CORREÇÃO: loadingPulse declarado e sincronizado com isDataLoading
   const [loadingPulse, setLoadingPulse] = useState(false)
+
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
-  const [unreadNotifications, setUnreadNotifications] = useState(0)
-  const [notifications, setNotifications] = useState<any[]>([])
-  const [criticalCount, setCriticalCount] = useState(0)
 
   const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_SECTION_ORDER)
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
@@ -108,171 +91,247 @@ function HomeContent() {
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
-  // 🔥 CORRIGIDO: Adicionado orderBy: 'date' para ordenar corretamente
-  const { data: localTransactions } = useLocalData({ 
+  // ============================================================
+  // 🔥 DADOS LOCAIS (Reativos - Dexie)
+  // ============================================================
+  const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context },
     orderBy: 'date',
     orderDir: 'desc',
   })
-  const { data: localCategories } = useLocalData({ 
+  const { data: localCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
     filters: { context }
   })
-  const { data: localAccountsData } = useLocalData({ 
+  const { data: localAccountsData, loading: accLoading } = useLocalData({ 
     table: 'accounts' as any, 
     filters: { context }
   })
-  const { data: localDebts } = useLocalData({ 
+  const { data: localDebts, loading: debtsLoading } = useLocalData({ 
     table: 'debts' as any, 
     filters: { context }
   })
-  const { data: localFinancings } = useLocalData({ 
+  const { data: localFinancings, loading: finLoading } = useLocalData({ 
     table: 'financings' as any, 
     filters: { context, status: 'active' }
   })
-  const { data: localCards } = useLocalData({ 
+  const { data: localCards, loading: cardsLoading } = useLocalData({ 
     table: 'credit_cards' as any, 
     filters: { context, is_archived: false }
   })
+  const { data: localBudgets, loading: budgetsLoading } = useLocalData({
+    table: 'budgets' as any,
+    filters: { context }
+  })
+  const { data: localLoans, loading: loansLoading } = useLocalData({
+    table: 'loans' as any,
+    filters: { context }
+  })
+  const { data: localNotifications, reload: reloadNotifs } = useLocalData({
+    table: 'notifications' as any,
+    filters: { user_id: user?.id }
+  })
 
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setDataLoading(true)
-    setLoadingPulse(true)
+  // Agrupa carregamento
+  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
-    try {
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+  // 🔥 Sincroniza a bolinha de loading com o estado geral
+  useEffect(() => {
+    setLoadingPulse(isDataLoading)
+  }, [isDataLoading])
 
-      const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-        const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-        const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
-        return {
-          ...tx,
-          categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-          accounts: account ? { name: account.name, color: account.color } : null,
-        }
-      })
+  // ============================================================
+  // 🔥 CÁLCULOS EM TEMPO REAL (useMemo elimina o flicker)
+  // ============================================================
+  
+  const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
+  const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
 
-      const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
-
-      const income = monthTransactions
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const expense = monthTransactions
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const balance = income - expense
-      setSummary({ income, expense, balance })
-
-      const prevMonthDate = subMonths(currentDate, 1)
-      const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
-      const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
-      const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
-      const prevInc = prevMonthTxs
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const prevExp = prevMonthTxs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const prevBal = prevInc - prevExp
-      setPreviousBalance(prevBal)
-      setBalanceVariation(prevBal !== 0 ? ((balance - prevBal) / Math.abs(prevBal)) * 100 : (balance > 0 ? 100 : balance < 0 ? -100 : 0))
-
-      const toPay = monthTransactions
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const toReceive = monthTransactions
-        .filter((t: any) => t.type === 'income' && t.status === 'pending')
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-
-      setRecentTransactions(monthTransactions.slice(0, 5))
-
-      const accsWithPrevisto = (localAccountsData || []).map((acc: any) => {
-        const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
-        const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-        const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-        const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense
-        return { ...acc, previsto }
-      })
-      setAccounts(accsWithPrevisto)
-
-      const cardsWithInvoice = (localCards || []).map((card: any) => {
-        const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
-        const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (parseFloat(t.amount) || 0), 0)
-        return { ...card, faturaAtual }
-      })
-      setCards(cardsWithInvoice)
-      setPendings({ toPay, toReceive, faturas: cardsWithInvoice.reduce((acc: number, c: any) => acc + c.faturaAtual, 0) })
-
-      const debtsWithProgress = (localDebts || []).map((debt: any) => {
-        const payments = monthTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
-        const paidAmount = payments.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0)
-        const percent = Number(debt.total_amount) > 0 ? (paidAmount / Number(debt.total_amount)) * 100 : 0
-        return { ...debt, paid_amount: paidAmount, percent: Math.min(percent, 100) }
-      })
-      setDebts(debtsWithProgress)
-      setTotalToReceive(debtsWithProgress.reduce((a: number, d: any) => a + (Number(d.total_amount) - (d.paid_amount || 0)), 0))
-      setFinancings(localFinancings || [])
-
-      if (navigator.onLine && Date.now() - (homeGlobalLastFetch['home'] || 0) > 15000) {
-        homeGlobalLastFetch['home'] = Date.now()
-        try {
-          const { data: loansData } = await supabase.from('loans').select('*').eq('user_id', user.id).in('status', ['active', 'completed']).order('created_at', { ascending: false })
-          if (loansData) setLoans(loansData)
-
-          const { data: budgetsData } = await supabase.from('budgets').select('*, categories(name, icon, color)').match({ user_id: user.id, context })
-          if (budgetsData) {
-            const budgetsWithSpent = budgetsData.map((budget: any) => {
-              const spent = monthTransactions.filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-              const remaining = Number(budget.amount) - spent
-              const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
-              return { ...budget, spent, remaining, percent: Math.min(percent, 100) }
-            })
-            setBudgets(budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3))
-          }
-
-          const { data: subsData } = await supabase.from('subscriptions').select('*, categories(name, icon, color), accounts(name)').match({ user_id: user.id, context, status: 'active' }).order('due_day', { ascending: true })
-          if (subsData) setSubscriptions(subsData)
-
-          const { data: reads } = await supabase.from('notification_reads').select('notification_id').eq('user_id', user.id)
-          const readSet = new Set((reads as any[])?.map((r: any) => r.notification_id) || [])
-          
-          const today = new Date()
-          const todayDay = today.getDate()
-          const notifs: any[] = []
-          cardsWithInvoice.forEach((card: any) => {
-            const days = (card.due_day || 1) - todayDay
-            if (days < 0) {
-              notifs.push({ id: `invoice-overdue-${card.id}`, type: 'invoice_overdue', title: `Fatura vencida: ${card.name}`, subtitle: `Venceu dia ${card.due_day}`, cardId: card.id, severity: 'critical', isRead: readSet.has(`invoice-overdue-${card.id}`) })
-            } else if (days <= 3) {
-              notifs.push({ id: `invoice-soon-${card.id}`, type: 'invoice_soon', title: `Fatura próxima: ${card.name}`, subtitle: `Vence em ${days} dia(s)`, cardId: card.id, severity: 'warning', isRead: readSet.has(`invoice-soon-${card.id}`) })
-            }
-          })
-          setNotifications(notifs)
-          setUnreadNotifications(notifs.filter((n: any) => !n.isRead).length)
-          setCriticalCount(notifs.filter((n: any) => n.severity === 'critical' && !n.isRead).length)
-        } catch (e) {}
+  const transactionsWithJoin = useMemo(() => {
+    return (localTransactions || []).map((tx: any) => {
+      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+      const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
+      return {
+        ...tx,
+        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+        accounts: account ? { name: account.name, color: account.color } : null,
       }
+    })
+  }, [localTransactions, localCategories, localAccountsData])
 
-    } catch (err) {
-      console.error('Erro na Home:', err)
-    } finally {
-      setDataLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [context, currentDate, user?.id, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
+  const monthTransactions = useMemo(() => 
+    transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end),
+  [transactionsWithJoin, start, end])
 
-  // 🔥 CORREÇÃO: Adicionar dependências para recarregar quando dados mudarem
+  const summary = useMemo(() => {
+    const income = monthTransactions
+      .filter((t: any) => t.type === 'income' && t.status === 'done')
+      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+    const expense = monthTransactions
+      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+    return { income, expense, balance: income - expense }
+  }, [monthTransactions])
+
+  const { previousBalance, balanceVariation } = useMemo(() => {
+    const prevMonthDate = subMonths(currentDate, 1)
+    const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
+    const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
+    const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
+    
+    const prevInc = prevMonthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
+    const prevExp = prevMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
+    const prevBal = prevInc - prevExp
+    
+    const variation = prevBal !== 0 ? ((summary.balance - prevBal) / Math.abs(prevBal)) * 100 : (summary.balance > 0 ? 100 : summary.balance < 0 ? -100 : 0)
+    return { previousBalance: prevBal, balanceVariation: variation }
+  }, [transactionsWithJoin, currentDate, summary.balance])
+
+  const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
+
+  const accounts = useMemo(() => {
+    return (localAccountsData || []).map((acc: any) => {
+      const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
+      const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense
+      return { ...acc, previsto }
+    })
+  }, [localAccountsData, monthTransactions])
+
+  const cards = useMemo(() => {
+    return (localCards || []).map((card: any) => {
+      const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
+      const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (parseFloat(t.amount) || 0), 0)
+      return { ...card, faturaAtual }
+    })
+  }, [localCards, monthTransactions])
+
+  const pendings = useMemo(() => {
+    const toPay = monthTransactions
+      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
+      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+    const toReceive = monthTransactions
+      .filter((t: any) => t.type === 'income' && t.status === 'pending')
+      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+    const faturas = cards.reduce((acc: number, c: any) => acc + c.faturaAtual, 0)
+    return { toPay, toReceive, faturas }
+  }, [monthTransactions, cards])
+
+  const debtsList = useMemo(() => {
+    const allDebts = (localDebts || []).map((debt: any) => {
+      const payments = (localTransactions || []).filter((t: any) => t.debt_id === debt.id && t.type === 'income')
+      const paidAmount = payments.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0)
+      const totalAmount = Number(debt.total_amount) || 0
+      const isEffectivelyPaid = totalAmount > 0 && paidAmount >= totalAmount
+      const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
+      
+      return { 
+        ...debt, 
+        paid_amount: paidAmount, 
+        percent: Math.min(percent, 100),
+        status: isEffectivelyPaid ? 'paid' : debt.status
+      }
+    })
+    return allDebts.filter(d => d.status !== 'paid' && d.status !== 'cancelled')
+  }, [localDebts, localTransactions])
+
+  const financings = localFinancings || []
+
+  const budgets = useMemo(() => {
+    const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
+      const cat = (localCategories || []).find((c: any) => c.id === budget.category_id)
+      const spent = monthTransactions
+        .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      const remaining = Number(budget.amount) - spent
+      const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
+      return { 
+        ...budget, 
+        name: cat?.name || budget.name,
+        icon: cat?.icon || budget.icon,
+        color: cat?.color || budget.color,
+        spent, 
+        remaining, 
+        percent: Math.min(percent, 100) 
+      }
+    })
+    return budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3)
+  }, [localBudgets, localCategories, monthTransactions])
+
+  const loans = useMemo(() => {
+    return (localLoans || [])
+      .filter((l: any) => l.status === 'active' || l.status === 'completed')
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [localLoans])
+
+  // ============================================================
+  // 🔥 GERAÇÃO AUTOMÁTICA DE NOTIFICAÇÕES LOCAIS (Dexie)
+  // ============================================================
   useEffect(() => {
-    if (user?.id && context) {
-      loadData()
-    }
-  }, [user?.id, context, currentDate, localTransactions, localDebts, localCards, localAccountsData, loadData])
+    if (!user?.id || cards.length === 0) return
+    const generateNotifs = async () => {
+      const todayDay = new Date().getDate()
+      let addedNew = false
 
+      for (const card of cards) {
+        const days = (card.due_day || 1) - todayDay
+        let notifData = null
+
+        if (days < 0 && card.faturaAtual > 0) {
+          notifData = {
+            id: `invoice-overdue-${card.id}-${currentDate.getMonth()}`,
+            user_id: user.id,
+            type: 'invoice_overdue',
+            title: `Fatura vencida: ${card.name}`,
+            subtitle: `Venceu dia ${card.due_day}`,
+            card_id: card.id,
+            severity: 'critical',
+            is_read: false,
+            created_at: new Date().toISOString()
+          }
+        } else if (days <= 3 && days >= 0 && card.faturaAtual > 0) {
+          notifData = {
+            id: `invoice-soon-${card.id}-${currentDate.getMonth()}`,
+            user_id: user.id,
+            type: 'invoice_soon',
+            title: `Fatura próxima: ${card.name}`,
+            subtitle: `Vence em ${days} dia(s)`,
+            card_id: card.id,
+            severity: 'warning',
+            is_read: false,
+            created_at: new Date().toISOString()
+          }
+        }
+
+        if (notifData) {
+          const existing = await db.table('notifications').get(notifData.id)
+          if (!existing) {
+            await db.table('notifications').put({ ...notifData, sync_status: 'pending', sync_attempts: 0 })
+            addedNew = true
+          }
+        }
+      }
+      if (addedNew) reloadNotifs()
+    }
+    generateNotifs()
+  }, [cards, user?.id, currentDate, reloadNotifs])
+
+  const notificationsMap = useMemo(() => {
+    return (localNotifications || [])
+      .map((n: any) => ({ ...n, isRead: n.is_read || n.isRead, cardId: n.card_id || n.cardId }))
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [localNotifications])
+
+  const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
+  const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
+
+  // ============================================================
+  // BUSCA REMOTA PARA LAYOUT
+  // ============================================================
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && isOnline) {
       supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single().then(({ data }) => {
         if (data?.section_order) {
           setEnabledSections(data.section_order)
@@ -281,7 +340,7 @@ function HomeContent() {
         }
       })
     }
-  }, [user?.id, context])
+  }, [user?.id, context, isOnline])
 
   const saveLayout = async (order: string[]) => {
     if (!user?.id) return
@@ -289,23 +348,27 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
+  // ============================================================
+  // PULL TO REFRESH
+  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
   const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || dataLoading) return
+    if (window.scrollY > 10 || isDataLoading) return
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
   }
 
-  const handleTouchMove = (e: TouchEvent) => {
+  const handleTouchMove = async (e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
     const pullDistance = e.touches[0].clientY - pullStartY.current
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
+      await reloadTxs()
+      setRefreshing(false)
     }
   }
 
@@ -322,7 +385,7 @@ function HomeContent() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [dataLoading, refreshing])
+  }, [isDataLoading, refreshing])
 
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
@@ -331,6 +394,7 @@ function HomeContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
+  
   const today = new Date()
   const todayDay = today.getDate()
   const sortedByDue = [...cards].sort((a, b) => { const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day; const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day; return aDue - bDue })
@@ -351,6 +415,9 @@ function HomeContent() {
 
   useEffect(() => { const saved = localStorage.getItem('dfl_notifications_enabled'); setNotificationsEnabled(saved !== 'false') }, [])
 
+  // ============================================================
+  // RENDERIZAÇÃO
+  // ============================================================
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
     const isFixed = FIXED_SECTIONS.includes(sectionId)
@@ -415,7 +482,7 @@ function HomeContent() {
                 <EyeOff size={14} />
               </button>
             )}
-            <Suspense fallback={<Skeleton className="h-24 w-full rounded-xl" />}>
+            <Suspense fallback={<Skeleton count={1} className="h-24 w-full rounded-[24px]" />}>
               <ProjectionSparklineCard />
             </Suspense>
           </div>
@@ -440,7 +507,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
-                {loans.filter((l: any) => l.status === 'active').slice(0, 3).map((loan: any) => {
+                {loans.slice(0, 3).map((loan: any) => {
                   const progress = Number(loan.total_amount) > 0 ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100 : 0
                   const isOverdue = loan.due_date && differenceInDays(new Date(loan.due_date), today) < 0
                   return (
@@ -548,7 +615,7 @@ function HomeContent() {
           </div>
         )
       case 'receivables':
-        if (debts.length === 0) return null
+        if (debtsList.length === 0) return null
         return (
           <div key="receivables" className="mb-6 relative">
             {!isFixed && (
@@ -566,7 +633,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
-                {debts.slice(0, 3).map((debt: any) => {
+                {debtsList.slice(0, 3).map((debt: any) => {
                   const IconComp = getDynamicIcon(debt.icon || 'user')
                   const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
                   const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), today) : null
@@ -798,6 +865,19 @@ function HomeContent() {
     }
   }
 
+  if (isDataLoading && !localTransactions?.length && !localAccountsData?.length) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 pt-6">
+        <Skeleton count={1} className="h-10 w-full mb-6" />
+        <Skeleton count={1} className="h-32 w-full rounded-[32px] mb-6" />
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <Skeleton count={1} className="h-24 w-full rounded-[24px]" />
+          <Skeleton count={1} className="h-24 w-full rounded-[24px]" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans relative px-4 pt-6 transition-colors duration-300">
       {loadingPulse && (
@@ -825,9 +905,9 @@ function HomeContent() {
         </div>
       )}
 
-      {debts.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
+      {debtsList.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').length > 0 && (
         <div className="mb-4 space-y-2">
-          {debts.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map((debt: any) => (
+          {debtsList.filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid').map((debt: any) => (
             <DebtAlert key={debt.id} personName={debt.person_name} amount={Number(debt.total_amount) - (debt.paid_amount || 0)} dueDate={debt.due_date} debtId={debt.id} />
           ))}
         </div>
@@ -864,9 +944,7 @@ function HomeContent() {
         <span className="font-bold text-[15px]">Personalizar Dashboard</span>
       </button>
 
-
-
-      <FAB onSave={() => loadData()} />
+      <FAB onSave={() => reloadTxs()} />
       <PersonalizeModal
         isOpen={showPersonalizeModal}
         onClose={() => setShowPersonalizeModal(false)}
@@ -882,7 +960,7 @@ function HomeContent() {
         <NotificationCenter
           isOpen={showNotifications}
           onClose={() => setShowNotifications(false)}
-          notifications={notifications}
+          notifications={notificationsMap}
           onReadChange={(unread) => setUnreadNotifications(unread)}
         />
       )}
