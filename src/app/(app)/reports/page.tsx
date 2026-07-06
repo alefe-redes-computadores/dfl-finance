@@ -121,13 +121,11 @@ export default function ReportsPage() {
   const [showExportModal, setShowExportModal] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
-    orderBy: { field: 'date', direction: 'asc' },
-    realtime: true,
   })
 
   const containerRef = useRef<HTMLDivElement>(null)
