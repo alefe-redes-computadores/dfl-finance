@@ -21,6 +21,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 export default function ContactsPage() {
@@ -59,15 +60,13 @@ export default function ContactsPage() {
     return acc
   }, {})
 
-  // Remove contato
-  const { remove } = useLocalData({
-    table: 'contacts' as any,
-  })
+  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'contacts' as any })
 
+  // 🔥 CORRIGIDO: Remove contato com db.table().delete()
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
-      await remove(deleteModal)
+      await db.table('contacts').delete(deleteModal)
       showToast("Contato excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
