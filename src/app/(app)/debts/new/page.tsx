@@ -151,9 +151,9 @@ function NewDebtContent() {
     </div>
   )
 
-  // 🔥 USAR localCategories E localAccounts DIRETAMENTE
-  const selectedCat = (localCategories || []).find((c: any) => c.id === categoryId)
-  const selectedAcc = (localAccounts || []).find((a: any) => a.id === accountId)
+  // 🔥 USAR localCategories E localAccounts DIRETAMENTE (SEM ESTADO INTERMEDIÁRIO)
+  const selectedCat = (localCategories || []).find((c: any) => c.id === categoryId) as any
+  const selectedAcc = (localAccounts || []).find((a: any) => a.id === accountId) as any
   const IconComp = getDynamicIcon(icon)
 
   return (
