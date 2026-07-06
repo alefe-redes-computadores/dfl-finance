@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Check, Loader2, X, Wallet, Calendar, User, FileText, Tag } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
+import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -42,20 +43,34 @@ function NewDebtContent() {
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
+  // 🔥 BUSCA DADOS LOCAIS EM VEZ DE SUPABASE
+  const { data: localCategories, reload: reloadCategories } = useLocalData({
+    table: 'categories' as any,
+    filters: { context, type: 'expense' },
+  })
+
+  const { data: localAccounts, reload: reloadAccounts } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context },
+  })
+
+  const { data: localDebt, reload: reloadDebt } = useLocalData({
+    table: 'debts' as any,
+    filters: { id: editId || '' },
+  })
+
   const loadData = async () => {
     if (!user?.id) return
-    const [{ data: cats }, { data: accs }] = await Promise.all([
-      supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, context: context }).eq('type', 'expense'),
-      supabase.from('accounts').select('id, name, color').match({ user_id: user.id, context: context })
-    ])
-    setCategories(Array.isArray(cats) ? cats : [])
-    setAccounts(Array.isArray(accs) ? accs : [])
+    await Promise.all([reloadCategories(), reloadAccounts()])
+    setCategories(Array.isArray(localCategories) ? localCategories : [])
+    setAccounts(Array.isArray(localAccounts) ? localAccounts : [])
   }
 
   const loadDebt = async () => {
     if (!editId || !user?.id) return
     setLoading(true)
-    const { data } = await supabase.from('debts').select('*').match({ id: editId, user_id: user.id }).single()
+    await reloadDebt()
+    const data = (localDebt || [])[0] as any
     if (data) {
       setPersonName(data.person_name)
       setAmountNum(Number(data.total_amount))
@@ -96,8 +111,6 @@ function NewDebtContent() {
     setSaving(true)
 
     const payload = {
-      user_id: user.id,
-      context: debtContext,
       person_name: personName.trim(),
       total_amount: amountNum,
       due_date: dueDate || null,
@@ -105,17 +118,30 @@ function NewDebtContent() {
       category_id: categoryId || null,
       account_id: accountId || null,
       color,
-      icon,
-      status: 'pending'
+      icon: icon.toLowerCase(),
+      status: 'pending',
+      context: debtContext,
+      updated_at: new Date().toISOString(),
     }
 
     try {
       if (editId) {
-        await supabase.from('debts').update(payload).eq('id', editId)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('debts').update(editId, payload)
+        showToast('Empréstimo atualizado com sucesso!', 'success')
       } else {
-        await supabase.from('debts').insert(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('debts').add({
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          ...payload,
+          paid_amount: 0,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
+        showToast('Empréstimo registrado com sucesso!', 'success')
       }
-      showToast(editId ? 'Empréstimo atualizado com sucesso!' : 'Empréstimo registrado com sucesso!', 'success')
       router.push('/debts')
     } catch (err: any) {
       showToast('Erro ao salvar empréstimo.', 'error')
