@@ -11,6 +11,7 @@ import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -42,16 +43,16 @@ function NewBudgetContent() {
   // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { data: localCategories, reload: reloadCategories } = useLocalData({
-    table: 'categories',
+    table: 'categories' as any,
     filters: { context, type: 'expense', parent_id: null },
-    realtime: false,
   })
 
   const { data: localBudget, loading: budgetLoading, reload: reloadBudget } = useLocalData({
     table: 'budgets' as any,
     filters: { id: editId || '' },
-    realtime: false,
   })
+
+  // 🔥 REMOVIDOS: const { create, update } = useLocalData({ table: 'budgets' as any })
 
   // ============================================================
   // LOAD DATA
@@ -92,7 +93,7 @@ function NewBudgetContent() {
   }, [user?.id, editId])
 
   // ============================================================
-  // HANDLE SAVE
+  // 🔥 HANDLE SAVE CORRIGIDO
   // ============================================================
   const handleSave = async () => {
     if (!user?.id || !name.trim() || amountNum <= 0) {
@@ -102,25 +103,36 @@ function NewBudgetContent() {
     setSaving(true)
 
     const payload = {
-      user_id: user.id,
-      context,
       name: name.trim(),
       amount: amountNum,
       category_id: categoryId || null,
       color,
       icon: icon.toLowerCase(),
       period,
-      accumulate
+      accumulate,
+      context,
+      updated_at: new Date().toISOString(),
     }
 
     try {
-      const { create, update } = useLocalData({ table: 'budgets' as any })
-      
       if (editId) {
-        await update(editId, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('budgets').update(editId, payload)
         showToast('Orçamento atualizado!', 'success')
       } else {
-        await create(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('budgets').add({
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          ...payload,
+          spent: 0,
+          remaining: amountNum,
+          percent: 0,
+          status: 'active',
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
         showToast('Orçamento criado!', 'success')
       }
       router.push('/budgets')
