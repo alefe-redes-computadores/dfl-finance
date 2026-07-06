@@ -174,7 +174,6 @@ export default function TransactionsPage() {
 
   const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
-  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (COM FILTROS DE CONTEXTO E TIPO)
   const startMonth = format(startOfMonth(currentDate), 'yyyy-MM-dd')
   const endMonth = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
@@ -191,6 +190,7 @@ export default function TransactionsPage() {
     localFilters.status = statusFilter
   }
 
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   const {
     data: localTransactions,
     loading,
@@ -199,24 +199,21 @@ export default function TransactionsPage() {
   } = useLocalData({
     table: 'transactions' as any,
     filters: localFilters,
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
   })
 
-  // 🔥 BUSCA CATEGORIAS E CONTAS LOCALMENTE (para JOIN em memória)
+  // 🔥 CORRIGIDO: Removido realtime
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context },
-    realtime: false,
   })
 
+  // 🔥 CORRIGIDO: Removido realtime
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
-    realtime: false,
   })
 
-  // 🔥 JOIN EM MEMÓRIA (compatível com o formato antigo)
+  // JOIN em memória
   const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
     const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
     const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
@@ -231,12 +228,10 @@ export default function TransactionsPage() {
     }
   })
 
-  // 🔥 FILTROS ADICIONAIS (data e search)
+  // Filtros adicionais (data e search)
   const filtered = transactionsWithJoin.filter((t: any) => {
-    // Filtro de data (mês atual)
     if (t.date < startMonth || t.date > endMonth) return false
 
-    // Filtro de busca
     if (search) {
       const desc = String(t.description || '').toLowerCase()
       const cat = String(t.categories?.name || '').toLowerCase()
@@ -247,36 +242,24 @@ export default function TransactionsPage() {
     return true
   })
 
-  // 🔥 SEPARAR PENDENTES (para o card)
   const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
   const doneTxs = filtered.filter((t: any) => t.status === 'done')
 
-  // 🔥 TRANSAÇÕES EXIBIDAS (baseado no filtro de status)
   const displayTxs = statusFilter === 'pending' ? pendingTxs : doneTxs
 
-  // Agrupamento por data
   const grouped = groupByDate(displayTxs)
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
 
-  // ============================================================
-  // EFETTO PARA SINCRONIZAR EM BACKGROUND
-  // ============================================================
   useEffect(() => {
     if (user?.id && context) {
       reloadTransactions()
     }
   }, [user?.id, context, currentDate, filter, statusFilter, reloadTransactions])
 
-  // ============================================================
-  // EFETTO PARA ATUALIZAR A BOLINHA
-  // ============================================================
   useEffect(() => {
     setLoadingPulse(loading || syncing)
   }, [loading, syncing])
 
-  // ============================================================
-  // HANDLERS DE FILTRO E EXPORT (mantidos iguais)
-  // ============================================================
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -323,7 +306,6 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* ── HEADER STICKY ── */}
       <div className="sticky top-0 z-50 bg-[#f8f9fa]/85 dark:bg-slate-900/85 backdrop-blur-xl pt-2 pb-2 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
 
         <div className="flex items-center justify-between mb-2 mt-1">
