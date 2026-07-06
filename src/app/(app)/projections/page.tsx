@@ -12,7 +12,6 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
-// 🔥 NOVO: Import do hook local
 import { useLocalData } from '@/hooks/useLocalData'
 
 // ✅ Imports normais (sem lazy loading)
@@ -88,13 +87,11 @@ export default function ProjectionsPage() {
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
   // ============================================================
-  // 🔥 BUSCA LOCAL DE TRANSAÇÕES (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
-    orderBy: { field: 'date', direction: 'asc' },
-    realtime: true,
   })
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -135,7 +132,7 @@ export default function ProjectionsPage() {
   }, [loading, refreshing])
 
   // ============================================================
-  // LOAD DATA (REFATORADO PARA USAR DADOS LOCAIS)
+  // LOAD DATA
   // ============================================================
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -143,11 +140,7 @@ export default function ProjectionsPage() {
     setLoadingPulse(true)
 
     try {
-      // Recarrega transações do IndexedDB
       await reloadTransactions()
-
-      // Os dados já estão disponíveis via localTransactions
-      // O useEffect abaixo vai processar os dados
     } catch (err) {
       console.error('Erro ao carregar transações:', err)
     } finally {
@@ -183,7 +176,7 @@ export default function ProjectionsPage() {
       return
     }
 
-    // 🔥 AGRUPAMENTO POR MÊS (MANTIDO IGUAL AO ORIGINAL)
+    // 🔥 AGRUPAMENTO POR MÊS
     const months = new Map()
     filtered.forEach((tx: any) => {
       const month = format(new Date(tx.date), 'yyyy-MM')
@@ -214,7 +207,7 @@ export default function ProjectionsPage() {
       currentBalance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)
     })
 
-    // 🔥 PROJEÇÃO (MANTIDA IGUAL AO ORIGINAL)
+    // 🔥 PROJEÇÃO
     const monthsToProject = parseInt(period)
     const projectionData = []
     let balance = currentBalance
