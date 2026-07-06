@@ -80,13 +80,12 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const [localNotifs, setLocalNotifs] = useState<Notification[]>(notifications)
   const [processing, setProcessing] = useState(false)
 
-  // 🔥 Atualiza quando a prop muda
   useEffect(() => {
     setLocalNotifs(notifications)
   }, [notifications])
 
-  // 🔥 Força recarga completa e notifica o pai
-  const refreshAndNotify = async () => {
+  // 🔥 BUSCA DIRETO NO DEXIE E ATUALIZA
+  const refreshFromDexie = async () => {
     if (!user) return
     
     try {
@@ -105,12 +104,14 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
 
       const unread = mapped.filter((n: any) => !n.is_read && !n.read).length
       if (onReadChange) onReadChange(unread)
+      
+      return mapped
     } catch (err) {
-      console.error('Erro ao atualizar notificações:', err)
+      console.error('Erro ao buscar notificações:', err)
+      return []
     }
   }
 
-  // 🔥 Marca como lida E FORÇA RECARGA
   const markAsRead = async (notifIds: string[]) => {
     if (!user || processing) return
     setProcessing(true)
@@ -124,7 +125,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
         })
       }
 
-      await refreshAndNotify()
+      await refreshFromDexie()
       showToast(`${notifIds.length} notificação(ões) marcada(s) como lida(s)!`, 'success')
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
@@ -140,9 +141,8 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     await markAsRead(allIds)
   }
 
-  // 🔥 Ao fechar, força recarga
   const handleClose = async () => {
-    await refreshAndNotify()
+    await refreshFromDexie()
     onClose()
   }
 
