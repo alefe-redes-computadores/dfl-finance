@@ -43,19 +43,16 @@ export default function CardsPage() {
   const [loadingPulse, setLoadingPulse] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { context, is_archived: false },
-    orderBy: { field: 'created_at', direction: 'desc' },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
-    realtime: true,
   })
 
   // ============================================================
@@ -220,9 +217,9 @@ export default function CardsPage() {
           </div>
         ) : (
           cardsWithInvoice.map((card: any, index: number) => {
-            const limitPercent = getLimitPercent(card.faturaAtual || 0, Number(card.credit_limit) || 0)
+            const limitPercent = getLimitPercent(card.faturaAtual || 0, Number(card.limit_amount) || 0)
             const limitColor = getLimitColor(limitPercent)
-            const available = (Number(card.credit_limit) || 0) - (card.faturaAtual || 0)
+            const available = (Number(card.limit_amount) || 0) - (card.faturaAtual || 0)
             const isNearLimit = limitPercent >= 90
             const brandLabel = getBrandLabel(card.brand)
 
@@ -254,7 +251,7 @@ export default function CardsPage() {
                           <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase">{brandLabel}</span>
                         )}
                         <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                          {card.last_digits ? `•••• ${card.last_digits}` : ''}
+                          {card.last_four ? `•••• ${card.last_four}` : ''}
                         </span>
                       </div>
                     </div>
@@ -273,7 +270,7 @@ export default function CardsPage() {
                       Fatura atual: <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(card.faturaAtual || 0)}</span>
                     </span>
                     <span className="font-medium text-gray-400 dark:text-gray-500">
-                      Limite: {formatCurrency(Number(card.credit_limit) || 0)}
+                      Limite: {formatCurrency(Number(card.limit_amount) || 0)}
                     </span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
