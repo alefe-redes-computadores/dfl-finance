@@ -16,6 +16,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 export default function NewFinancingPage() {
@@ -25,6 +26,7 @@ export default function NewFinancingPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { context } = useContext_()
+  const { user } = useAuth() // 🔥 ADICIONADO
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -51,9 +53,7 @@ export default function NewFinancingPage() {
 
   const financingData = localFinancings?.find((f: any) => f.id === editId) as any
 
-  const { create, update, remove } = useLocalData({
-    table: 'financings' as any,
-  })
+  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'financings' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -133,13 +133,24 @@ export default function NewFinancingPage() {
         notes: notes.trim() || null,
         status,
         context,
+        updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        await update(editId, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('financings').update(editId, payload)
         showToast("Financiamento atualizado com sucesso!", "success")
       } else {
-        await create(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('financings').add({
+          id: crypto.randomUUID(),
+          user_id: user!.id,
+          ...payload,
+          remaining_amount: parseFloat(totalAmount),
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
         showToast("Financiamento criado com sucesso!", "success")
       }
 
@@ -157,7 +168,8 @@ export default function NewFinancingPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este financiamento?")) return
     try {
-      await remove(editId)
+      // 🔥 CORRIGIDO: Usando db.table().delete()
+      await db.table('financings').delete(editId)
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       router.back()
