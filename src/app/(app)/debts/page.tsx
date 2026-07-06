@@ -3,17 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
-import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, TrendingUp, ChevronLeft } from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
+import { differenceInDays } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useLocalData } from '@/hooks/useLocalData'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const DebtsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="grid grid-cols-2 gap-3">
@@ -28,7 +23,6 @@ const DebtsSkeleton = () => (
         <div className="h-5 w-10 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
       </div>
     </div>
-
     {[1, 2, 3].map((i) => (
       <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-3">
@@ -58,68 +52,48 @@ function DebtsContent() {
   const router = useRouter()
   const { context } = useContext_()
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
-  const [totalToReceive, setTotalToReceive] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [debts, setDebts] = useState<any[]>([])
+  const [totalToReceiveState, setTotalToReceiveState] = useState(0)
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Adicionado as any e removidos orderBy/realtime
-  // ============================================================
-  const { data: localDebts, loading: debtsLoading, syncing: debtsSyncing, reload: reloadDebts } = useLocalData({
-    table: 'debts' as any, // 🔥 ADICIONADO as any
+  const { data: localDebts, reload: reloadDebts } = useLocalData({
+    table: 'debts' as any,
     filters: { context },
   })
 
-  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any, // 🔥 ADICIONADO as any
+  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
+    table: 'transactions' as any,
     filters: { context, type: 'income' },
   })
 
-  // ============================================================
-  // 🔥 JOIN EM MEMÓRIA (DÍVIDAS + PAGAMENTOS)
-  // ============================================================
+  // JOIN em memória
   const consolidateDebts = useCallback(() => {
     if (!localDebts || !localTransactions) return []
-
-    // 1. Agrupa pagamentos por debt_id
     const paymentsByDebt: Record<string, number> = {}
     localTransactions.forEach((tx: any) => {
       if (tx.debt_id) {
         paymentsByDebt[tx.debt_id] = (paymentsByDebt[tx.debt_id] || 0) + Number(tx.amount || 0)
       }
     })
-
-    // 2. Filtra dívidas pelo status (ativo/pago)
-    let filteredDebts = localDebts
+    let filtered = localDebts
     if (filter === 'active') {
-      filteredDebts = localDebts.filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+      filtered = localDebts.filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
     } else {
-      filteredDebts = localDebts.filter((d: any) => d.status === 'paid')
+      filtered = localDebts.filter((d: any) => d.status === 'paid')
     }
-
-    // 3. Constrói o array com progresso
-    return filteredDebts.map((debt: any) => {
-      const paidAmount = paymentsByDebt[debt.id] || 0
-      const totalAmount = Number(debt.total_amount) || 0
-      const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
-
-      return {
-        ...debt,
-        paid_amount: paidAmount,
-        percent: Math.min(percent, 100),
-      }
+    return filtered.map((debt: any) => {
+      const paid = paymentsByDebt[debt.id] || 0
+      const total = Number(debt.total_amount) || 0
+      return { ...debt, paid_amount: paid, percent: Math.min(total > 0 ? (paid / total) * 100 : 0, 100) }
     })
   }, [localDebts, localTransactions, filter])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadDebts = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
-
     try {
       await Promise.all([reloadDebts(), reloadTransactions()])
     } catch (err) {
@@ -130,35 +104,23 @@ function DebtsContent() {
     }
   }, [user?.id, reloadDebts, reloadTransactions])
 
-  // ============================================================
-  // EFETTOS
-  // ============================================================
+  // Efeito inicial
   useEffect(() => {
-    if (user?.id && context) {
-      loadDebts()
-    }
-  }, [user?.id, context, filter, loadDebts])
+    if (user?.id && context) loadDebts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, context, filter])
 
-  // Atualiza a lista consolidada sempre que os dados locais mudarem
-  const [debts, setDebts] = useState<any[]>([])
-  const [totalToReceiveState, setTotalToReceiveState] = useState(0)
-
+  // Consolida dados quando mudam
   useEffect(() => {
-    if (localDebts && localTransactions) {
-      const consolidated = consolidateDebts()
-      setDebts(consolidated)
-
-      // Calcula total a receber (apenas ativos)
-      const total = consolidated
-        .filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
-        .reduce((sum: number, d: any) => sum + (Number(d.total_amount) - (d.paid_amount || 0)), 0)
-      setTotalToReceiveState(total)
-    }
+    const consolidated = consolidateDebts()
+    setDebts(consolidated)
+    const total = consolidated
+      .filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+      .reduce((sum: number, d: any) => sum + (Number(d.total_amount) - (d.paid_amount || 0)), 0)
+    setTotalToReceiveState(total)
   }, [localDebts, localTransactions, filter, consolidateDebts])
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
+  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -168,38 +130,32 @@ function DebtsContent() {
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
   }
-
   const handleTouchMove = (e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
+    if (e.touches[0].clientY - pullStartY.current > 60) {
       setRefreshing(true)
       isPulling.current = false
       loadDebts().finally(() => setRefreshing(false))
     }
   }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  const handleTouchEnd = () => { isPulling.current = false }
 
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+    const c = containerRef.current
+    if (!c) return
+    c.addEventListener('touchstart', handleTouchStart, { passive: true })
+    c.addEventListener('touchmove', handleTouchMove, { passive: true })
+    c.addEventListener('touchend', handleTouchEnd, { passive: true })
     return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
+      c.removeEventListener('touchstart', handleTouchStart)
+      c.removeEventListener('touchmove', handleTouchMove)
+      c.removeEventListener('touchend', handleTouchEnd)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, refreshing])
 
-  // ============================================================
-  // FUNÇÕES AUXILIARES
-  // ============================================================
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -208,23 +164,16 @@ function DebtsContent() {
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
-
-      {/* ============================================================
-          HEADER
-          ============================================================ */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/more')}
             className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors"
           >
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
-            Quem me deve
-          </h1>
+          <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Quem me deve</h1>
         </div>
-
         <div className="flex items-center gap-2">
           <ContextToggle />
           <button
@@ -236,7 +185,6 @@ function DebtsContent() {
         </div>
       </div>
 
-      {/* Cards de resumo */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
           <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
@@ -254,23 +202,11 @@ function DebtsContent() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
-        <button
-          onClick={() => setFilter('active')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${filter === 'active' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}
-        >
-          Pendentes
-        </button>
-        <button
-          onClick={() => setFilter('paid')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${filter === 'paid' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}
-        >
-          Pagos
-        </button>
+        <button onClick={() => setFilter('active')} className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${filter === 'active' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>Pendentes</button>
+        <button onClick={() => setFilter('paid')} className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${filter === 'paid' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>Pagos</button>
       </div>
 
-      {/* Lista de dívidas */}
       {loading ? (
         <DebtsSkeleton />
       ) : debts.length === 0 ? (
@@ -282,40 +218,26 @@ function DebtsContent() {
           <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
             {filter === 'paid' ? 'Nenhuma dívida foi paga ainda.' : 'Registre empréstimos para acompanhar quem te deve.'}
           </p>
-          <button
-            onClick={() => router.push('/debts/new')}
-            className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
-          >
-            Novo empréstimo
-          </button>
+          <button onClick={() => router.push('/debts/new')} className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors">Novo empréstimo</button>
         </div>
       ) : (
         <div className="space-y-3 animate-in fade-in duration-300">
-          {debts.map(debt => {
+          {debts.map((debt: any) => {
             const IconComp = getDynamicIcon(debt.icon || 'user')
             const isPaid = debt.status === 'paid'
             const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
             const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
             const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
             const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
-
             return (
               <div
                 key={debt.id}
                 onClick={() => router.push(`/debts/${debt.id}`)}
-                className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${
-                  isPaid 
-                    ? 'border-emerald-200 dark:border-emerald-800' 
-                    : isOverdue 
-                      ? 'border-red-200 dark:border-red-800' 
-                      : 'border-gray-50 dark:border-slate-700'
-                }`}
+                className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${isPaid ? 'border-emerald-200 dark:border-emerald-800' : isOverdue ? 'border-red-200 dark:border-red-800' : 'border-gray-50 dark:border-slate-700'}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}>
-                      <IconComp size={18} />
-                    </div>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}><IconComp size={18} /></div>
                     <div>
                       <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{debt.person_name}</span>
                       {debt.description && <p className="text-[11px] text-gray-400 dark:text-gray-500">{debt.description}</p>}
@@ -325,42 +247,19 @@ function DebtsContent() {
                     {isPaid && <Check size={14} className="text-emerald-500" />}
                     {isOverdue && <AlertTriangle size={14} className="text-red-500" />}
                     {isNearDue && <Clock size={14} className="text-orange-500" />}
-                    <span className={`text-[11px] font-bold ${
-                      isPaid 
-                        ? 'text-emerald-600' 
-                        : isOverdue 
-                          ? 'text-red-500' 
-                          : isNearDue 
-                            ? 'text-orange-500' 
-                            : 'text-gray-400 dark:text-gray-500'
-                    }`}>
-                      {isPaid 
-                        ? 'Pago' 
-                        : isOverdue 
-                          ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)` 
-                          : isNearDue 
-                            ? `Vence em ${daysUntilDue} dia(s)` 
-                            : ''}
+                    <span className={`text-[11px] font-bold ${isPaid ? 'text-emerald-600' : isOverdue ? 'text-red-500' : isNearDue ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {isPaid ? 'Pago' : isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)` : isNearDue ? `Vence em ${daysUntilDue} dia(s)` : ''}
                     </span>
                   </div>
                 </div>
-
                 <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-                  <div
-                    className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                      isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : isNearDue ? 'bg-orange-500' : 'bg-teal-500'
-                    }`}
-                    style={{ width: `${Math.min(debt.percent, 100)}%` }}
-                  />
+                  <div className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : isNearDue ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(debt.percent, 100)}%` }} />
                 </div>
-
                 <div className="flex justify-between text-[11px]">
                   <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
                     {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
                   </span>
-                  <span className="text-gray-400 dark:text-gray-500 font-medium">
-                    {debt.percent.toFixed(0)}% • {formatCurrency(Number(debt.total_amount))}
-                  </span>
+                  <span className="text-gray-400 dark:text-gray-500 font-medium">{debt.percent.toFixed(0)}% • {formatCurrency(Number(debt.total_amount))}</span>
                 </div>
               </div>
             )
