@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, Wallet, Clock, Flame, Gauge, Percent, DollarSign } from 'lucide-react'
 
 interface KPICardProps {
@@ -34,7 +34,7 @@ const colorMap = {
   teal: 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
 }
 
-export default function KPICard({ 
+function KPICardComponent({ 
   title, 
   value, 
   icon, 
@@ -82,3 +82,6 @@ export default function KPICard({
     </div>
   )
 }
+
+// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
+export default React.memo(KPICardComponent)
