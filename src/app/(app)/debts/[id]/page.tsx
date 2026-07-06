@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, Plus, X, Wallet, Calendar, User, MessageCircle, RefreshCw
+  ChevronLeft, Edit2, Loader2, Check, Trash2, X, Wallet, Calendar, MessageCircle, RefreshCw
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -14,50 +13,47 @@ import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
-export default function DebtDetailPage() {
-  const { id } = useParams()
+function DebtDetailContent() {
+  const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
   const { success, error } = useHapticFeedback()
 
+  // Garante que o ID é uma string, mesmo que venha em array
+  const debtId = Array.isArray(params.id) ? params.id[0] : params.id
+
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
   // ============================================================
   const { 
     data: localDebt, 
     loading: debtLoading, 
-    syncing: debtSyncing, 
     reload: reloadDebt,
   } = useLocalData({
-    table: 'debts' as any, // 🔥 ADICIONADO as any
-    filters: { id: id as string },
+    table: 'debts' as any,
+    filters: { id: debtId },
   })
 
   const { 
     data: localTransactions, 
-    loading: txLoading, 
-    syncing: txSyncing, 
     reload: reloadTransactions,
   } = useLocalData({
-    table: 'transactions' as any, // 🔥 ADICIONADO as any
-    filters: { debt_id: id as string },
+    table: 'transactions' as any,
+    filters: { debt_id: debtId },
   })
 
   const debtData = (localDebt || [])[0] as any
 
   const { 
     data: localAccounts, 
-    loading: accLoading, 
     reload: reloadAccounts,
   } = useLocalData({
-    table: 'accounts' as any, // 🔥 ADICIONADO as any
+    table: 'accounts' as any,
     filters: { context: debtData?.context || 'dfl' },
   })
-
-  // 🔥 REMOVIDOS: updateDebt, removeDebt, createTransaction, updateTransaction, removeTransaction, updateAccount
 
   // ============================================================
   // ESTADOS LOCAIS
@@ -65,12 +61,12 @@ export default function DebtDetailPage() {
   const [debt, setDebt] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [accounts, setAccounts] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  
+  // Removemos o loading manual que estava travando a tela!
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // WhatsApp
@@ -93,8 +89,20 @@ export default function DebtDetailPage() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
+  const loadData = useCallback(async () => {
+    if (!debtId || !user?.id) return
+    setLoadingPulse(true)
+    try {
+      await Promise.all([reloadDebt(), reloadTransactions(), reloadAccounts()])
+    } catch (err) {
+      console.error('Erro ao recarregar dados:', err)
+    } finally {
+      setLoadingPulse(false)
+    }
+  }, [debtId, user, reloadDebt, reloadTransactions, reloadAccounts])
+
   const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
+    if (window.scrollY > 10 || debtLoading) return
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
   }
@@ -109,9 +117,7 @@ export default function DebtDetailPage() {
     }
   }
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  const handleTouchEnd = () => { isPulling.current = false }
 
   useEffect(() => {
     const container = containerRef.current
@@ -124,59 +130,31 @@ export default function DebtDetailPage() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [loading, refreshing])
-
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
-  const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    try {
-      await Promise.all([reloadDebt(), reloadTransactions(), reloadAccounts()])
-    } catch (err) {
-      console.error('Erro ao carregar dados:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [id, user, reloadDebt, reloadTransactions, reloadAccounts])
+  }, [debtLoading, refreshing, loadData])
 
   // ============================================================
   // EFEITOS PARA ATUALIZAR ESTADOS
   // ============================================================
   useEffect(() => {
     if (localDebt && localDebt.length > 0) {
-      const debtData = localDebt[0] as any
-      setDebt(debtData)
-      setWhatsAppMessage(`Olá ${debtData.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(debtData.total_amount))}. Você pode verificar?`)
+      const data = localDebt[0] as any
+      setDebt(data)
+      setWhatsAppMessage(`Olá ${data.person_name}, tudo bem? Preciso lembrar sobre o pagamento de ${formatCurrency(Number(data.total_amount))}. Você pode verificar?`)
     }
   }, [localDebt])
 
-  useEffect(() => {
-    if (localTransactions) {
-      setPayments(localTransactions)
-    }
-  }, [localTransactions])
-
-  useEffect(() => {
-    if (localAccounts) {
-      setAccounts(localAccounts)
-    }
-  }, [localAccounts])
+  useEffect(() => { if (localTransactions) setPayments(localTransactions) }, [localTransactions])
+  useEffect(() => { if (localAccounts) setAccounts(localAccounts) }, [localAccounts])
 
   // ============================================================
-  // HANDLERS
+  // HANDLERS DE AÇÃO
   // ============================================================
   const handleDeleteDebt = async () => {
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete()
-      await db.table('debts').delete(id as string)
+      await db.table('debts').delete(debtId)
       showToast('Dívida excluída.', 'info')
-      router.back()
+      router.push('/debts')
     } catch (err: any) {
       showToast(`Erro ao excluir: ${err.message}`, 'error')
     }
@@ -186,7 +164,6 @@ export default function DebtDetailPage() {
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete()
       await db.table('transactions').delete(paymentId)
 
       const updatedPayments = payments.filter(p => p.id !== paymentId)
@@ -196,9 +173,9 @@ export default function DebtDetailPage() {
       const totalPaidCents = Math.round(totalPaid * 100)
       const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
 
-      // 🔥 CORRIGIDO: Usando db.table().update()
-      await db.table('debts').update(id as string, { 
+      await db.table('debts').update(debtId, { 
         status: newStatus,
+        paid_amount: totalPaidCents / 100,
         updated_at: new Date().toISOString()
       })
 
@@ -206,7 +183,6 @@ export default function DebtDetailPage() {
       if (deletedPayment?.account_id) {
         const account = accounts.find(a => a.id === deletedPayment.account_id)
         if (account) {
-          // 🔥 CORRIGIDO: Usando db.table().update()
           await db.table('accounts').update(deletedPayment.account_id, {
             balance: Number(account.balance) - amount
           })
@@ -245,7 +221,6 @@ export default function DebtDetailPage() {
     const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
     const totalPaidCents = Math.round(totalPaid * 100)
     const payAmountCents = Math.round(payAmountNum * 100)
-
     const remainingCents = totalAmountCents - totalPaidCents
     const remaining = remainingCents / 100
 
@@ -256,12 +231,10 @@ export default function DebtDetailPage() {
     }
 
     setIsSubmitting(true)
-    setSaving(true)
 
     try {
       const targetAccountId = payAccountId || debt.account_id || null
 
-      // 🔥 CORRIGIDO: Usando db.table().add()
       await db.table('transactions').add({
         id: crypto.randomUUID(),
         user_id: user.id,
@@ -269,7 +242,7 @@ export default function DebtDetailPage() {
         amount: payAmountNum,
         description: payNote || `Pagamento de ${debt.person_name}`,
         account_id: targetAccountId,
-        debt_id: id,
+        debt_id: debtId,
         date: payDate,
         status: 'done',
         affects_balance: true,
@@ -283,7 +256,6 @@ export default function DebtDetailPage() {
       if (targetAccountId) {
         const account = accounts.find(a => a.id === targetAccountId)
         if (account) {
-          // 🔥 CORRIGIDO: Usando db.table().update()
           await db.table('accounts').update(targetAccountId, {
             balance: Number(account.balance) + payAmountNum
           })
@@ -293,8 +265,7 @@ export default function DebtDetailPage() {
       const newTotalPaidCents = totalPaidCents + payAmountCents
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
 
-      // 🔥 CORRIGIDO: Usando db.table().update()
-      await db.table('debts').update(id as string, {
+      await db.table('debts').update(debtId, {
         status: newStatus,
         paid_amount: newTotalPaidCents / 100,
         updated_at: new Date().toISOString()
@@ -314,7 +285,6 @@ export default function DebtDetailPage() {
       error()
       showToast(`❌ Erro: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
-      setSaving(false)
       setIsSubmitting(false)
     }
   }
@@ -330,30 +300,32 @@ export default function DebtDetailPage() {
     setShowWhatsAppModal(false)
   }
 
-  if (loading) return (
+  // ============================================================
+  // RENDERIZAÇÃO
+  // ============================================================
+  if (debtLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
       <Loader2 className="animate-spin text-teal-700" size={40} />
     </div>
   )
 
-  if (!debt) return (
+  if (!debt && !debtLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
       <p className="text-gray-500 dark:text-gray-400">Registro não encontrado.</p>
     </div>
   )
 
-  const IconComp = getDynamicIcon(debt.icon || 'user')
-
+  const IconComp = getDynamicIcon(debt?.icon || 'user')
   const totalPaid = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
-  const totalAmountCents = Math.round(Number(debt.total_amount) * 100)
+  const totalAmountCents = Math.round(Number(debt?.total_amount || 0) * 100)
   const totalPaidCents = Math.round(totalPaid * 100)
   const remainingCents = totalAmountCents - totalPaidCents
   const remaining = remainingCents / 100
 
   const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
-  const isPaid = debt.status === 'paid' || remainingCents <= 0
+  const isPaid = debt?.status === 'paid' || remainingCents <= 0
 
-  const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
+  const daysUntilDue = debt?.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
   const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
 
   const selectedAcc = accounts.find(a => a.id === payAccountId)
@@ -377,7 +349,7 @@ export default function DebtDetailPage() {
       )}
 
       <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
+        <button onClick={() => router.push('/debts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
         </button>
         <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{debt.person_name}</h2>
@@ -472,7 +444,7 @@ export default function DebtDetailPage() {
                 </div>
                 <button
                   onClick={() => handleDeletePayment(pay.id, Number(pay.amount))}
-                  className="p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="p-2 text-red-400 hover:text-red-600 transition-colors"
                   title="Excluir pagamento"
                 >
                   <Trash2 size={16} />
@@ -636,4 +608,12 @@ export default function DebtDetailPage() {
 
     </div>
   )
+}
+
+// 🛡️ A CAPA PROTETORA ANTI-SSR
+export default function DebtDetailPage() {
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
+  if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
+  return <DebtDetailContent />
 }
