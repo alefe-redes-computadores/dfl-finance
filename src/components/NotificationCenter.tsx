@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { db } from '@/lib/db' // 🔥 USANDO Dexie, não Supabase
+import { db } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
 
 interface Notification {
@@ -87,7 +87,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     if (!user) return
 
     try {
-      // 🔥 CORREÇÃO: Marcar como lida no Dexie
       for (const notifId of notifIds) {
         await db.table('notifications').update(notifId, { 
           is_read: true,
@@ -96,14 +95,20 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
         })
       }
 
-      // Atualiza a lista local
-      const updatedNotifs = localNotifs.map(n => 
-        notifIds.includes(n.id) ? { ...n, is_read: true, read: true } : n
-      )
-      setLocalNotifs(updatedNotifs)
+      const updatedNotifs = await db.table('notifications')
+        .where('user_id')
+        .equals(user.id)
+        .toArray()
 
-      // Notifica o componente pai
-      const unread = updatedNotifs.filter(n => !n.is_read && !n.read).length
+      const mappedNotifs = updatedNotifs.map((n: any) => ({
+        ...n,
+        isRead: n.is_read || n.isRead,
+        cardId: n.card_id || n.cardId,
+      }))
+
+      setLocalNotifs(mappedNotifs as Notification[])
+
+      const unread = mappedNotifs.filter((n: any) => !n.is_read && !n.read).length
       onReadChange?.(unread)
 
       showToast(`${notifIds.length} notificação(ões) marcada(s) como lida(s)!`, 'success')
