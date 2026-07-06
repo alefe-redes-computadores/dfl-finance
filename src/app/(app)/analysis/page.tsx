@@ -21,7 +21,7 @@ import {
   RefreshCw,
   Filter,
   Gauge,
-  Fire,
+  Flame,      // ← Fire → Flame
   Clock,
   Percent,
 } from 'lucide-react'
