@@ -80,11 +80,13 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const [localNotifs, setLocalNotifs] = useState<Notification[]>(notifications)
   const [processing, setProcessing] = useState(false)
 
+  // 🔥 Atualiza quando a prop muda
   useEffect(() => {
     setLocalNotifs(notifications)
   }, [notifications])
 
-  const refreshNotifications = async () => {
+  // 🔥 Força recarga completa e notifica o pai
+  const refreshAndNotify = async () => {
     if (!user) return
     
     try {
@@ -108,6 +110,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     }
   }
 
+  // 🔥 Marca como lida E FORÇA RECARGA
   const markAsRead = async (notifIds: string[]) => {
     if (!user || processing) return
     setProcessing(true)
@@ -121,9 +124,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
         })
       }
 
-      // 🔥 FORÇA RECARGA COMPLETA
-      await refreshNotifications()
-      
+      await refreshAndNotify()
       showToast(`${notifIds.length} notificação(ões) marcada(s) como lida(s)!`, 'success')
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
@@ -139,11 +140,16 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     await markAsRead(allIds)
   }
 
+  // 🔥 Ao fechar, força recarga
+  const handleClose = async () => {
+    await refreshAndNotify()
+    onClose()
+  }
+
   if (!isOpen) return null
 
   const grouped = groupNotifications(localNotifs)
   const unreadCount = localNotifs.filter(n => !n.is_read && !n.read).length
-  
   const displayedGroups = grouped.slice(0, 5)
 
   const handleClick = async (group: NotificationGroup) => {
@@ -160,8 +166,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
       else if (notif.debt_id) router.push(`/debts/${notif.debt_id}`)
       else if (notif.sub_id) router.push('/subscriptions')
     }
-    
-    onClose()
   }
 
   const getIcon = (type: string) => {
@@ -190,11 +194,10 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm transition-opacity" onClick={handleClose} />
       <div className="fixed inset-x-0 top-0 z-[110] mx-auto max-w-md pt-14 px-4 pointer-events-none">
         <div className="bg-white dark:bg-slate-800 rounded-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300 pointer-events-auto border border-gray-100 dark:border-slate-700">
           
-          {/* Header */}
           <div className="flex items-center justify-between p-6 pb-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
@@ -218,13 +221,12 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                   <Check size={18} />
                 </button>
               )}
-              <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full transition-colors">
+              <button onClick={handleClose} className="w-10 h-10 flex items-center justify-center text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full transition-colors">
                 <X size={18} />
               </button>
             </div>
           </div>
 
-          {/* Indicadores Rápidos */}
           <div className="flex px-6 pb-4 gap-3">
             <div className="flex-1 bg-red-50 dark:bg-red-500/10 rounded-2xl p-3 flex flex-col items-center justify-center">
               <span className="text-[16px] font-bold text-red-600 dark:text-red-400">{criticalCount}</span>
@@ -285,12 +287,11 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
             )}
           </div>
           
-          {/* Rodapé Ver Tudo */}
           <div className="p-4 pt-2">
             <button
               onClick={() => {
                 router.push('/notifications')
-                onClose()
+                handleClose()
               }}
               className="w-full flex items-center justify-center gap-2 p-4 text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/40 rounded-[20px] transition-colors font-bold text-[14px]"
             >
