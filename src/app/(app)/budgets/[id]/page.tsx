@@ -17,6 +17,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
@@ -105,19 +106,16 @@ export default function BudgetDetailPage() {
   const [projection, setProjection] = useState('')
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { id: id as string },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any, // 🔥 ADICIONADO as any
     filters: { context },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
   })
 
   // ============================================================
