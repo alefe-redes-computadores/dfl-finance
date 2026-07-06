@@ -1,6 +1,7 @@
 'use client'
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import React from 'react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface CategoryData {
   name: string
@@ -16,7 +17,7 @@ interface CategoryPieProps {
 
 const COLORS = ['#14b8a6', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#10b981', '#6366f1']
 
-export default function CategoryPie({ pfData, pjData, title = 'Distribuição de Gastos' }: CategoryPieProps) {
+function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gastos' }: CategoryPieProps) {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -123,3 +124,6 @@ export default function CategoryPie({ pfData, pjData, title = 'Distribuição de
     </div>
   )
 }
+
+// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
+export default React.memo(CategoryPieComponent)
