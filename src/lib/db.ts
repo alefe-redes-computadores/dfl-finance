@@ -213,10 +213,32 @@ export interface LocalNotification {
   sync_status: 'synced' | 'pending' | 'failed'
 }
 
+// 🆕 NOVAS TABELAS PARA O CHAT
+export interface LocalChatMessage {
+  id: string
+  user_id: string
+  session_id: string
+  role: 'user' | 'assistant'
+  content: string
+  type?: string
+  created_at: string
+  sync_status: 'synced' | 'pending' | 'failed'
+}
+
+export interface LocalChatSession {
+  id: string
+  user_id: string
+  title: string
+  status: 'active' | 'archived'
+  created_at: string
+  updated_at: string
+  sync_status: 'synced' | 'pending' | 'failed'
+}
+
 export interface LocalSyncQueue {
   id: string
   user_id: string
-  table: 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications'
+  table: 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications' | 'chat_history' | 'chat_sessions'
   operation: 'create' | 'update' | 'delete'
   record_id: string
   data: any
@@ -226,7 +248,7 @@ export interface LocalSyncQueue {
 }
 
 // ============================================================
-// BANCO DE DADOS ATUALIZADO
+// BANCO DE DADOS ATUALIZADO (v3)
 // ============================================================
 class DFLDatabase extends Dexie {
   transactions!: Table<LocalTransaction, string>
@@ -243,12 +265,14 @@ class DFLDatabase extends Dexie {
   credit_cards!: Table<LocalCreditCard, string>
   credit_invoices!: Table<LocalCreditInvoice, string>
   notifications!: Table<LocalNotification, string>
+  chat_history!: Table<LocalChatMessage, string>
+  chat_sessions!: Table<LocalChatSession, string>
   syncQueue!: Table<LocalSyncQueue, string>
 
   constructor() {
     super('DFLFinanceDB')
 
-    this.version(2).stores({
+    this.version(3).stores({
       transactions: 'id, user_id, context, date, status, sync_status, account_id, category_id',
       accounts: 'id, user_id, context, sync_status',
       categories: 'id, user_id, context, type, sync_status',
@@ -263,6 +287,8 @@ class DFLDatabase extends Dexie {
       credit_cards: 'id, user_id, context, is_archived, sync_status',
       credit_invoices: 'id, user_id, credit_card_id, status, sync_status',
       notifications: 'id, user_id, read, sync_status',
+      chat_history: 'id, user_id, session_id, created_at, sync_status',
+      chat_sessions: 'id, user_id, status, sync_status',
       syncQueue: 'id, user_id, table, operation, record_id, created_at',
     })
   }
@@ -288,6 +314,8 @@ export async function clearAllLocalData() {
   await db.credit_cards.clear()
   await db.credit_invoices.clear()
   await db.notifications.clear()
+  await db.chat_history.clear()
+  await db.chat_sessions.clear()
   await db.syncQueue.clear()
 }
 
