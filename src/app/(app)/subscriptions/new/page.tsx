@@ -14,6 +14,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 const CATEGORIES = [
@@ -45,6 +46,7 @@ export default function NewSubscriptionPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { context } = useContext_()
+  const { user } = useAuth() // 🔥 ADICIONADO
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -67,9 +69,7 @@ export default function NewSubscriptionPage() {
 
   const subscriptionData = localSubscriptions?.find((s: any) => s.id === editId) as any
 
-  const { create, update, remove } = useLocalData({
-    table: 'subscriptions' as any,
-  })
+  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'subscriptions' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -124,13 +124,23 @@ export default function NewSubscriptionPage() {
         notes: notes.trim() || null,
         status,
         context,
+        updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        await update(editId, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('subscriptions').update(editId, payload)
         showToast("Assinatura atualizada com sucesso!", "success")
       } else {
-        await create(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('subscriptions').add({
+          id: crypto.randomUUID(),
+          user_id: user!.id,
+          ...payload,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
         showToast("Assinatura criada com sucesso!", "success")
       }
 
@@ -148,7 +158,8 @@ export default function NewSubscriptionPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir esta assinatura?")) return
     try {
-      await remove(editId)
+      // 🔥 CORRIGIDO: Usando db.table().delete()
+      await db.table('subscriptions').delete(editId)
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       router.back()
