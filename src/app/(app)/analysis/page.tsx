@@ -1,6 +1,5 @@
 'use client'
 
-//Importações
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +20,10 @@ import {
   FileText,
   RefreshCw,
   Filter,
+  Gauge,
+  Fire,
+  Clock,
+  Percent,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -42,11 +45,16 @@ import {
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import DetailedProjectionChart from '@/components/DetailedProjectionChart'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useDashboardMetrics } from '@/hooks/useDashboardMetrics'
+import KPICard from '@/components/dashboard/KPICard'
+import ComparisonChart from '@/components/dashboard/ComparisonChart'
+import ProjectionChart from '@/components/dashboard/ProjectionChart'
+import CategoryPie from '@/components/dashboard/CategoryPie'
 
 const AnalysisSkeleton = () => (
   <div className="space-y-6 animate-pulse">
-    <div className="grid grid-cols-3 gap-3">
-      {[1, 2, 3].map((i) => (
+    <div className="grid grid-cols-2 gap-3">
+      {[1, 2, 3, 4].map((i) => (
         <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700" />
@@ -92,7 +100,7 @@ function AnalysisContent() {
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [activeTab, setActiveTab] = useState<'month' | 'new'>('month')
+  const [activeTab, setActiveTab] = useState<'month' | 'new' | 'dashboard'>('dashboard')
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [newGastos, setNewGastos] = useState<any[]>([])
@@ -109,10 +117,24 @@ function AnalysisContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  // 🔑 CORRIGIDO: removidos orderBy e realtime (não existem mais na API do hook)
-  const { data: localTransactions } = useLocalData({ table: 'transactions', filters: { context } })
-  const { data: localCategories } = useLocalData({ table: 'categories', filters: { context } })
-  const { data: localAccounts } = useLocalData({ table: 'accounts', filters: { context } })
+  // 🔥 DADOS LOCAIS
+  const { data: localTransactions, loading: txLoading } = useLocalData({ 
+    table: 'transactions' as any, 
+    filters: { context },
+    orderBy: 'date',
+    orderDir: 'desc',
+  })
+  const { data: localCategories, loading: catLoading } = useLocalData({ 
+    table: 'categories' as any, 
+    filters: { context }
+  })
+  const { data: localAccounts, loading: accLoading } = useLocalData({ 
+    table: 'accounts' as any, 
+    filters: { context }
+  })
+
+  // 🔥 DASHBOARD METRICS (NOVO!)
+  const { metrics, loading: metricsLoading, reload: reloadMetrics } = useDashboardMetrics(currentDate)
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -249,7 +271,7 @@ function AnalysisContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
+      Promise.all([loadData(), reloadMetrics()]).finally(() => setRefreshing(false))
     }
   }
 
@@ -280,6 +302,90 @@ function AnalysisContent() {
   const handleExportPDF = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-pdf?userId=${user.id}&context=${context}&range=${range}`, '_blank') }
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
+
+  // 🔥 RENDERIZA O DASHBOARD
+  const renderDashboard = () => {
+    if (metricsLoading || !metrics) {
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 animate-pulse">
+                <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
+                <div className="h-6 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto" />
+              </div>
+            ))}
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 animate-pulse">
+            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+            <div className="h-[200px] bg-gray-100 dark:bg-slate-700 rounded-xl" />
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4 animate-in fade-in duration-300">
+        {/* KPIs */}
+        <div className="grid grid-cols-2 gap-3">
+          <KPICard
+            title="Burn Rate"
+            value={metrics.kpis.burnRate}
+            icon="fire"
+            prefix="R$ "
+            color="red"
+          />
+          <KPICard
+            title="Runway"
+            value={metrics.kpis.runway}
+            icon="gauge"
+            suffix=" meses"
+            color="teal"
+          />
+          <KPICard
+            title="Taxa de Economia"
+            value={metrics.kpis.savingsRate}
+            icon="percent"
+            suffix="%"
+            color="emerald"
+          />
+          <KPICard
+            title="Gasto Médio Diário"
+            value={metrics.kpis.averageDailyExpense}
+            icon="clock"
+            prefix="R$ "
+            color="orange"
+          />
+        </div>
+
+        {/* Cards de Consolidação */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 text-white shadow-lg">
+            <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Saldo Total</p>
+            <p className="text-2xl font-black">{formatCurrency(metrics.consolidated.totalBalance)}</p>
+          </div>
+          <div className={`rounded-2xl p-4 shadow-lg border ${metrics.consolidated.monthlyEvolutionPercent >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'}`}>
+            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Evolução</p>
+            <p className={`text-2xl font-black ${metrics.consolidated.monthlyEvolutionPercent >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {metrics.consolidated.monthlyEvolutionPercent >= 0 ? '+' : ''}{metrics.consolidated.monthlyEvolutionPercent.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+
+        {/* Gráfico Comparativo PF vs PJ */}
+        <ComparisonChart data={metrics.comparisonChart} />
+
+        {/* Gráfico de Projeção 12 Meses */}
+        <ProjectionChart data={metrics.projections} />
+
+        {/* Categorias PF vs PJ */}
+        <CategoryPie
+          pfData={metrics.categoryPie.pf}
+          pjData={metrics.categoryPie.pj}
+        />
+      </div>
+    )
+  }
 
   if (loading) return <AnalysisSkeleton />
 
@@ -390,7 +496,18 @@ function AnalysisContent() {
 
       <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Análise</h2>
 
+      {/* 🔥 NOVAS ABAS: Dashboard, No mês, Novos gastos */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
+            activeTab === 'dashboard'
+              ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]'
+              : 'text-gray-400 dark:text-gray-500'
+          }`}
+        >
+          Dashboard
+        </button>
         <button
           onClick={() => setActiveTab('month')}
           className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
@@ -413,7 +530,9 @@ function AnalysisContent() {
         </button>
       </div>
 
-      {activeTab === 'new' ? (
+      {activeTab === 'dashboard' && renderDashboard()}
+
+      {activeTab === 'new' && (
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-50 dark:border-slate-700">
@@ -524,8 +643,11 @@ function AnalysisContent() {
             )}
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'month' && (
         <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Cards de resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
@@ -585,6 +707,7 @@ function AnalysisContent() {
             </div>
           </div>
 
+          {/* Distribuição de Gastos */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
               Distribuição de Gastos
@@ -626,6 +749,7 @@ function AnalysisContent() {
             )}
           </div>
 
+          {/* Gastos por Categoria */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
               Gastos por Categoria
@@ -672,6 +796,7 @@ function AnalysisContent() {
             )}
           </div>
 
+          {/* Fluxo Mensal */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
               Fluxo Mensal
@@ -694,6 +819,7 @@ function AnalysisContent() {
             )}
           </div>
 
+          {/* Patrimônio */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Patrimônio</h3>
@@ -807,8 +933,6 @@ function AnalysisContent() {
     </div>
   )
 }
-
-//Forçar Deoloy
 
 export default function AnalysisPage() {
   const [isClient, setIsClient] = useState(false)
