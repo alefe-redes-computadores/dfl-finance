@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -22,14 +22,17 @@ export function useLocalData<T>({
   orderDir?: 'asc' | 'desc'
 }) {
   const { user } = useAuth()
-  const [data, setData] = useState<T[]>([])
+  
+  // 🔥 A MÁGICA DO FLICKER: Começa como null em vez de array vazio
+  const [data, setData] = useState<T[] | null>(null) 
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  
   const lock = useRef(false)
   const filtersKey = JSON.stringify(filters)
 
   // ============================================================
-  // 1. REATIVIDADE LOCAL COM liveQuery
+  // 🔥 1. REATIVIDADE LOCAL COM liveQuery
   // ============================================================
   useEffect(() => {
     if (!user?.id) {
@@ -41,6 +44,7 @@ export function useLocalData<T>({
       const collection = db.table(table)
       let q = collection.where('user_id').equals(user.id)
 
+      // Aplica filtros
       Object.entries(filters).forEach(([k, v]) => {
         if (v !== undefined && v !== null && v !== '') {
           q = q.and((i: any) => i[k] === v)
@@ -49,6 +53,7 @@ export function useLocalData<T>({
 
       let res = await q.toArray()
 
+      // Ordenação em memória
       if (orderBy && res.length > 0) {
         res = res.sort((a: any, b: any) => {
           const valA = a[orderBy] || ''
@@ -79,11 +84,12 @@ export function useLocalData<T>({
 
     const subscription = observable.subscribe({
       next: (result: any) => {
-        setData(result)
-        setLoading(false)
+        setData(result || []) // Alimenta os dados reais
+        setLoading(false) // Libera a tela
       },
       error: (err) => {
         console.error(`Erro no liveQuery da tabela ${table}:`, err)
+        setData([]) // Em caso de erro, devolve vazio para não quebrar a tela
         setLoading(false)
       }
     })
@@ -92,7 +98,7 @@ export function useLocalData<T>({
   }, [user?.id, table, filtersKey, limit, orderBy, orderDir])
 
   // ============================================================
-  // 2. SINCRONIZAÇÃO COM A NUVEM
+  // 🔥 2. SINCRONIZAÇÃO COM A NUVEM
   // ============================================================
   useEffect(() => {
     if (!user?.id || lock.current) return
@@ -130,7 +136,7 @@ export function useLocalData<T>({
   }, [user?.id, table])
 
   // ============================================================
-  // 🔥 3. RELOAD (AGORA RETORNA PROMISE!)
+  // 🔥 3. FUNÇÃO RELOAD
   // ============================================================
   const reload = useCallback(async () => {
     setLoading(true)
@@ -138,5 +144,13 @@ export function useLocalData<T>({
     setLoading(false)
   }, [])
 
-  return { data, loading, syncing, reload }
+  // 🔥 O PULO DO GATO:
+  // Se data for null, significa que o liveQuery ainda não rodou a primeira vez.
+  // Então mantemos o loading como true e devolvemos um array vazio preventivo para não quebrar os .map() das telas.
+  return { 
+    data: data || [], 
+    loading: loading || data === null, 
+    syncing, 
+    reload 
+  }
 }
