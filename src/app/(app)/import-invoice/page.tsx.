@@ -21,6 +21,7 @@ import BankLogo from '@/components/BankLogo'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 interface ExtractedTransaction {
   date: string
@@ -99,35 +100,31 @@ export default function ImportInvoicePage() {
   const [isRefund, setIsRefund] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removido realtime: false
   // ============================================================
   const { data: localCreditCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { context },
-    realtime: false,
   })
 
   const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
-    realtime: false,
   })
 
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
-    realtime: false,
   })
 
   const { data: localTags, loading: tagsLoading, reload: reloadTags } = useLocalData({
     table: 'tags' as any,
     filters: { context },
-    realtime: false,
   })
 
-  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
-  const { create: createInvoice, update: updateInvoice } = useLocalData({ table: 'credit_invoices' as any })
-  const { create: createNotification } = useLocalData({ table: 'notifications' as any })
+  // 🔥 REMOVIDOS: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
+  // 🔥 REMOVIDOS: const { create: createInvoice, update: updateInvoice } = useLocalData({ table: 'credit_invoices' as any })
+  // 🔥 REMOVIDOS: const { create: createNotification } = useLocalData({ table: 'notifications' as any })
 
   useEffect(() => {
     if (!user?.id) return
@@ -191,6 +188,9 @@ export default function ImportInvoicePage() {
     setTransactions(prev => prev.filter((_, i) => i !== index))
   }
 
+  // ============================================================
+  // 🔥 HANDLE IMPORT CORRIGIDO (usando db.table())
+  // ============================================================
   const handleImport = async () => {
     if (!user?.id || transactions.length === 0) return
     setImporting(true)
@@ -201,7 +201,8 @@ export default function ImportInvoicePage() {
       if (creditCardId) {
         const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
 
-        const existingInvoice = await supabase
+        // Busca fatura aberta existente no Supabase (para manter compatibilidade)
+        const { data: existingInvoice } = await supabase
           .from('credit_invoices')
           .select('id')
           .eq('user_id', user.id)
@@ -209,18 +210,20 @@ export default function ImportInvoicePage() {
           .eq('status', 'open')
           .single()
 
-        if (existingInvoice.data) {
-          invoiceId = existingInvoice.data.id
+        if (existingInvoice) {
+          invoiceId = existingInvoice.id
 
-          const currentInvoice = await supabase
+          // Busca total atual
+          const { data: currentInvoice } = await supabase
             .from('credit_invoices')
             .select('total_amount')
             .eq('id', invoiceId)
             .single()
 
-          const newTotal = (Number(currentInvoice.data?.total_amount) || 0) + totalAmount
+          const newTotal = (Number(currentInvoice?.total_amount) || 0) + totalAmount
 
-          await updateInvoice(invoiceId, {
+          // 🔥 CORRIGIDO: Usando db.table().update()
+          await db.table('credit_invoices').update(invoiceId, {
             total_amount: newTotal,
             updated_at: new Date().toISOString(),
           })
@@ -244,7 +247,11 @@ export default function ImportInvoicePage() {
             dueDate.setMonth(dueDate.getMonth() + 1)
           }
 
-          const result = await createInvoice({
+          const newInvoiceId = crypto.randomUUID()
+
+          // 🔥 CORRIGIDO: Usando db.table().add()
+          await db.table('credit_invoices').add({
+            id: newInvoiceId,
             user_id: user.id,
             credit_card_id: creditCardId,
             closing_date: closingDate.toISOString().split('T')[0],
@@ -256,12 +263,15 @@ export default function ImportInvoicePage() {
             context,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
           })
 
-          invoiceId = result?.id || null
+          invoiceId = newInvoiceId
         }
       }
 
+      // Prepara payload das transações
       const payload = transactions.map((tx, index) => {
         const catId = applyCategoryToAll ? categoryId : null
         const accId = applyAccountToAll ? accountId : null
@@ -270,6 +280,7 @@ export default function ImportInvoicePage() {
         if (isRefund) finalNotes = `[Devolução/Estorno] ${finalNotes}`.trim()
 
         return {
+          id: crypto.randomUUID(),
           user_id: user.id,
           type: 'expense',
           amount: tx.amount,
@@ -288,15 +299,19 @@ export default function ImportInvoicePage() {
           affects_balance: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
       })
 
+      // 🔥 CORRIGIDO: Usando db.table().add()
       for (const tx of payload) {
-        await createTransaction(tx)
+        await db.table('transactions').add(tx)
       }
 
-      await createNotification({
-        id: `import-${Date.now()}`,
+      // 🔥 CORRIGIDO: Usando db.table().add()
+      await db.table('notifications').add({
+        id: crypto.randomUUID(),
         user_id: user.id,
         type: 'import_done',
         title: 'Fatura importada',
@@ -308,6 +323,8 @@ export default function ImportInvoicePage() {
         },
         read: false,
         created_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
 
       showToast(`${transactions.length} transações importadas!`, 'success')
