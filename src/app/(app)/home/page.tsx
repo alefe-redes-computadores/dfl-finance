@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
