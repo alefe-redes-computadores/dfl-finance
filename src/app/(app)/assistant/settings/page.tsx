@@ -14,6 +14,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 // ============================================================
@@ -61,16 +62,15 @@ export default function AssistantSettingsPage() {
   const [saving, setSaving] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 CORRIGIDO: Removido realtime: true
   // ============================================================
   const { data: localSettings, loading: settingsLoading, reload: reloadSettings } = useLocalData({
     table: 'user_settings' as any,
     filters: { user_id: user?.id },
-    realtime: true,
   })
 
-  const { update: updateSettings } = useLocalData({ table: 'user_settings' as any })
-  const { create: createSettings } = useLocalData({ table: 'user_settings' as any })
+  // 🔥 REMOVIDOS: const { update: updateSettings } = useLocalData({ table: 'user_settings' as any })
+  // 🔥 REMOVIDOS: const { create: createSettings } = useLocalData({ table: 'user_settings' as any })
 
   // ============================================================
   // ESTADOS LOCAIS
@@ -174,6 +174,9 @@ export default function AssistantSettingsPage() {
     }))
   }
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO
+  // ============================================================
   const handleSave = async () => {
     if (!user?.id) return
     setSaving(true)
@@ -186,9 +189,17 @@ export default function AssistantSettingsPage() {
       }
 
       if (localSettings && localSettings.length > 0) {
-        await updateSettings((localSettings[0] as any).id, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('user_settings').update((localSettings[0] as any).id, payload)
       } else {
-        await createSettings(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('user_settings').add({
+          id: crypto.randomUUID(),
+          ...payload,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
       }
 
       showToast('Configurações salvas!', 'success')
