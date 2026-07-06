@@ -17,7 +17,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
@@ -27,7 +27,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
   laptop: Laptop, trending: TrendingUpIcon, shopping: ShoppingCart,
   receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
 }
-
 
 // ============================================================
 // SKELETON LOADER
@@ -106,7 +105,7 @@ export default function BudgetDetailPage() {
   const [projection, setProjection] = useState('')
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime do useLocalData
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
@@ -114,8 +113,10 @@ export default function BudgetDetailPage() {
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any, // 🔥 ADICIONADO as any
+    table: 'transactions' as any,
     filters: { context },
+    orderBy: 'date',
+    orderDir: 'desc',
   })
 
   // ============================================================
@@ -272,6 +273,7 @@ export default function BudgetDetailPage() {
       )}
 
       <div className="flex items-center justify-between mb-6">
+        {/* 🔥 CORRIGIDO: router.back() → router.push('/budgets') */}
         <button onClick={() => router.push('/budgets')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
           <ChevronLeft size={24} />
         </button>
