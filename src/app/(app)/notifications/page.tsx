@@ -12,7 +12,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
 // ============================================================
 // SKELETON LOADER
@@ -46,14 +46,12 @@ export default function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  // 🔥 BUSCA LOCAL
   // ============================================================
   const { data: localNotifications, loading: notifLoading, reload: reloadNotifications } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id },
   })
-
-  // 🔥 REMOVIDOS: const { create: createNotification, update: updateNotification, remove: removeNotification } = useLocalData({ table: 'notifications' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -120,25 +118,40 @@ export default function NotificationsPage() {
   }, [user?.id])
 
   // ============================================================
-  // PROCESSAR DADOS
+  // 🔥 PROCESSAR DADOS — USANDO is_read (padrão unificado)
   // ============================================================
   useEffect(() => {
     if (localNotifications) {
-      setNotifications(localNotifications)
-      const unread = localNotifications.filter((n: any) => !n.read).length
+      // 🔥 Mapeia para usar is_read em vez de read
+      const mapped = localNotifications.map((n: any) => ({
+        ...n,
+        is_read: n.is_read !== undefined ? n.is_read : n.read || false,
+        read: n.read !== undefined ? n.read : n.is_read || false,
+      }))
+      setNotifications(mapped)
+      const unread = mapped.filter((n: any) => !n.is_read && !n.read).length
       setUnreadCount(unread)
     }
   }, [localNotifications])
 
   // ============================================================
-  // 🔥 HANDLERS CORRIGIDOS
+  // 🔥 HANDLERS — USANDO is_read
   // ============================================================
   const markAsRead = async (id: string) => {
     try {
       await db.table('notifications').update(id, { 
+        is_read: true,
         read: true,
         updated_at: new Date().toISOString()
       })
+      
+      // Atualiza localmente
+      const updated = notifications.map((n: any) => 
+        n.id === id ? { ...n, is_read: true, read: true } : n
+      )
+      setNotifications(updated)
+      setUnreadCount(updated.filter((n: any) => !n.is_read && !n.read).length)
+      
       showToast('Notificação marcada como lida.', 'info')
       loadNotifications()
     } catch (err: any) {
@@ -150,13 +163,20 @@ export default function NotificationsPage() {
     if (!user?.id || notifications.length === 0) return
 
     try {
-      const unread = notifications.filter((n: any) => !n.read)
+      const unread = notifications.filter((n: any) => !n.is_read && !n.read)
       for (const notif of unread) {
         await db.table('notifications').update(notif.id, { 
+          is_read: true,
           read: true,
           updated_at: new Date().toISOString()
         })
       }
+      
+      // Atualiza localmente
+      const updated = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
+      setNotifications(updated)
+      setUnreadCount(0)
+      
       showToast('Todas as notificações marcadas como lidas!', 'success')
       loadNotifications()
     } catch (err: any) {
@@ -193,7 +213,7 @@ export default function NotificationsPage() {
   }
 
   const filteredNotifications = notifications.filter((n: any) => {
-    if (filter === 'unread') return !n.read
+    if (filter === 'unread') return !n.is_read && !n.read
     if (filter === 'critical') return n.severity === 'critical'
     return true
   })
@@ -267,7 +287,7 @@ export default function NotificationsPage() {
       ) : (
         <div className="space-y-3 animate-in fade-in duration-300">
           {filteredNotifications.map((notif: any) => {
-            const isUnread = !notif.read
+            const isUnread = !notif.is_read && !notif.read
             return (
               <div
                 key={notif.id}
