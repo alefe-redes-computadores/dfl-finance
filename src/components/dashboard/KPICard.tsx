@@ -1,0 +1,75 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { TrendingUp, TrendingDown, Wallet, Clock, Fire, Gauge, Percent, DollarSign } from 'lucide-react'
+
+interface KPICardProps {
+  title: string
+  value: number
+  icon: 'trending-up' | 'trending-down' | 'wallet' | 'clock' | 'fire' | 'gauge' | 'percent' | 'dollar'
+  subtitle?: string
+  suffix?: string
+  prefix?: string
+  color?: 'emerald' | 'red' | 'blue' | 'purple' | 'orange' | 'teal'
+  formatter?: (val: number) => string
+}
+
+const iconMap = {
+  'trending-up': TrendingUp,
+  'trending-down': TrendingDown,
+  'wallet': Wallet,
+  'clock': Clock,
+  'fire': Fire,
+  'gauge': Gauge,
+  'percent': Percent,
+  'dollar': DollarSign,
+}
+
+const colorMap = {
+  emerald: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
+  red: 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400',
+  blue: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+  purple: 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+  orange: 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+  teal: 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
+}
+
+export default function KPICard({ title, value, icon, subtitle, suffix = '', prefix = '', color = 'teal', formatter }: KPICardProps) {
+  const [displayValue, setDisplayValue] = useState(0)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDisplayValue(value)
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [value])
+
+  const Icon = iconMap[icon] || Wallet
+  const colorClass = colorMap[color] || colorMap.teal
+
+  const formatValue = (val: number) => {
+    if (formatter) return formatter(val)
+    if (val === Infinity) return '∞'
+    if (Number.isInteger(val)) return val.toLocaleString('pt-BR')
+    return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  const formattedValue = formatValue(displayValue)
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 transition-all hover:shadow-md">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{title}</p>
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${colorClass}`}>
+          <Icon size={16} />
+        </div>
+      </div>
+      <p className="text-2xl font-black text-gray-800 dark:text-gray-100 tracking-tight">
+        {prefix}{formattedValue}{suffix}
+      </p>
+      {subtitle && (
+        <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-1">{subtitle}</p>
+      )}
+    </div>
+  )
+}
