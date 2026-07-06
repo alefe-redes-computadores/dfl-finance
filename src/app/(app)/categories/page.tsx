@@ -10,6 +10,7 @@ import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -46,18 +47,14 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removido realtime
   // ============================================================
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext, type: tab },
-    realtime: true,
   })
 
-  // Hooks CRUD no topo
-  const { create: createCategory, update: updateCategory, remove: removeCategory } = useLocalData({
-    table: 'categories' as any,
-  })
+  // 🔥 REMOVIDOS: const { create: createCategory, update: updateCategory, remove: removeCategory } = useLocalData({ table: 'categories' as any })
 
   // ============================================================
   // INICIALIZAÇÃO
@@ -87,10 +84,17 @@ export default function CategoriesPage() {
 
     try {
       for (const cat of missing) {
-        await createCategory({
-          ...cat,
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('categories').add({
+          id: crypto.randomUUID(),
           user_id: user.id,
+          ...cat,
           is_default: true,
+          parent_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         })
       }
       await reloadCategories()
@@ -151,28 +155,40 @@ export default function CategoriesPage() {
     setShowForm(true)
   }
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO
+  // ============================================================
   async function handleSave() {
     if (!name) return
     setSaving(true)
 
     const payload = {
       name,
-      icon,
+      icon: icon.toLowerCase(),
       color,
       type: tab,
       context: effectiveContext,
       parent_id: parentId,
-      user_id: user!.id,
       is_default: false,
       sort_order: 999,
+      updated_at: new Date().toISOString(),
     }
 
     try {
       if (editingCategory) {
-        await updateCategory(editingCategory.id, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('categories').update(editingCategory.id, payload)
         showToast('Categoria atualizada!', 'success')
       } else {
-        await createCategory(payload)
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('categories').add({
+          id: crypto.randomUUID(),
+          user_id: user!.id,
+          ...payload,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
         showToast('Categoria criada!', 'success')
       }
 
@@ -189,12 +205,15 @@ export default function CategoriesPage() {
     }
   }
 
+  // ============================================================
+  // 🔥 HANDLE DELETE CORRIGIDO
+  // ============================================================
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria?')) return
     
     try {
-      await removeCategory(id)
+      await db.table('categories').delete(id)
       showToast('Categoria excluída!', 'info')
       await loadCategories()
     } catch (err: any) {
