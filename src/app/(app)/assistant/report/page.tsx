@@ -17,6 +17,8 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
 
+
+//TESTE
 // ============================================================
 // SKELETON LOADER
 // ============================================================
