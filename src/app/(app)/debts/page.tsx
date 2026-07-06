@@ -61,11 +61,15 @@ function DebtsContent() {
   const { data: localDebts, reload: reloadDebts } = useLocalData({
     table: 'debts' as any,
     filters: { context },
+    orderBy: 'created_at',
+    orderDir: 'desc',
   })
 
   const { data: localTransactions, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, type: 'income' },
+    orderBy: 'date',
+    orderDir: 'desc',
   })
 
   // JOIN em memória
@@ -77,16 +81,35 @@ function DebtsContent() {
         paymentsByDebt[tx.debt_id] = (paymentsByDebt[tx.debt_id] || 0) + Number(tx.amount || 0)
       }
     })
+    
+    // 🔥 CORREÇÃO: Filtro por cálculo real (paid_amount >= total_amount) em vez de status
     let filtered = localDebts
     if (filter === 'active') {
-      filtered = localDebts.filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+      filtered = localDebts.filter((d: any) => {
+        const total = Number(d.total_amount) || 0
+        const paid = paymentsByDebt[d.id] || 0
+        const isEffectivelyPaid = total > 0 && paid >= total
+        return !isEffectivelyPaid && d.status !== 'cancelled'
+      })
     } else {
-      filtered = localDebts.filter((d: any) => d.status === 'paid')
+      filtered = localDebts.filter((d: any) => {
+        const total = Number(d.total_amount) || 0
+        const paid = paymentsByDebt[d.id] || 0
+        const isEffectivelyPaid = total > 0 && paid >= total
+        return isEffectivelyPaid || d.status === 'paid'
+      })
     }
+    
     return filtered.map((debt: any) => {
       const paid = paymentsByDebt[debt.id] || 0
       const total = Number(debt.total_amount) || 0
-      return { ...debt, paid_amount: paid, percent: Math.min(total > 0 ? (paid / total) * 100 : 0, 100) }
+      return { 
+        ...debt, 
+        paid_amount: paid, 
+        percent: Math.min(total > 0 ? (paid / total) * 100 : 0, 100),
+        // 🔥 CORREÇÃO: Força o status a refletir a realidade
+        status: total > 0 && paid >= total ? 'paid' : debt.status
+      }
     })
   }, [localDebts, localTransactions, filter])
 
@@ -110,12 +133,16 @@ function DebtsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, context, filter])
 
-  // Consolida dados quando mudam
+  // 🔥 CORREÇÃO: Consolida dados quando mudam
   useEffect(() => {
     const consolidated = consolidateDebts()
     setDebts(consolidated)
     const total = consolidated
-      .filter((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+      .filter((d: any) => {
+        const totalVal = Number(d.total_amount) || 0
+        const paid = d.paid_amount || 0
+        return totalVal > 0 && paid < totalVal
+      })
       .reduce((sum: number, d: any) => sum + (Number(d.total_amount) - (d.paid_amount || 0)), 0)
     setTotalToReceiveState(total)
   }, [localDebts, localTransactions, filter, consolidateDebts])
@@ -224,6 +251,7 @@ function DebtsContent() {
         <div className="space-y-3 animate-in fade-in duration-300">
           {debts.map((debt: any) => {
             const IconComp = getDynamicIcon(debt.icon || 'user')
+            // 🔥 CORREÇÃO: Usa o status já corrigido pelo consolidateDebts
             const isPaid = debt.status === 'paid'
             const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
             const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
