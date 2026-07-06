@@ -19,7 +19,7 @@ export default function DebtAlert({ personName, amount, dueDate, debtId }: DebtA
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // 🔥 SÓ EXIBE SE O VALOR FOR MAIOR QUE ZERO (dívida efetivamente pendente)
+  // 🔥 SÓ EXIBE SE O VALOR FOR MAIOR QUE ZERO
   if (amount <= 0) return null
 
   return (
