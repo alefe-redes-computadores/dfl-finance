@@ -3,7 +3,6 @@ import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
-import Script from 'next/script'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -41,13 +40,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="DFL Finance" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#0f172a" />
-        <Script 
-          src="https://cdn.jsdelivr.net/npm/eruda" 
-          strategy="beforeInteractive" 
-        />
-        <Script id="eruda-init" strategy="afterInteractive">
-          {`if (typeof eruda !== "undefined") eruda.init();`}
-        </Script>
       </head>
       <body className="antialiased bg-gray-50 dark:bg-slate-900">
         <ThemeProvider>
