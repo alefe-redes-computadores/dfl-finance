@@ -24,6 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 export default function SubscriptionsPage() {
@@ -50,15 +51,13 @@ export default function SubscriptionsPage() {
     filters: { context },
   })
 
-  // Remove assinatura
-  const { remove } = useLocalData({
-    table: 'subscriptions' as any,
-  })
+  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'subscriptions' as any })
 
+  // 🔥 CORRIGIDO: Remove assinatura com db.table().delete()
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
-      await remove(deleteModal)
+      await db.table('subscriptions').delete(deleteModal)
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
