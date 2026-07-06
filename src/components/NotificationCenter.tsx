@@ -78,13 +78,39 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const { user } = useAuth()
   const { showToast } = useToast()
   const [localNotifs, setLocalNotifs] = useState<Notification[]>(notifications)
+  const [processing, setProcessing] = useState(false)
 
   useEffect(() => {
     setLocalNotifs(notifications)
   }, [notifications])
 
-  const markAsRead = async (notifIds: string[]) => {
+  const refreshNotifications = async () => {
     if (!user) return
+    
+    try {
+      const updated = await db.table('notifications')
+        .where('user_id')
+        .equals(user.id)
+        .toArray()
+
+      const mapped = updated.map((n: any) => ({
+        ...n,
+        isRead: n.is_read === true || n.isRead === true || n.read === true,
+        cardId: n.card_id || n.cardId,
+      }))
+
+      setLocalNotifs(mapped as Notification[])
+
+      const unread = mapped.filter((n: any) => !n.is_read && !n.read).length
+      if (onReadChange) onReadChange(unread)
+    } catch (err) {
+      console.error('Erro ao atualizar notificações:', err)
+    }
+  }
+
+  const markAsRead = async (notifIds: string[]) => {
+    if (!user || processing) return
+    setProcessing(true)
 
     try {
       for (const notifId of notifIds) {
@@ -95,31 +121,20 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
         })
       }
 
-      const updatedNotifs = await db.table('notifications')
-        .where('user_id')
-        .equals(user.id)
-        .toArray()
-
-      const mappedNotifs = updatedNotifs.map((n: any) => ({
-        ...n,
-        isRead: n.is_read || n.isRead,
-        cardId: n.card_id || n.cardId,
-      }))
-
-      setLocalNotifs(mappedNotifs as Notification[])
-
-      const unread = mappedNotifs.filter((n: any) => !n.is_read && !n.read).length
-      onReadChange?.(unread)
-
+      // 🔥 FORÇA RECARGA COMPLETA
+      await refreshNotifications()
+      
       showToast(`${notifIds.length} notificação(ões) marcada(s) como lida(s)!`, 'success')
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
       showToast(`Erro: ${err.message}`, 'error')
+    } finally {
+      setProcessing(false)
     }
   }
 
   const markAllAsRead = async () => {
-    if (!user) return
+    if (!user || processing) return
     const allIds = localNotifs.map(n => n.id)
     await markAsRead(allIds)
   }
@@ -196,7 +211,8 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               {unreadCount > 0 && (
                 <button 
                   onClick={markAllAsRead}
-                  className="w-10 h-10 flex items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                  disabled={processing}
+                  className="w-10 h-10 flex items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors disabled:opacity-50"
                   title="Marcar todas como lidas"
                 >
                   <Check size={18} />
@@ -238,7 +254,8 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                   <button
                     key={group.key}
                     onClick={() => handleClick(group)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-[24px] text-left transition-all ${isRead ? 'opacity-50 hover:opacity-80' : 'bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md'}`}
+                    disabled={processing}
+                    className={`w-full flex items-center gap-4 p-4 rounded-[24px] text-left transition-all ${isRead ? 'opacity-50 hover:opacity-80' : 'bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md'} ${processing ? 'cursor-wait' : ''}`}
                   >
                     <div className={`relative w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0 ${theme.bg}`}>
                       <span className={theme.icon}>{getIcon(group.items[0]?.type || '')}</span>
