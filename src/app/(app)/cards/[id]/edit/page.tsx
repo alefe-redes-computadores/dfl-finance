@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -48,19 +49,14 @@ export default function EditCardPage() {
   const { data: localAccounts, loading: accLoading } = useLocalData({
     table: 'accounts' as any,
     filters: { context: 'dfl' },
-    realtime: false,
   })
 
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { id: cardId },
-    realtime: false,
   })
 
-  // Hook CRUD no topo (não dentro de função)
-  const { update: updateCard, remove: removeCard } = useLocalData({
-    table: 'credit_cards' as any,
-  })
+  // 🔥 REMOVIDOS: const { update: updateCard, remove: removeCard } = useLocalData({ table: 'credit_cards' as any })
 
   // ============================================================
   // LOAD DATA
@@ -132,11 +128,13 @@ export default function EditCardPage() {
       due_day: dueDay ? parseInt(dueDay) : 10,
       payment_account_id: paymentAccountId || null,
       color,
-      limit_amount: parseFloat(limitAmount.replace(/\./g, '').replace(',', '.')) || 0
+      limit_amount: parseFloat(limitAmount.replace(/\./g, '').replace(',', '.')) || 0,
+      updated_at: new Date().toISOString(),
     }
 
     try {
-      await updateCard(cardId, payload)
+      // 🔥 CORRIGIDO: Usando db.table().update() em vez de updateCard()
+      await db.table('credit_cards').update(cardId, payload)
       showToast('Cartão atualizado!', 'success')
       router.push(`/cards/${cardId}`)
     } catch (error: any) {
@@ -151,7 +149,8 @@ export default function EditCardPage() {
     setDeleting(true)
 
     try {
-      await removeCard(cardId)
+      // 🔥 CORRIGIDO: Usando db.table().delete() em vez de removeCard()
+      await db.table('credit_cards').delete(cardId)
       showToast('Cartão excluído!', 'info')
       router.push('/cards')
     } catch (error: any) {
