@@ -14,6 +14,7 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const GoalsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
@@ -48,23 +49,19 @@ function GoalsContent() {
   const [refreshing, setRefreshing] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
     table: 'goals' as any,
     filters: { context },
-    orderBy: { field: 'created_at', direction: 'desc' },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
-    realtime: true,
   })
 
-  // Hook remove no topo
-  const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
+  // 🔥 REMOVIDO: const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -154,12 +151,12 @@ function GoalsContent() {
   })
 
   // ============================================================
-  // HANDLERS
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM db.table().delete()
   // ============================================================
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir esta meta?')) return
     try {
-      await removeGoal(id)
+      await db.table('goals').delete(id)
       showToast('Meta excluída.', 'info')
       loadData()
     } catch (err: any) {
