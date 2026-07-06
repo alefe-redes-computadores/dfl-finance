@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
@@ -67,11 +67,15 @@ export default function AccountDetailPage() {
   const { data: localAccounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
+    orderBy: 'name',
+    orderDir: 'asc',
   })
 
   const { data: allTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, account_id: accountId },
+    orderBy: 'date',
+    orderDir: 'desc',
   })
 
   const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
@@ -215,14 +219,14 @@ export default function AccountDetailPage() {
     touchStartY.current = e.touches[0].clientY
   }, [])
 
+  // 🔥 CORRIGIDO: Removido .finally() do reload()
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
-        reload().finally(() => {
-          setTimeout(() => setRefreshing(false), 600)
-        })
+        reload()
+        setTimeout(() => setRefreshing(false), 600)
       }
     }
   }, [refreshing, reload])
