@@ -24,6 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 export default function ContactDetailPage() {
@@ -57,9 +58,7 @@ export default function ContactDetailPage() {
 
   const transactions = allTransactions || []
 
-  const { remove } = useLocalData({
-    table: 'contacts' as any,
-  })
+  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'contacts' as any })
 
   // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -78,11 +77,11 @@ export default function ContactDetailPage() {
     }
   }, [refreshing, reload])
 
-  // Excluir contato
+  // 🔥 CORRIGIDO: Excluir contato com db.table().delete()
   const handleDelete = async () => {
     if (!confirm("Tem certeza que deseja excluir este contato? As transações vinculadas não serão afetadas.")) return
     try {
-      await remove(contactId)
+      await db.table('contacts').delete(contactId)
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
