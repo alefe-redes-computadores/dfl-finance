@@ -108,10 +108,12 @@ function HomeContent() {
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  // 🔥 CORRIGIDO: Adicionado orderBy: 'date' para ordenar corretamente
   const { data: localTransactions } = useLocalData({ 
     table: 'transactions' as any, 
-    filters: { context }
+    filters: { context },
+    orderBy: 'date',
+    orderDir: 'desc',
   })
   const { data: localCategories } = useLocalData({ 
     table: 'categories' as any, 
@@ -262,9 +264,12 @@ function HomeContent() {
     }
   }, [context, currentDate, user?.id, localTransactions, localCategories, localAccountsData, localCards, localDebts, localFinancings])
 
+  // 🔥 CORREÇÃO: Adicionar dependências para recarregar quando dados mudarem
   useEffect(() => {
-    if (user?.id && context) loadData()
-  }, [user?.id, context, currentDate, loadData])
+    if (user?.id && context) {
+      loadData()
+    }
+  }, [user?.id, context, currentDate, localTransactions, localDebts, localCards, localAccountsData, loadData])
 
   useEffect(() => {
     if (user?.id) {
