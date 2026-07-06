@@ -26,6 +26,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 type Payment = {
@@ -57,7 +58,7 @@ export default function LoansPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
+  // 🔥 BUSCA DADOS LOCAIS
   const { data: loans, loading, reload } = useLocalData({
     table: 'loans' as any,
     filters: { context },
@@ -69,6 +70,8 @@ export default function LoansPage() {
     filters: { context, type: 'loan_payment' },
   })
 
+  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'loans' as any })
+
   // Agrupa pagamentos por loan_id
   const paymentsByLoan = (allPayments || []).reduce((acc: Record<string, Payment[]>, p: any) => {
     if (p.loan_id) {
@@ -78,15 +81,11 @@ export default function LoansPage() {
     return acc
   }, {})
 
-  // Remove empréstimo
-  const { remove } = useLocalData({
-    table: 'loans' as any,
-  })
-
+  // 🔥 CORRIGIDO: Remove empréstimo com db.table().delete()
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
-      await remove(deleteModal)
+      await db.table('loans').delete(deleteModal)
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -171,9 +170,6 @@ export default function LoansPage() {
         )
     }
   }
-
-  // CONTEXTO PF: Empréstimos Pessoais (onde eu sou o tomador OU o credor)
-  // CONTEXTO PJ: Empréstimos da Empresa
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
