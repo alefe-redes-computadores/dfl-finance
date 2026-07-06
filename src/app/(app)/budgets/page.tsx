@@ -15,6 +15,7 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 // ============================================================
 // SKELETON LOADER
@@ -54,20 +55,19 @@ function BudgetsContent() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { context },
-    orderBy: { field: 'name', direction: 'asc' },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions',
+    table: 'transactions' as any,
     filters: { context },
-    realtime: true,
   })
+
+  // 🔥 REMOVIDOS: const { remove } e const { update } do useLocalData
 
   // ============================================================
   // PULL TO REFRESH
@@ -159,13 +159,12 @@ function BudgetsContent() {
   })
 
   // ============================================================
-  // HANDLERS
+  // 🔥 HANDLERS CORRIGIDOS
   // ============================================================
   const handleDelete = async (id: string) => {
     if (!confirm('Excluir este orçamento?')) return
     try {
-      const { remove } = useLocalData({ table: 'budgets' as any })
-      await remove(id)
+      await db.table('budgets').delete(id)
       showToast('Orçamento excluído.', 'info')
       loadData()
     } catch (err: any) {
@@ -175,9 +174,11 @@ function BudgetsContent() {
 
   const handleToggleStatus = async (budget: any) => {
     try {
-      const { update } = useLocalData({ table: 'budgets' as any })
       const newStatus = budget.status === 'active' ? 'inactive' : 'active'
-      await update(budget.id, { status: newStatus })
+      await db.table('budgets').update(budget.id, { 
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
       showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
       loadData()
     } catch (err: any) {
