@@ -13,7 +13,8 @@ import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+// 🔥 IMPORTAMOS O addToSyncQueue AQUI!
+import { db, addToSyncQueue } from '@/lib/db' 
 
 function DebtDetailContent() {
   const params = useParams()
@@ -62,7 +63,6 @@ function DebtDetailContent() {
   const [payments, setPayments] = useState<any[]>([])
   const [accounts, setAccounts] = useState<any[]>([])
   
-  // Removemos o loading manual que estava travando a tela!
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -147,12 +147,17 @@ function DebtDetailContent() {
   useEffect(() => { if (localAccounts) setAccounts(localAccounts) }, [localAccounts])
 
   // ============================================================
-  // HANDLERS DE AÇÃO
+  // HANDLERS DE AÇÃO COM FILA DE SINCRONIZAÇÃO APLICADA! 🔥
   // ============================================================
   const handleDeleteDebt = async () => {
+    if (!user?.id) return
     if (!confirm('Tem certeza que deseja excluir este registro?')) return
     try {
+      // 1. Apaga do celular
       await db.table('debts').delete(debtId)
+      // 2. Coloca na fila para apagar da nuvem!
+      await addToSyncQueue(user.id, 'debts', 'delete', debtId, { id: debtId })
+      
       showToast('Dívida excluída.', 'info')
       router.push('/debts')
     } catch (err: any) {
@@ -161,10 +166,13 @@ function DebtDetailContent() {
   }
 
   const handleDeletePayment = async (paymentId: string, amount: number) => {
+    if (!user?.id) return
     if (!confirm('Excluir este pagamento? O valor será removido do total pago.')) return
 
     try {
+      // Apaga o pagamento e joga na fila
       await db.table('transactions').delete(paymentId)
+      await addToSyncQueue(user.id, 'transactions', 'delete', paymentId, { id: paymentId })
 
       const updatedPayments = payments.filter(p => p.id !== paymentId)
       const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
@@ -173,19 +181,24 @@ function DebtDetailContent() {
       const totalPaidCents = Math.round(totalPaid * 100)
       const newStatus = totalPaidCents >= totalAmountCents ? 'paid' : totalPaidCents > 0 ? 'partial' : 'pending'
 
-      await db.table('debts').update(debtId, { 
+      const debtUpdates = { 
         status: newStatus,
         paid_amount: totalPaidCents / 100,
         updated_at: new Date().toISOString()
-      })
+      }
 
+      // Atualiza a dívida e joga na fila
+      await db.table('debts').update(debtId, debtUpdates)
+      await addToSyncQueue(user.id, 'debts', 'update', debtId, debtUpdates)
+
+      // Atualiza a conta (se houver) e joga na fila
       const deletedPayment = payments.find(p => p.id === paymentId)
       if (deletedPayment?.account_id) {
         const account = accounts.find(a => a.id === deletedPayment.account_id)
         if (account) {
-          await db.table('accounts').update(deletedPayment.account_id, {
-            balance: Number(account.balance) - amount
-          })
+          const accUpdates = { balance: Number(account.balance) - amount }
+          await db.table('accounts').update(deletedPayment.account_id, accUpdates)
+          await addToSyncQueue(user.id, 'accounts', 'update', deletedPayment.account_id, accUpdates)
         }
       }
 
@@ -234,9 +247,10 @@ function DebtDetailContent() {
 
     try {
       const targetAccountId = payAccountId || debt.account_id || null
-
-      await db.table('transactions').add({
-        id: crypto.randomUUID(),
+      const txId = crypto.randomUUID()
+      
+      const newTx = {
+        id: txId,
         user_id: user.id,
         type: 'income',
         amount: payAmountNum,
@@ -251,25 +265,34 @@ function DebtDetailContent() {
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
 
+      // 1. Cria a transação e enfileira
+      await db.table('transactions').add(newTx)
+      await addToSyncQueue(user.id, 'transactions', 'create', txId, newTx)
+
+      // 2. Atualiza a conta e enfileira
       if (targetAccountId) {
         const account = accounts.find(a => a.id === targetAccountId)
         if (account) {
-          await db.table('accounts').update(targetAccountId, {
-            balance: Number(account.balance) + payAmountNum
-          })
+          const accUpdates = { balance: Number(account.balance) + payAmountNum }
+          await db.table('accounts').update(targetAccountId, accUpdates)
+          await addToSyncQueue(user.id, 'accounts', 'update', targetAccountId, accUpdates)
         }
       }
 
+      // 3. Atualiza a dívida e enfileira
       const newTotalPaidCents = totalPaidCents + payAmountCents
       const newStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
-
-      await db.table('debts').update(debtId, {
+      
+      const debtUpdates = {
         status: newStatus,
         paid_amount: newTotalPaidCents / 100,
         updated_at: new Date().toISOString()
-      })
+      }
+
+      await db.table('debts').update(debtId, debtUpdates)
+      await addToSyncQueue(user.id, 'debts', 'update', debtId, debtUpdates)
 
       success()
       showToast('✅ Pagamento registrado com sucesso!', 'success')
