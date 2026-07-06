@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, Wallet, Clock, Fire, Gauge, Percent, DollarSign } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, Clock, Flame, Gauge, Percent, DollarSign } from 'lucide-react'
 
 interface KPICardProps {
   title: string
@@ -19,7 +19,7 @@ const iconMap = {
   'trending-down': TrendingDown,
   'wallet': Wallet,
   'clock': Clock,
-  'fire': Fire,
+  'fire': Flame,
   'gauge': Gauge,
   'percent': Percent,
   'dollar': DollarSign,
@@ -34,7 +34,16 @@ const colorMap = {
   teal: 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
 }
 
-export default function KPICard({ title, value, icon, subtitle, suffix = '', prefix = '', color = 'teal', formatter }: KPICardProps) {
+export default function KPICard({ 
+  title, 
+  value, 
+  icon, 
+  subtitle, 
+  suffix = '', 
+  prefix = '', 
+  color = 'teal', 
+  formatter 
+}: KPICardProps) {
   const [displayValue, setDisplayValue] = useState(0)
 
   useEffect(() => {
