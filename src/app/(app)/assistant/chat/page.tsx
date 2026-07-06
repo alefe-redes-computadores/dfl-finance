@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import {
   ChevronLeft, Send, Loader2, Bot, User, RefreshCw,
   Sparkles, Trash2, MessageSquare, Clock, Zap, Brain,
@@ -74,17 +75,13 @@ export default function AssistantChatPage() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
+  // 🔥 BUSCA LOCAL (INDEXEDDB) — sem orderBy/realtime (não existem mais)
+  // Ordenação por data é feita manualmente após buscar.
   // ============================================================
-  const { data: localMessages, loading: msgLoading, reload: reloadMessages } = useLocalData({
+  const { data: localMessages, reload: reloadMessages } = useLocalData({
     table: 'chat_history' as any,
     filters: { user_id: user?.id, session_id: sessionId || '' },
-    orderBy: { field: 'created_at', direction: 'asc' },
-    realtime: true,
   })
-
-  const { create: createMessage } = useLocalData({ table: 'chat_history' as any })
-  const { create: createSession } = useLocalData({ table: 'chat_sessions' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -137,9 +134,22 @@ export default function AssistantChatPage() {
   }, [messages])
 
   // ============================================================
+  // Ordena localMessages por data (asc) sempre que mudar
+  // e sincroniza com o state `messages` exibido na tela
+  // ============================================================
+  useEffect(() => {
+    if (localMessages && localMessages.length > 0) {
+      const sorted = [...(localMessages as any[])].sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      )
+      setMessages(sorted as Message[])
+    }
+  }, [localMessages])
+
+  // ============================================================
   // LOAD DATA
   // ============================================================
-  const loadChat = async () => {
+  const loadChat = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
@@ -158,24 +168,21 @@ export default function AssistantChatPage() {
         setSessionId(session.id)
         await reloadMessages()
       }
-
-      if (localMessages) {
-        setMessages(localMessages as Message[])
-      }
     } catch (err) {
       console.error('Erro ao carregar chat:', err)
     } finally {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }
+  }, [user?.id, reloadMessages])
 
   useEffect(() => {
     if (user?.id) loadChat()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
   // ============================================================
-  // ENVIAR MENSAGEM
+  // ENVIAR MENSAGEM (agora usando db.table() diretamente)
   // ============================================================
   const handleSend = async () => {
     if (!input.trim() || isSending || !user?.id) return
@@ -186,33 +193,47 @@ export default function AssistantChatPage() {
 
     try {
       let currentSessionId = sessionId
+
+      // Cria sessão se ainda não existir
       if (!currentSessionId) {
-        const result = await createSession({
+        const newSession = {
+          id: crypto.randomUUID(),
           user_id: user.id,
           title: 'Nova conversa',
           status: 'active',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        })
-        currentSessionId = (result as any)?.id || null
+          sync_status: 'pending' as const,
+        }
+        await db.table('chat_sessions').add(newSession)
+        currentSessionId = newSession.id
         setSessionId(currentSessionId)
+
+        // Sincroniza a sessão nova com o Supabase em background
+        supabase.from('chat_sessions').insert(newSession).then(({ error }) => {
+          if (error) console.error('Erro ao sincronizar sessão:', error)
+        })
       }
 
-      const userMsg = await createMessage({
+      // Salva mensagem do usuário localmente
+      const userMsgRecord = {
+        id: crypto.randomUUID(),
         user_id: user.id,
         session_id: currentSessionId,
-        role: 'user',
+        role: 'user' as const,
         content: userMessage,
         created_at: new Date().toISOString(),
+        sync_status: 'pending' as const,
+      }
+      await db.table('chat_history').add(userMsgRecord)
+      await reloadMessages()
+
+      // Sincroniza mensagem do usuário com o Supabase em background
+      supabase.from('chat_history').insert(userMsgRecord).then(({ error }) => {
+        if (error) console.error('Erro ao sincronizar mensagem:', error)
       })
 
-      setMessages(prev => [...prev, {
-        id: (userMsg as any)?.id || Date.now().toString(),
-        role: 'user',
-        content: userMessage,
-        created_at: new Date().toISOString(),
-      }])
-
+      // Chama a API do assistente
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -229,22 +250,24 @@ export default function AssistantChatPage() {
         throw new Error(data.error || 'Erro ao processar mensagem')
       }
 
-      const assistantMsg = await createMessage({
+      // Salva resposta do assistente localmente
+      const assistantMsgRecord = {
+        id: crypto.randomUUID(),
         user_id: user.id,
         session_id: currentSessionId,
-        role: 'assistant',
+        role: 'assistant' as const,
         content: data.response,
         type: data.type || 'text',
         created_at: new Date().toISOString(),
-      })
+        sync_status: 'pending' as const,
+      }
+      await db.table('chat_history').add(assistantMsgRecord)
+      await reloadMessages()
 
-      setMessages(prev => [...prev, {
-        id: (assistantMsg as any)?.id || Date.now().toString(),
-        role: 'assistant',
-        content: data.response,
-        created_at: new Date().toISOString(),
-        type: data.type || 'text',
-      }])
+      // Sincroniza resposta do assistente com o Supabase em background
+      supabase.from('chat_history').insert(assistantMsgRecord).then(({ error }) => {
+        if (error) console.error('Erro ao sincronizar resposta:', error)
+      })
 
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
@@ -261,19 +284,35 @@ export default function AssistantChatPage() {
     }
   }
 
+  // ============================================================
+  // LIMPAR CHAT (agora usando db.table() diretamente,
+  // sem chamar hooks dentro de função — regra dos hooks)
+  // ============================================================
   const handleClearChat = async () => {
     if (!confirm('Limpar todo o histórico da conversa?')) return
+    if (!sessionId) return
 
     try {
-      if (sessionId) {
-        const { remove } = useLocalData({ table: 'chat_history' as any })
-        const msgsToRemove = messages.map(m => m.id)
-        for (const id of msgsToRemove) {
-          await remove(id)
-        }
-        setMessages([])
-        showToast('Histórico limpo.', 'info')
+      const idsToRemove = messages.map((m) => m.id)
+
+      for (const id of idsToRemove) {
+        await db.table('chat_history').delete(id)
       }
+
+      // Remove também no Supabase em background
+      if (idsToRemove.length > 0) {
+        supabase
+          .from('chat_history')
+          .delete()
+          .in('id', idsToRemove)
+          .then(({ error }) => {
+            if (error) console.error('Erro ao limpar histórico remoto:', error)
+          })
+      }
+
+      setMessages([])
+      await reloadMessages()
+      showToast('Histórico limpo.', 'info')
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
     }
