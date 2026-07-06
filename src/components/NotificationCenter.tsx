@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db' // 🔥 USANDO Dexie, não Supabase
 import { useToast } from '@/contexts/ToastContext'
 
 interface Notification {
@@ -12,14 +12,17 @@ interface Notification {
   type: string
   title: string
   subtitle: string
-  cardId?: string
-  budgetId?: string
-  txId?: string
-  subId?: string
-  financingId?: string
-  debtId?: string
+  card_id?: string
+  budget_id?: string
+  tx_id?: string
+  sub_id?: string
+  financing_id?: string
+  debt_id?: string
   route?: string
   severity: 'critical' | 'warning' | 'info' | 'success'
+  is_read: boolean
+  read?: boolean
+  created_at: string
 }
 
 interface NotificationGroup {
@@ -48,7 +51,7 @@ function groupNotifications(notifs: Notification[]): NotificationGroup[] {
     if (n.route) {
       key = n.route
     }
-    if (n.cardId || n.budgetId || n.financingId || n.debtId) {
+    if (n.card_id || n.budget_id || n.financing_id || n.debt_id) {
       key = n.id
     }
 
@@ -74,60 +77,52 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
-  const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  const [localNotifs, setLocalNotifs] = useState<Notification[]>(notifications)
 
   useEffect(() => {
-    if (isOpen && user) {
-      loadReadNotifications()
-    }
-  }, [isOpen, user])
-
-  const loadReadNotifications = async () => {
-    if (!user) return
-    const { data } = await supabase
-      .from('notification_reads')
-      .select('notification_id')
-      .eq('user_id', user.id)
-    
-    if (data) {
-      setReadIds(new Set(data.map(d => d.notification_id)))
-    }
-  }
+    setLocalNotifs(notifications)
+  }, [notifications])
 
   const markAsRead = async (notifIds: string[]) => {
     if (!user) return
-    
-    const newRead = new Set(readIds)
-    notifIds.forEach(id => newRead.add(id))
-    setReadIds(newRead)
 
-    for (const notifId of notifIds) {
-      await supabase
-        .from('notification_reads')
-        .upsert({
-          user_id: user.id,
-          notification_id: notifId,
-          read_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,notification_id'
+    try {
+      // 🔥 CORREÇÃO: Marcar como lida no Dexie
+      for (const notifId of notifIds) {
+        await db.table('notifications').update(notifId, { 
+          is_read: true,
+          read: true,
+          updated_at: new Date().toISOString()
         })
-    }
+      }
 
-    const unread = notifications.filter(n => !newRead.has(n.id)).length
-    onReadChange?.(unread)
+      // Atualiza a lista local
+      const updatedNotifs = localNotifs.map(n => 
+        notifIds.includes(n.id) ? { ...n, is_read: true, read: true } : n
+      )
+      setLocalNotifs(updatedNotifs)
+
+      // Notifica o componente pai
+      const unread = updatedNotifs.filter(n => !n.is_read && !n.read).length
+      onReadChange?.(unread)
+
+      showToast(`${notifIds.length} notificação(ões) marcada(s) como lida(s)!`, 'success')
+    } catch (err: any) {
+      console.error('Erro ao marcar como lida:', err)
+      showToast(`Erro: ${err.message}`, 'error')
+    }
   }
 
   const markAllAsRead = async () => {
     if (!user) return
-    const allIds = notifications.map(n => n.id)
+    const allIds = localNotifs.map(n => n.id)
     await markAsRead(allIds)
-    showToast('Notificações marcadas como lidas!', 'success')
   }
 
   if (!isOpen) return null
 
-  const grouped = groupNotifications(notifications)
-  const unreadCount = notifications.filter(n => !readIds.has(n.id)).length
+  const grouped = groupNotifications(localNotifs)
+  const unreadCount = localNotifs.filter(n => !n.is_read && !n.read).length
   
   const displayedGroups = grouped.slice(0, 5)
 
@@ -139,11 +134,11 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
       router.push(group.route)
     } else if (group.items.length === 1) {
       const notif = group.items[0]
-      if (notif.cardId) router.push(`/cards/${notif.cardId}`)
-      else if (notif.budgetId) router.push(`/budgets/${notif.budgetId}`)
-      else if (notif.financingId) router.push(`/financings/${notif.financingId}`)
-      else if (notif.debtId) router.push(`/debts/${notif.debtId}`)
-      else if (notif.subId) router.push('/subscriptions')
+      if (notif.card_id) router.push(`/cards/${notif.card_id}`)
+      else if (notif.budget_id) router.push(`/budgets/${notif.budget_id}`)
+      else if (notif.financing_id) router.push(`/financings/${notif.financing_id}`)
+      else if (notif.debt_id) router.push(`/debts/${notif.debt_id}`)
+      else if (notif.sub_id) router.push('/subscriptions')
     }
     
     onClose()
@@ -231,7 +226,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               </div>
             ) : (
               displayedGroups.map(group => {
-                const isRead = group.items.every(n => readIds.has(n.id))
+                const isRead = group.items.every(n => n.is_read || n.read)
                 const theme = getThemeVars(group.severity)
                 
                 return (
