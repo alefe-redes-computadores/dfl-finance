@@ -88,7 +88,7 @@ function HomeContent() {
   const [loans, setLoans] = useState<any[]>([])
   const [totalToReceive, setTotalToReceive] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)   // <-- CORREÇÃO: variável adicionada
+  const [loadingPulse, setLoadingPulse] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -108,12 +108,31 @@ function HomeContent() {
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
-  const { data: localTransactions } = useLocalData({ table: 'transactions' as any, filters: { context }, orderBy: { field: 'date', direction: 'desc' }, realtime: true })
-  const { data: localCategories } = useLocalData({ table: 'categories' as any, filters: { context }, realtime: false })
-  const { data: localAccountsData } = useLocalData({ table: 'accounts' as any, filters: { context }, realtime: false })
-  const { data: localDebts } = useLocalData({ table: 'debts' as any, filters: { context }, realtime: true })
-  const { data: localFinancings } = useLocalData({ table: 'financings' as any, filters: { context, status: 'active' }, realtime: true })
-  const { data: localCards } = useLocalData({ table: 'credit_cards' as any, filters: { context, is_archived: false }, realtime: true })
+  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  const { data: localTransactions } = useLocalData({ 
+    table: 'transactions' as any, 
+    filters: { context }
+  })
+  const { data: localCategories } = useLocalData({ 
+    table: 'categories' as any, 
+    filters: { context }
+  })
+  const { data: localAccountsData } = useLocalData({ 
+    table: 'accounts' as any, 
+    filters: { context }
+  })
+  const { data: localDebts } = useLocalData({ 
+    table: 'debts' as any, 
+    filters: { context }
+  })
+  const { data: localFinancings } = useLocalData({ 
+    table: 'financings' as any, 
+    filters: { context, status: 'active' }
+  })
+  const { data: localCards } = useLocalData({ 
+    table: 'credit_cards' as any, 
+    filters: { context, is_archived: false }
+  })
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -136,7 +155,6 @@ function HomeContent() {
 
       const monthTransactions = transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end)
 
-      // Usando parseFloat para evitar NaN
       const income = monthTransactions
         .filter((t: any) => t.type === 'income' && t.status === 'done')
         .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
