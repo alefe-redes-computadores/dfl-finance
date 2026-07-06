@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
@@ -40,16 +41,14 @@ export default function NewCardPage() {
   const [showAccountModal, setShowAccountModal] = useState(false)
 
   // ============================================================
-  // 🔥 BUSCA LOCAL DE CONTAS - CORRIGIDO
+  // 🔥 BUSCA LOCAL DE CONTAS
   // ============================================================
   const { data: localAccounts, loading: accLoading } = useLocalData({
     table: 'accounts' as any,
     filters: { context: 'dfl' },
-    realtime: false,
   })
 
-  // Hook CRUD no topo
-  const { create: createCard } = useLocalData({ table: 'credit_cards' as any })
+  // 🔥 REMOVIDO: const { create: createCard } = useLocalData({ table: 'credit_cards' as any })
 
   useEffect(() => {
     if (localAccounts) {
@@ -79,6 +78,7 @@ export default function NewCardPage() {
     setSaving(true)
 
     const payload = {
+      id: crypto.randomUUID(), // 🔥 ADICIONADO: ID gerado localmente
       user_id: user!.id,
       context: 'dfl',
       name,
@@ -89,11 +89,17 @@ export default function NewCardPage() {
       due_day: dueDay ? parseInt(dueDay) : 10,
       payment_account_id: paymentAccountId || null,
       color,
-      limit_amount: parseFloat(limitAmount.replace(/\./g, '').replace(',', '.')) || 0
+      limit_amount: parseFloat(limitAmount.replace(/\./g, '').replace(',', '.')) || 0,
+      is_archived: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending',
+      sync_attempts: 0,
     }
 
     try {
-      await createCard(payload)
+      // 🔥 CORRIGIDO: Usando db.table().add() em vez de create()
+      await db.table('credit_cards').add(payload)
       showToast('Cartão criado com sucesso!', 'success')
       router.push('/cards')
     } catch (error: any) {
