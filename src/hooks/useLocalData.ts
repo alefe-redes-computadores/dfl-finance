@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react' // 🔥 ADICIONADO useCallback
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
@@ -49,7 +49,6 @@ export function useLocalData<T>({
 
       let res = await q.toArray()
 
-      // Ordenação em memória
       if (orderBy && res.length > 0) {
         res = res.sort((a: any, b: any) => {
           const valA = a[orderBy] || ''
@@ -130,14 +129,13 @@ export function useLocalData<T>({
     sync()
   }, [user?.id, table])
 
-//FORÇAR DEPLOY
-
   // ============================================================
-  // 3. FUNÇÃO RELOAD (Força reexecução do liveQuery)
+  // 🔥 3. RELOAD (AGORA RETORNA PROMISE!)
   // ============================================================
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     setLoading(true)
-    setTimeout(() => setLoading(false), 100)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    setLoading(false)
   }, [])
 
   return { data, loading, syncing, reload }
