@@ -24,6 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
+import { db } from '@/lib/db'
 
 type Installment = {
   id: string
@@ -75,24 +76,14 @@ export default function FinancingsPage() {
     return acc
   }, {})
 
-  // Remove financiamento
-  const { remove } = useLocalData({
-    table: 'financings' as any,
-  })
-
-  // Hook removeTransaction no topo
-  const { remove: removeTransaction } = useLocalData({
-    table: 'transactions' as any,
-  })
-
   const handleDelete = async () => {
     if (!deleteModal) return
     try {
       const installments = installmentsByFinancing[deleteModal] || []
       for (const inst of installments) {
-        await removeTransaction(inst.id)
+        await db.table('transactions').delete(inst.id)
       }
-      await remove(deleteModal)
+      await db.table('financings').delete(deleteModal)
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
