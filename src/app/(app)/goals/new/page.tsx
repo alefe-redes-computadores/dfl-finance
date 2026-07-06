@@ -10,6 +10,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { format } from 'date-fns'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
@@ -46,18 +47,15 @@ function NewGoalContent() {
   const { data: localCategories, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context },
-    realtime: false,
   })
 
   const { data: localGoal, loading: goalLoading, reload: reloadGoal } = useLocalData({
     table: 'goals' as any,
     filters: { id: editId || '' },
-    realtime: false,
   })
 
-  // Hooks CRUD no topo
-  const { create: createGoal, update: updateGoal } = useLocalData({ table: 'goals' as any })
-  const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
+  // 🔥 REMOVIDOS: const { create: createGoal, update: updateGoal } = useLocalData({ table: 'goals' as any })
+  // 🔥 REMOVIDOS: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   // ============================================================
   // LOAD DATA
@@ -108,6 +106,9 @@ function NewGoalContent() {
     displaySetter(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO
+  // ============================================================
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -116,8 +117,6 @@ function NewGoalContent() {
     setSaving(true)
 
     const payload = {
-      user_id: user.id,
-      context,
       name: name.trim(),
       target_amount: targetAmountNum,
       deadline,
@@ -126,23 +125,39 @@ function NewGoalContent() {
       icon,
       description: description || null,
       status: 'active',
+      context,
+      updated_at: new Date().toISOString(),
     }
 
     try {
       let goalId: string | undefined
+
       if (editId) {
-        await updateGoal(editId, payload)
+        // 🔥 CORRIGIDO: Usando db.table().update()
+        await db.table('goals').update(editId, payload)
         goalId = editId
         showToast('Meta atualizada!', 'success')
       } else {
-        const result: any = await createGoal(payload)
-        goalId = result?.id
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        const newId = crypto.randomUUID()
+        await db.table('goals').add({
+          id: newId,
+          user_id: user.id,
+          ...payload,
+          saved_amount: 0,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        })
+        goalId = newId
         showToast('Meta criada!', 'success')
       }
 
       // Se houver contribuição inicial, registrar
       if (initialContributionNum > 0 && goalId) {
-        await createTransaction({
+        // 🔥 CORRIGIDO: Usando db.table().add()
+        await db.table('transactions').add({
+          id: crypto.randomUUID(),
           user_id: user.id,
           context,
           type: 'income',
@@ -152,6 +167,10 @@ function NewGoalContent() {
           status: 'done',
           affects_balance: true,
           goal_id: goalId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         })
       }
 
