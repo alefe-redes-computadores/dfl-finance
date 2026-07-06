@@ -10,7 +10,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -20,13 +20,11 @@ function NewDebtContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { context } = useContext_()
-  const editId = searchParams.get('edit')
   const { showToast } = useToast()
+  const editId = searchParams.get('edit')
 
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(!!editId)
   const [saving, setSaving] = useState(false)
-  const [categories, setCategories] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
 
   const [personName, setPersonName] = useState('')
   const [amount, setAmount] = useState('0,00')
@@ -43,35 +41,30 @@ function NewDebtContent() {
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // 🔥 BUSCA DADOS LOCAIS EM VEZ DE SUPABASE
-  const { data: localCategories, reload: reloadCategories } = useLocalData({
+  // ============================================================
+  // 🔥 BUSCAS LOCAIS — USAR DIRETAMENTE NO JSX
+  // ============================================================
+  const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
   })
 
-  const { data: localAccounts, reload: reloadAccounts } = useLocalData({
+  const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
   })
 
-  const { data: localDebt, reload: reloadDebt } = useLocalData({
+  const { data: localDebt, loading: debtLoading, reload: reloadDebt } = useLocalData({
     table: 'debts' as any,
     filters: { id: editId || '' },
   })
 
-  const loadData = async () => {
-    if (!user?.id) return
-    await Promise.all([reloadCategories(), reloadAccounts()])
-    setCategories(Array.isArray(localCategories) ? localCategories : [])
-    setAccounts(Array.isArray(localAccounts) ? localAccounts : [])
-  }
-
-  const loadDebt = async () => {
-    if (!editId || !user?.id) return
-    setLoading(true)
-    await reloadDebt()
-    const data = (localDebt || [])[0] as any
-    if (data) {
+  // ============================================================
+  // CARREGAR DADOS PARA EDIÇÃO
+  // ============================================================
+  useEffect(() => {
+    if (editId && localDebt && localDebt.length > 0) {
+      const data = localDebt[0] as any
       setPersonName(data.person_name)
       setAmountNum(Number(data.total_amount))
       setAmount(Number(data.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
@@ -82,15 +75,15 @@ function NewDebtContent() {
       setColor(data.color)
       setIcon(data.icon ? data.icon.charAt(0).toUpperCase() + data.icon.slice(1) : 'User')
       setDebtContext(data.context || 'dfl')
+      setLoading(false)
+    } else if (!editId) {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [editId, localDebt])
 
-  useEffect(() => {
-    loadData()
-    if (editId) loadDebt()
-  }, [user, context, editId])
-
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
@@ -126,11 +119,9 @@ function NewDebtContent() {
 
     try {
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
         await db.table('debts').update(editId, payload)
         showToast('Empréstimo atualizado com sucesso!', 'success')
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
         await db.table('debts').add({
           id: crypto.randomUUID(),
           user_id: user.id,
@@ -154,14 +145,15 @@ function NewDebtContent() {
     router.push('/debts')
   }
 
-  if (loading) return (
+  if (loading || debtLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
       <Loader2 className="animate-spin text-teal-700" size={40} />
     </div>
   )
 
-  const selectedCat = categories.find(c => c.id === categoryId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
+  // 🔥 USAR localCategories E localAccounts DIRETAMENTE
+  const selectedCat = (localCategories || []).find((c: any) => c.id === categoryId)
+  const selectedAcc = (localAccounts || []).find((a: any) => a.id === accountId)
   const IconComp = getDynamicIcon(icon)
 
   return (
@@ -335,7 +327,7 @@ function NewDebtContent() {
                 <span className={`flex-1 text-left font-medium ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Geral</span>
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
-              {categories.map(cat => {
+              {(localCategories || []).map((cat: any) => {
                 const CatIconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
@@ -374,7 +366,7 @@ function NewDebtContent() {
                 <span className={`flex-1 text-left font-medium ${!accountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Nenhuma conta</span>
                 {!accountId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
               </button>
-              {accounts.map(acc => {
+              {(localAccounts || []).map((acc: any) => {
                 const isActive = acc.id === accountId
                 return (
                   <button
