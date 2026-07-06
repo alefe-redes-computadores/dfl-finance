@@ -127,12 +127,12 @@ function HomeContent() {
     table: 'loans' as any,
     filters: { context }
   })
-  const { data: localNotifications, loading: notifsLoading, reload: reloadNotifs } = useLocalData({
+  const { data: localNotifications, reload: reloadNotifs } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id }
   })
 
-  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading || notifsLoading
+  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
   useEffect(() => {
     setLoadingPulse(isDataLoading)
@@ -242,6 +242,7 @@ function HomeContent() {
 
   const financings = localFinancings || []
 
+  // 🔥 CORREÇÃO: Tipagem do cat com as any + fallback
   const budgets = useMemo(() => {
     const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
       const cat = (localCategories || []).find((c: any) => c.id === budget.category_id) as any
@@ -252,7 +253,7 @@ function HomeContent() {
       const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
       return { 
         ...budget, 
-        name: cat?.name ?? budget.name,
+        name: cat?.name ?? budget.name,  // 🔥 fallback seguro
         icon: cat?.icon ?? budget.icon,
         color: cat?.color ?? budget.color,
         spent, 
@@ -268,27 +269,6 @@ function HomeContent() {
       .filter((l: any) => l.status === 'active' || l.status === 'completed')
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [localLoans])
-
-  // ============================================================
-  // 🔥 NOTIFICAÇÕES — MAPEAMENTO CORRETO COM is_read
-  // ============================================================
-  const notificationsMap = useMemo(() => {
-    return (localNotifications || [])
-      .map((n: any) => ({ 
-        ...n, 
-        isRead: n.is_read === true || n.isRead === true || n.read === true,
-        cardId: n.card_id || n.cardId 
-      }))
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  }, [localNotifications])
-
-  const unreadNotifications = useMemo(() => 
-    notificationsMap.filter((n: any) => !n.isRead).length, 
-  [notificationsMap])
-  
-  const criticalCount = useMemo(() => 
-    notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, 
-  [notificationsMap])
 
   // ============================================================
   // 🔥 GERAÇÃO AUTOMÁTICA DE NOTIFICAÇÕES LOCAIS (Dexie)
@@ -342,6 +322,15 @@ function HomeContent() {
     generateNotifs()
   }, [cards, user?.id, currentDate, reloadNotifs])
 
+  const notificationsMap = useMemo(() => {
+    return (localNotifications || [])
+      .map((n: any) => ({ ...n, isRead: n.is_read || n.isRead, cardId: n.card_id || n.cardId }))
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [localNotifications])
+
+  const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
+  const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
+
   // ============================================================
   // BUSCA REMOTA PARA LAYOUT
   // ============================================================
@@ -364,7 +353,7 @@ function HomeContent() {
   }
 
   // ============================================================
-  // NAVEGAÇÃO INTELIGENTE
+  // NAVEGAÇÃO INTELIGENTE (volta para Home se veio de lá)
   // ============================================================
   const goBack = useCallback(() => {
     if (window.history.length > 2) {
@@ -393,7 +382,7 @@ function HomeContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      await Promise.all([reloadTxs(), reloadNotifs()])
+      await reloadTxs()
       setRefreshing(false)
     }
   }
@@ -931,6 +920,7 @@ function HomeContent() {
         </div>
       )}
 
+      {/* 🔥 CORREÇÃO: DebtAlert só exibe dívidas NÃO pagas */}
       {debtsList
         .filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid')
         .map((debt: any) => (
@@ -974,7 +964,7 @@ function HomeContent() {
         <span className="font-bold text-[15px]">Personalizar Dashboard</span>
       </button>
 
-      <FAB onSave={() => Promise.all([reloadTxs(), reloadNotifs()])} />
+      <FAB onSave={() => reloadTxs()} />
       <PersonalizeModal
         isOpen={showPersonalizeModal}
         onClose={() => setShowPersonalizeModal(false)}
@@ -986,14 +976,17 @@ function HomeContent() {
         onSave={handleSavePersonalize}
       />
 
-      {notificationsEnabled && (
-        <NotificationCenter
-          isOpen={showNotifications}
-          onClose={() => setShowNotifications(false)}
-          notifications={notificationsMap}
-          onReadChange={() => reloadNotifs()}
-        />
-      )}
+    {notificationsEnabled && (
+      <NotificationCenter
+      isOpen={showNotifications}
+      onClose={() => {
+      setShowNotifications(false)
+      reloadNotifs()
+     }}
+     notifications={notificationsMap}
+     onReadChange={() => reloadNotifs()}
+    />
+    )}
     </div>
   )
 }
