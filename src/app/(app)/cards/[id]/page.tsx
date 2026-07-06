@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db' // 🔥 ADICIONADO
 
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
@@ -85,25 +86,22 @@ export default function CardDetailPage() {
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { id: id as string },
-    realtime: true,
   })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { credit_card_id: id as string },
-    orderBy: { field: 'date', direction: 'desc' },
-    realtime: true,
   })
 
   const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
-    realtime: false,
   })
 
-  // Hooks CRUD no topo
-  const { update: updateAccount } = useLocalData({ table: 'accounts' as any })
-  const { create: createTransaction, update: updateTransaction } = useLocalData({ table: 'transactions' as any })
+  // ============================================================
+  // 🔥 REMOVIDOS: hooks CRUD do useLocalData
+  // ============================================================
+  // Agora usamos db.table() diretamente
 
   // ============================================================
   // PULL TO REFRESH
@@ -209,7 +207,7 @@ export default function CardDetailPage() {
   }
 
   // ============================================================
-  // 🔥 PAGAR FATURA (COM HOOK LOCAL)
+  // 🔥 PAGAR FATURA (COM db.table() DIRETO)
   // ============================================================
   const handlePayFatura = async () => {
     if (!user?.id || !card) return
@@ -224,13 +222,14 @@ export default function CardDetailPage() {
         return
       }
 
-      // 1. Atualizar saldo da conta
-      await updateAccount(targetAccount.id, {
+      // 🔥 1. Atualizar saldo da conta usando db.table().update()
+      await db.table('accounts').update(targetAccount.id, {
         balance: Number(targetAccount.balance) - totalFatura
       })
 
-      // 2. Criar transação de pagamento
-      await createTransaction({
+      // 🔥 2. Criar transação de pagamento usando db.table().add()
+      await db.table('transactions').add({
+        id: crypto.randomUUID(),
         user_id: user.id,
         type: 'expense',
         amount: totalFatura,
@@ -241,16 +240,20 @@ export default function CardDetailPage() {
         status: 'done',
         context: card.context,
         affects_balance: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
 
-      // 3. Atualizar transações do cartão (afetam saldo)
+      // 🔥 3. Atualizar transações do cartão (afetam saldo) usando db.table().update()
       const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
       const allTxs = (localTransactions || []) as any[]
       const cardTxs = allTxs.filter((t: any) => t.date >= start && t.date <= end)
 
       for (const tx of cardTxs) {
-        await updateTransaction(tx.id, { affects_balance: true })
+        await db.table('transactions').update(tx.id, { affects_balance: true })
       }
 
       showToast('Fatura paga com sucesso!', 'success')
@@ -278,9 +281,9 @@ export default function CardDetailPage() {
 
   if (!card) return null
 
-  const limitPercent = getLimitPercent(totalFatura, Number(card.credit_limit) || 0)
+  const limitPercent = getLimitPercent(totalFatura, Number(card.limit_amount) || 0)
   const limitColor = getLimitColor(limitPercent)
-  const available = (Number(card.credit_limit) || 0) - totalFatura
+  const available = (Number(card.limit_amount) || 0) - totalFatura
   const isNearLimit = limitPercent >= 90
   const brandLabel = getBrandLabel(card.brand)
   const monthLabel = format(currentMonth, 'MMMM yyyy', { locale: ptBR })
@@ -333,8 +336,8 @@ export default function CardDetailPage() {
                 {brandLabel && (
                   <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase">{brandLabel}</span>
                 )}
-                {card.last_digits && (
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500">•••• {card.last_digits}</span>
+                {card.last_four && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">•••• {card.last_four}</span>
                 )}
               </div>
             </div>
@@ -346,7 +349,7 @@ export default function CardDetailPage() {
                 Fatura atual: <span className="font-bold text-gray-800 dark:text-gray-200">{formatCurrency(totalFatura)}</span>
               </span>
               <span className="font-medium text-gray-400 dark:text-gray-500">
-                Limite: {formatCurrency(Number(card.credit_limit) || 0)}
+                Limite: {formatCurrency(Number(card.limit_amount) || 0)}
               </span>
             </div>
             <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
@@ -399,7 +402,7 @@ export default function CardDetailPage() {
               <CreditCard size={14} className="text-teal-600 dark:text-teal-400" />
             </div>
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Limite Total</p>
-            <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(card.credit_limit) || 0)}</p>
+            <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(card.limit_amount) || 0)}</p>
           </div>
           <div className={`rounded-[20px] p-4 shadow-sm border text-center ${
             available > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800'
