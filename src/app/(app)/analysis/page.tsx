@@ -1,6 +1,5 @@
 'use client'
 
-
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -118,12 +117,10 @@ function AnalysisContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  // 🔥 DADOS LOCAIS
+  // 🔥 DADOS LOCAIS - REMOVIDOS orderBy e orderDir
   const { data: localTransactions, loading: txLoading } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context },
-    orderBy: 'date',
-    orderDir: 'desc',
   })
   const { data: localCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
@@ -304,7 +301,7 @@ function AnalysisContent() {
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
 
-  // 🔥 OTIMIZAÇÃO: dashboardContent com useMemo (recalcula apenas quando metrics mudar)
+  // 🔥 OTIMIZAÇÃO: dashboardContent com useMemo
   const dashboardContent = useMemo(() => {
     if (metricsLoading || !metrics) {
       return (
