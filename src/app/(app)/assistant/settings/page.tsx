@@ -14,8 +14,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 // ============================================================
 // SKELETON LOADER
@@ -68,9 +67,6 @@ export default function AssistantSettingsPage() {
     table: 'user_settings' as any,
     filters: { user_id: user?.id },
   })
-
-  // 🔥 REMOVIDOS: const { update: updateSettings } = useLocalData({ table: 'user_settings' as any })
-  // 🔥 REMOVIDOS: const { create: createSettings } = useLocalData({ table: 'user_settings' as any })
 
   // ============================================================
   // ESTADOS LOCAIS
@@ -175,7 +171,7 @@ export default function AssistantSettingsPage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO
+  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
   // ============================================================
   const handleSave = async () => {
     if (!user?.id) return
@@ -189,17 +185,20 @@ export default function AssistantSettingsPage() {
       }
 
       if (localSettings && localSettings.length > 0) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
-        await db.table('user_settings').update((localSettings[0] as any).id, payload)
+        const existingId = (localSettings[0] as any).id
+        await db.table('user_settings').update(existingId, payload)
+        await addToSyncQueue(user.id, 'user_settings', 'update', existingId, payload)
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('user_settings').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           ...payload,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('user_settings').add(fullPayload)
+        await addToSyncQueue(user.id, 'user_settings', 'create', id, fullPayload)
       }
 
       showToast('Configurações salvas!', 'success')
