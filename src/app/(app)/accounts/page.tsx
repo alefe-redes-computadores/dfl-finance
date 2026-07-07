@@ -1,5 +1,4 @@
-"use client"
-
+'use client'
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
@@ -22,7 +21,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -62,16 +61,28 @@ function AccountsContent() {
     filters: { context },
   })
 
+  // 🔥 CORRIGIDO: Exclusão com sincronização
   const handleDelete = async () => {
-    if (!deleteModal) return
+    if (!deleteModal || !user) return
     try {
+      // 1. Apaga do IndexedDB
       await db.table('accounts').delete(deleteModal)
+      
+      // 2. Adiciona à fila de sincronização (delete)
+      await addToSyncQueue(
+        user.id,
+        'accounts',
+        'delete',
+        deleteModal,
+        { id: deleteModal }
+      )
+      
       showToast("Conta excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
-      showToast("Erro ao excluir conta", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
     }
   }
