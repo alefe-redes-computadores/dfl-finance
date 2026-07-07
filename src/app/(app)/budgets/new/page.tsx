@@ -11,7 +11,7 @@ import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -52,8 +52,6 @@ function NewBudgetContent() {
     filters: { id: editId || '' },
   })
 
-  // 🔥 REMOVIDOS: const { create, update } = useLocalData({ table: 'budgets' as any })
-
   // ============================================================
   // LOAD DATA
   // ============================================================
@@ -93,7 +91,7 @@ function NewBudgetContent() {
   }, [user?.id, editId])
 
   // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO
+  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
   // ============================================================
   const handleSave = async () => {
     if (!user?.id || !name.trim() || amountNum <= 0) {
@@ -116,13 +114,13 @@ function NewBudgetContent() {
 
     try {
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
         await db.table('budgets').update(editId, payload)
+        await addToSyncQueue(user.id, 'budgets', 'update', editId, payload)
         showToast('Orçamento atualizado!', 'success')
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('budgets').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           user_id: user.id,
           ...payload,
           spent: 0,
@@ -132,7 +130,9 @@ function NewBudgetContent() {
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('budgets').add(fullPayload)
+        await addToSyncQueue(user.id, 'budgets', 'create', id, fullPayload)
         showToast('Orçamento criado!', 'success')
       }
       router.push('/budgets')
