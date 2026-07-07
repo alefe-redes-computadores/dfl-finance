@@ -24,8 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function SubscriptionsPage() {
   const router = useRouter()
@@ -51,13 +50,12 @@ export default function SubscriptionsPage() {
     filters: { context },
   })
 
-  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'subscriptions' as any })
-
-  // 🔥 CORRIGIDO: Remove assinatura com db.table().delete()
+  // 🔥 CORRIGIDO: Remove assinatura com db.table().delete() + addToSyncQueue
   const handleDelete = async () => {
-    if (!deleteModal) return
+    if (!deleteModal || !user) return
     try {
       await db.table('subscriptions').delete(deleteModal)
+      await addToSyncQueue(user.id, 'subscriptions', 'delete', deleteModal, { id: deleteModal })
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -168,14 +166,12 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {/* Bolinha de loading sutil */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -185,9 +181,7 @@ export default function SubscriptionsPage() {
         </div>
       )}
 
-      {/* Header fixo */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
-        {/* Barra do topo */}
         <div className="flex items-center justify-between pt-4 mb-3">
           <div>
             <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
@@ -224,7 +218,6 @@ export default function SubscriptionsPage() {
           </div>
         </div>
 
-        {/* Card de total mensal */}
         <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 mb-3 text-white shadow-lg shadow-teal-500/20">
           <div className="flex items-center justify-between">
             <div>
@@ -240,7 +233,6 @@ export default function SubscriptionsPage() {
           </p>
         </div>
 
-        {/* Search */}
         {showSearch && (
           <div className="relative mb-2">
             <Search
@@ -257,7 +249,6 @@ export default function SubscriptionsPage() {
           </div>
         )}
 
-        {/* Filtros */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setSortBy("updated_at")}
@@ -292,7 +283,6 @@ export default function SubscriptionsPage() {
         </div>
       </div>
 
-      {/* Lista */}
       <div
         ref={scrollRef}
         onTouchStart={handleTouchStart}
@@ -314,7 +304,6 @@ export default function SubscriptionsPage() {
                 key={sub.id}
                 className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all"
               >
-                {/* Card principal */}
                 <button
                   onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
                   className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
@@ -358,7 +347,6 @@ export default function SubscriptionsPage() {
                   )}
                 </button>
 
-                {/* Ações */}
                 <div className="px-4 pb-3 flex gap-2">
                   <button
                     onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
@@ -380,7 +368,6 @@ export default function SubscriptionsPage() {
         )}
       </div>
 
-      {/* Modal de exclusão */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
