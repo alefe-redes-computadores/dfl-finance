@@ -28,7 +28,7 @@ import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db'
 
 async function processOCR(file: File): Promise<{
   amount: string
@@ -59,7 +59,10 @@ async function processOCR(file: File): Promise<{
     }
   }
 
-  const formattedAmount = amount || '0,00'
+  // 🔥 Converte number para string formatada com vírgula (ex: 150.50 → "150,50")
+  const formattedAmount = amount !== null && amount !== undefined
+    ? amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '0,00'
 
   return {
     amount: formattedAmount,
@@ -137,9 +140,6 @@ function ImportContent() {
     }
   }
 
-  // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
-  // ============================================================
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) return
@@ -176,7 +176,6 @@ function ImportContent() {
         sync_attempts: 0,
       }
 
-      // 🔥 CRIA TRANSAÇÃO COM addToSyncQueue
       await db.table('transactions').add(txPayload)
       await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
 
@@ -235,6 +234,7 @@ function ImportContent() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
             />
