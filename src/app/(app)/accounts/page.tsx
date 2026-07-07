@@ -21,7 +21,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -56,6 +56,7 @@ function AccountsContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: accounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
@@ -65,10 +66,7 @@ function AccountsContent() {
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      // 1. Apaga do IndexedDB
       await db.table('accounts').delete(deleteModal)
-      
-      // 2. Adiciona à fila de sincronização (delete)
       await addToSyncQueue(
         user.id,
         'accounts',
@@ -76,7 +74,6 @@ function AccountsContent() {
         deleteModal,
         { id: deleteModal }
       )
-      
       showToast("Conta excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
