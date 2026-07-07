@@ -190,7 +190,7 @@ export default function TransactionsPage() {
     localFilters.status = statusFilter
   }
 
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const {
     data: localTransactions,
     loading,
