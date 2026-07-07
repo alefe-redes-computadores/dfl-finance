@@ -24,8 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function ContactDetailPage() {
   const router = useRouter()
@@ -35,6 +34,7 @@ export default function ContactDetailPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
+  const { user } = useAuth() // 🔥 ADICIONADO
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -58,8 +58,6 @@ export default function ContactDetailPage() {
 
   const transactions = allTransactions || []
 
-  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'contacts' as any })
-
   // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -77,11 +75,13 @@ export default function ContactDetailPage() {
     }
   }, [refreshing, reload])
 
-  // 🔥 CORRIGIDO: Excluir contato com db.table().delete()
+  // 🔥 CORRIGIDO: Excluir contato com addToSyncQueue
   const handleDelete = async () => {
+    if (!user) return
     if (!confirm("Tem certeza que deseja excluir este contato? As transações vinculadas não serão afetadas.")) return
     try {
       await db.table('contacts').delete(contactId)
+      await addToSyncQueue(user.id, 'contacts', 'delete', contactId, { id: contactId })
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
@@ -146,14 +146,12 @@ export default function ContactDetailPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {/* Bolinha de loading */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -163,7 +161,6 @@ export default function ContactDetailPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -193,14 +190,12 @@ export default function ContactDetailPage() {
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div
         ref={scrollRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4"
       >
-        {/* Card de perfil */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex items-center gap-4 mb-4">
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${
@@ -228,7 +223,6 @@ export default function ContactDetailPage() {
             </div>
           </div>
 
-          {/* Informações de contato */}
           <div className="space-y-2.5">
             {contactData.email && (
               <div className="flex items-center gap-3 text-sm">
@@ -261,7 +255,6 @@ export default function ContactDetailPage() {
             )}
           </div>
 
-          {/* Campos extras para PF */}
           {contactData.type === "individual" && (contactData.company || contactData.position) && (
             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
               {contactData.company && (
@@ -287,7 +280,6 @@ export default function ContactDetailPage() {
           )}
         </div>
 
-        {/* Resumo financeiro */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
           <h3 className="font-black text-slate-800 dark:text-slate-200 mb-3">Resumo Financeiro</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -304,7 +296,6 @@ export default function ContactDetailPage() {
           </div>
         </div>
 
-        {/* Transações vinculadas */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
