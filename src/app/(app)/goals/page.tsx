@@ -14,7 +14,7 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const GoalsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
@@ -48,9 +48,6 @@ function GoalsContent() {
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
-  // ============================================================
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
     table: 'goals' as any,
     filters: { context },
@@ -60,8 +57,6 @@ function GoalsContent() {
     table: 'transactions' as any,
     filters: { context },
   })
-
-  // 🔥 REMOVIDO: const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -150,13 +145,13 @@ function GoalsContent() {
     }
   })
 
-  // ============================================================
-  // 🔥 CORRIGIDO: HANDLER DE DELETE COM db.table().delete()
-  // ============================================================
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM addToSyncQueue
   const handleDelete = async (id: string) => {
+    if (!user) return
     if (!confirm('Excluir esta meta?')) return
     try {
       await db.table('goals').delete(id)
+      await addToSyncQueue(user.id, 'goals', 'delete', id, { id })
       showToast('Meta excluída.', 'info')
       loadData()
     } catch (err: any) {
