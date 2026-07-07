@@ -12,7 +12,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 // ============================================================
 // SKELETON LOADER
@@ -122,7 +122,6 @@ export default function NotificationsPage() {
   // ============================================================
   useEffect(() => {
     if (localNotifications) {
-      // 🔥 Mapeia para usar is_read em vez de read
       const mapped = localNotifications.map((n: any) => ({
         ...n,
         is_read: n.is_read !== undefined ? n.is_read : n.read || false,
@@ -135,17 +134,19 @@ export default function NotificationsPage() {
   }, [localNotifications])
 
   // ============================================================
-  // 🔥 HANDLERS — USANDO is_read
+  // 🔥 HANDLERS CORRIGIDOS COM addToSyncQueue
   // ============================================================
   const markAsRead = async (id: string) => {
+    if (!user) return
     try {
-      await db.table('notifications').update(id, { 
+      const updateData = {
         is_read: true,
         read: true,
         updated_at: new Date().toISOString()
-      })
+      }
+      await db.table('notifications').update(id, updateData)
+      await addToSyncQueue(user.id, 'notifications', 'update', id, updateData)
       
-      // Atualiza localmente
       const updated = notifications.map((n: any) => 
         n.id === id ? { ...n, is_read: true, read: true } : n
       )
@@ -165,14 +166,15 @@ export default function NotificationsPage() {
     try {
       const unread = notifications.filter((n: any) => !n.is_read && !n.read)
       for (const notif of unread) {
-        await db.table('notifications').update(notif.id, { 
+        const updateData = {
           is_read: true,
           read: true,
           updated_at: new Date().toISOString()
-        })
+        }
+        await db.table('notifications').update(notif.id, updateData)
+        await addToSyncQueue(user.id, 'notifications', 'update', notif.id, updateData)
       }
       
-      // Atualiza localmente
       const updated = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
       setNotifications(updated)
       setUnreadCount(0)
@@ -185,8 +187,10 @@ export default function NotificationsPage() {
   }
 
   const deleteNotification = async (id: string) => {
+    if (!user) return
     try {
       await db.table('notifications').delete(id)
+      await addToSyncQueue(user.id, 'notifications', 'delete', id, { id })
       showToast('Notificação removida.', 'info')
       loadNotifications()
     } catch (err: any) {
