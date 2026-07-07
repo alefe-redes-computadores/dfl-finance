@@ -105,18 +105,17 @@ export default function BudgetDetailPage() {
   const [projection, setProjection] = useState('')
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime do useLocalData
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { id: id as string },
   })
 
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
-    orderBy: 'date',
-    orderDir: 'desc',
   })
 
   // ============================================================
@@ -273,7 +272,6 @@ export default function BudgetDetailPage() {
       )}
 
       <div className="flex items-center justify-between mb-6">
-        {/* 🔥 CORRIGIDO: router.back() → router.push('/budgets') */}
         <button onClick={() => router.push('/budgets')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
           <ChevronLeft size={24} />
         </button>
