@@ -15,8 +15,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function NewContactPage() {
   const router = useRouter()
@@ -52,8 +51,6 @@ export default function NewContactPage() {
 
   const contactData = localContacts?.find((c: any) => c.id === editId) as any
 
-  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'contacts' as any })
-
   // Preenche formulário para edição
   useEffect(() => {
     if (contactData) {
@@ -87,6 +84,7 @@ export default function NewContactPage() {
     }
   }, [refreshing])
 
+  // 🔥 CORRIGIDO: handleSave com addToSyncQueue
   const handleSave = async () => {
     if (!name.trim()) {
       showToast("Preencha o nome do contato", "warning")
@@ -114,19 +112,21 @@ export default function NewContactPage() {
       }
 
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
         await db.table('contacts').update(editId, payload)
+        await addToSyncQueue(user!.id, 'contacts', 'update', editId, payload)
         showToast("Contato atualizado com sucesso!", "success")
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('contacts').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           user_id: user!.id,
           ...payload,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('contacts').add(fullPayload)
+        await addToSyncQueue(user!.id, 'contacts', 'create', id, fullPayload)
         showToast("Contato criado com sucesso!", "success")
       }
 
@@ -140,12 +140,13 @@ export default function NewContactPage() {
     }
   }
 
+  // 🔥 CORRIGIDO: handleDelete com addToSyncQueue
   const handleDelete = async () => {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este contato?")) return
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete()
       await db.table('contacts').delete(editId)
+      await addToSyncQueue(user!.id, 'contacts', 'delete', editId, { id: editId })
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
@@ -163,7 +164,6 @@ export default function NewContactPage() {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -173,7 +173,6 @@ export default function NewContactPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <button
@@ -217,9 +216,7 @@ export default function NewContactPage() {
         </div>
       </div>
 
-      {/* Formulário */}
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
-        {/* Tipo */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Tipo
@@ -250,7 +247,6 @@ export default function NewContactPage() {
           </div>
         </div>
 
-        {/* Nome */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             {type === "company" ? "Razão Social" : "Nome Completo"}
@@ -264,7 +260,6 @@ export default function NewContactPage() {
           />
         </div>
 
-        {/* Documento */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             {type === "company" ? "CNPJ" : "CPF"} (opcional)
@@ -278,7 +273,6 @@ export default function NewContactPage() {
           />
         </div>
 
-        {/* Email */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Email (opcional)
@@ -292,7 +286,6 @@ export default function NewContactPage() {
           />
         </div>
 
-        {/* Telefone */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Telefone (opcional)
@@ -306,7 +299,6 @@ export default function NewContactPage() {
           />
         </div>
 
-        {/* Campos adicionais para PF */}
         {type === "individual" && (
           <>
             <div>
@@ -336,7 +328,6 @@ export default function NewContactPage() {
           </>
         )}
 
-        {/* Endereço */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Endereço (opcional)
@@ -350,7 +341,6 @@ export default function NewContactPage() {
           />
         </div>
 
-        {/* Cidade, Estado, CEP */}
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
@@ -391,7 +381,6 @@ export default function NewContactPage() {
           </div>
         </div>
 
-        {/* Observações */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Observações (opcional)
@@ -405,7 +394,6 @@ export default function NewContactPage() {
           />
         </div>
 
-        {/* Botão Salvar fixo no mobile */}
         <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
           <button
             onClick={handleSave}
