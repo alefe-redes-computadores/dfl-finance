@@ -14,8 +14,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const CATEGORIES = [
   "Streaming",
@@ -46,7 +45,7 @@ export default function NewSubscriptionPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { context } = useContext_()
-  const { user } = useAuth() // 🔥 ADICIONADO
+  const { user } = useAuth()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -68,8 +67,6 @@ export default function NewSubscriptionPage() {
   })
 
   const subscriptionData = localSubscriptions?.find((s: any) => s.id === editId) as any
-
-  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'subscriptions' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -128,19 +125,25 @@ export default function NewSubscriptionPage() {
       }
 
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
+        // 🔥 ATUALIZA NO INDEXEDDB
         await db.table('subscriptions').update(editId, payload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user!.id, 'subscriptions', 'update', editId, payload)
         showToast("Assinatura atualizada com sucesso!", "success")
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('subscriptions').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           user_id: user!.id,
           ...payload,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        // 🔥 CRIA NO INDEXEDDB
+        await db.table('subscriptions').add(fullPayload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user!.id, 'subscriptions', 'create', id, fullPayload)
         showToast("Assinatura criada com sucesso!", "success")
       }
 
@@ -158,8 +161,10 @@ export default function NewSubscriptionPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir esta assinatura?")) return
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete()
+      // 🔥 EXCLUI DO INDEXEDDB
       await db.table('subscriptions').delete(editId)
+      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+      await addToSyncQueue(user!.id, 'subscriptions', 'delete', editId, { id: editId })
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       router.back()
@@ -177,7 +182,6 @@ export default function NewSubscriptionPage() {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -187,7 +191,6 @@ export default function NewSubscriptionPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <button
@@ -231,9 +234,7 @@ export default function NewSubscriptionPage() {
         </div>
       </div>
 
-      {/* Formulário */}
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
-        {/* Nome */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Nome da Assinatura
@@ -247,7 +248,6 @@ export default function NewSubscriptionPage() {
           />
         </div>
 
-        {/* Valor e Ciclo */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
@@ -280,7 +280,6 @@ export default function NewSubscriptionPage() {
           </div>
         </div>
 
-        {/* Categoria */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Categoria (opcional)
@@ -302,7 +301,6 @@ export default function NewSubscriptionPage() {
           </div>
         </div>
 
-        {/* Próximo vencimento */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Próximo Vencimento (opcional)
@@ -315,7 +313,6 @@ export default function NewSubscriptionPage() {
           />
         </div>
 
-        {/* Forma de pagamento */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Forma de Pagamento (opcional)
@@ -329,7 +326,6 @@ export default function NewSubscriptionPage() {
           />
         </div>
 
-        {/* Status */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Status
@@ -355,7 +351,6 @@ export default function NewSubscriptionPage() {
           </div>
         </div>
 
-        {/* Observações */}
         <div>
           <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
             Observações (opcional)
@@ -369,7 +364,6 @@ export default function NewSubscriptionPage() {
           />
         </div>
 
-        {/* Botão Salvar fixo no mobile */}
         <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
           <button
             onClick={handleSave}
