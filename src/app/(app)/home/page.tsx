@@ -92,13 +92,11 @@ function HomeContent() {
   const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
   // ============================================================
-  // 🔥 DADOS LOCAIS (Reativos - Dexie)
+  // 🔥 DADOS LOCAIS (Reativos - Dexie) - REMOVIDOS orderBy e orderDir
   // ============================================================
   const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context },
-    orderBy: 'date',
-    orderDir: 'desc',
   })
   const { data: localCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
@@ -243,7 +241,6 @@ function HomeContent() {
 
   const financings = localFinancings || []
 
-  // 🔥 CORREÇÃO: Tipagem do cat com as any + fallback
   const budgets = useMemo(() => {
     const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
       const cat = (localCategories || []).find((c: any) => c.id === budget.category_id) as any
@@ -254,7 +251,7 @@ function HomeContent() {
       const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
       return { 
         ...budget, 
-        name: cat?.name ?? budget.name,  // 🔥 fallback seguro
+        name: cat?.name ?? budget.name,
         icon: cat?.icon ?? budget.icon,
         color: cat?.color ?? budget.color,
         spent, 
@@ -921,7 +918,6 @@ function HomeContent() {
         </div>
       )}
 
-      {/* 🔥 CORREÇÃO: DebtAlert só exibe dívidas NÃO pagas */}
       {debtsList
         .filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) > 0 && d.status !== 'paid')
         .map((debt: any) => (
