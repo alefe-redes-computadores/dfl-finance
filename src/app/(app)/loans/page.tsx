@@ -26,8 +26,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 type Payment = {
   id: string
@@ -70,8 +69,6 @@ export default function LoansPage() {
     filters: { context, type: 'loan_payment' },
   })
 
-  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'loans' as any })
-
   // Agrupa pagamentos por loan_id
   const paymentsByLoan = (allPayments || []).reduce((acc: Record<string, Payment[]>, p: any) => {
     if (p.loan_id) {
@@ -81,11 +78,13 @@ export default function LoansPage() {
     return acc
   }, {})
 
-  // 🔥 CORRIGIDO: Remove empréstimo com db.table().delete()
+  // 🔥 CORRIGIDO: Remove empréstimo com db.table().delete() + addToSyncQueue
   const handleDelete = async () => {
-    if (!deleteModal) return
+    if (!deleteModal || !user) return
     try {
       await db.table('loans').delete(deleteModal)
+      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+      await addToSyncQueue(user.id, 'loans', 'delete', deleteModal, { id: deleteModal })
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
