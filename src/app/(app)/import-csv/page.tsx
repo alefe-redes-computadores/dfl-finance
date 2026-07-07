@@ -14,7 +14,7 @@ import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const PreviewSkeleton = () => (
   <div className="animate-pulse space-y-4">
@@ -74,8 +74,6 @@ export default function ImportCSVPage() {
     table: 'categories' as any,
     filters: { context },
   })
-
-  // 🔥 REMOVIDO: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -162,7 +160,7 @@ export default function ImportCSVPage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE IMPORT CORRIGIDO
+  // 🔥 HANDLE IMPORT CORRIGIDO COM addToSyncQueue
   // ============================================================
   const handleImport = async () => {
     if (!user?.id) {
@@ -260,9 +258,9 @@ export default function ImportCSVPage() {
             if (found) categoryId = found.id
           }
 
-          // 🔥 CORRIGIDO: Usando db.table().add()
-          await db.table('transactions').add({
-            id: crypto.randomUUID(),
+          const txId = crypto.randomUUID()
+          const txPayload = {
+            id: txId,
             user_id: user.id,
             context: context,
             type: type,
@@ -277,7 +275,11 @@ export default function ImportCSVPage() {
             updated_at: new Date().toISOString(),
             sync_status: 'pending',
             sync_attempts: 0,
-          })
+          }
+
+          // 🔥 CRIA TRANSAÇÃO COM addToSyncQueue
+          await db.table('transactions').add(txPayload)
+          await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
 
           successCount++
         } catch (err) {
