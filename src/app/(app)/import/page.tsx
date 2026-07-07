@@ -28,7 +28,7 @@ import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 async function processOCR(file: File): Promise<{
   amount: string
@@ -105,8 +105,6 @@ function ImportContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 REMOVIDO: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
-
   const handleFileSelect = async (selectedFile: File | null) => {
     if (!selectedFile) return
     setFile(selectedFile)
@@ -139,6 +137,9 @@ function ImportContent() {
     }
   }
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
+  // ============================================================
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) return
@@ -155,9 +156,9 @@ function ImportContent() {
     setStep('saving')
 
     try {
-      // 🔥 CORRIGIDO: Usando db.table().add()
-      await db.table('transactions').add({
-        id: crypto.randomUUID(),
+      const txId = crypto.randomUUID()
+      const txPayload = {
+        id: txId,
         user_id: user.id,
         amount: amountNum,
         type: 'expense',
@@ -173,7 +174,11 @@ function ImportContent() {
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
+
+      // 🔥 CRIA TRANSAÇÃO COM addToSyncQueue
+      await db.table('transactions').add(txPayload)
+      await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
 
       router.push('/home')
     } catch (err: any) {
