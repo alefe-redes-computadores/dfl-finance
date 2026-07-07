@@ -10,7 +10,7 @@ import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -46,19 +46,11 @@ export default function CategoriesPage() {
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Removido realtime
-  // ============================================================
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext, type: tab },
   })
 
-  // 🔥 REMOVIDOS: const { create: createCategory, update: updateCategory, remove: removeCategory } = useLocalData({ table: 'categories' as any })
-
-  // ============================================================
-  // INICIALIZAÇÃO
-  // ============================================================
   useEffect(() => {
     if (user) {
       ensureDefaultCategories()
@@ -84,9 +76,9 @@ export default function CategoriesPage() {
 
     try {
       for (const cat of missing) {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('categories').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const payload = {
+          id,
           user_id: user.id,
           ...cat,
           is_default: true,
@@ -95,7 +87,10 @@ export default function CategoriesPage() {
           updated_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('categories').add(payload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user.id, 'categories', 'create', id, payload)
       }
       await reloadCategories()
     } catch (e) {
@@ -122,9 +117,6 @@ export default function CategoriesPage() {
     setSubcategories(subsMap)
   }
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
   function toggleExpand(catId: string) {
     setExpandedId(expandedId === catId ? null : catId)
   }
@@ -155,11 +147,8 @@ export default function CategoriesPage() {
     setShowForm(true)
   }
 
-  // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO
-  // ============================================================
   async function handleSave() {
-    if (!name) return
+    if (!name || !user) return
     setSaving(true)
 
     const payload = {
@@ -176,19 +165,23 @@ export default function CategoriesPage() {
 
     try {
       if (editingCategory) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
+        // 🔥 ATUALIZA NO INDEXEDDB
         await db.table('categories').update(editingCategory.id, payload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user.id, 'categories', 'update', editingCategory.id, payload)
         showToast('Categoria atualizada!', 'success')
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('categories').add({
-          id: crypto.randomUUID(),
-          user_id: user!.id,
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
+          user_id: user.id,
           ...payload,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('categories').add(fullPayload)
+        await addToSyncQueue(user.id, 'categories', 'create', id, fullPayload)
         showToast('Categoria criada!', 'success')
       }
 
@@ -205,15 +198,14 @@ export default function CategoriesPage() {
     }
   }
 
-  // ============================================================
-  // 🔥 HANDLE DELETE CORRIGIDO
-  // ============================================================
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria?')) return
+    if (!user) return
     
     try {
       await db.table('categories').delete(id)
+      await addToSyncQueue(user.id, 'categories', 'delete', id, { id })
       showToast('Categoria excluída!', 'info')
       await loadCategories()
     } catch (err: any) {
