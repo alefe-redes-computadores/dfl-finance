@@ -21,8 +21,9 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
+import { useAuth } from '@/lib/hooks/useAuth' // 🔥 ADICIONADO
 import Skeleton from '@/components/Skeleton'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
