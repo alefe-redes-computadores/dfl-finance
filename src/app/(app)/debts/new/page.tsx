@@ -10,7 +10,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -96,6 +96,7 @@ function NewDebtContent() {
     setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
+  // 🔥 CORRIGIDO: Salvar dívida com addToSyncQueue
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -119,18 +120,26 @@ function NewDebtContent() {
 
     try {
       if (editId) {
+        // 🔥 ATUALIZA NO INDEXEDDB
         await db.table('debts').update(editId, payload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user.id, 'debts', 'update', editId, payload)
         showToast('Empréstimo atualizado com sucesso!', 'success')
       } else {
-        await db.table('debts').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           user_id: user.id,
           ...payload,
           paid_amount: 0,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        // 🔥 CRIA NO INDEXEDDB
+        await db.table('debts').add(fullPayload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user.id, 'debts', 'create', id, fullPayload)
         showToast('Empréstimo registrado com sucesso!', 'success')
       }
       router.push('/debts')
