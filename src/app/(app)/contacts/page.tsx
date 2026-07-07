@@ -21,8 +21,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function ContactsPage() {
   const router = useRouter()
@@ -60,13 +59,12 @@ export default function ContactsPage() {
     return acc
   }, {})
 
-  // 🔥 REMOVIDO: const { remove } = useLocalData({ table: 'contacts' as any })
-
-  // 🔥 CORRIGIDO: Remove contato com db.table().delete()
+  // 🔥 CORRIGIDO: Remove contato com db.table().delete() + addToSyncQueue
   const handleDelete = async () => {
-    if (!deleteModal) return
+    if (!deleteModal || !user) return
     try {
       await db.table('contacts').delete(deleteModal)
+      await addToSyncQueue(user.id, 'contacts', 'delete', deleteModal, { id: deleteModal })
       showToast("Contato excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -129,14 +127,12 @@ export default function ContactsPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {/* Bolinha de loading sutil */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -146,9 +142,7 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Header fixo */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
-        {/* Barra do topo */}
         <div className="flex items-center justify-between pt-4 mb-3">
           <div>
             <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
@@ -176,7 +170,6 @@ export default function ContactsPage() {
           </div>
         </div>
 
-        {/* Search */}
         {showSearch && (
           <div className="relative mb-2">
             <Search
@@ -193,7 +186,6 @@ export default function ContactsPage() {
           </div>
         )}
 
-        {/* Filtros de tipo */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setTypeFilter("all")}
@@ -230,7 +222,6 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Lista */}
       <div
         ref={scrollRef}
         onTouchStart={handleTouchStart}
@@ -270,7 +261,6 @@ export default function ContactsPage() {
                           onClick={() => router.push(`/contacts/${c.id}`)}
                           className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                         >
-                          {/* Avatar */}
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                             c.type === "company"
                               ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
@@ -283,7 +273,6 @@ export default function ContactsPage() {
                             )}
                           </div>
 
-                          {/* Info */}
                           <div className="flex-1 min-w-0 text-left">
                             <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">
                               {c.name}
@@ -309,7 +298,6 @@ export default function ContactsPage() {
                             )}
                           </div>
 
-                          {/* Badge de transações e ação */}
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {txCount > 0 && (
                               <span className="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">
@@ -320,7 +308,6 @@ export default function ContactsPage() {
                           </div>
                         </button>
 
-                        {/* Ação rápida: excluir */}
                         <div className="px-3 pb-2 flex justify-end">
                           <button
                             onClick={() => setDeleteModal(c.id)}
@@ -340,7 +327,6 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {/* Modal de exclusão */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
