@@ -21,7 +21,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
-import { useAuth } from '@/lib/hooks/useAuth' // 🔥 ADICIONADO
+import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
 import { db, addToSyncQueue } from '@/lib/db'
 
@@ -51,7 +51,7 @@ export default function AccountDetailPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
-  const { user } = useAuth() // 🔥 ADICIONADO para pegar user.id
+  const { user } = useAuth()
 
   const [refreshing, setRefreshing] = useState(false)
   const [expandedTransactions, setExpandedTransactions] = useState(false)
@@ -66,18 +66,16 @@ export default function AccountDetailPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: localAccounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: allTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, account_id: accountId },
-    orderBy: 'date',
-    orderDir: 'desc',
   })
 
   const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
@@ -104,9 +102,7 @@ export default function AccountDetailPage() {
       const amount = parseFloat(adjustAmount)
       const newBalance = (accountData?.balance || 0) + amount
 
-      // 1. Atualiza a conta no IndexedDB
       await db.table('accounts').update(accountId, { balance: newBalance })
-      // 2. Enfileira a atualização da conta
       await addToSyncQueue(
         user.id,
         'accounts',
@@ -115,7 +111,6 @@ export default function AccountDetailPage() {
         { balance: newBalance }
       )
 
-      // 3. Cria a transação no IndexedDB
       const txId = crypto.randomUUID()
       const newTx = {
         id: txId,
@@ -133,7 +128,6 @@ export default function AccountDetailPage() {
         sync_attempts: 0,
       }
       await db.table('transactions').put(newTx)
-      // 4. Enfileira a transação
       await addToSyncQueue(
         user.id,
         'transactions',
@@ -176,7 +170,6 @@ export default function AccountDetailPage() {
       const fromTxId = crypto.randomUUID()
       const toTxId = crypto.randomUUID()
 
-      // 1. Transação de saída (conta origem)
       const fromTx = {
         id: fromTxId,
         user_id: accountData.user_id,
@@ -196,7 +189,6 @@ export default function AccountDetailPage() {
       await db.table('transactions').put(fromTx)
       await addToSyncQueue(user.id, 'transactions', 'create', fromTxId, fromTx)
 
-      // 2. Transação de entrada (conta destino)
       const toTx = {
         id: toTxId,
         user_id: accountData.user_id,
@@ -216,7 +208,6 @@ export default function AccountDetailPage() {
       await db.table('transactions').put(toTx)
       await addToSyncQueue(user.id, 'transactions', 'create', toTxId, toTx)
 
-      // 3. Atualiza saldo da conta origem
       const newFromBalance = (accountData?.balance || 0) - amount
       await db.table('accounts').update(accountId, { balance: newFromBalance })
       await addToSyncQueue(
@@ -227,7 +218,6 @@ export default function AccountDetailPage() {
         { balance: newFromBalance }
       )
 
-      // 4. Atualiza saldo da conta destino
       const toAccount = (localAccounts || []).find((a: any) => a.id === transferToAccount) as any
       const newToBalance = (toAccount?.balance || 0) + amount
       await db.table('accounts').update(transferToAccount, { balance: newToBalance })
