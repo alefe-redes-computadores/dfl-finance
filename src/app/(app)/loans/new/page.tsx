@@ -13,8 +13,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function NewLoanPage() {
   const router = useRouter()
@@ -46,8 +45,6 @@ export default function NewLoanPage() {
   })
 
   const loanData = localLoans?.find((l: any) => l.id === editId) as any
-
-  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'loans' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -108,20 +105,26 @@ export default function NewLoanPage() {
       }
 
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
+        // 🔥 ATUALIZA NO INDEXEDDB
         await db.table('loans').update(editId, payload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user!.id, 'loans', 'update', editId, payload)
         showToast("Empréstimo atualizado com sucesso!", "success")
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('loans').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           user_id: user!.id,
           ...payload,
           remaining_amount: parseFloat(amount),
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        // 🔥 CRIA NO INDEXEDDB
+        await db.table('loans').add(fullPayload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user!.id, 'loans', 'create', id, fullPayload)
         showToast("Empréstimo criado com sucesso!", "success")
       }
 
@@ -139,8 +142,10 @@ export default function NewLoanPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este empréstimo?")) return
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete()
+      // 🔥 EXCLUI DO INDEXEDDB
       await db.table('loans').delete(editId)
+      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+      await addToSyncQueue(user!.id, 'loans', 'delete', editId, { id: editId })
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       router.back()
