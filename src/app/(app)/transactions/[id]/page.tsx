@@ -21,6 +21,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function EditTransactionPage() {
   const { id } = useParams()
@@ -340,6 +341,9 @@ export default function EditTransactionPage() {
     })
   }, [])
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
+  // ============================================================
   const handleSave = useCallback(async () => {
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     setSaving(true)
@@ -382,9 +386,11 @@ export default function EditTransactionPage() {
       financing_id: financingId,
       debt_id: debtId,
       is_reimbursable: isReimbursable,
+      updated_at: new Date().toISOString(),
     }
 
     try {
+      // 🔥 REVERTE SALDO DA CONTA ORIGINAL
       if (!isNew && tx?.status === 'done' && tx?.account_id) {
         const { data: oldAcc, error: oldAccErr } = await supabase
           .from('accounts')
@@ -398,13 +404,11 @@ export default function EditTransactionPage() {
             ? Number(oldAcc.balance) - Number(tx.amount)
             : Number(oldAcc.balance) + Number(tx.amount)
 
-        const { error: revertErr } = await supabase
-          .from('accounts')
-          .update({ balance: revertedBalance })
-          .match({ id: tx.account_id, user_id: user.id })
-        if (revertErr) throw revertErr
+        await db.table('accounts').update(tx.account_id, { balance: revertedBalance })
+        await addToSyncQueue(user.id, 'accounts', 'update', tx.account_id, { balance: revertedBalance })
       }
 
+      // 🔥 APLICA NOVO SALDO
       if (isPaid && accountId && !creditCardId) {
         const { data: newAcc, error: newAccErr } = await supabase
           .from('accounts')
@@ -418,72 +422,71 @@ export default function EditTransactionPage() {
             ? Number(newAcc.balance) + rawAmount
             : Number(newAcc.balance) - rawAmount
 
-        const { error: applyErr } = await supabase
-          .from('accounts')
-          .update({ balance: updatedBalance })
-          .match({ id: accountId, user_id: user.id })
-        if (applyErr) throw applyErr
+        await db.table('accounts').update(accountId, { balance: updatedBalance })
+        await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: updatedBalance })
       }
 
       if (isNew) {
-        const { data: savedTx, error } = await supabase.from('transactions').insert([payload]).select().single()
-        if (error) throw error
+        const txId = crypto.randomUUID()
+        const fullPayload = { id: txId, ...payload, created_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0 }
+        await db.table('transactions').add(fullPayload)
+        await addToSyncQueue(user.id, 'transactions', 'create', txId, fullPayload)
 
-        if (isReimbursable && savedTx) {
+        if (isReimbursable) {
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
-          const { data: reimbTx } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: user.id,
-              type: txType === 'expense' ? 'income' : 'expense',
-              amount: rawAmount,
-              description: `Reembolso: ${finalDescription}`,
-              date,
-              status: 'pending',
-              context: otherContext,
-              category_id: null,
-              linked_transaction_id: savedTx.id,
-              is_reimbursable: true,
-            })
-            .select()
-            .single()
-
-          if (reimbTx) {
-            await supabase
-              .from('transactions')
-              .update({ linked_transaction_id: reimbTx.id })
-              .eq('id', savedTx.id)
+          const reimbTxId = crypto.randomUUID()
+          const reimbPayload = {
+            id: reimbTxId,
+            user_id: user.id,
+            type: txType === 'expense' ? 'income' : 'expense',
+            amount: rawAmount,
+            description: `Reembolso: ${finalDescription}`,
+            date,
+            status: 'pending',
+            context: otherContext,
+            category_id: null,
+            linked_transaction_id: txId,
+            is_reimbursable: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
           }
+          await db.table('transactions').add(reimbPayload)
+          await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
+
+          await db.table('transactions').update(txId, { linked_transaction_id: reimbTxId })
+          await addToSyncQueue(user.id, 'transactions', 'update', txId, { linked_transaction_id: reimbTxId })
         }
       } else {
-        const { error } = await supabase.from('transactions').update(payload).match({ id, user_id: user.id })
-        if (error) throw error
+        await db.table('transactions').update(id as string, payload)
+        await addToSyncQueue(user.id, 'transactions', 'update', id as string, payload)
 
         if (isReimbursable && !tx?.is_reimbursable) {
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
-          const { data: reimbTx } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: user.id,
-              type: txType === 'expense' ? 'income' : 'expense',
-              amount: rawAmount,
-              description: `Reembolso: ${finalDescription}`,
-              date,
-              status: 'pending',
-              context: otherContext,
-              category_id: null,
-              linked_transaction_id: id,
-              is_reimbursable: true,
-            })
-            .select()
-            .single()
-
-          if (reimbTx) {
-            await supabase
-              .from('transactions')
-              .update({ linked_transaction_id: reimbTx.id })
-              .eq('id', id)
+          const reimbTxId = crypto.randomUUID()
+          const reimbPayload = {
+            id: reimbTxId,
+            user_id: user.id,
+            type: txType === 'expense' ? 'income' : 'expense',
+            amount: rawAmount,
+            description: `Reembolso: ${finalDescription}`,
+            date,
+            status: 'pending',
+            context: otherContext,
+            category_id: null,
+            linked_transaction_id: id,
+            is_reimbursable: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
           }
+          await db.table('transactions').add(reimbPayload)
+          await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
+
+          await db.table('transactions').update(id as string, { linked_transaction_id: reimbTxId })
+          await addToSyncQueue(user.id, 'transactions', 'update', id as string, { linked_transaction_id: reimbTxId })
         }
       }
 
@@ -512,12 +515,16 @@ export default function EditTransactionPage() {
     }
   }
 
+  // ============================================================
+  // 🔥 CONFIRM DELETE CORRIGIDO COM addToSyncQueue
+  // ============================================================
   const confirmDelete = async (mode: 'single' | 'future' | 'all') => {
     if (!user?.id) return
     setSaving(true)
     setShowDeleteModal(false)
 
     try {
+      // 🔥 REVERTE SALDO DA CONTA
       if (tx?.status === 'done' && tx?.account_id) {
         const { data: accData } = await supabase
           .from('accounts')
@@ -529,23 +536,40 @@ export default function EditTransactionPage() {
             tx.type === 'income'
               ? Number(accData.balance) - Number(tx.amount)
               : Number(accData.balance) + Number(tx.amount)
-          await supabase.from('accounts').update({ balance: newBalance }).match({ id: tx.account_id, user_id: user.id })
+          await db.table('accounts').update(tx.account_id, { balance: newBalance })
+          await addToSyncQueue(user.id, 'accounts', 'update', tx.account_id, { balance: newBalance })
         }
       }
 
       if (mode === 'single' || !hasInstallments) {
-        await supabase.from('transactions').delete().match({ id, user_id: user.id })
+        await db.table('transactions').delete(id as string)
+        await addToSyncQueue(user.id, 'transactions', 'delete', id as string, { id: id as string })
       } else if (mode === 'future' && tx?.recurring_group_id) {
-        await supabase
+        // 🔥 Busca transações futuras via supabase (leitura) e deleta localmente
+        const { data: futureTxs } = await supabase
           .from('transactions')
-          .delete()
+          .select('id')
           .match({ user_id: user.id, recurring_group_id: tx.recurring_group_id })
           .gte('date', tx.date)
+
+        if (futureTxs) {
+          for (const ftx of futureTxs) {
+            await db.table('transactions').delete(ftx.id)
+            await addToSyncQueue(user.id, 'transactions', 'delete', ftx.id, { id: ftx.id })
+          }
+        }
       } else if (mode === 'all' && tx?.recurring_group_id) {
-        await supabase
+        const { data: allTxs } = await supabase
           .from('transactions')
-          .delete()
+          .select('id')
           .match({ user_id: user.id, recurring_group_id: tx.recurring_group_id })
+
+        if (allTxs) {
+          for (const atx of allTxs) {
+            await db.table('transactions').delete(atx.id)
+            await addToSyncQueue(user.id, 'transactions', 'delete', atx.id, { id: atx.id })
+          }
+        }
       }
 
       showToast(
@@ -601,7 +625,6 @@ export default function EditTransactionPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* Indicador de carregamento sutil */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
@@ -611,7 +634,7 @@ export default function EditTransactionPage() {
       <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
       <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
 
-      <div className={`${headerGradient} px-4 pt-6 pb-4 shadow-sm border-b border-gray-100 dark:border-slate-700 sticky top-0 z-10 transition-all duration-300`}>
+      <div className={`${headerGradient} px-4 pt-6 pb-4 shadow-sm border border-gray-100 dark:border-slate-700 sticky top-0 z-10 transition-all duration-300`}>
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
             <ChevronLeft size={24} />
@@ -948,8 +971,202 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Modais (Cat, Acc, Card, Contact, Tag, Receipt, Camera, Financing, Loan) — mantenha os que já existem no seu arquivo original, pois são extensos e não foram alterados */}
+      {/* Modais - mantidos com supabase para criação (funciona) */}
+      {showReceiptModal && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          onOptionSelect={handleReceiptOption}
+        />
+      )}
+      {showCamera && (
+        <CameraCapture
+          isOpen={showCamera}
+          onClose={() => setShowCamera(false)}
+          onCapture={handleCameraCapture}
+        />
+      )}
+      {showFinancingModal && (
+        <ModalFinancing
+          isOpen={showFinancingModal}
+          onClose={() => setShowFinancingModal(false)}
+          onSave={(id) => setFinancingId(id)}
+        />
+      )}
+      {showLoanModal && (
+        <ModalEmprestimo
+          isOpen={showLoanModal}
+          onClose={() => setShowLoanModal(false)}
+          onSave={(id) => setDebtId(id)}
+        />
+      )}
 
+      {/* Modais de seleção - mantidos com supabase para criação (funciona) */}
+      {showCatModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => setShowCatModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {categories.map((cat) => {
+                const IconComp = getDynamicIcon(cat.icon)
+                const subCount = subcategories[cat.id]?.length || 0
+                const isActive = cat.id === categoryId
+                return (
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setSelectedParentCat(cat); subCount > 0 ? setShowSubCatModal(true) : setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
+                    {subCount > 0 && <span className="text-xs text-gray-400 font-medium mr-2">{subCount}</span>}
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300" />}
+                  </button>
+                )
+              })}
+              {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSubCatModal && selectedParentCat && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2"><ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" /></button>
+              <div><h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3><p className="text-xs text-gray-500">{selectedParentCat.name}</p></div>
+            </div>
+            <div className="space-y-2">
+              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
+                const SubIcon = getDynamicIcon(sub.icon)
+                const isActive = sub.id === categoryId
+                return (
+                  <button key={sub.id} onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}><SubIcon size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              <button onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }} className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 text-gray-500 font-medium">
+                Usar "{selectedParentCat.name}" sem subcategoria
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => setShowAccModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {accounts.map((acc) => {
+                const isActive = acc.id === accountId
+                return (
+                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCardModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {creditCards.map((card) => {
+                const isActive = card.id === creditCardId
+                return (
+                  <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {creditCards.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showContactModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowContactModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contatos</h3>
+              <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {contacts.map((contact) => {
+                const isActive = contact.id === contactId
+                const IconComp = getDynamicIcon(contact.icon || 'user')
+                return (
+                  <button key={contact.id} onClick={() => { setContactId(contact.id); setShowContactModal(false) }}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}>
+                      <IconComp size={20} />
+                    </div>
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</span>
+                    <span className="text-xs text-gray-400">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {contacts.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">Nenhum contato cadastrado.</p>
+                  <button onClick={() => { setShowContactModal(false); router.push('/contacts/new') }} className="text-teal-600 text-sm font-bold mt-2">Criar contato</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTagModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => setShowTagModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {tags.map((tag) => {
+                const isActive = selectedTags.includes(tag.id)
+                return (
+                  <button key={tag.id} onClick={() => toggleTag(tag.id)}
+                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+              {tags.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma tag encontrada.</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
