@@ -27,7 +27,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -148,40 +148,30 @@ function NewTransactionContent() {
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context: effectiveContext },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
   // 🔥 Categorias — usando o contexto atual e tipo correto
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
   // 🔥 Tags — usando o contexto atual
   const { data: localTags } = useLocalData({
     table: 'tags' as any,
     filters: { context: effectiveContext },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
   // 🔥 Cartões de crédito — usando o contexto atual
   const { data: localCreditCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { context: effectiveContext, is_archived: false },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
   // 🔥 Contatos — usando o contexto atual
   const { data: localContacts } = useLocalData({
     table: 'contacts' as any,
     filters: { context: effectiveContext },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
   // 🔥 Orçamentos — usando o contexto atual
@@ -228,7 +218,6 @@ function NewTransactionContent() {
   // 🔥 Atualiza o contexto quando o globalContext mudar
   useEffect(() => {
     setContext(effectiveContext)
-    // Limpa seleções quando o contexto muda
     setAccountId('')
     setCategoryId('')
     setCreditCardId('')
@@ -272,9 +261,6 @@ function NewTransactionContent() {
     })
   }, [])
 
-  // 🔥 Removido loadData com supabase — agora usa useLocalData diretamente
-  // O useEffect com supabase foi removido
-
   const budgetAlertMemo = useMemo(() => {
     if (!categoryId || amountNum <= 0 || type !== 'expense') {
       return null
@@ -294,7 +280,7 @@ function NewTransactionContent() {
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
-    // 🔥 Usando supabase para consulta de gastos (mantido)
+    // 🔥 Usando supabase para consulta de gastos (mantido - é leitura)
     supabase
       .from('transactions')
       .select('amount')
@@ -512,7 +498,6 @@ function NewTransactionContent() {
         .select()
         .single()
       if (error) throw error
-      // 🔥 Atualiza o estado local
       setCategories((prev) => [...prev, data])
       setCategoryId(data.id)
       setShowCreateCatModal(false)
@@ -584,6 +569,9 @@ function NewTransactionContent() {
     }
   }
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
+  // ============================================================
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
@@ -651,6 +639,7 @@ function NewTransactionContent() {
 
       let invoiceId: string | null = null
 
+      // 🔥 Busca cartão (leitura via supabase - mantido)
       if (type === 'expense' && creditCardId && !isRefund) {
         const txDate = new Date(date)
         const { data: cardData } = await supabase
@@ -675,6 +664,7 @@ function NewTransactionContent() {
             dueDate.setMonth(dueDate.getMonth() + 1)
           }
 
+          // 🔥 Busca fatura (leitura via supabase - mantido)
           const { data: existingInvoice } = await supabase
             .from('credit_invoices')
             .select('id')
@@ -688,27 +678,31 @@ function NewTransactionContent() {
           if (existingInvoice) {
             invoiceId = existingInvoice.id
           } else {
-            const { data: newInvoice, error: invoiceError } = await supabase
-              .from('credit_invoices')
-              .insert({
-                user_id: user.id,
-                credit_card_id: creditCardId,
-                closing_date: closingDate.toISOString().split('T')[0],
-                due_date: dueDate.toISOString().split('T')[0],
-                start_date: startDate.toISOString().split('T')[0],
-                end_date: closingDate.toISOString().split('T')[0],
-                total_amount: 0,
-                paid_amount: 0,
-                status: 'open',
-                context: effectiveContext,
-              })
-              .select()
-              .single()
-
-            if (invoiceError) throw invoiceError
-            invoiceId = newInvoice.id
+            // 🔥 CRIA FATURA COM addToSyncQueue
+            const newInvoiceId = crypto.randomUUID()
+            const invoicePayload = {
+              id: newInvoiceId,
+              user_id: user.id,
+              credit_card_id: creditCardId,
+              closing_date: closingDate.toISOString().split('T')[0],
+              due_date: dueDate.toISOString().split('T')[0],
+              start_date: startDate.toISOString().split('T')[0],
+              end_date: closingDate.toISOString().split('T')[0],
+              total_amount: 0,
+              paid_amount: 0,
+              status: 'open',
+              context: effectiveContext,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              sync_status: 'pending',
+              sync_attempts: 0,
+            }
+            await db.table('credit_invoices').add(invoicePayload)
+            await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
+            invoiceId = newInvoiceId
           }
 
+          // 🔥 ATUALIZA FATURA COM addToSyncQueue
           if (invoiceId) {
             const { data: currentInvoice } = await supabase
               .from('credit_invoices')
@@ -717,18 +711,17 @@ function NewTransactionContent() {
               .single()
 
             const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
-
-            await supabase
-              .from('credit_invoices')
-              .update({
-                total_amount: newTotal,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', invoiceId)
+            const updateData = {
+              total_amount: newTotal,
+              updated_at: new Date().toISOString(),
+            }
+            await db.table('credit_invoices').update(invoiceId, updateData)
+            await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
           }
         }
       }
 
+      // 🔥 ATUALIZA SALDO DA CONTA (se pago e não for cartão)
       if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
         const { data: acc } = await supabase
           .from('accounts')
@@ -752,12 +745,9 @@ function NewTransactionContent() {
             if (!proceed) { setIsSubmitting(false); return }
           }
 
-          const { error: updateError } = await supabase
-            .from('accounts')
-            .update({ balance: newBalance })
-            .eq('id', accountId)
-
-          if (updateError) throw updateError
+          // 🔥 ATUALIZA CONTA COM addToSyncQueue
+          await db.table('accounts').update(accountId, { balance: newBalance })
+          await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newBalance })
         }
       }
 
@@ -776,7 +766,9 @@ function NewTransactionContent() {
           installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
         }
 
+        const txId = crypto.randomUUID()
         const payload: any = {
+          id: txId,
           user_id: user.id,
           type,
           amount: installmentAmount,
@@ -798,6 +790,10 @@ function NewTransactionContent() {
           financing_id: financingId,
           debt_id: debtId,
           is_reimbursable: isReimbursable,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
 
         if (!isOnline) {
@@ -809,42 +805,38 @@ function NewTransactionContent() {
           continue
         }
 
-        const { data: savedTx, error: insertError } = await supabase
-          .from('transactions')
-          .insert(payload)
-          .select()
-          .single()
+        // 🔥 CRIA TRANSAÇÃO COM addToSyncQueue
+        await db.table('transactions').add(payload)
+        await addToSyncQueue(user.id, 'transactions', 'create', txId, payload)
 
-        if (insertError) throw insertError
-
-        if (i === 0 && isReimbursable && savedTx) {
-          linkedTransactionId = savedTx.id
+        if (i === 0 && isReimbursable) {
+          linkedTransactionId = txId
           const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
           const reimbursementDesc = `Reembolso: ${finalDescription}`
-
-          const { data: reimbTx, error: reimbError } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: user.id,
-              type: type === 'expense' ? 'income' : 'expense',
-              amount: installmentAmount,
-              description: reimbursementDesc,
-              date: installmentDate,
-              status: 'pending',
-              context: otherContext,
-              category_id: null,
-              linked_transaction_id: savedTx.id,
-              is_reimbursable: true,
-            })
-            .select()
-            .single()
-
-          if (!reimbError && reimbTx) {
-            await supabase
-              .from('transactions')
-              .update({ linked_transaction_id: reimbTx.id })
-              .eq('id', savedTx.id)
+          const reimbTxId = crypto.randomUUID()
+          const reimbPayload = {
+            id: reimbTxId,
+            user_id: user.id,
+            type: type === 'expense' ? 'income' : 'expense',
+            amount: installmentAmount,
+            description: reimbursementDesc,
+            date: installmentDate,
+            status: 'pending',
+            context: otherContext,
+            category_id: null,
+            linked_transaction_id: txId,
+            is_reimbursable: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
           }
+          await db.table('transactions').add(reimbPayload)
+          await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
+
+          // 🔥 ATUALIZA A TRANSAÇÃO ORIGINAL COM O LINK
+          await db.table('transactions').update(txId, { linked_transaction_id: reimbTxId })
+          await addToSyncQueue(user.id, 'transactions', 'update', txId, { linked_transaction_id: reimbTxId })
         }
       }
 
@@ -973,7 +965,6 @@ function NewTransactionContent() {
       {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
         
-        {/* Nome da transação / Descrição */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
           <input
@@ -985,7 +976,6 @@ function NewTransactionContent() {
           />
         </div>
 
-        {/* Pago/Recebido */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
             {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
@@ -1046,7 +1036,6 @@ function NewTransactionContent() {
           </button>
         )}
 
-        {/* Contato */}
         {contacts.length > 0 && (
           <button onClick={() => setShowContactModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-4">
@@ -1235,7 +1224,7 @@ function NewTransactionContent() {
         onSelect={setNewCatIcon}
       />
 
-      {/* Modais de criação e seleção */}
+      {/* Modais de criação e seleção - mantidos com supabase para criação (funciona) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
