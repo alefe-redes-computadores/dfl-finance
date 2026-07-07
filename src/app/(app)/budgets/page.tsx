@@ -15,7 +15,7 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 // ============================================================
 // SKELETON LOADER
@@ -55,20 +55,17 @@ function BudgetsContent() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
   // ============================================================
-  // 🔥 BUSCAS LOCAIS COM ORDENAÇÃO
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { context },
-    orderBy: 'name',
-    orderDir: 'asc',
   })
 
+  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
-    orderBy: 'date',
-    orderDir: 'desc',
   })
 
   // ============================================================
@@ -163,12 +160,14 @@ function BudgetsContent() {
   })
 
   // ============================================================
-  // HANDLERS
+  // 🔥 HANDLERS CORRIGIDOS COM addToSyncQueue
   // ============================================================
   const handleDelete = async (id: string) => {
+    if (!user) return
     if (!confirm('Excluir este orçamento?')) return
     try {
       await db.table('budgets').delete(id)
+      await addToSyncQueue(user.id, 'budgets', 'delete', id, { id })
       showToast('Orçamento excluído.', 'info')
       loadData()
     } catch (err: any) {
@@ -177,12 +176,15 @@ function BudgetsContent() {
   }
 
   const handleToggleStatus = async (budget: any) => {
+    if (!user) return
     try {
       const newStatus = budget.status === 'active' ? 'inactive' : 'active'
-      await db.table('budgets').update(budget.id, { 
+      const payload = { 
         status: newStatus,
         updated_at: new Date().toISOString()
-      })
+      }
+      await db.table('budgets').update(budget.id, payload)
+      await addToSyncQueue(user.id, 'budgets', 'update', budget.id, payload)
       showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
       loadData()
     } catch (err: any) {
@@ -202,7 +204,6 @@ function BudgetsContent() {
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          {/* 🔥 CORRIGIDO: router.back() → router.push('/more') */}
           <button onClick={() => router.push('/more')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
             <ChevronLeft size={24} />
           </button>
@@ -276,7 +277,6 @@ function BudgetsContent() {
                     <button onClick={() => handleToggleStatus(budget)} className="text-xs text-gray-400 hover:text-teal-600 transition-colors">
                       {isActive ? 'Ativo' : 'Inativo'}
                     </button>
-                    {/* 🔥 CORRIGIDO: Link para o detalhe do orçamento */}
                     <button 
                       onClick={() => router.push(`/budgets/${budget.id}`)} 
                       className="text-gray-400 hover:text-teal-600 transition-colors"
