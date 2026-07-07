@@ -20,7 +20,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = [
   "#3B82F6",
@@ -41,7 +41,7 @@ export default function TagsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
-  const { user } = useAuth() // 🔥 ADICIONADO
+  const { user } = useAuth()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -56,15 +56,11 @@ export default function TagsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
   const { data: tags, loading, reload } = useLocalData({
     table: 'tags' as any,
     filters: { context },
   })
 
-  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'tags' as any })
-
-  // Conta transações por tag
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
@@ -79,7 +75,6 @@ export default function TagsPage() {
     return acc
   }, {})
 
-  // Abrir formulário para edição
   const handleEdit = (tag: any) => {
     setEditId(tag.id)
     setTagName(tag.name || "")
@@ -87,7 +82,6 @@ export default function TagsPage() {
     setShowForm(true)
   }
 
-  // Abrir formulário para nova tag
   const handleNew = () => {
     setEditId(null)
     setTagName("")
@@ -95,9 +89,9 @@ export default function TagsPage() {
     setShowForm(true)
   }
 
-  // 🔥 CORRIGIDO: Salvar tag com db.table()
+  // 🔥 CORRIGIDO: Salvar tag com sincronização
   const handleSave = async () => {
-    if (!tagName.trim()) {
+    if (!tagName.trim() || !user) {
       showToast("Informe o nome da tag", "warning")
       errorHaptic()
       return
@@ -114,16 +108,20 @@ export default function TagsPage() {
 
       if (editId) {
         await db.table('tags').update(editId, payload)
+        await addToSyncQueue(user.id, 'tags', 'update', editId, payload)
         showToast("Tag atualizada com sucesso!", "success")
       } else {
-        await db.table('tags').add({
-          id: crypto.randomUUID(),
-          user_id: user!.id,
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
+          user_id: user.id,
           ...payload,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('tags').add(fullPayload)
+        await addToSyncQueue(user.id, 'tags', 'create', id, fullPayload)
         showToast("Tag criada com sucesso!", "success")
       }
 
@@ -140,22 +138,22 @@ export default function TagsPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: Excluir tag com db.table().delete()
+  // 🔥 CORRIGIDO: Excluir tag com sincronização
   const handleDelete = async () => {
-    if (!deleteModal) return
+    if (!deleteModal || !user) return
     try {
       await db.table('tags').delete(deleteModal)
+      await addToSyncQueue(user.id, 'tags', 'delete', deleteModal, { id: deleteModal })
       showToast("Tag excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
-      showToast("Erro ao excluir tag", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
     }
   }
 
-  // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -172,7 +170,6 @@ export default function TagsPage() {
     }
   }, [refreshing, reload])
 
-  // Filtros
   const filteredTags = (tags || []).filter((tag: any) => {
     if (!search) return true
     const s = search.toLowerCase()
@@ -181,14 +178,12 @@ export default function TagsPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {/* Bolinha de loading sutil */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -198,43 +193,31 @@ export default function TagsPage() {
         </div>
       )}
 
-      {/* Header fixo */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
-        {/* Barra do topo */}
         <div className="flex items-center justify-between pt-4 mb-3">
           <div>
-            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
-              Tags
-            </h1>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Organize suas transações
-            </p>
+            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">Tags</h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Organize suas transações</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearch(!showSearch)}
               className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              aria-label="Buscar"
             >
               {showSearch ? <X size={18} /> : <Search size={18} />}
             </button>
             <button
               onClick={handleNew}
               className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
-              aria-label="Nova tag"
             >
               <Plus size={18} />
             </button>
           </div>
         </div>
 
-        {/* Search */}
         {showSearch && (
           <div className="relative">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar tag..."
@@ -246,7 +229,6 @@ export default function TagsPage() {
         )}
       </div>
 
-      {/* Formulário de criação/edição */}
       {showForm && (
         <div className="px-4 pt-3 pb-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
           <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3">
@@ -265,11 +247,8 @@ export default function TagsPage() {
               </button>
             </div>
 
-            {/* Nome */}
             <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
-                Nome da Tag
-              </label>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Nome da Tag</label>
               <input
                 type="text"
                 placeholder="Ex: Fixo, Variável, Essencial..."
@@ -280,11 +259,8 @@ export default function TagsPage() {
               />
             </div>
 
-            {/* Cor */}
             <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">
-                Cor
-              </label>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Cor</label>
               <div className="flex flex-wrap gap-2">
                 {COLORS.map((color) => (
                   <button
@@ -296,17 +272,13 @@ export default function TagsPage() {
                         : "hover:scale-105"
                     }`}
                     style={{ backgroundColor: color }}
-                    aria-label={`Cor ${color}`}
                   />
                 ))}
               </div>
             </div>
 
-            {/* Preview */}
             <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">
-                Preview
-              </label>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Preview</label>
               <span
                 className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold text-white"
                 style={{ backgroundColor: tagColor }}
@@ -316,7 +288,6 @@ export default function TagsPage() {
               </span>
             </div>
 
-            {/* Botões */}
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => {
@@ -332,11 +303,7 @@ export default function TagsPage() {
                 disabled={saving}
                 className="flex-1 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors"
               >
-                {saving ? (
-                  <RefreshCw size={14} className="animate-spin" />
-                ) : (
-                  <Save size={14} />
-                )}
+                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                 {editId ? "Atualizar" : "Criar"}
               </button>
             </div>
@@ -344,7 +311,6 @@ export default function TagsPage() {
         </div>
       )}
 
-      {/* Lista */}
       <div
         ref={scrollRef}
         onTouchStart={handleTouchStart}
@@ -392,14 +358,12 @@ export default function TagsPage() {
                     <button
                       onClick={() => handleEdit(tag)}
                       className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-500 transition-colors"
-                      aria-label="Editar tag"
                     >
                       <Pencil size={16} />
                     </button>
                     <button
                       onClick={() => setDeleteModal(tag.id)}
                       className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
-                      aria-label="Excluir tag"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -411,29 +375,14 @@ export default function TagsPage() {
         )}
       </div>
 
-      {/* Modal de exclusão */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
-              Excluir Tag
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-              Tem certeza que deseja excluir esta tag? As transações vinculadas não serão afetadas, apenas perderão esta tag.
-            </p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Excluir Tag</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">Tem certeza que deseja excluir esta tag? As transações vinculadas não serão afetadas.</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteModal(null)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
-              >
-                Excluir
-              </button>
+              <button onClick={() => setDeleteModal(null)} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm">Cancelar</button>
+              <button onClick={handleDelete} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm">Excluir</button>
             </div>
           </div>
         </div>
