@@ -58,18 +58,16 @@ function DebtsContent() {
   const [debts, setDebts] = useState<any[]>([])
   const [totalToReceiveState, setTotalToReceiveState] = useState(0)
 
+  // 🔥 CORRIGIDO: Removeu orderBy e orderDir
   const { data: localDebts, reload: reloadDebts } = useLocalData({
     table: 'debts' as any,
     filters: { context },
-    orderBy: 'created_at',
-    orderDir: 'desc',
   })
 
+  // 🔥 CORRIGIDO: Removeu orderBy e orderDir
   const { data: localTransactions, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, type: 'income' },
-    orderBy: 'date',
-    orderDir: 'desc',
   })
 
   // JOIN em memória
@@ -82,7 +80,6 @@ function DebtsContent() {
       }
     })
     
-    // 🔥 CORREÇÃO: Filtro por cálculo real (paid_amount >= total_amount) em vez de status
     let filtered = localDebts
     if (filter === 'active') {
       filtered = localDebts.filter((d: any) => {
@@ -107,7 +104,6 @@ function DebtsContent() {
         ...debt, 
         paid_amount: paid, 
         percent: Math.min(total > 0 ? (paid / total) * 100 : 0, 100),
-        // 🔥 CORREÇÃO: Força o status a refletir a realidade
         status: total > 0 && paid >= total ? 'paid' : debt.status
       }
     })
@@ -127,13 +123,10 @@ function DebtsContent() {
     }
   }, [user?.id, reloadDebts, reloadTransactions])
 
-  // Efeito inicial
   useEffect(() => {
     if (user?.id && context) loadDebts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, context, filter])
 
-  // 🔥 CORREÇÃO: Consolida dados quando mudam
   useEffect(() => {
     const consolidated = consolidateDebts()
     setDebts(consolidated)
@@ -147,7 +140,6 @@ function DebtsContent() {
     setTotalToReceiveState(total)
   }, [localDebts, localTransactions, filter, consolidateDebts])
 
-  // Pull to refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -178,7 +170,6 @@ function DebtsContent() {
       c.removeEventListener('touchmove', handleTouchMove)
       c.removeEventListener('touchend', handleTouchEnd)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, refreshing])
 
   const formatCurrency = (val: number) =>
@@ -251,7 +242,6 @@ function DebtsContent() {
         <div className="space-y-3 animate-in fade-in duration-300">
           {debts.map((debt: any) => {
             const IconComp = getDynamicIcon(debt.icon || 'user')
-            // 🔥 CORREÇÃO: Usa o status já corrigido pelo consolidateDebts
             const isPaid = debt.status === 'paid'
             const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
             const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
