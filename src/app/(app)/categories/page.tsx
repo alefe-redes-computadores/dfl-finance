@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, AlertTriangle, Tag } from 'lucide-react'
@@ -265,7 +265,7 @@ export default function CategoriesPage() {
               className="w-full bg-gray-100 dark:bg-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
             >
               <option value="">Nenhuma (categoria principal)</option>
-              {categories.map(cat => (
+              {categories.map((cat: any) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
@@ -326,7 +326,7 @@ export default function CategoriesPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {categories.map(cat => {
+          {categories.map((cat: any) => {
             const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
             const ListIconComp = (Icons as any)[catIconName] || Icons.Tag
 
