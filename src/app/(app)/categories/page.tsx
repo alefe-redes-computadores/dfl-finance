@@ -1,16 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import * as Icons from 'lucide-react'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, AlertTriangle, Tag } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -32,8 +31,6 @@ export default function CategoriesPage() {
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  const [categories, setCategories] = useState<any[]>([])
-  const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [tab, setTab] = useState<'expense'|'income'>('expense')
 
@@ -46,75 +43,64 @@ export default function CategoriesPage() {
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
+  // O Hook busca TODAS as categorias sem filtro, a gente filtra no useMemo
+  const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context: effectiveContext, type: tab },
   })
 
-  useEffect(() => {
-    if (user) {
-      ensureDefaultCategories()
-      loadCategories()
-    }
-  }, [user, tab, effectiveContext])
-
-  async function ensureDefaultCategories() {
-    if (!user) return
+  // 🔥 ISSO RESOLVE O PROBLEMA DA ABA PF/PJ E DE ATUALIZAÇÃO IMEDIATA
+  const { categories, subcategories } = useMemo(() => {
+    if (!allLocalCategories) return { categories: [], subcategories: {} }
     
-    const existingCats = (localCategories || []).filter((c: any) => c.context === effectiveContext)
-    const existingKeys = new Set(
-      existingCats.map((c: any) => `${c.name}-${c.type}-${c.context}`)
+    // Filtra pelo contexto e tipo (Receita/Despesa)
+    const filtered = allLocalCategories.filter((c: any) => 
+      c.context === effectiveContext && c.type === tab
     )
 
-    const missing = DEFAULT_CATEGORIES.filter(
-      cat =>
-        cat.context === effectiveContext &&
-        !existingKeys.has(`${cat.name}-${cat.type}-${cat.context}`)
-    )
-
-    if (!missing.length) return
-
-    try {
-      for (const cat of missing) {
-        const id = crypto.randomUUID()
-        const payload = {
-          id,
-          user_id: user.id,
-          ...cat,
-          is_default: true,
-          parent_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-        await db.table('categories').add(payload)
-        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
-        await addToSyncQueue(user.id, 'categories', 'create', id, payload)
-      }
-      await reloadCategories()
-    } catch (e) {
-      console.error("Erro ao criar padrões:", e)
-    }
-  }
-
-  async function loadCategories() {
-    if (!user) return
-    await reloadCategories()
+    const mainCats = filtered.filter((c: any) => !c.parent_id)
+      .sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
     
-    const allCats = (localCategories || []) as any[]
-    const mainCats = allCats.filter((c: any) => c.type === tab && !c.parent_id)
-    const subs = allCats.filter((c: any) => c.type === tab && c.parent_id)
-
     const subsMap: Record<string, any[]> = {}
-    subs.forEach((sub: any) => {
-      const key = sub.parent_id
-      if (!subsMap[key]) subsMap[key] = []
-      subsMap[key].push(sub)
+    filtered.filter((c: any) => c.parent_id).forEach((sub: any) => {
+      if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
+      subsMap[sub.parent_id].push(sub)
     })
 
-    setCategories(mainCats.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999)))
-    setSubcategories(subsMap)
+    return { categories: mainCats, subcategories: subsMap }
+  }, [allLocalCategories, effectiveContext, tab])
+
+  // 🔥 LIMPEZA SEGURA E INTELIGENTE: Funde as transações para não quebrar o gráfico
+  async function cleanupDuplicates() {
+    if(!user) return;
+    
+    const all = await db.table('categories').where('user_id').equals(user.id).toArray();
+    const transactions = await db.table('transactions').toArray();
+    
+    const seen = new Map();
+    const toDelete = [];
+
+    for (const cat of all) {
+      const key = `${cat.name.trim().toLowerCase()}-${cat.context}-${cat.type}`;
+      if (seen.has(key)) {
+        const officialId = seen.get(key);
+        // Protege os gráficos! Troca a categoria das transações para a "Oficial"
+        const txs = transactions.filter(t => t.category_id === cat.id);
+        for(const tx of txs) {
+          await db.table('transactions').update(tx.id, { category_id: officialId });
+        }
+        toDelete.push(cat.id);
+      } else {
+        seen.set(key, cat.id);
+      }
+    }
+
+    for (const id of toDelete) {
+      await db.table('categories').delete(id);
+      await addToSyncQueue(user.id, 'categories', 'delete', id, { id });
+    }
+    
+    showToast(`Limpeza concluída! ${toDelete.length} duplicatas fundidas com sucesso.`, 'success');
+    await reloadCategories();
   }
 
   function toggleExpand(catId: string) {
@@ -165,9 +151,7 @@ export default function CategoriesPage() {
 
     try {
       if (editingCategory) {
-        // 🔥 ATUALIZA NO INDEXEDDB
         await db.table('categories').update(editingCategory.id, payload)
-        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
         await addToSyncQueue(user.id, 'categories', 'update', editingCategory.id, payload)
         showToast('Categoria atualizada!', 'success')
       } else {
@@ -189,7 +173,7 @@ export default function CategoriesPage() {
       setEditingCategory(null)
       setParentId(null)
       setShowForm(false)
-      await loadCategories()
+      await reloadCategories()
     } catch (err: any) {
       console.error("Erro ao salvar:", err)
       showToast(`Erro ao salvar: ${err.message}`, 'error')
@@ -207,7 +191,7 @@ export default function CategoriesPage() {
       await db.table('categories').delete(id)
       await addToSyncQueue(user.id, 'categories', 'delete', id, { id })
       showToast('Categoria excluída!', 'info')
-      await loadCategories()
+      await reloadCategories()
     } catch (err: any) {
       showToast(`Erro ao excluir: ${err.message}`, 'error')
     }
@@ -234,6 +218,14 @@ export default function CategoriesPage() {
       </div>
 
       <ContextToggle />
+
+      {/* 🔥 BOTÃO PARA CORRIGIR DUPLICATAS */}
+      <button 
+        onClick={cleanupDuplicates}
+        className="w-full mb-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
+      >
+        <AlertTriangle size={16} /> Limpar duplicatas e corrigir gráficos
+      </button>
 
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4">
         {([['expense','Despesas'],['income','Receitas']] as const).map(([k,l]) => (
@@ -324,7 +316,9 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      {categories.length === 0 ? (
+      {catLoading && categories.length === 0 ? (
+        <div className="py-10 text-center text-gray-500 text-sm">Carregando categorias...</div>
+      ) : categories.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-gray-400 dark:text-gray-500">
           <span className="text-4xl mb-3">🏷️</span>
           <p className="text-sm font-medium">Nenhuma categoria</p>
