@@ -10,7 +10,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { format } from 'date-fns'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
@@ -41,9 +41,6 @@ function NewGoalContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
-  // ============================================================
   const { data: localCategories, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context },
@@ -54,12 +51,6 @@ function NewGoalContent() {
     filters: { id: editId || '' },
   })
 
-  // 🔥 REMOVIDOS: const { create: createGoal, update: updateGoal } = useLocalData({ table: 'goals' as any })
-  // 🔥 REMOVIDOS: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
-
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   useEffect(() => {
     if (localCategories) {
       setCategories(localCategories)
@@ -91,9 +82,6 @@ function NewGoalContent() {
     }
   }, [user?.id, editId])
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (num: number) => void, displaySetter: (val: string) => void) => {
     const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
@@ -106,9 +94,7 @@ function NewGoalContent() {
     displaySetter(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO
-  // ============================================================
+  // 🔥 CORRIGIDO: HANDLE SAVE COM addToSyncQueue
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -133,14 +119,13 @@ function NewGoalContent() {
       let goalId: string | undefined
 
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
         await db.table('goals').update(editId, payload)
+        await addToSyncQueue(user.id, 'goals', 'update', editId, payload)
         goalId = editId
         showToast('Meta atualizada!', 'success')
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
         const newId = crypto.randomUUID()
-        await db.table('goals').add({
+        const fullPayload = {
           id: newId,
           user_id: user.id,
           ...payload,
@@ -148,16 +133,17 @@ function NewGoalContent() {
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('goals').add(fullPayload)
+        await addToSyncQueue(user.id, 'goals', 'create', newId, fullPayload)
         goalId = newId
         showToast('Meta criada!', 'success')
       }
 
-      // Se houver contribuição inicial, registrar
       if (initialContributionNum > 0 && goalId) {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('transactions').add({
-          id: crypto.randomUUID(),
+        const txId = crypto.randomUUID()
+        const txPayload = {
+          id: txId,
           user_id: user.id,
           context,
           type: 'income',
@@ -171,7 +157,9 @@ function NewGoalContent() {
           updated_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        await db.table('transactions').add(txPayload)
+        await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
       }
 
       router.push('/goals')
