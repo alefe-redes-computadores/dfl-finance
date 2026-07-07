@@ -15,7 +15,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const GoalDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6 space-y-4">
@@ -84,9 +84,6 @@ export default function GoalDetailPage() {
   const [contribDate, setContribDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [contribNote, setContribNote] = useState('')
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
-  // ============================================================
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
     table: 'goals' as any,
     filters: { id: id as string },
@@ -96,9 +93,6 @@ export default function GoalDetailPage() {
     table: 'transactions' as any,
     filters: { goal_id: id as string },
   })
-
-  // 🔥 REMOVIDOS: const { remove: removeGoal } = useLocalData({ table: 'goals' as any })
-  // 🔥 REMOVIDOS: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
 
   // ============================================================
   // PULL TO REFRESH
@@ -175,13 +169,13 @@ export default function GoalDetailPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ============================================================
-  // 🔥 HANDLERS CORRIGIDOS
-  // ============================================================
+  // 🔥 CORRIGIDO: HANDLER DELETE COM addToSyncQueue
   const handleDelete = async () => {
+    if (!user) return
     if (!confirm('Excluir esta meta?')) return
     try {
       await db.table('goals').delete(id as string)
+      await addToSyncQueue(user.id, 'goals', 'delete', id as string, { id: id as string })
       showToast('Meta excluída.', 'info')
       router.push('/goals')
     } catch (err: any) {
@@ -189,6 +183,7 @@ export default function GoalDetailPage() {
     }
   }
 
+  // 🔥 CORRIGIDO: HANDLER CONTRIBUIÇÃO COM addToSyncQueue
   const handleContribution = async () => {
     if (!user?.id || contribAmountNum <= 0) {
       showToast('Digite um valor válido.', 'warning')
@@ -196,9 +191,9 @@ export default function GoalDetailPage() {
     }
 
     try {
-      // 🔥 CORRIGIDO: Usando db.table().add()
-      await db.table('transactions').add({
-        id: crypto.randomUUID(),
+      const txId = crypto.randomUUID()
+      const txPayload = {
+        id: txId,
         user_id: user.id,
         context: context || 'dfl',
         type: 'income',
@@ -212,7 +207,9 @@ export default function GoalDetailPage() {
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
+      await db.table('transactions').add(txPayload)
+      await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
 
       showToast('Contribuição registrada!', 'success')
       setShowContributionModal(false)
@@ -400,7 +397,6 @@ export default function GoalDetailPage() {
         )}
       </div>
 
-      {/* Modal de Contribuição */}
       {showContributionModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowContributionModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
