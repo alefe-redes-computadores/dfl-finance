@@ -24,7 +24,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 type Installment = {
   id: string
@@ -76,18 +76,19 @@ export default function FinancingsPage() {
     return acc
   }, {})
 
-  // 🔥 REMOVIDOS: const { remove } = useLocalData({ table: 'financings' as any })
-  // 🔥 REMOVIDOS: const { remove: removeTransaction } = useLocalData({ table: 'transactions' as any })
-
-  // 🔥 CORRIGIDO: Remove financiamento com db.table().delete()
+  // 🔥 CORRIGIDO: Remove financiamento com db.table().delete() + addToSyncQueue
   const handleDelete = async () => {
-    if (!deleteModal) return
+    if (!deleteModal || !user) return
     try {
       const installments = installmentsByFinancing[deleteModal] || []
       for (const inst of installments) {
         await db.table('transactions').delete(inst.id)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO (cada parcela)
+        await addToSyncQueue(user.id, 'transactions', 'delete', inst.id, { id: inst.id })
       }
       await db.table('financings').delete(deleteModal)
+      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO (o financiamento)
+      await addToSyncQueue(user.id, 'financings', 'delete', deleteModal, { id: deleteModal })
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
