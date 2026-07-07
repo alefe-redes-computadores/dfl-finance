@@ -14,7 +14,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db'
 
 // ============================================================
 // SKELETON LOADER
@@ -171,7 +171,7 @@ export default function AssistantSettingsPage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
+  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue E AS ANY PARA user_settings
   // ============================================================
   const handleSave = async () => {
     if (!user?.id) return
@@ -187,7 +187,7 @@ export default function AssistantSettingsPage() {
       if (localSettings && localSettings.length > 0) {
         const existingId = (localSettings[0] as any).id
         await db.table('user_settings').update(existingId, payload)
-        await addToSyncQueue(user.id, 'user_settings', 'update', existingId, payload)
+        await addToSyncQueue(user.id, 'user_settings' as any, 'update', existingId, payload)
       } else {
         const id = crypto.randomUUID()
         const fullPayload = {
@@ -198,7 +198,7 @@ export default function AssistantSettingsPage() {
           sync_attempts: 0,
         }
         await db.table('user_settings').add(fullPayload)
-        await addToSyncQueue(user.id, 'user_settings', 'create', id, fullPayload)
+        await addToSyncQueue(user.id, 'user_settings' as any, 'create', id, fullPayload)
       }
 
       showToast('Configurações salvas!', 'success')
