@@ -16,8 +16,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 export default function NewFinancingPage() {
   const router = useRouter()
@@ -26,7 +25,7 @@ export default function NewFinancingPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { context } = useContext_()
-  const { user } = useAuth() // 🔥 ADICIONADO
+  const { user } = useAuth()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -52,8 +51,6 @@ export default function NewFinancingPage() {
   })
 
   const financingData = localFinancings?.find((f: any) => f.id === editId) as any
-
-  // 🔥 REMOVIDOS: const { create, update, remove } = useLocalData({ table: 'financings' as any })
 
   // Preenche formulário para edição
   useEffect(() => {
@@ -137,20 +134,26 @@ export default function NewFinancingPage() {
       }
 
       if (editId) {
-        // 🔥 CORRIGIDO: Usando db.table().update()
+        // 🔥 ATUALIZA NO INDEXEDDB
         await db.table('financings').update(editId, payload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user!.id, 'financings', 'update', editId, payload)
         showToast("Financiamento atualizado com sucesso!", "success")
       } else {
-        // 🔥 CORRIGIDO: Usando db.table().add()
-        await db.table('financings').add({
-          id: crypto.randomUUID(),
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
           user_id: user!.id,
           ...payload,
           remaining_amount: parseFloat(totalAmount),
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
-        })
+        }
+        // 🔥 CRIA NO INDEXEDDB
+        await db.table('financings').add(fullPayload)
+        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+        await addToSyncQueue(user!.id, 'financings', 'create', id, fullPayload)
         showToast("Financiamento criado com sucesso!", "success")
       }
 
@@ -168,8 +171,10 @@ export default function NewFinancingPage() {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este financiamento?")) return
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete()
+      // 🔥 EXCLUI DO INDEXEDDB
       await db.table('financings').delete(editId)
+      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
+      await addToSyncQueue(user!.id, 'financings', 'delete', editId, { id: editId })
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       router.back()
