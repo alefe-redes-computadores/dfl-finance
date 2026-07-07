@@ -22,7 +22,7 @@ import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -50,6 +50,7 @@ export default function AccountDetailPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
+  const { user } = useAuth() // 🔥 ADICIONADO para pegar user.id
 
   const [refreshing, setRefreshing] = useState(false)
   const [expandedTransactions, setExpandedTransactions] = useState(false)
@@ -89,7 +90,9 @@ export default function AccountDetailPage() {
     return new Date(date).toLocaleDateString("pt-BR")
   }
 
+  // 🔥 CORRIGIDO: Ajuste de saldo com sincronização
   const handleAdjustBalance = async () => {
+    if (!user) return
     if (!adjustAmount || parseFloat(adjustAmount) === 0) {
       showToast("Informe um valor para ajuste", "warning")
       errorHaptic()
@@ -97,15 +100,28 @@ export default function AccountDetailPage() {
     }
     setSaving(true)
     try {
-      const newBalance = (accountData?.balance || 0) + parseFloat(adjustAmount)
-      await db.table('accounts').update(accountId, { balance: newBalance })
+      const amount = parseFloat(adjustAmount)
+      const newBalance = (accountData?.balance || 0) + amount
 
+      // 1. Atualiza a conta no IndexedDB
+      await db.table('accounts').update(accountId, { balance: newBalance })
+      // 2. Enfileira a atualização da conta
+      await addToSyncQueue(
+        user.id,
+        'accounts',
+        'update',
+        accountId,
+        { balance: newBalance }
+      )
+
+      // 3. Cria a transação no IndexedDB
+      const txId = crypto.randomUUID()
       const newTx = {
-        id: crypto.randomUUID(),
+        id: txId,
         user_id: accountData.user_id,
         description: adjustNotes || "Ajuste de saldo",
-        amount: parseFloat(adjustAmount),
-        type: parseFloat(adjustAmount) >= 0 ? "income" : "expense",
+        amount: amount,
+        type: amount >= 0 ? "income" : "expense",
         account_id: accountId,
         date: new Date().toISOString().split("T")[0],
         status: "completed",
@@ -116,6 +132,14 @@ export default function AccountDetailPage() {
         sync_attempts: 0,
       }
       await db.table('transactions').put(newTx)
+      // 4. Enfileira a transação
+      await addToSyncQueue(
+        user.id,
+        'transactions',
+        'create',
+        txId,
+        newTx
+      )
 
       showToast("Saldo ajustado com sucesso!", "success")
       success()
@@ -131,7 +155,9 @@ export default function AccountDetailPage() {
     }
   }
 
+  // 🔥 CORRIGIDO: Transferência com sincronização
   const handleTransfer = async () => {
+    if (!user) return
     if (!transferAmount || parseFloat(transferAmount) <= 0) {
       showToast("Informe um valor válido", "warning")
       errorHaptic()
@@ -146,8 +172,12 @@ export default function AccountDetailPage() {
     try {
       const amount = parseFloat(transferAmount)
 
-      await db.table('transactions').put({
-        id: crypto.randomUUID(),
+      const fromTxId = crypto.randomUUID()
+      const toTxId = crypto.randomUUID()
+
+      // 1. Transação de saída (conta origem)
+      const fromTx = {
+        id: fromTxId,
         user_id: accountData.user_id,
         description: transferNotes || `Transferência para conta`,
         amount: -amount,
@@ -161,10 +191,13 @@ export default function AccountDetailPage() {
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
+      await db.table('transactions').put(fromTx)
+      await addToSyncQueue(user.id, 'transactions', 'create', fromTxId, fromTx)
 
-      await db.table('transactions').put({
-        id: crypto.randomUUID(),
+      // 2. Transação de entrada (conta destino)
+      const toTx = {
+        id: toTxId,
         user_id: accountData.user_id,
         description: transferNotes || `Transferência recebida`,
         amount: amount,
@@ -178,14 +211,32 @@ export default function AccountDetailPage() {
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
+      await db.table('transactions').put(toTx)
+      await addToSyncQueue(user.id, 'transactions', 'create', toTxId, toTx)
 
+      // 3. Atualiza saldo da conta origem
       const newFromBalance = (accountData?.balance || 0) - amount
+      await db.table('accounts').update(accountId, { balance: newFromBalance })
+      await addToSyncQueue(
+        user.id,
+        'accounts',
+        'update',
+        accountId,
+        { balance: newFromBalance }
+      )
+
+      // 4. Atualiza saldo da conta destino
       const toAccount = (localAccounts || []).find((a: any) => a.id === transferToAccount) as any
       const newToBalance = (toAccount?.balance || 0) + amount
-
-      await db.table('accounts').update(accountId, { balance: newFromBalance })
       await db.table('accounts').update(transferToAccount, { balance: newToBalance })
+      await addToSyncQueue(
+        user.id,
+        'accounts',
+        'update',
+        transferToAccount,
+        { balance: newToBalance }
+      )
 
       showToast("Transferência realizada com sucesso!", "success")
       success()
@@ -202,15 +253,24 @@ export default function AccountDetailPage() {
     }
   }
 
+  // 🔥 CORRIGIDO: Exclusão com sincronização
   const handleDelete = async () => {
+    if (!user) return
     if (!confirm("Tem certeza que deseja excluir esta conta?")) return
     try {
       await db.table('accounts').delete(accountId)
+      await addToSyncQueue(
+        user.id,
+        'accounts',
+        'delete',
+        accountId,
+        { id: accountId }
+      )
       showToast("Conta excluída com sucesso!", "success")
       success()
       router.back()
-    } catch {
-      showToast("Erro ao excluir conta", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
     }
   }
@@ -219,7 +279,6 @@ export default function AccountDetailPage() {
     touchStartY.current = e.touches[0].clientY
   }, [])
 
-  // 🔥 CORRIGIDO: Removido .finally() do reload()
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
       const deltaY = e.touches[0].clientY - touchStartY.current
