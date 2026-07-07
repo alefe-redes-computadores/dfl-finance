@@ -21,7 +21,7 @@ import BankLogo from '@/components/BankLogo'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 interface ExtractedTransaction {
   date: string
@@ -122,10 +122,6 @@ export default function ImportInvoicePage() {
     filters: { context },
   })
 
-  // 🔥 REMOVIDOS: const { create: createTransaction } = useLocalData({ table: 'transactions' as any })
-  // 🔥 REMOVIDOS: const { create: createInvoice, update: updateInvoice } = useLocalData({ table: 'credit_invoices' as any })
-  // 🔥 REMOVIDOS: const { create: createNotification } = useLocalData({ table: 'notifications' as any })
-
   useEffect(() => {
     if (!user?.id) return
     reloadCards()
@@ -189,7 +185,7 @@ export default function ImportInvoicePage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE IMPORT CORRIGIDO (usando db.table())
+  // 🔥 HANDLE IMPORT CORRIGIDO COM addToSyncQueue
   // ============================================================
   const handleImport = async () => {
     if (!user?.id || transactions.length === 0) return
@@ -222,11 +218,13 @@ export default function ImportInvoicePage() {
 
           const newTotal = (Number(currentInvoice?.total_amount) || 0) + totalAmount
 
-          // 🔥 CORRIGIDO: Usando db.table().update()
-          await db.table('credit_invoices').update(invoiceId, {
+          // 🔥 ATUALIZA FATURA COM addToSyncQueue
+          const updateData = {
             total_amount: newTotal,
             updated_at: new Date().toISOString(),
-          })
+          }
+          await db.table('credit_invoices').update(invoiceId, updateData)
+          await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
         } else {
           const today = new Date()
           const closingDay = 10
@@ -248,9 +246,7 @@ export default function ImportInvoicePage() {
           }
 
           const newInvoiceId = crypto.randomUUID()
-
-          // 🔥 CORRIGIDO: Usando db.table().add()
-          await db.table('credit_invoices').add({
+          const invoicePayload = {
             id: newInvoiceId,
             user_id: user.id,
             credit_card_id: creditCardId,
@@ -265,7 +261,11 @@ export default function ImportInvoicePage() {
             updated_at: new Date().toISOString(),
             sync_status: 'pending',
             sync_attempts: 0,
-          })
+          }
+
+          // 🔥 CRIA FATURA COM addToSyncQueue
+          await db.table('credit_invoices').add(invoicePayload)
+          await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
 
           invoiceId = newInvoiceId
         }
@@ -304,14 +304,16 @@ export default function ImportInvoicePage() {
         }
       })
 
-      // 🔥 CORRIGIDO: Usando db.table().add()
+      // 🔥 CRIA TRANSAÇÕES COM addToSyncQueue
       for (const tx of payload) {
         await db.table('transactions').add(tx)
+        await addToSyncQueue(user.id, 'transactions', 'create', tx.id, tx)
       }
 
-      // 🔥 CORRIGIDO: Usando db.table().add()
-      await db.table('notifications').add({
-        id: crypto.randomUUID(),
+      // 🔥 CRIA NOTIFICAÇÃO COM addToSyncQueue
+      const notifId = crypto.randomUUID()
+      const notifPayload = {
+        id: notifId,
         user_id: user.id,
         type: 'import_done',
         title: 'Fatura importada',
@@ -325,7 +327,9 @@ export default function ImportInvoicePage() {
         created_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
+      await db.table('notifications').add(notifPayload)
+      await addToSyncQueue(user.id, 'notifications', 'create', notifId, notifPayload)
 
       showToast(`${transactions.length} transações importadas!`, 'success')
       setStep('done')
