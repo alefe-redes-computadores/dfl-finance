@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -24,8 +25,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
 
 type Payment = {
   id: string
@@ -75,9 +75,6 @@ export default function LoanDetailPage() {
 
   const payments = (allPayments || []).filter((p: any) => p.loan_id === loanId) as Payment[]
 
-  // 🔥 REMOVIDOS: const { create: createTransaction, remove: removeTransaction } = useLocalData({ table: 'transactions' as any })
-  // 🔥 REMOVIDOS: const { update: updateLoan, remove: removeLoan } = useLocalData({ table: 'loans' as any })
-
   // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -95,7 +92,7 @@ export default function LoanDetailPage() {
     }
   }, [refreshing, reload])
 
-  // 🔥 CORRIGIDO: Registrar pagamento com db.table()
+  // 🔥 CORRIGIDO: Registrar pagamento com db.table() + addToSyncQueue
   const handleRegisterPayment = async () => {
     if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
       showToast("Informe um valor válido", "warning")
@@ -111,8 +108,9 @@ export default function LoanDetailPage() {
       const newStatus = newTotalPaidCents >= totalAmountCents ? "paid" : loanData?.status || "active"
 
       // 🔥 Criar transação de pagamento
-      await db.table('transactions').add({
-        id: crypto.randomUUID(),
+      const txId = crypto.randomUUID()
+      const txPayload = {
+        id: txId,
         user_id: user!.id,
         description: `Pagamento: ${loanData?.description || "Empréstimo"}`,
         amount: parseFloat(paymentAmount),
@@ -128,13 +126,17 @@ export default function LoanDetailPage() {
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
-      })
+      }
+      await db.table('transactions').add(txPayload)
+      await addToSyncQueue(user!.id, 'transactions', 'create', txId, txPayload)
 
       // 🔥 Atualizar status do empréstimo
-      await db.table('loans').update(loanId, { 
+      const loanUpdate = {
         status: newStatus,
         updated_at: new Date().toISOString()
-      })
+      }
+      await db.table('loans').update(loanId, loanUpdate)
+      await addToSyncQueue(user!.id, 'loans', 'update', loanId, loanUpdate)
 
       showToast("Pagamento registrado com sucesso!", "success")
       success()
@@ -150,10 +152,27 @@ export default function LoanDetailPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: Excluir pagamento com db.table()
+  // 🔥 CORRIGIDO: Excluir pagamento com db.table() + addToSyncQueue
   const handleDeletePayment = async (paymentId: string) => {
     try {
+      // Exclui a transação
       await db.table('transactions').delete(paymentId)
+      await addToSyncQueue(user!.id, 'transactions', 'delete', paymentId, { id: paymentId })
+
+      // Recalcula total pago e atualiza status
+      const updatedPayments = payments.filter(p => p.id !== paymentId)
+      const totalPaid = updatedPayments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+      const totalAmountCents = Math.round((loanData?.amount || 0) * 100)
+      const totalPaidCents = Math.round(totalPaid * 100)
+      const newStatus = totalPaidCents >= totalAmountCents ? "paid" : (totalPaidCents > 0 ? "active" : "active")
+
+      const loanUpdate = {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      }
+      await db.table('loans').update(loanId, loanUpdate)
+      await addToSyncQueue(user!.id, 'loans', 'update', loanId, loanUpdate)
+
       showToast("Pagamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -164,14 +183,17 @@ export default function LoanDetailPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: Excluir empréstimo com db.table()
+  // 🔥 CORRIGIDO: Excluir empréstimo com db.table() + addToSyncQueue
   const handleDeleteLoan = async () => {
     try {
       // Exclui todos os pagamentos vinculados
       for (const p of payments) {
         await db.table('transactions').delete(p.id)
+        await addToSyncQueue(user!.id, 'transactions', 'delete', p.id, { id: p.id })
       }
+      // Exclui o empréstimo
       await db.table('loans').delete(loanId)
+      await addToSyncQueue(user!.id, 'loans', 'delete', loanId, { id: loanId })
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       router.back()
