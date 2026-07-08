@@ -100,6 +100,8 @@ export default function CategoriesPage() {
     if (!name || !user) return
     setSaving(true)
 
+    // 🔥 AQUI ESTÁ A CORREÇÃO DO EFEITO REBOTE
+    // Forçamos o sync_status pendente na edição para travar a categoria localmente
     const payload = {
       name,
       icon: icon.toLowerCase(),
@@ -110,6 +112,8 @@ export default function CategoriesPage() {
       is_default: false,
       sort_order: 999,
       updated_at: new Date().toISOString(),
+      sync_status: 'pending', 
+      sync_attempts: 0,
     }
 
     try {
@@ -119,7 +123,7 @@ export default function CategoriesPage() {
           showToast(`Erro ao atualizar: ${result.error}`, 'error')
           return
         }
-        showToast('Categoria atualizada!', 'success')
+        showToast('Categoria atualizada e salva!', 'success')
       } else {
         const id = crypto.randomUUID()
         const fullPayload = {
@@ -127,8 +131,6 @@ export default function CategoriesPage() {
           user_id: user.id,
           ...payload,
           created_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
         }
         const result = await safeAdd('categories', fullPayload)
         if (!result.success) {
@@ -175,13 +177,11 @@ export default function CategoriesPage() {
     }
   }
 
-  // 🔥 VASSOURA BLINDADA (Sem confirm() para não ser bloqueada no celular)
   async function handleKillZombies() {
     setCleaning(true);
     showToast('Iniciando faxina nas categorias...', 'info');
     
     try {
-      // 1. Limpa fila problemática silenciosamente
       try {
         const allQueue = await db.table('sync_queue').toArray() as any[];
         const catQueue = allQueue.filter(q => q.table === 'categories' || q.entity === 'categories' || q.tableName === 'categories');
@@ -192,10 +192,8 @@ export default function CategoriesPage() {
         console.log('Ignorando erro da fila offline');
       }
 
-      // 2. Busca e unifica duplicatas
       const allCats = await db.table('categories').toArray() as any[];
       
-      // Ordena pelas mais antigas
       allCats.sort((a: any, b: any) => {
         const timeA = new Date(a.created_at || a.updated_at || 0).getTime();
         const timeB = new Date(b.created_at || b.updated_at || 0).getTime();
@@ -215,7 +213,6 @@ export default function CategoriesPage() {
         const key = `${catName}-${catType}-${catContext}-${catParent}`;
         
         if (seen.has(key)) {
-           // Achamos um clone
            toDeleteAndMigrate.push({ cloneId: cat.id, originalId: seen.get(key) });
         } else {
            seen.set(key, cat.id); 
@@ -232,7 +229,6 @@ export default function CategoriesPage() {
                await safeUpdate('transactions', tx.id, { category_id: originalId });
                migratedCount++;
             }
-
             await safeDelete('categories', cloneId); 
          }
          showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones destruídos e ${migratedCount} transações preservadas.`, 'success');
@@ -422,7 +418,6 @@ export default function CategoriesPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {/* BOTÃO LÁPIS CORRIGIDO */}
                       <button onClick={(e) => { e.stopPropagation(); openEdit(cat); }} className="p-1.5 bg-blue-50 dark:bg-blue-500/10 rounded-lg transition-colors hover:bg-blue-100 dark:hover:bg-blue-500/20">
                         <Edit3 size={16} className="text-blue-500" />
                       </button>
