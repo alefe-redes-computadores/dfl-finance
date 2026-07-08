@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -19,6 +20,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
+import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { db, addToSyncQueue } from '@/lib/db'
@@ -47,7 +49,7 @@ function AccountsContent() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_() // 🔥 ADICIONADO effectiveContext
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -56,10 +58,10 @@ function AccountsContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
+  // 🔥 CORRIGIDO: USANDO effectiveContext
   const { data: accounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
-    filters: { context },
+    filters: { context: effectiveContext }, // 🔥 effectiveContext
   })
 
   // 🔥 CORRIGIDO: Exclusão com sincronização
@@ -140,6 +142,7 @@ function AccountsContent() {
               {appMode === "personal_only" ? "Pessoais" : "Empresariais e Pessoais"}
             </p>
           </div>
+          <ContextToggle />
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearch(!showSearch)}
