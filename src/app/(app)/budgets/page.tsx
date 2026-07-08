@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Plus, Loader2, RefreshCw, 
   AlertTriangle, CheckCircle, Clock, Tag, MoreHorizontal,
-  Eye, EyeOff, Settings2
+  Eye, EyeOff, Settings2, Check
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -15,7 +15,9 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 // ============================================================
 // SKELETON LOADER
@@ -47,25 +49,28 @@ const BudgetsSkeleton = () => (
 function BudgetsContent() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
+  // 🔥 CORRIGIDO: Usa effectiveContext
   // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   // ============================================================
@@ -160,14 +165,18 @@ function BudgetsContent() {
   })
 
   // ============================================================
-  // 🔥 HANDLERS CORRIGIDOS COM addToSyncQueue
+  // 🔥 HANDLERS CORRIGIDOS COM safeDb
   // ============================================================
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir este orçamento?')) return
     try {
-      await db.table('budgets').delete(id)
-      await addToSyncQueue(user.id, 'budgets', 'delete', id, { id })
+      // 🔥 Substituído por safeDelete com verificação
+      const result = await safeDelete('budgets', id)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, 'error')
+        return
+      }
       showToast('Orçamento excluído.', 'info')
       loadData()
     } catch (err: any) {
@@ -183,8 +192,12 @@ function BudgetsContent() {
         status: newStatus,
         updated_at: new Date().toISOString()
       }
-      await db.table('budgets').update(budget.id, payload)
-      await addToSyncQueue(user.id, 'budgets', 'update', budget.id, payload)
+      // 🔥 Substituído por safeUpdate com verificação
+      const result = await safeUpdate('budgets', budget.id, payload)
+      if (!result.success) {
+        showToast(`Erro ao atualizar: ${result.error}`, 'error')
+        return
+      }
       showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
       loadData()
     } catch (err: any) {
