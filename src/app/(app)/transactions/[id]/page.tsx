@@ -250,10 +250,10 @@ export default function EditTransactionPage() {
   setLoadingPulse(true)
 
   try {
-    const catType = txType === 'income' ? 'income' : 'expense'
+    // Carrega dados de referência (categorias, contas, etc)
     const [{ data: accData }, { data: catData }, { data: tagData }, { data: cardsData }, { data: contactsData }] = await Promise.all([
       supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
-      supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
+      supabase.from('categories').select('*').match({ user_id: user.id }),
       supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name'),
       supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_archived', false).order('name'),
       supabase.from('contacts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
@@ -262,6 +262,7 @@ export default function EditTransactionPage() {
     setAccounts(Array.isArray(accData) ? accData : [])
     setCreditCards(Array.isArray(cardsData) ? cardsData : [])
     setContacts(Array.isArray(contactsData) ? contactsData : [])
+    
     const allCats = Array.isArray(catData) ? catData : []
     const mainCats = allCats.filter((c) => !c.parent_id)
     const subCats = allCats.filter((c) => c.parent_id)
@@ -274,22 +275,24 @@ export default function EditTransactionPage() {
     setSubcategories(subsMap)
     setTags(Array.isArray(tagData) ? tagData : [])
 
-    // 🔥 CORREÇÃO: Verifica se o ID existe e NÃO é 'new'
+    // 🔥 VERIFICA SE É EDIÇÃO
     const isEditMode = id && id !== 'new' && typeof id === 'string' && id.length > 5
-    
+
     if (isEditMode) {
-      console.log('🔍 Buscando transação com ID:', id)
+      // Busca a transação
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .select('*')
-        .match({ id, user_id: user.id })
+        .eq('id', id)
+        .eq('user_id', user.id)
         .single()
 
       if (txError) {
         console.error('❌ Erro ao buscar transação:', txError)
-        showToast('Erro ao buscar transação.', 'error')
-        // 🔥 Se não encontrar, cria uma nova
+        showToast('Transação não encontrada.', 'error')
+        // 🔥 CRIA UMA NOVA EM CASO DE ERRO
         setIsNew(true)
+        setTxType('expense')
         setIsPaid(false)
         setDate(format(new Date(), 'yyyy-MM-dd'))
         setAmountInput('0,00')
@@ -308,13 +311,16 @@ export default function EditTransactionPage() {
         setFinancingId(null)
         setDebtId(null)
         setIsRefund(false)
+        setLoading(false)
+        setLoadingPulse(false)
         return
       }
 
       if (txData) {
-        // 🔥 CORREÇÃO: Define o tipo ANTES de preencher os campos
-        setTxType(txData.type)
+        // 🔥 PREENCHE OS DADOS
         setTx(txData)
+        setTxType(txData.type)
+        setIsNew(false)
         setIsPaid(txData.status === 'done')
         setDate(txData.date)
         setDescription(txData.description || '')
@@ -325,6 +331,7 @@ export default function EditTransactionPage() {
         setContactId(txData.contact_id || '')
         setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
         setIsReimbursable(txData.is_reimbursable || false)
+        
         const amountSafe = Number(txData.amount) || 0
         setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
@@ -339,10 +346,10 @@ export default function EditTransactionPage() {
         if (txData.financing_id) setFinancingId(txData.financing_id)
         if (txData.debt_id) setDebtId(txData.debt_id)
         if (txData.notes?.includes('[Devolução/Estorno]')) setIsRefund(true)
-        setIsNew(false)
       } else {
-        // Não encontrou dados
+        // Transação não encontrada
         setIsNew(true)
+        setTxType('expense')
         setIsPaid(false)
         setDate(format(new Date(), 'yyyy-MM-dd'))
         setAmountInput('0,00')
@@ -361,20 +368,42 @@ export default function EditTransactionPage() {
         setFinancingId(null)
         setDebtId(null)
         setIsRefund(false)
+        showToast('Transação não encontrada.', 'error')
       }
     } else {
-      // Modo de criação (nova transação)
+      // 🔥 MODO DE CRIAÇÃO
       setIsNew(true)
       const paramType = searchParams.get('type')
-      if (paramType === 'income' || paramType === 'expense') {
-        setTxType(paramType)
-        if (paramType === 'income') setIsPaid(true)
+      if (paramType === 'income') {
+        setTxType('income')
+        setIsPaid(true)
+      } else {
+        setTxType('expense')
+        setIsPaid(false)
       }
+      setDate(format(new Date(), 'yyyy-MM-dd'))
+      setAmountInput('0,00')
+      setDescription('')
+      setNotes('')
+      setCategoryId('')
+      setAccountId('')
+      setCreditCardId('')
+      setContactId('')
+      setSelectedTags([])
+      setIsReimbursable(false)
+      setReceiptUrl(null)
+      setReceiptPreview(null)
+      setReceiptName('')
+      setReceiptType(null)
+      setFinancingId(null)
+      setDebtId(null)
+      setIsRefund(false)
     }
   } catch (err) {
     console.error('Erro inesperado:', err)
-    // Em caso de erro, cria uma nova transação
+    // 🔥 FALLBACK: cria uma nova transação
     setIsNew(true)
+    setTxType('expense')
     setIsPaid(false)
     setDate(format(new Date(), 'yyyy-MM-dd'))
     setAmountInput('0,00')
@@ -393,11 +422,12 @@ export default function EditTransactionPage() {
     setFinancingId(null)
     setDebtId(null)
     setIsRefund(false)
+    showToast('Erro ao carregar dados.', 'error')
   } finally {
     setLoading(false)
     setLoadingPulse(false)
   }
-}, [id, user, txType, searchParams, context])
+}, [id, user, context, searchParams])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '')
