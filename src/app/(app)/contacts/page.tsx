@@ -21,7 +21,9 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function ContactsPage() {
   const router = useRouter()
@@ -29,7 +31,9 @@ export default function ContactsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -40,16 +44,16 @@ export default function ContactsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: contacts, loading, reload } = useLocalData({
     table: 'contacts' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  // Busca transações para contar por contato
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const transactionCountByContact = (transactions || []).reduce((acc: Record<string, number>, tx: any) => {
@@ -59,18 +63,22 @@ export default function ContactsPage() {
     return acc
   }, {})
 
-  // 🔥 CORRIGIDO: Remove contato com db.table().delete() + addToSyncQueue
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.table('contacts').delete(deleteModal)
-      await addToSyncQueue(user.id, 'contacts', 'delete', deleteModal, { id: deleteModal })
+      const result = await safeDelete('contacts', deleteModal)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, "error")
+        errorHaptic()
+        return
+      }
       showToast("Contato excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
-      showToast("Erro ao excluir contato", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
     }
   }
