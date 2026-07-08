@@ -23,13 +23,13 @@ export function useLocalData<T>({
 }) {
   const { user } = useAuth()
   
-  // 🔥 A MÁGICA DO FLICKER: Começa como null em vez de array vazio
   const [data, setData] = useState<T[] | null>(null) 
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   
   const lock = useRef(false)
   const filtersKey = JSON.stringify(filters)
+  const reloadCount = useRef(0)
 
   // ============================================================
   // 🔥 1. REATIVIDADE LOCAL COM liveQuery
@@ -44,7 +44,6 @@ export function useLocalData<T>({
       const collection = db.table(table)
       let q = collection.where('user_id').equals(user.id)
 
-      // Aplica filtros
       Object.entries(filters).forEach(([k, v]) => {
         if (v !== undefined && v !== null && v !== '') {
           q = q.and((i: any) => i[k] === v)
@@ -53,7 +52,6 @@ export function useLocalData<T>({
 
       let res = await q.toArray()
 
-      // Ordenação em memória
       if (orderBy && res.length > 0) {
         res = res.sort((a: any, b: any) => {
           const valA = a[orderBy] || ''
@@ -84,18 +82,18 @@ export function useLocalData<T>({
 
     const subscription = observable.subscribe({
       next: (result: any) => {
-        setData(result || []) // Alimenta os dados reais
-        setLoading(false) // Libera a tela
+        setData(result || [])
+        setLoading(false)
       },
       error: (err) => {
         console.error(`Erro no liveQuery da tabela ${table}:`, err)
-        setData([]) // Em caso de erro, devolve vazio para não quebrar a tela
+        setData([])
         setLoading(false)
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [user?.id, table, filtersKey, limit, orderBy, orderDir])
+  }, [user?.id, table, filtersKey, limit, orderBy, orderDir, reloadCount.current])
 
   // ============================================================
   // 🔥 2. SINCRONIZAÇÃO COM A NUVEM
@@ -136,17 +134,37 @@ export function useLocalData<T>({
   }, [user?.id, table])
 
   // ============================================================
-  // 🔥 3. FUNÇÃO RELOAD
+  // 🔥 3. RELOAD DE VERDADE (FORÇA RELEITURA)
   // ============================================================
   const reload = useCallback(async () => {
     setLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 100))
-    setLoading(false)
-  }, [])
+    
+    // 🔥 Força o liveQuery a reagir incrementando o contador
+    reloadCount.current += 1
+    
+    // 🔥 Também força uma sincronização manual
+    if (user?.id && navigator.onLine) {
+      try {
+        const { data: remoteData, error } = await supabase
+          .from(table)
+          .select('*')
+          .eq('user_id', user.id)
 
-  // 🔥 O PULO DO GATO:
-  // Se data for null, significa que o liveQuery ainda não rodou a primeira vez.
-  // Então mantemos o loading como true e devolvemos um array vazio preventivo para não quebrar os .map() das telas.
+        if (!error && remoteData && remoteData.length > 0) {
+          await db.table(table).bulkPut(
+            remoteData.map((r: any) => ({ ...r, sync_status: 'synced' }))
+          )
+        }
+      } catch (err) {
+        console.error('Erro no reload manual:', err)
+      }
+    }
+    
+    // Pequeno delay para garantir que o liveQuery reagiu
+    await new Promise(resolve => setTimeout(resolve, 150))
+    setLoading(false)
+  }, [user?.id, table])
+
   return { 
     data: data || [], 
     loading: loading || data === null, 
