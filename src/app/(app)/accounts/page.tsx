@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from "react"
@@ -49,7 +48,7 @@ function AccountsContent() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode, effectiveContext } = useContext_() // 🔥 ADICIONADO effectiveContext
+  const { context, appMode, effectiveContext } = useContext_()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -58,13 +57,11 @@ function AccountsContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORRIGIDO: USANDO effectiveContext
   const { data: accounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
-    filters: { context: effectiveContext }, // 🔥 effectiveContext
+    filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Exclusão com sincronização
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
@@ -135,14 +132,14 @@ function AccountsContent() {
       )}
 
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
-        <div className="flex items-center justify-between pt-4 mb-3">
+        {/* 🔥 LINHA 1: Título + Botões */}
+        <div className="flex items-center justify-between pt-4 mb-2">
           <div>
             <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">Contas</h1>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {appMode === "personal_only" ? "Pessoais" : "Empresariais e Pessoais"}
             </p>
           </div>
-          <ContextToggle />
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearch(!showSearch)}
@@ -159,6 +156,15 @@ function AccountsContent() {
           </div>
         </div>
 
+        {/* 🔥 LINHA 2: SELETOR DE CONTEXTO + INDICADOR */}
+        <div className="flex items-center justify-between mb-3">
+          <ContextToggle />
+          <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
+            {effectiveContext === 'dfl' ? '🏢 PJ' : '👤 PF'}
+          </span>
+        </div>
+
+        {/* Saldo Total */}
         <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 mb-3 text-white shadow-lg shadow-teal-500/20">
           <div className="flex items-center justify-between">
             <div>
@@ -172,6 +178,7 @@ function AccountsContent() {
           <p className="text-xs text-white/70 mt-1">{filteredAccounts.length} conta(s)</p>
         </div>
 
+        {/* Search */}
         {showSearch && (
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
