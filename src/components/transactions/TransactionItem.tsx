@@ -16,11 +16,16 @@ const safeNum = (val: any) => {
   return isNaN(parsed) ? 0 : parsed;
 }
 
+// 🔥 CORREÇÃO 2: Ícone do Anexo (Foto vs Arquivo)
 const getAttachmentIcon = (url: string | null) => {
-  if (!url) return null
-  const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-  if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-  return <Paperclip size={12} className="text-gray-500 shrink-0" />
+  if (!url) return null;
+  // Se for um documento conhecido, exibe o Clipe de Papel
+  const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase());
+  if (isDocument) {
+    return <Paperclip size={12} className="text-gray-500 shrink-0" />;
+  }
+  // Caso contrário (jpeg, png, heic, ou sem extensão clara), assume como Foto
+  return <Image size={12} className="text-blue-500 shrink-0" />;
 }
 
 interface TransactionItemProps {
@@ -33,12 +38,10 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
   const router = useRouter()
   const { vibrate } = useHapticFeedback()
   
-  // Controles de Animação e Swipe
   const x = useMotionValue(0)
   const controls = useAnimation()
   const [swipeAction, setSwipeAction] = useState<'none' | 'edit' | 'done' | 'delete'>('none')
 
-  // Monitora a posição do arrasto para mudar a cor de fundo dinamicamente
   useMotionValueEvent(x, "change", (latest) => {
     if (latest > 60) {
       if (swipeAction !== 'edit') { setSwipeAction('edit'); vibrate([10]); }
@@ -53,30 +56,48 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
 
   const handleDragEnd = (event: any, info: any) => {
     const offset = info.offset.x
-    
-    // Ações baseadas na distância do Swipe
     if (offset > 60) {
-      router.push(`/transactions/${transaction.id}`) // Edição
+      router.push(`/transactions/${transaction.id}`)
     } else if (offset < -100) {
-      onDelete(transaction) // Excluir
+      onDelete(transaction)
     } else if (offset < -40) {
-      onToggleStatus(transaction) // Efetivar/Pendente
+      onToggleStatus(transaction)
     }
-
-    // Volta o card para a posição inicial com efeito mola
     controls.start({ x: 0, transition: { type: 'spring', stiffness: 400, damping: 25 } })
   }
 
-  const isTransferIn = transaction.type === 'transfer' && transaction.description?.includes('de ')
-  const isIncomeVisual = transaction.type === 'income' || isTransferIn
   const isPending = transaction.status === 'pending'
   const hasInstallments = transaction.total_installments && transaction.total_installments > 1
   const installmentBadge = hasInstallments ? `${transaction.installment_index || 1}/${transaction.total_installments}` : null
-  const transactionName = transaction.description || transaction.categories?.name || (isIncomeVisual ? 'Receita' : 'Despesa')
   const IconComp = transaction.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(transaction.categories?.icon)
   const attachmentIcon = getAttachmentIcon(transaction.receipt_url)
 
-  // Configurações do Fundo Dinâmico
+  // 🔥 CORREÇÃO 1: Cores por Tipo de Transação (Verde, Vermelho, Azul)
+  const isIncome = transaction.type === 'income';
+  const isExpense = transaction.type === 'expense' || transaction.type === 'sangria';
+  const isTransfer = transaction.type === 'transfer';
+
+  let amountColorClass = 'text-gray-800 dark:text-gray-200';
+  let amountPrefix = '';
+  let defaultName = 'Transação';
+
+  if (isIncome) {
+    amountColorClass = 'text-emerald-600 dark:text-emerald-400';
+    amountPrefix = '+';
+    defaultName = 'Receita';
+  } else if (isExpense) {
+    amountColorClass = 'text-red-500 dark:text-red-400';
+    amountPrefix = '-';
+    defaultName = 'Despesa';
+  } else if (isTransfer) {
+    amountColorClass = 'text-blue-500 dark:text-blue-400';
+    // Se for transferência de entrada (+) senão (-)
+    amountPrefix = transaction.description?.toLowerCase().includes('de ') ? '+' : '-';
+    defaultName = 'Transferência';
+  }
+
+  const transactionName = transaction.description || transaction.categories?.name || defaultName;
+
   let bgClass = 'bg-gray-100 dark:bg-slate-800'
   let iconLeft = null
   let iconRight = null
@@ -94,13 +115,11 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
 
   return (
     <div className="relative w-full mb-3 rounded-[20px] overflow-hidden">
-      {/* Fundo do Swipe (Revelado ao arrastar) */}
       <div className={`absolute inset-0 flex items-center justify-between transition-colors duration-200 ${bgClass}`}>
         <div className="flex-1 flex items-center justify-start">{iconLeft}</div>
         <div className="flex-1 flex items-center justify-end">{iconRight}</div>
       </div>
 
-      {/* Card Flutuante Principal */}
       <motion.div
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
@@ -161,8 +180,8 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
               {format(new Date(transaction.date), "dd MMM", { locale: ptBR })}
             </p>
           </div>
-          <p className={`text-[15px] font-bold whitespace-nowrap ${isIncomeVisual ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-            {isIncomeVisual ? '+' : '-'} R$ {safeNum(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <p className={`text-[15px] font-bold whitespace-nowrap ${amountColorClass}`}>
+            {amountPrefix} R$ {safeNum(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
         </div>
       </motion.div>
