@@ -14,7 +14,9 @@ import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const PreviewSkeleton = () => (
   <div className="animate-pulse space-y-4">
@@ -51,8 +53,10 @@ const PreviewSkeleton = () => (
 export default function ImportCSVPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [file, setFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
@@ -69,10 +73,10 @@ export default function ImportCSVPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORRIGIDO: Removido realtime
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,7 +164,7 @@ export default function ImportCSVPage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE IMPORT CORRIGIDO COM addToSyncQueue
+  // 🔥 HANDLE IMPORT CORRIGIDO COM safeAdd
   // ============================================================
   const handleImport = async () => {
     if (!user?.id) {
@@ -262,7 +266,7 @@ export default function ImportCSVPage() {
           const txPayload = {
             id: txId,
             user_id: user.id,
-            context: context,
+            context: effectiveContext,
             type: type,
             amount: amount,
             description: description,
@@ -277,9 +281,13 @@ export default function ImportCSVPage() {
             sync_attempts: 0,
           }
 
-          // 🔥 CRIA TRANSAÇÃO COM addToSyncQueue
-          await db.table('transactions').add(txPayload)
-          await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
+          // 🔥 Substituído por safeAdd com verificação
+          const result = await safeAdd('transactions', txPayload)
+          if (!result.success) {
+            failCount++
+            console.error(`Erro ao importar linha ${i + 1}: ${result.error}`)
+            continue
+          }
 
           successCount++
         } catch (err) {
