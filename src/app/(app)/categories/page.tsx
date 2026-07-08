@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, AlertTriangle, Tag } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
@@ -12,16 +12,6 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { db, addToSyncQueue } from '@/lib/db'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
-
-const DEFAULT_CATEGORIES = [
-  { name:'Insumos', icon:'ShoppingBag', color:'#16a34a', type:'expense', context:'dfl', sort_order:1 },
-  { name:'Embalagens', icon:'Gift', color:'#0891b2', type:'expense', context:'dfl', sort_order:2 },
-  { name:'Fornecedores', icon:'Briefcase', color:'#ea580c', type:'expense', context:'dfl', sort_order:3 },
-  { name:'Vendas', icon:'ShoppingCart', color:'#16a34a', type:'income', context:'dfl', sort_order:1 },
-  { name:'Moradia', icon:'Home', color:'#ca8a04', type:'expense', context:'personal', sort_order:1 },
-  { name:'Alimentação', icon:'Utensils', color:'#16a34a', type:'expense', context:'personal', sort_order:2 },
-  { name:'Salário', icon:'Briefcase', color:'#16a34a', type:'income', context:'personal', sort_order:1 },
-]
 
 export default function CategoriesPage() {
   const { user } = useAuth()
@@ -43,16 +33,13 @@ export default function CategoriesPage() {
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // O Hook busca TODAS as categorias sem filtro, a gente filtra no useMemo
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
   })
 
-  // 🔥 ISSO RESOLVE O PROBLEMA DA ABA PF/PJ E DE ATUALIZAÇÃO IMEDIATA
   const { categories, subcategories } = useMemo(() => {
     if (!allLocalCategories) return { categories: [], subcategories: {} }
     
-    // Filtra pelo contexto e tipo (Receita/Despesa)
     const filtered = allLocalCategories.filter((c: any) => 
       c.context === effectiveContext && c.type === tab
     )
@@ -68,40 +55,6 @@ export default function CategoriesPage() {
 
     return { categories: mainCats, subcategories: subsMap }
   }, [allLocalCategories, effectiveContext, tab])
-
-  // 🔥 LIMPEZA SEGURA E INTELIGENTE: Funde as transações para não quebrar o gráfico
-  async function cleanupDuplicates() {
-    if(!user) return;
-    
-    const all = await db.table('categories').where('user_id').equals(user.id).toArray();
-    const transactions = await db.table('transactions').toArray();
-    
-    const seen = new Map();
-    const toDelete = [];
-
-    for (const cat of all) {
-      const key = `${cat.name.trim().toLowerCase()}-${cat.context}-${cat.type}`;
-      if (seen.has(key)) {
-        const officialId = seen.get(key);
-        // Protege os gráficos! Troca a categoria das transações para a "Oficial"
-        const txs = transactions.filter(t => t.category_id === cat.id);
-        for(const tx of txs) {
-          await db.table('transactions').update(tx.id, { category_id: officialId });
-        }
-        toDelete.push(cat.id);
-      } else {
-        seen.set(key, cat.id);
-      }
-    }
-
-    for (const id of toDelete) {
-      await db.table('categories').delete(id);
-      await addToSyncQueue(user.id, 'categories', 'delete', id, { id });
-    }
-    
-    showToast(`Limpeza concluída! ${toDelete.length} duplicatas fundidas com sucesso.`, 'success');
-    await reloadCategories();
-  }
 
   function toggleExpand(catId: string) {
     setExpandedId(expandedId === catId ? null : catId)
@@ -218,14 +171,6 @@ export default function CategoriesPage() {
       </div>
 
       <ContextToggle />
-
-      {/* 🔥 BOTÃO PARA CORRIGIR DUPLICATAS */}
-      <button 
-        onClick={cleanupDuplicates}
-        className="w-full mb-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
-      >
-        <AlertTriangle size={16} /> Limpar duplicatas e corrigir gráficos
-      </button>
 
       <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4">
         {([['expense','Despesas'],['income','Receitas']] as const).map(([k,l]) => (
