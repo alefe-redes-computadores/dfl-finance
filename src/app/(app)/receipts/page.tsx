@@ -13,6 +13,8 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import Skeleton from '@/components/Skeleton'
+// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 interface ReceiptFile {
   name: string
@@ -29,6 +31,9 @@ export default function ReceiptsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem (preparatório - mantém consistência)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [receipts, setReceipts] = useState<ReceiptFile[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
