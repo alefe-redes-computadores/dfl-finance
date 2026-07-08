@@ -12,7 +12,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db, addToSyncQueue } from '@/lib/db'
 
 // ============================================================
 // SKELETON LOADER
@@ -45,9 +45,6 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
 
-  // ============================================================
-  // 🔥 BUSCA LOCAL
-  // ============================================================
   const { data: localNotifications, loading: notifLoading, reload: reloadNotifications } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id },
@@ -118,7 +115,7 @@ export default function NotificationsPage() {
   }, [user?.id])
 
   // ============================================================
-  // 🔥 PROCESSAR DADOS — USANDO is_read (padrão unificado)
+  // PROCESSAR DADOS
   // ============================================================
   useEffect(() => {
     if (localNotifications) {
@@ -134,7 +131,7 @@ export default function NotificationsPage() {
   }, [localNotifications])
 
   // ============================================================
-  // 🔥 HANDLERS CORRIGIDOS COM addToSyncQueue
+  // 🔥 CORRIGIDO: markAsRead SEM loadNotifications()
   // ============================================================
   const markAsRead = async (id: string) => {
     if (!user) return
@@ -147,6 +144,7 @@ export default function NotificationsPage() {
       await db.table('notifications').update(id, updateData)
       await addToSyncQueue(user.id, 'notifications', 'update', id, updateData)
       
+      // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
       const updated = notifications.map((n: any) => 
         n.id === id ? { ...n, is_read: true, read: true } : n
       )
@@ -154,12 +152,15 @@ export default function NotificationsPage() {
       setUnreadCount(updated.filter((n: any) => !n.is_read && !n.read).length)
       
       showToast('Notificação marcada como lida.', 'info')
-      loadNotifications()
+      // 🔥 NÃO chama loadNotifications() aqui!
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
     }
   }
 
+  // ============================================================
+  // 🔥 CORRIGIDO: markAllAsRead SEM loadNotifications()
+  // ============================================================
   const markAllAsRead = async () => {
     if (!user?.id || notifications.length === 0) return
 
@@ -175,23 +176,28 @@ export default function NotificationsPage() {
         await addToSyncQueue(user.id, 'notifications', 'update', notif.id, updateData)
       }
       
+      // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
       const updated = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
       setNotifications(updated)
       setUnreadCount(0)
       
       showToast('Todas as notificações marcadas como lidas!', 'success')
-      loadNotifications()
+      // 🔥 NÃO chama loadNotifications() aqui!
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
     }
   }
 
+  // ============================================================
+  // 🔥 CORRIGIDO: deleteNotification COM loadNotifications() (é uma exclusão)
+  // ============================================================
   const deleteNotification = async (id: string) => {
     if (!user) return
     try {
       await db.table('notifications').delete(id)
       await addToSyncQueue(user.id, 'notifications', 'delete', id, { id })
       showToast('Notificação removida.', 'info')
+      // 🔥 AQUI SIM, precisamos recarregar para remover da lista
       loadNotifications()
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
