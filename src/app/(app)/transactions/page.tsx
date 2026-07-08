@@ -175,48 +175,56 @@ export default function TransactionsPage() {
   }, [user?.id, effectiveContext, currentDate, filter, statusFilter, reloadTransactions])
 
   // 🔥 LÓGICA DE SWIPE: Efetivar/Pendente e Atualizar Saldo
-    const handleToggleStatus = async (tx: any) => {
-    if (!user?.id) return
-    try {
-      // 1. Usar safeNum para garantir que o cálculo matemático não falhe
-      const amount = safeNum(tx.amount)
-      const newStatus = tx.status === 'pending' ? 'done' : 'pending'
-      
-      // 2. Operação na Conta (se houver conta vinculada)
-      if (tx.account_id) {
-        const acc = await db.table('accounts').get(tx.account_id)
-        if (acc) {
-          let currentBalance = safeNum(acc.balance)
-          let newBalance = currentBalance
-          
-          if (newStatus === 'done') {
-            // Efetivando: soma se for receita, subtrai se for despesa
-            newBalance = tx.type === 'income' ? currentBalance + amount : currentBalance - amount
-          } else {
-            // Pendente: reverte (subtrai receita, soma despesa)
-            newBalance = tx.type === 'income' ? currentBalance - amount : currentBalance + amount
-          }
-          
-          // Atualiza localmente com await
-          await db.table('accounts').update(acc.id, { balance: newBalance })
-          await addToSyncQueue(user.id, 'accounts', 'update', acc.id, { balance: newBalance })
-        }
-      }
-
-      // 3. Operação na Transação
-      await db.table('transactions').update(tx.id, { status: newStatus })
-      await addToSyncQueue(user.id, 'transactions', 'update', tx.id, { status: newStatus })
-
-      // 4. Feedback e Reload IMEDIATO
-      showToast(`Transação ${newStatus === 'done' ? 'efetivada' : 'marcada como pendente'}.`, 'success')
-      
-      // 🔥 O 'await' no reloadTransactions garante que a UI só atualize DEPOIS que o Dexie salvar
-      await reloadTransactions() 
-    } catch (e) {
-      console.error('Erro no toggle status:', e)
-      showToast('Erro ao atualizar status', 'error')
+      const handleToggleStatus = async (tx: any) => {
+    if (!user?.id) return;
+    
+    // 1. Verificação de Integridade (Feedback Visual)
+    if (!tx.account_id) {
+      showToast("Erro: Esta transação não tem conta vinculada", "error");
+      return;
     }
-  }
+
+    try {
+      const amount = safeNum(tx.amount);
+      const newStatus = tx.status === 'pending' ? 'done' : 'pending';
+      
+      // Iniciamos a transação
+      await db.transaction('rw', db.table('accounts'), db.table('transactions'), async () => {
+        
+        const acc = await db.table('accounts').get(tx.account_id);
+        
+        if (!acc) {
+          throw new Error("Conta não encontrada no sistema");
+        }
+
+        let currentBalance = safeNum(acc.balance);
+        let newBalance = currentBalance;
+
+        if (newStatus === 'done') {
+          newBalance = tx.type === 'income' ? currentBalance + amount : currentBalance - amount;
+        } else {
+          newBalance = tx.type === 'income' ? currentBalance - amount : currentBalance + amount;
+        }
+
+        // Feedback do cálculo (Isso vai te mostrar se o valor está certo ou dando 0)
+        showToast(`Calculando: ${currentBalance} -> ${newBalance}`, "info");
+        
+        await db.table('accounts').update(acc.id, { balance: newBalance });
+        await addToSyncQueue(user.id, 'accounts', 'update', acc.id, { balance: newBalance });
+        
+        await db.table('transactions').update(tx.id, { status: newStatus });
+        await addToSyncQueue(user.id, 'transactions', 'update', tx.id, { status: newStatus });
+      });
+
+      showToast('Sucesso! Transação atualizada.', 'success');
+      await reloadTransactions(); 
+
+    } catch (e: any) {
+      // Se der erro, o Toast vai mostrar o motivo
+      showToast(`Falha: ${e.message}`, 'error');
+    }
+  };
+
 
 
   // 🔥 LÓGICA DE SWIPE: Excluir e Estornar Saldo
