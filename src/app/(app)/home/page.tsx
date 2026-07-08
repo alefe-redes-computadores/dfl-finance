@@ -154,8 +154,15 @@ function HomeContent() {
     })
   }, [localTransactions, localCategories, localAccountsData])
 
+  // 🔥 CORREÇÃO DA ORDENAÇÃO
   const monthTransactions = useMemo(() => 
-    transactionsWithJoin.filter((t: any) => t.date >= start && t.date <= end),
+    transactionsWithJoin
+      .filter((t: any) => t.date >= start && t.date <= end)
+      .sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at || a.date || 0).getTime();
+        const timeB = new Date(b.created_at || b.date || 0).getTime();
+        return timeB - timeA;
+      }),
   [transactionsWithJoin, start, end])
 
   const summary = useMemo(() => {
@@ -182,6 +189,7 @@ function HomeContent() {
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
 
+  // Por causa do sort no monthTransactions, aqui ele já recorta os 5 mais recentes
   const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
 
   const accounts = useMemo(() => {
@@ -202,7 +210,6 @@ function HomeContent() {
     })
   }, [localCards, monthTransactions])
 
-  // 🔥 CORRIGIDO: Pendências SEM filtro de mês
   const pendings = useMemo(() => {
     const allPending = (localTransactions || []).filter((t: any) => t.status === 'pending')
     
@@ -400,7 +407,13 @@ function HomeContent() {
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
   const allCardsPaid = cards.length > 0 && cards.every((c) => (c.faturaAtual || 0) === 0)
 
-  const getAttachmentIcon = (url: string | null) => { if (!url) return null; const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url); if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />; return <Paperclip size={12} className="text-gray-500 shrink-0" /> }
+  // 🔥 CORREÇÃO DO ÍCONE DE ANEXO
+  const getAttachmentIcon = (url: string | null) => { 
+    if (!url) return null; 
+    const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase()); 
+    if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />; 
+    return <Image size={12} className="text-blue-500 shrink-0" />; 
+  }
 
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
     const removedSection = sectionId
@@ -832,8 +845,32 @@ function HomeContent() {
                 ) : (
                   recentTransactions.map((tx: any, index: number) => {
                     const isPending = tx.status === 'pending'
-                    const IconComp = getDynamicIcon(tx.categories?.icon)
+                    const IconComp = tx.type === 'transfer' ? ArrowRightLeft : getDynamicIcon(tx.categories?.icon)
                     const attachmentIcon = getAttachmentIcon(tx.receipt_url)
+                    
+                    // 🔥 CORREÇÃO DE CORES E SINAIS PARA RECENTES
+                    const isIncome = tx.type === 'income';
+                    const isExpense = tx.type === 'expense' || tx.type === 'sangria';
+                    const isTransfer = tx.type === 'transfer';
+
+                    let amountColorClass = 'text-gray-800 dark:text-gray-200';
+                    let amountPrefix = '';
+                    let defaultName = 'Transação';
+
+                    if (isIncome) {
+                      amountColorClass = 'text-emerald-600 dark:text-emerald-400';
+                      amountPrefix = '+';
+                      defaultName = 'Receita';
+                    } else if (isExpense) {
+                      amountColorClass = 'text-red-500 dark:text-red-400';
+                      amountPrefix = '-';
+                      defaultName = 'Despesa';
+                    } else if (isTransfer) {
+                      amountColorClass = 'text-blue-500 dark:text-blue-400';
+                      amountPrefix = tx.description?.toLowerCase().includes('de ') ? '+' : '-';
+                      defaultName = 'Transferência';
+                    }
+
                     return (
                       <div key={tx.id} onClick={() => router.push(`/transactions/${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
                         {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
@@ -841,13 +878,13 @@ function HomeContent() {
                           <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || (tx.type === 'income' ? 'Receita' : 'Despesa')}</p>
+                              <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 uppercase tracking-tight truncate">{tx.description || tx.categories?.name || defaultName}</p>
                               {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
                             </div>
                             <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5 truncate">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.categories?.name || 'Geral'}</p>
                           </div>
                         </div>
-                        <p className={`text-[15px] font-bold whitespace-nowrap shrink-0 ${tx.type === 'income' ? 'text-emerald-600' : 'text-gray-800 dark:text-gray-200'}`}>{tx.type === 'income' ? '+' : '-'} {hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}</p>
+                        <p className={`text-[15px] font-bold whitespace-nowrap shrink-0 ${amountColorClass}`}>{amountPrefix} {hideBalance ? '••••' : formatCurrency(Number(tx.amount) || 0)}</p>
                       </div>
                     )
                   })
