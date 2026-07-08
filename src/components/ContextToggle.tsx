@@ -4,13 +4,6 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Building2, User } from 'lucide-react'
-import { Poppins } from 'next/font/google'
-
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  display: 'swap',
-})
 
 type Context = 'dfl' | 'personal'
 
@@ -19,6 +12,8 @@ interface ContextCtx {
   setContext: (c: Context) => void
   appMode: 'personal_only' | 'full' | null
   setAppMode: (m: 'personal_only' | 'full') => void
+  // 🔥 NOVO: contexto efetivo (já calculado)
+  effectiveContext: Context
 }
 
 const ContextCtx = createContext<ContextCtx>({
@@ -26,6 +21,7 @@ const ContextCtx = createContext<ContextCtx>({
   setContext: () => {},
   appMode: null,
   setAppMode: () => {},
+  effectiveContext: 'dfl', // 🔥 NOVO
 })
 
 export const useContext_ = () => useContext(ContextCtx)
@@ -56,6 +52,9 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     return 'dfl'
   })
 
+  // 🔥 NOVO: effectiveContext calculado automaticamente
+  const effectiveContext: Context = appMode === 'personal_only' ? 'personal' : context
+
   useEffect(() => {
     if (!user?.id) return
     if (hasSynced.current) return
@@ -77,7 +76,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
         if (data?.app_mode) {
           setAppModeState(data.app_mode)
           localStorage.setItem('dfl_app_mode', data.app_mode)
-          setAppModeCookie(data.app_mode) // sincroniza cookie
+          setAppModeCookie(data.app_mode)
           setContextState(data.app_mode === 'personal_only' ? 'personal' : 'dfl')
         } else {
           setAppModeState('full')
@@ -105,7 +104,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   function setAppMode(mode: 'personal_only' | 'full') {
     setAppModeState(mode)
     localStorage.setItem('dfl_app_mode', mode)
-    setAppModeCookie(mode) // sincroniza cookie
+    setAppModeCookie(mode)
     if (mode === 'personal_only') {
       setContextState('personal')
     } else {
@@ -114,7 +113,13 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ContextCtx.Provider value={{ context, setContext, appMode, setAppMode }}>
+    <ContextCtx.Provider value={{
+      context,
+      setContext,
+      appMode,
+      setAppMode,
+      effectiveContext, // 🔥 EXPORTA o effectiveContext!
+    }}>
       {children}
     </ContextCtx.Provider>
   )
@@ -123,11 +128,12 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
 
+  // 🔥 Se for personal_only, NÃO RENDERIZA NADA
   if (appMode !== 'full') return null
 
   return (
     <div className="inline-flex mt-1">
-      <div className={`flex bg-gray-100 dark:bg-slate-700 p-0.5 rounded-full ${poppins.className}`}>
+      <div className="flex bg-gray-100 dark:bg-slate-700 p-0.5 rounded-full">
         <button
           onClick={() => setContext('dfl')}
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
