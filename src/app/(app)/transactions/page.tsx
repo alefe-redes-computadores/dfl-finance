@@ -17,7 +17,9 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import BankLogo from '@/components/BankLogo'
 import { useScrollPosition } from '@/hooks/useScrollPosition'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { db } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 import { getDynamicIcon } from '@/lib/iconUtils'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
@@ -222,6 +224,10 @@ export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, appMode, effectiveContext } = useContext_()
+  
+  // 🔥 NOVO: Hook de blindagem para operações futuras
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loadingPulse, setLoadingPulse] = useState(false)
