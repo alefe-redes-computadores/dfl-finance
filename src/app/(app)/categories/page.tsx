@@ -3,14 +3,13 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag, Eraser } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
@@ -20,7 +19,7 @@ export default function CategoriesPage() {
   const router = useRouter()
   const { context, appMode } = useContext_() 
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem
+  
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
@@ -36,6 +35,7 @@ export default function CategoriesPage() {
   const [color, setColor] = useState('#16a34a')
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
 
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
@@ -81,16 +81,15 @@ export default function CategoriesPage() {
     setShowForm(true)
   }
 
-  function openNew(parentId: string | null = null) {
+  function openNew(targetParentId: string | null = null) {
     setEditingCategory(null)
     setName('')
     setIcon('Tag')
     setColor('#16a34a')
-    setParentId(parentId)
+    setParentId(targetParentId)
     setShowForm(true)
   }
 
-  // 🔥 CORRIGIDO: HANDLER DE SAVE COM safeAdd/safeUpdate
   async function handleSave() {
     if (!name || !user) return
     setSaving(true)
@@ -101,7 +100,7 @@ export default function CategoriesPage() {
       color,
       type: tab,
       context: effectiveContext,
-      parent_id: parentId,
+      parent_id: parentId || null, // Garante que string vazia vire nulo de verdade
       is_default: false,
       sort_order: 999,
       updated_at: new Date().toISOString(),
@@ -146,22 +145,79 @@ export default function CategoriesPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
+  // 🔥 CORREÇÃO: EXCLUSÃO EM CASCATA
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm('Deseja excluir esta categoria?')) return
+    if (!confirm('Deseja excluir esta categoria? ATENÇÃO: Todas as subcategorias dela também serão apagadas!')) return
     if (!user) return
     
     try {
+      // 1. Apaga todas as subcategorias primeiro para não gerar órfãos
+      const subsToDelete = (allLocalCategories || []).filter((c: any) => c.parent_id === id);
+      for (const sub of subsToDelete) {
+        await safeDelete('categories', sub.id);
+      }
+      
+      // 2. Apaga a categoria principal
       const result = await safeDelete('categories', id)
       if (!result.success) {
         showToast(`Erro ao excluir: ${result.error}`, 'error')
         return
       }
-      showToast('Categoria excluída!', 'info')
+      
+      showToast(subsToDelete.length > 0 ? `Categoria e ${subsToDelete.length} subcategoria(s) excluídas!` : 'Categoria excluída!', 'info')
       await reloadCategories()
     } catch (err: any) {
       showToast(`Erro ao excluir: ${err.message}`, 'error')
+    }
+  }
+
+  // 🔥 VÃO LIMPAR OS ZUMBIS: VASSOURA MÁGICA
+  async function handleKillZombies() {
+    if (!confirm("Isso vai apagar categorias duplicadas e limpar a fila de sincronização corrompida. Continuar?")) return;
+    setCleaning(true);
+    
+    try {
+      // 1. Limpa a fila de sincronização pendente de categorias (Mata a ressurreição)
+      const queue = await db.table('sync_queue').where('entity').equals('categories').toArray();
+      if (queue.length > 0) {
+        await db.table('sync_queue').bulkDelete(queue.map(q => q.id));
+      }
+
+      // 2. Encontra duplicatas baseadas no Nome + Tipo + Contexto + Pai
+      const allCats = await db.table('categories').toArray();
+      
+      // Ordena pelas mais antigas primeiro. Assim mantemos a original e apagamos os clones.
+      allCats.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      const seen = new Map();
+      const toDelete = [];
+
+      for (const cat of allCats) {
+        // Chave única: "insumos-expense-dfl-null"
+        const key = `${cat.name.trim().toLowerCase()}-${cat.type}-${cat.context}-${cat.parent_id || 'main'}`;
+        
+        if (seen.has(key)) {
+           // É um clone! Manda pra lista de exclusão
+           toDelete.push(cat.id);
+        } else {
+           seen.set(key, cat.id); // Registra a original
+        }
+      }
+
+      // 3. Exclui os clones
+      if (toDelete.length > 0) {
+         for (const id of toDelete) {
+            await safeDelete('categories', id); 
+         }
+      }
+
+      showToast(`Limpeza concluída! ${toDelete.length} clones e ${queue.length} zumbis removidos.`, 'success');
+      await reloadCategories();
+    } catch (e: any) {
+      showToast(`Erro na limpeza: ${e.message}`, "error");
+    } finally {
+      setCleaning(false);
     }
   }
 
@@ -177,12 +233,24 @@ export default function CategoriesPage() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Categorias</h1>
         </div>
 
-        <button
-          onClick={() => openNew()}
-          className="w-9 h-9 bg-brand-teal rounded-full flex items-center justify-center"
-        >
-          <Plus size={20} className="text-white" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 🔥 BOTÃO VASSOURA (ANTI-ZUMBI) */}
+          <button
+            onClick={handleKillZombies}
+            disabled={cleaning}
+            className="w-9 h-9 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center transition-opacity disabled:opacity-50"
+            title="Limpar Duplicatas"
+          >
+            <Eraser size={18} className="text-amber-600 dark:text-amber-400" />
+          </button>
+          
+          <button
+            onClick={() => openNew()}
+            className="w-9 h-9 bg-brand-teal rounded-full flex items-center justify-center"
+          >
+            <Plus size={20} className="text-white" />
+          </button>
+        </div>
       </div>
 
       <ContextToggle />
@@ -225,9 +293,11 @@ export default function CategoriesPage() {
               className="w-full bg-gray-100 dark:bg-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
             >
               <option value="">Nenhuma (categoria principal)</option>
-              {categories.map((cat: any) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
+              {categories.map((cat: any) => {
+                // Impede que a categoria seja pai dela mesma
+                if (editingCategory && cat.id === editingCategory.id) return null;
+                return <option key={cat.id} value={cat.id}>{cat.name}</option>
+              })}
             </select>
           </div>
 
