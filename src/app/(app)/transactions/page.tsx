@@ -330,12 +330,24 @@ export default function TransactionsPage() {
 
   const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
   const doneTxs = filtered.filter((t: any) => t.status === 'done')
-  
-  const displayTxs = statusFilter === 'all' 
-    ? [...pendingTxs, ...doneTxs]
-    : statusFilter === 'pending' 
-      ? pendingTxs 
-      : doneTxs
+
+  // ============================================================
+  // 🔥 CORRIGIDO: DUPLICAÇÃO DE PENDENTES NO FILTRO "TODAS"
+  //
+  // Antes: quando statusFilter === 'all', displayTxs incluía
+  // [...pendingTxs, ...doneTxs] E, ao mesmo tempo, o <PendingCard>
+  // também era renderizado (porque a condição dele era só
+  // "statusFilter !== 'pending'", que também é true em 'all').
+  // Resultado: toda transação pendente aparecia DUAS vezes na tela
+  // — uma no card amarelo colapsável, outra na timeline principal.
+  //
+  // Agora: quando o filtro é 'all', a timeline principal (displayTxs)
+  // mostra só as EFETIVADAS (doneTxs). As pendentes ficam SÓ no
+  // PendingCard, que já é exibido logo acima — sem duplicar.
+  // Quando o filtro é 'pending' ou 'done' explicitamente, o
+  // comportamento não muda.
+  // ============================================================
+  const displayTxs = statusFilter === 'pending' ? pendingTxs : doneTxs
 
   const grouped = groupByDate(displayTxs)
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
