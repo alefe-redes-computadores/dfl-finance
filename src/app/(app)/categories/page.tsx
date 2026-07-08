@@ -100,7 +100,7 @@ export default function CategoriesPage() {
       color,
       type: tab,
       context: effectiveContext,
-      parent_id: parentId || null, // Garante que string vazia vire nulo de verdade
+      parent_id: parentId || null, 
       is_default: false,
       sort_order: 999,
       updated_at: new Date().toISOString(),
@@ -145,20 +145,17 @@ export default function CategoriesPage() {
     }
   }
 
-  // 🔥 CORREÇÃO: EXCLUSÃO EM CASCATA
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria? ATENÇÃO: Todas as subcategorias dela também serão apagadas!')) return
     if (!user) return
     
     try {
-      // 1. Apaga todas as subcategorias primeiro para não gerar órfãos
       const subsToDelete = (allLocalCategories || []).filter((c: any) => c.parent_id === id);
       for (const sub of subsToDelete) {
         await safeDelete('categories', sub.id);
       }
       
-      // 2. Apaga a categoria principal
       const result = await safeDelete('categories', id)
       if (!result.success) {
         showToast(`Erro ao excluir: ${result.error}`, 'error')
@@ -172,47 +169,53 @@ export default function CategoriesPage() {
     }
   }
 
-  // 🔥 VÃO LIMPAR OS ZUMBIS: VASSOURA MÁGICA
+  // 🔥 VASSOURA INTELIGENTE: SALVA OS RELATÓRIOS E APAGA CLONES
   async function handleKillZombies() {
-    if (!confirm("Isso vai apagar categorias duplicadas e limpar a fila de sincronização corrompida. Continuar?")) return;
+    if (!confirm("Aviso: O app vai unificar categorias duplicadas e transferir as transações para proteger seus relatórios. Continuar?")) return;
     setCleaning(true);
     
     try {
-      // 1. Limpa a fila de sincronização pendente de categorias (Mata a ressurreição)
       const queue = await db.table('sync_queue').where('entity').equals('categories').toArray();
       if (queue.length > 0) {
         await db.table('sync_queue').bulkDelete(queue.map(q => q.id));
       }
 
-      // 2. Encontra duplicatas baseadas no Nome + Tipo + Contexto + Pai
       const allCats = await db.table('categories').toArray();
-      
-      // Ordena pelas mais antigas primeiro. Assim mantemos a original e apagamos os clones.
       allCats.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       const seen = new Map();
-      const toDelete = [];
+      const toDeleteAndMigrate = [];
 
       for (const cat of allCats) {
-        // Chave única: "insumos-expense-dfl-null"
         const key = `${cat.name.trim().toLowerCase()}-${cat.type}-${cat.context}-${cat.parent_id || 'main'}`;
         
         if (seen.has(key)) {
-           // É um clone! Manda pra lista de exclusão
-           toDelete.push(cat.id);
+           // É clone! Anota qual é a original para transferir os dados.
+           toDeleteAndMigrate.push({ cloneId: cat.id, originalId: seen.get(key) });
         } else {
-           seen.set(key, cat.id); // Registra a original
+           seen.set(key, cat.id); 
         }
       }
 
-      // 3. Exclui os clones
-      if (toDelete.length > 0) {
-         for (const id of toDelete) {
-            await safeDelete('categories', id); 
+      let migratedCount = 0;
+
+      if (toDeleteAndMigrate.length > 0) {
+         for (const { cloneId, originalId } of toDeleteAndMigrate) {
+            // 1. Busca transações do clone
+            const txsToMigrate = await db.table('transactions').where('category_id').equals(cloneId).toArray();
+            
+            // 2. Transfere para a original
+            for (const tx of txsToMigrate) {
+               await safeUpdate('transactions', tx.id, { category_id: originalId });
+               migratedCount++;
+            }
+
+            // 3. Deleta o clone com segurança
+            await safeDelete('categories', cloneId); 
          }
       }
 
-      showToast(`Limpeza concluída! ${toDelete.length} clones e ${queue.length} zumbis removidos.`, 'success');
+      showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones removidos e ${migratedCount} transações preservadas.`, 'success');
       await reloadCategories();
     } catch (e: any) {
       showToast(`Erro na limpeza: ${e.message}`, "error");
@@ -234,14 +237,18 @@ export default function CategoriesPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 🔥 BOTÃO VASSOURA (ANTI-ZUMBI) */}
+          {/* BOTÃO VASSOURA INTELIGENTE */}
           <button
             onClick={handleKillZombies}
             disabled={cleaning}
             className="w-9 h-9 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center transition-opacity disabled:opacity-50"
             title="Limpar Duplicatas"
           >
-            <Eraser size={18} className="text-amber-600 dark:text-amber-400" />
+            {cleaning ? (
+              <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Eraser size={18} className="text-amber-600 dark:text-amber-400" />
+            )}
           </button>
           
           <button
@@ -294,7 +301,6 @@ export default function CategoriesPage() {
             >
               <option value="">Nenhuma (categoria principal)</option>
               {categories.map((cat: any) => {
-                // Impede que a categoria seja pai dela mesma
                 if (editingCategory && cat.id === editingCategory.id) return null;
                 return <option key={cat.id} value={cat.id}>{cat.name}</option>
               })}
