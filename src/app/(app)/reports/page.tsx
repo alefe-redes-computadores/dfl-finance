@@ -15,6 +15,8 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 import {
   BarChart,
@@ -111,8 +113,11 @@ function ExportModal({ isOpen, onClose, onExport }: { isOpen: boolean; onClose: 
 export default function ReportsPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem (preparatório)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -121,11 +126,11 @@ export default function ReportsPage() {
   const [showExportModal, setShowExportModal] = useState(false)
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  // 🔥 CORRIGIDO: Usa effectiveContext
   // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const containerRef = useRef<HTMLDivElement>(null)
