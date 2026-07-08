@@ -13,6 +13,7 @@ import {
   PiggyBank,
   Trash2,
   ChevronRight,
+  Loader2,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -22,7 +23,9 @@ import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db'
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -49,6 +52,8 @@ function AccountsContent() {
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
   const { context, appMode, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -62,17 +67,18 @@ function AccountsContent() {
     filters: { context: effectiveContext },
   })
 
+  // ============================================================
+  // 🔥 HANDLE DELETE CORRIGIDO COM safeDelete
+  // ============================================================
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.table('accounts').delete(deleteModal)
-      await addToSyncQueue(
-        user.id,
-        'accounts',
-        'delete',
-        deleteModal,
-        { id: deleteModal }
-      )
+      const result = await safeDelete('accounts', deleteModal)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, "error")
+        errorHaptic()
+        return
+      }
       showToast("Conta excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
