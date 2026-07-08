@@ -9,7 +9,9 @@ import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db'
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
 
@@ -18,6 +20,8 @@ export default function CategoriesPage() {
   const router = useRouter()
   const { context, appMode } = useContext_() 
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
@@ -86,6 +90,7 @@ export default function CategoriesPage() {
     setShowForm(true)
   }
 
+  // 🔥 CORRIGIDO: HANDLER DE SAVE COM safeAdd/safeUpdate
   async function handleSave() {
     if (!name || !user) return
     setSaving(true)
@@ -104,8 +109,11 @@ export default function CategoriesPage() {
 
     try {
       if (editingCategory) {
-        await db.table('categories').update(editingCategory.id, payload)
-        await addToSyncQueue(user.id, 'categories', 'update', editingCategory.id, payload)
+        const result = await safeUpdate('categories', editingCategory.id, payload)
+        if (!result.success) {
+          showToast(`Erro ao atualizar: ${result.error}`, 'error')
+          return
+        }
         showToast('Categoria atualizada!', 'success')
       } else {
         const id = crypto.randomUUID()
@@ -117,8 +125,11 @@ export default function CategoriesPage() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.table('categories').add(fullPayload)
-        await addToSyncQueue(user.id, 'categories', 'create', id, fullPayload)
+        const result = await safeAdd('categories', fullPayload)
+        if (!result.success) {
+          showToast(`Erro ao criar: ${result.error}`, 'error')
+          return
+        }
         showToast('Categoria criada!', 'success')
       }
 
@@ -135,14 +146,18 @@ export default function CategoriesPage() {
     }
   }
 
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria?')) return
     if (!user) return
     
     try {
-      await db.table('categories').delete(id)
-      await addToSyncQueue(user.id, 'categories', 'delete', id, { id })
+      const result = await safeDelete('categories', id)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, 'error')
+        return
+      }
       showToast('Categoria excluída!', 'info')
       await reloadCategories()
     } catch (err: any) {
