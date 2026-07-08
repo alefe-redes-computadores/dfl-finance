@@ -175,31 +175,47 @@ export default function CategoriesPage() {
     }
   }
 
-  // 🔥 VASSOURA BLINDADA (Filtra a fila manualmente para não dar erro)
+  // 🔥 VASSOURA BLINDADA (Sem confirm() para não ser bloqueada no celular)
   async function handleKillZombies() {
-    if (!confirm("O app vai destruir os clones e destravar a sincronização. Pode prosseguir?")) return;
     setCleaning(true);
+    showToast('Iniciando faxina nas categorias...', 'info');
     
     try {
-      // 1. Limpa a fila inteira caçando a palavra categories (Impede que o bug volte)
-      const allQueue = await db.table('sync_queue').toArray() as any[];
-      const catQueue = allQueue.filter(q => q.table === 'categories' || q.entity === 'categories' || q.tableName === 'categories');
-      
-      if (catQueue.length > 0) {
-        await db.table('sync_queue').bulkDelete(catQueue.map(q => q.id));
+      // 1. Limpa fila problemática silenciosamente
+      try {
+        const allQueue = await db.table('sync_queue').toArray() as any[];
+        const catQueue = allQueue.filter(q => q.table === 'categories' || q.entity === 'categories' || q.tableName === 'categories');
+        if (catQueue.length > 0) {
+          await db.table('sync_queue').bulkDelete(catQueue.map(q => q.id));
+        }
+      } catch (e) {
+        console.log('Ignorando erro da fila offline');
       }
 
       // 2. Busca e unifica duplicatas
       const allCats = await db.table('categories').toArray() as any[];
-      allCats.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      // Ordena pelas mais antigas
+      allCats.sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at || a.updated_at || 0).getTime();
+        const timeB = new Date(b.created_at || b.updated_at || 0).getTime();
+        return timeA - timeB;
+      });
       
       const seen = new Map();
       const toDeleteAndMigrate = [];
 
       for (const cat of allCats) {
-        const key = `${cat.name.trim().toLowerCase()}-${cat.type}-${cat.context}-${cat.parent_id || 'main'}`;
+        const catName = (cat.name || '').trim().toLowerCase();
+        const catType = cat.type || 'expense';
+        const catContext = cat.context || 'personal';
+        let catParent = cat.parent_id;
+        if (!catParent || catParent === 'null' || catParent === '') catParent = 'main';
+
+        const key = `${catName}-${catType}-${catContext}-${catParent}`;
         
         if (seen.has(key)) {
+           // Achamos um clone
            toDeleteAndMigrate.push({ cloneId: cat.id, originalId: seen.get(key) });
         } else {
            seen.set(key, cat.id); 
@@ -219,9 +235,11 @@ export default function CategoriesPage() {
 
             await safeDelete('categories', cloneId); 
          }
+         showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones destruídos e ${migratedCount} transações preservadas.`, 'success');
+      } else {
+         showToast('Nenhum clone encontrado! Suas categorias estão limpas.', 'info');
       }
 
-      showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones destruídos e ${catQueue.length} zumbis limpos.`, 'success');
       await reloadCategories();
     } catch (e: any) {
       showToast(`Erro na limpeza: ${e.message}`, "error");
@@ -243,7 +261,7 @@ export default function CategoriesPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* BOTÃO VASSOURA BLINDADO */}
+          {/* BOTÃO VASSOURA MÁGICA */}
           <button
             onClick={handleKillZombies}
             disabled={cleaning}
@@ -404,6 +422,7 @@ export default function CategoriesPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                      {/* BOTÃO LÁPIS CORRIGIDO */}
                       <button onClick={(e) => { e.stopPropagation(); openEdit(cat); }} className="p-1.5 bg-blue-50 dark:bg-blue-500/10 rounded-lg transition-colors hover:bg-blue-100 dark:hover:bg-blue-500/20">
                         <Edit3 size={16} className="text-blue-500" />
                       </button>
