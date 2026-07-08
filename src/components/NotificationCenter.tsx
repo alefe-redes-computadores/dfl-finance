@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO addToSyncQueue
 import { useToast } from '@/contexts/ToastContext'
 
 interface Notification {
@@ -84,48 +84,39 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     setLocalNotifs(notifications)
   }, [notifications])
 
-  // 🔥 BUSCA DIRETO NO DEXIE E ATUALIZA
-  const refreshFromDexie = async () => {
-    if (!user) return
-    
-    try {
-      const updated = await db.table('notifications')
-        .where('user_id')
-        .equals(user.id)
-        .toArray()
+  // 🔥 CORRIGIDO: NÃO usa refreshFromDexie() para marcar como lida
+  // Apenas atualiza o estado local
 
-      const mapped = updated.map((n: any) => ({
-        ...n,
-        isRead: n.is_read === true || n.isRead === true || n.read === true,
-        cardId: n.card_id || n.cardId,
-      }))
-
-      setLocalNotifs(mapped as Notification[])
-
-      const unread = mapped.filter((n: any) => !n.is_read && !n.read).length
-      if (onReadChange) onReadChange(unread)
-      
-      return mapped
-    } catch (err) {
-      console.error('Erro ao buscar notificações:', err)
-      return []
-    }
-  }
-
+  // ============================================================
+  // 🔥 CORRIGIDO: markAsRead SEM refreshFromDexie()
+  // ============================================================
   const markAsRead = async (notifIds: string[]) => {
     if (!user || processing) return
     setProcessing(true)
 
     try {
       for (const notifId of notifIds) {
-        await db.table('notifications').update(notifId, { 
+        const updateData = {
           is_read: true,
           read: true,
           updated_at: new Date().toISOString()
-        })
+        }
+        await db.table('notifications').update(notifId, updateData)
+        await addToSyncQueue(user.id, 'notifications', 'update', notifId, updateData)
       }
 
-      await refreshFromDexie()
+      // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
+      const updated = localNotifs.map((n: any) => {
+        if (notifIds.includes(n.id)) {
+          return { ...n, is_read: true, read: true }
+        }
+        return n
+      })
+      setLocalNotifs(updated)
+
+      const unread = updated.filter((n: any) => !n.is_read && !n.read).length
+      if (onReadChange) onReadChange(unread)
+
       showToast(`${notifIds.length} notificação(ões) marcada(s) como lida(s)!`, 'success')
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
@@ -135,14 +126,19 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     }
   }
 
+  // ============================================================
+  // 🔥 CORRIGIDO: markAllAsRead SEM refreshFromDexie()
+  // ============================================================
   const markAllAsRead = async () => {
     if (!user || processing) return
     const allIds = localNotifs.map(n => n.id)
     await markAsRead(allIds)
   }
 
-  const handleClose = async () => {
-    await refreshFromDexie()
+  // ============================================================
+  // 🔥 CORRIGIDO: handleClose NÃO chama refreshFromDexie()
+  // ============================================================
+  const handleClose = () => {
     onClose()
   }
 
