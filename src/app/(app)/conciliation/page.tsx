@@ -10,10 +10,15 @@ import { ConciProgress } from '@/components/conciliation/ConciProgress'
 import { ConciSummary } from '@/components/conciliation/ConciSummary'
 import { generateMockTransactions } from '@/lib/conciliationUtils'
 import { useToast } from '@/contexts/ToastContext'
+// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function ConciliationPage() {
   const router = useRouter()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem (preparatório - mantém consistência)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const {
     queue,
     current,
