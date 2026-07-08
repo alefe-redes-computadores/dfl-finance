@@ -9,7 +9,7 @@ import * as Icons from 'lucide-react'
 import { 
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, 
   ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, RefreshCw, Clock, ChevronDown,
-  Check
+  Check, Image as ImageIcon, Paperclip
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -17,7 +17,6 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import BankLogo from '@/components/BankLogo'
 import { useScrollPosition } from '@/hooks/useScrollPosition'
 import { useLocalData } from '@/hooks/useLocalData'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -30,6 +29,13 @@ const safeNum = (val: any) => {
   if (typeof val === 'number') return val;
   const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g,""));
   return isNaN(parsed) ? 0 : parsed;
+}
+
+const getAttachmentIcon = (url: string | null) => {
+  if (!url) return null;
+  const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase());
+  if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />;
+  return <ImageIcon size={12} className="text-blue-500 shrink-0" />;
 }
 
 function groupByDate(transactions: any[]) {
@@ -150,22 +156,37 @@ function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
 
 function TransactionItem({ transaction, index, totalItems }: { transaction: any; index: number; totalItems: number }) {
   const router = useRouter()
-  const { context } = useContext_()
   
-  const isIncome = transaction.type === 'income'
   const isPending = transaction.status === 'pending'
   const amount = safeNum(transaction.amount)
-  const IconComp = getDynamicIcon(transaction.categories?.icon)
+  const IconComp = transaction.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(transaction.categories?.icon)
+  const attachmentIcon = getAttachmentIcon(transaction.receipt_url)
 
-  const handleClick = () => {
-    if (transaction.id) {
-      router.push(`/transactions/${transaction.id}`)
-    }
+  const isIncome = transaction.type === 'income';
+  const isExpense = transaction.type === 'expense' || transaction.type === 'sangria';
+  const isTransfer = transaction.type === 'transfer';
+
+  let amountColorClass = 'text-gray-800 dark:text-gray-200';
+  let amountPrefix = '';
+  let defaultName = 'Transação';
+
+  if (isIncome) {
+    amountColorClass = 'text-emerald-600 dark:text-emerald-400';
+    amountPrefix = '+';
+    defaultName = 'Receita';
+  } else if (isExpense) {
+    amountColorClass = 'text-red-500 dark:text-red-400';
+    amountPrefix = '-';
+    defaultName = 'Despesa';
+  } else if (isTransfer) {
+    amountColorClass = 'text-blue-500 dark:text-blue-400';
+    amountPrefix = transaction.description?.toLowerCase().includes('de ') ? '+' : '-';
+    defaultName = 'Transferência';
   }
 
   return (
     <div
-      onClick={handleClick}
+      onClick={() => transaction.id && router.push(`/transactions/${transaction.id}`)}
       className={`flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${
         isPending ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''
       } ${index !== totalItems - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
@@ -184,10 +205,13 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
           <IconComp size={18} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">
-            {transaction.description || transaction.categories?.name || (isIncome ? 'Receita' : 'Despesa')}
-          </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">
+              {transaction.description || transaction.categories?.name || defaultName}
+            </p>
+            {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
             <span className="text-[12px] text-gray-400 dark:text-gray-500">
               {format(new Date(transaction.date), "dd/MM/yyyy")}
             </span>
@@ -203,8 +227,8 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
         </div>
       </div>
       <div className="flex flex-col items-end shrink-0">
-        <p className={`text-[15px] font-bold ${isIncome ? 'text-emerald-600' : 'text-gray-800 dark:text-gray-200'}`}>
-          {isIncome ? '+' : '-'} {formatCurrency(amount)}
+        <p className={`text-[15px] font-bold ${amountColorClass}`}>
+          {amountPrefix} {formatCurrency(amount)}
         </p>
         {isPending && (
           <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
@@ -223,9 +247,8 @@ function formatCurrency(val: number) {
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, appMode, effectiveContext } = useContext_()
+  const { effectiveContext } = useContext_()
   
-  // 🔥 NOVO: Hook de blindagem para operações futuras
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [filter, setFilter] = useState<Filter>('all')
@@ -240,10 +263,6 @@ export default function TransactionsPage() {
 
   const [search, setSearch] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
-
-  const { scrollY, windowHeight, documentHeight } = useScrollPosition()
 
   const startMonth = format(startOfMonth(currentDate), 'yyyy-MM-dd')
   const endMonth = format(endOfMonth(currentDate), 'yyyy-MM-dd')
@@ -303,12 +322,15 @@ export default function TransactionsPage() {
       if (!desc.includes(term) && !cat.includes(term)) return false
     }
     return true
-  })
+  }).sort((a: any, b: any) => {
+    const timeA = new Date(a.created_at || a.date || 0).getTime();
+    const timeB = new Date(b.created_at || b.date || 0).getTime();
+    return timeB - timeA;
+  });
 
   const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
   const doneTxs = filtered.filter((t: any) => t.status === 'done')
   
-  // 🔥 CORRIGIDO: "Todas" mostra TODAS as transações
   const displayTxs = statusFilter === 'all' 
     ? [...pendingTxs, ...doneTxs]
     : statusFilter === 'pending' 
@@ -375,10 +397,8 @@ export default function TransactionsPage() {
       )}
 
       <div className="sticky top-0 z-50 bg-[#f8f9fa]/85 dark:bg-slate-900/85 backdrop-blur-xl pt-2 pb-2 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
-
         <div className="flex items-center justify-between mb-2 mt-1">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
-
           <div className="flex items-center gap-2">
             <div className="relative" ref={exportMenuRef}>
               <button 
