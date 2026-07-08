@@ -156,7 +156,7 @@ function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_() // 🔥 ADICIONADO effectiveContext
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -179,7 +179,7 @@ export default function TransactionsPage() {
 
   // Filtros para o useLocalData
   const localFilters: Record<string, any> = {
-    context: context,
+    context: effectiveContext, // 🔥 CORRIGIDO
   }
 
   if (filter !== 'all') {
@@ -190,7 +190,6 @@ export default function TransactionsPage() {
     localFilters.status = statusFilter
   }
 
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const {
     data: localTransactions,
     loading,
@@ -201,16 +200,16 @@ export default function TransactionsPage() {
     filters: localFilters,
   })
 
-  // 🔥 CORRIGIDO: Removido realtime
+  // 🔥 CORRIGIDO: USANDO effectiveContext
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Removido realtime
+  // 🔥 CORRIGIDO: USANDO effectiveContext
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   // JOIN em memória
@@ -251,10 +250,10 @@ export default function TransactionsPage() {
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
 
   useEffect(() => {
-    if (user?.id && context) {
+    if (user?.id && effectiveContext) { // 🔥 CORRIGIDO
       reloadTransactions()
     }
-  }, [user?.id, context, currentDate, filter, statusFilter, reloadTransactions])
+  }, [user?.id, effectiveContext, currentDate, filter, statusFilter, reloadTransactions]) // 🔥 CORRIGIDO
 
   useEffect(() => {
     setLoadingPulse(loading || syncing)
@@ -295,7 +294,7 @@ export default function TransactionsPage() {
   const handleExport = (range: string) => {
     setShowExportMenu(false)
     if (!user) return
-    window.open(`/api/export-transactions?userId=${user.id}&context={context}&range=${range}`, '_blank')
+    window.open(`/api/export-transactions?userId=${user.id}&context=${effectiveContext}&range=${range}`, '_blank') // 🔥 CORRIGIDO
   }
 
   return (
