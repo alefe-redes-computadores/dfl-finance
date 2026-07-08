@@ -175,55 +175,50 @@ export default function TransactionsPage() {
   }, [user?.id, effectiveContext, currentDate, filter, statusFilter, reloadTransactions])
 
   // 🔥 LÓGICA DE SWIPE: Efetivar/Pendente e Atualizar Saldo
-      const handleToggleStatus = async (tx: any) => {
+        const handleToggleStatus = async (tx: any) => {
     if (!user?.id) return;
     
-    // 1. Verificação de Integridade (Feedback Visual)
-    if (!tx.account_id) {
-      showToast("Erro: Esta transação não tem conta vinculada", "error");
-      return;
+    // 1. CHECAGEM DE IDENTIDADE
+    if (!tx.id || !tx.account_id) {
+       showToast(`Erro: Falta ID (${tx.id}) ou Conta (${tx.account_id})`, "error");
+       return;
     }
 
     try {
-      const amount = safeNum(tx.amount);
       const newStatus = tx.status === 'pending' ? 'done' : 'pending';
+      const amount = safeNum(tx.amount);
       
-      // Iniciamos a transação
-      await db.transaction('rw', db.table('accounts'), db.table('transactions'), async () => {
-        
-        const acc = await db.table('accounts').get(tx.account_id);
-        
-        if (!acc) {
-          throw new Error("Conta não encontrada no sistema");
-        }
+      // 2. BUSCA A CONTA ATUAL
+      const acc = await db.table('accounts').get(tx.account_id);
+      if (!acc) {
+        showToast("Erro: Conta não encontrada no banco local", "error");
+        return;
+      }
 
-        let currentBalance = safeNum(acc.balance);
-        let newBalance = currentBalance;
+      // 3. CÁLCULO
+      let currentBalance = safeNum(acc.balance);
+      let newBalance = newStatus === 'done' 
+        ? (tx.type === 'income' ? currentBalance + amount : currentBalance - amount)
+        : (tx.type === 'income' ? currentBalance - amount : currentBalance + amount);
 
-        if (newStatus === 'done') {
-          newBalance = tx.type === 'income' ? currentBalance + amount : currentBalance - amount;
-        } else {
-          newBalance = tx.type === 'income' ? currentBalance - amount : currentBalance + amount;
-        }
+      // 4. ESCRITA FORÇADA (Sem Transaction para evitar travamento)
+      await db.table('accounts').update(acc.id, { balance: newBalance });
+      await db.table('transactions').update(tx.id, { status: newStatus });
+      
+      // 5. SINCRONIZAÇÃO
+      await addToSyncQueue(user.id, 'accounts', 'update', acc.id, { balance: newBalance });
+      await addToSyncQueue(user.id, 'transactions', 'update', tx.id, { status: newStatus });
 
-        // Feedback do cálculo (Isso vai te mostrar se o valor está certo ou dando 0)
-        showToast(`Calculando: ${currentBalance} -> ${newBalance}`, "info");
-        
-        await db.table('accounts').update(acc.id, { balance: newBalance });
-        await addToSyncQueue(user.id, 'accounts', 'update', acc.id, { balance: newBalance });
-        
-        await db.table('transactions').update(tx.id, { status: newStatus });
-        await addToSyncQueue(user.id, 'transactions', 'update', tx.id, { status: newStatus });
-      });
-
-      showToast('Sucesso! Transação atualizada.', 'success');
-      await reloadTransactions(); 
-
+      showToast(`Sucesso: ${newStatus === 'done' ? 'Efetivado' : 'Pendente'}. Novo saldo: ${newBalance.toFixed(2)}`, "success");
+      
+      // 6. FORÇA O REACT A ATUALIZAR A LISTA
+      await reloadTransactions();
+      
     } catch (e: any) {
-      // Se der erro, o Toast vai mostrar o motivo
-      showToast(`Falha: ${e.message}`, 'error');
+      showToast(`Erro crítico: ${e.message}`, "error");
     }
   };
+
 
 
 
