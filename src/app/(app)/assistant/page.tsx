@@ -16,6 +16,8 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 // ============================================================
 // SKELETON LOADER
@@ -47,7 +49,10 @@ const AssistantSkeleton = () => (
 function AssistantContent() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem (preparatório)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -70,16 +75,16 @@ function AssistantContent() {
   ])
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos realtime: true e realtime: false
+  // 🔥 CORRIGIDO: Usa effectiveContext
   // ============================================================
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   // ============================================================
