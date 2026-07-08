@@ -41,10 +41,11 @@ export default function CategoriesPage() {
     table: 'categories' as any,
   })
 
+  // 🔥 CORREÇÃO: Só permite selecionar Categorias Principais como Pai (Impede o bug Inception)
   const allAvailableParents = useMemo(() => {
     if (!allLocalCategories) return []
     return allLocalCategories
-      .filter((c: any) => c.context === effectiveContext && c.type === tab)
+      .filter((c: any) => c.context === effectiveContext && c.type === tab && !c.parent_id) 
       .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
   }, [allLocalCategories, effectiveContext, tab])
 
@@ -102,13 +103,16 @@ export default function CategoriesPage() {
 
     try {
       if (editingCategory) {
-        // 🔥 UPDATE MINIMALISTA: Só envia o que pode mudar.
-        // Se mandarmos "is_default" ou "type" na edição, o servidor rejeita e dá o Efeito Rebote!
+        // 🔥 UPDATE BLINDADO CONTRA RLS DO SUPABASE: 
+        // Mandamos o user_id para o Supabase reconhecer que você é o dono e não rejeitar a edição
         const updatePayload = {
           name: name.trim(),
           icon: icon.toLowerCase(),
           color,
           parent_id: parentId || null, 
+          user_id: user.id, 
+          context: effectiveContext,
+          type: tab,
           updated_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
@@ -121,7 +125,6 @@ export default function CategoriesPage() {
         }
         showToast('Categoria atualizada e salva!', 'success')
       } else {
-        // Na criação, precisa enviar tudo
         const id = crypto.randomUUID()
         const fullPayload = {
           id,
