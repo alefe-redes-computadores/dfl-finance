@@ -12,7 +12,9 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db'
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 // ============================================================
 // SKELETON LOADER
@@ -38,6 +40,9 @@ export default function NotificationsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -131,7 +136,7 @@ export default function NotificationsPage() {
   }, [localNotifications])
 
   // ============================================================
-  // 🔥 CORRIGIDO: markAsRead SEM loadNotifications()
+  // 🔥 CORRIGIDO: markAsRead COM safeUpdate
   // ============================================================
   const markAsRead = async (id: string) => {
     if (!user) return
@@ -141,8 +146,11 @@ export default function NotificationsPage() {
         read: true,
         updated_at: new Date().toISOString()
       }
-      await db.table('notifications').update(id, updateData)
-      await addToSyncQueue(user.id, 'notifications', 'update', id, updateData)
+      const result = await safeUpdate('notifications', id, updateData)
+      if (!result.success) {
+        showToast(`Erro ao marcar como lida: ${result.error}`, 'error')
+        return
+      }
       
       // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
       const updated = notifications.map((n: any) => 
@@ -152,14 +160,13 @@ export default function NotificationsPage() {
       setUnreadCount(updated.filter((n: any) => !n.is_read && !n.read).length)
       
       showToast('Notificação marcada como lida.', 'info')
-      // 🔥 NÃO chama loadNotifications() aqui!
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
     }
   }
 
   // ============================================================
-  // 🔥 CORRIGIDO: markAllAsRead SEM loadNotifications()
+  // 🔥 CORRIGIDO: markAllAsRead COM safeUpdate
   // ============================================================
   const markAllAsRead = async () => {
     if (!user?.id || notifications.length === 0) return
@@ -172,8 +179,11 @@ export default function NotificationsPage() {
           read: true,
           updated_at: new Date().toISOString()
         }
-        await db.table('notifications').update(notif.id, updateData)
-        await addToSyncQueue(user.id, 'notifications', 'update', notif.id, updateData)
+        const result = await safeUpdate('notifications', notif.id, updateData)
+        if (!result.success) {
+          showToast(`Erro ao marcar como lida: ${result.error}`, 'error')
+          return
+        }
       }
       
       // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
@@ -182,22 +192,24 @@ export default function NotificationsPage() {
       setUnreadCount(0)
       
       showToast('Todas as notificações marcadas como lidas!', 'success')
-      // 🔥 NÃO chama loadNotifications() aqui!
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
     }
   }
 
   // ============================================================
-  // 🔥 CORRIGIDO: deleteNotification COM loadNotifications() (é uma exclusão)
+  // 🔥 CORRIGIDO: deleteNotification COM safeDelete
   // ============================================================
   const deleteNotification = async (id: string) => {
     if (!user) return
     try {
-      await db.table('notifications').delete(id)
-      await addToSyncQueue(user.id, 'notifications', 'delete', id, { id })
+      const result = await safeDelete('notifications', id)
+      if (!result.success) {
+        showToast(`Erro ao remover: ${result.error}`, 'error')
+        return
+      }
       showToast('Notificação removida.', 'info')
-      // 🔥 AQUI SIM, precisamos recarregar para remover da lista
+      // 🔥 Recarregar para remover da lista
       loadNotifications()
     } catch (err: any) {
       showToast(`Erro: ${err.message}`, 'error')
