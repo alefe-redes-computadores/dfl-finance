@@ -28,7 +28,9 @@ import { format } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db'
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 async function processOCR(file: File): Promise<{
   amount: string
@@ -88,7 +90,10 @@ const SavingSkeleton = () => (
 function ImportContent() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [step, setStep] = useState<'upload' | 'review' | 'saving'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -140,6 +145,7 @@ function ImportContent() {
     }
   }
 
+  // 🔥 CORRIGIDO: HANDLER DE SAVE COM safeAdd
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) return
@@ -168,7 +174,7 @@ function ImportContent() {
         category_id: formData.category_id || null,
         credit_card_id: formData.credit_card_id || null,
         notes: formData.notes || null,
-        context,
+        context: effectiveContext,
         affects_balance: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -176,8 +182,14 @@ function ImportContent() {
         sync_attempts: 0,
       }
 
-      await db.table('transactions').add(txPayload)
-      await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
+      // 🔥 Substituído por safeAdd com verificação
+      const result = await safeAdd('transactions', txPayload)
+      if (!result.success) {
+        alert(`Erro ao salvar: ${result.error}`)
+        setStep('review')
+        setIsSubmitting(false)
+        return
+      }
 
       router.push('/home')
     } catch (err: any) {
