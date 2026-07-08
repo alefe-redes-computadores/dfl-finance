@@ -3,12 +3,13 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag, Edit3 } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag, Edit3, Eraser } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
@@ -34,6 +35,7 @@ export default function CategoriesPage() {
   const [color, setColor] = useState('#16a34a')
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
 
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
@@ -70,7 +72,6 @@ export default function CategoriesPage() {
   }
 
   function openEdit(cat: any) {
-    // 🔥 CORREÇÃO: Removida a trava de is_default para permitir que você edite os órfãos
     setEditingCategory(cat)
     setName(cat.name)
     setColor(cat.color)
@@ -174,6 +175,61 @@ export default function CategoriesPage() {
     }
   }
 
+  // 🔥 VASSOURA BLINDADA (Filtra a fila manualmente para não dar erro)
+  async function handleKillZombies() {
+    if (!confirm("O app vai destruir os clones e destravar a sincronização. Pode prosseguir?")) return;
+    setCleaning(true);
+    
+    try {
+      // 1. Limpa a fila inteira caçando a palavra categories (Impede que o bug volte)
+      const allQueue = await db.table('sync_queue').toArray() as any[];
+      const catQueue = allQueue.filter(q => q.table === 'categories' || q.entity === 'categories' || q.tableName === 'categories');
+      
+      if (catQueue.length > 0) {
+        await db.table('sync_queue').bulkDelete(catQueue.map(q => q.id));
+      }
+
+      // 2. Busca e unifica duplicatas
+      const allCats = await db.table('categories').toArray() as any[];
+      allCats.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      const seen = new Map();
+      const toDeleteAndMigrate = [];
+
+      for (const cat of allCats) {
+        const key = `${cat.name.trim().toLowerCase()}-${cat.type}-${cat.context}-${cat.parent_id || 'main'}`;
+        
+        if (seen.has(key)) {
+           toDeleteAndMigrate.push({ cloneId: cat.id, originalId: seen.get(key) });
+        } else {
+           seen.set(key, cat.id); 
+        }
+      }
+
+      let migratedCount = 0;
+
+      if (toDeleteAndMigrate.length > 0) {
+         for (const { cloneId, originalId } of toDeleteAndMigrate) {
+            const txsToMigrate = await db.table('transactions').where('category_id').equals(cloneId).toArray() as any[];
+            
+            for (const tx of txsToMigrate) {
+               await safeUpdate('transactions', tx.id, { category_id: originalId });
+               migratedCount++;
+            }
+
+            await safeDelete('categories', cloneId); 
+         }
+      }
+
+      showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones destruídos e ${catQueue.length} zumbis limpos.`, 'success');
+      await reloadCategories();
+    } catch (e: any) {
+      showToast(`Erro na limpeza: ${e.message}`, "error");
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   const FormIconComp = (Icons as any)[icon] || Icons.Tag
 
   return (
@@ -186,12 +242,28 @@ export default function CategoriesPage() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Categorias</h1>
         </div>
 
-        <button
-          onClick={() => openNew()}
-          className="w-9 h-9 bg-brand-teal rounded-full flex items-center justify-center"
-        >
-          <Plus size={20} className="text-white" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* BOTÃO VASSOURA BLINDADO */}
+          <button
+            onClick={handleKillZombies}
+            disabled={cleaning}
+            className="w-9 h-9 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center transition-opacity disabled:opacity-50"
+            title="Limpar Duplicatas"
+          >
+            {cleaning ? (
+              <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Eraser size={18} className="text-amber-600 dark:text-amber-400" />
+            )}
+          </button>
+
+          <button
+            onClick={() => openNew()}
+            className="w-9 h-9 bg-brand-teal rounded-full flex items-center justify-center"
+          >
+            <Plus size={20} className="text-white" />
+          </button>
+        </div>
       </div>
 
       <ContextToggle />
@@ -332,7 +404,6 @@ export default function CategoriesPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {/* 🔥 O NOVO LÁPIS PARA EDITAR AS CATEGORIAS */}
                       <button onClick={(e) => { e.stopPropagation(); openEdit(cat); }} className="p-1.5 bg-blue-50 dark:bg-blue-500/10 rounded-lg transition-colors hover:bg-blue-100 dark:hover:bg-blue-500/20">
                         <Edit3 size={16} className="text-blue-500" />
                       </button>
