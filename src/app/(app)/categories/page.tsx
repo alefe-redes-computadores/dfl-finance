@@ -100,37 +100,44 @@ export default function CategoriesPage() {
     if (!name || !user) return
     setSaving(true)
 
-    // 🔥 AQUI ESTÁ A CORREÇÃO DO EFEITO REBOTE
-    // Forçamos o sync_status pendente na edição para travar a categoria localmente
-    const payload = {
-      name,
-      icon: icon.toLowerCase(),
-      color,
-      type: tab,
-      context: effectiveContext,
-      parent_id: parentId || null, 
-      is_default: false,
-      sort_order: 999,
-      updated_at: new Date().toISOString(),
-      sync_status: 'pending', 
-      sync_attempts: 0,
-    }
-
     try {
       if (editingCategory) {
-        const result = await safeUpdate('categories', editingCategory.id, payload)
+        // 🔥 UPDATE MINIMALISTA: Só envia o que pode mudar.
+        // Se mandarmos "is_default" ou "type" na edição, o servidor rejeita e dá o Efeito Rebote!
+        const updatePayload = {
+          name: name.trim(),
+          icon: icon.toLowerCase(),
+          color,
+          parent_id: parentId || null, 
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+        
+        const result = await safeUpdate('categories', editingCategory.id, updatePayload)
         if (!result.success) {
           showToast(`Erro ao atualizar: ${result.error}`, 'error')
           return
         }
         showToast('Categoria atualizada e salva!', 'success')
       } else {
+        // Na criação, precisa enviar tudo
         const id = crypto.randomUUID()
         const fullPayload = {
           id,
           user_id: user.id,
-          ...payload,
+          name: name.trim(),
+          icon: icon.toLowerCase(),
+          color,
+          type: tab,
+          context: effectiveContext,
+          parent_id: parentId || null, 
+          is_default: false,
+          sort_order: 999,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
         const result = await safeAdd('categories', fullPayload)
         if (!result.success) {
@@ -229,6 +236,7 @@ export default function CategoriesPage() {
                await safeUpdate('transactions', tx.id, { category_id: originalId });
                migratedCount++;
             }
+
             await safeDelete('categories', cloneId); 
          }
          showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones destruídos e ${migratedCount} transações preservadas.`, 'success');
