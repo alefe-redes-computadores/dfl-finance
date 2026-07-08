@@ -245,89 +245,159 @@ export default function EditTransactionPage() {
   }
 
   const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
+  if (!user?.id) return
+  setLoading(true)
+  setLoadingPulse(true)
 
-    try {
-      const catType = txType === 'income' ? 'income' : 'expense'
-      const [{ data: accData }, { data: catData }, { data: tagData }, { data: cardsData }, { data: contactsData }] = await Promise.all([
-        supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
-        supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
-        supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name'),
-        supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_archived', false).order('name'),
-        supabase.from('contacts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
-      ])
+  try {
+    const catType = txType === 'income' ? 'income' : 'expense'
+    const [{ data: accData }, { data: catData }, { data: tagData }, { data: cardsData }, { data: contactsData }] = await Promise.all([
+      supabase.from('accounts').select('id, name, balance, color').match({ user_id: user.id }).order('name'),
+      supabase.from('categories').select('*').match({ user_id: user.id }).eq('type', catType),
+      supabase.from('tags').select('id, name, color').match({ user_id: user.id }).order('name'),
+      supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_archived', false).order('name'),
+      supabase.from('contacts').select('*').eq('user_id', user.id).eq('context', context).order('name'),
+    ])
 
-      setAccounts(Array.isArray(accData) ? accData : [])
-      setCreditCards(Array.isArray(cardsData) ? cardsData : [])
-      setContacts(Array.isArray(contactsData) ? contactsData : [])
-      const allCats = Array.isArray(catData) ? catData : []
-      const mainCats = allCats.filter((c) => !c.parent_id)
-      const subCats = allCats.filter((c) => c.parent_id)
-      const subsMap: Record<string, any[]> = {}
-      subCats.forEach((sub) => {
-        if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
-        subsMap[sub.parent_id].push(sub)
-      })
-      setCategories(mainCats)
-      setSubcategories(subsMap)
-      setTags(Array.isArray(tagData) ? tagData : [])
+    setAccounts(Array.isArray(accData) ? accData : [])
+    setCreditCards(Array.isArray(cardsData) ? cardsData : [])
+    setContacts(Array.isArray(contactsData) ? contactsData : [])
+    const allCats = Array.isArray(catData) ? catData : []
+    const mainCats = allCats.filter((c) => !c.parent_id)
+    const subCats = allCats.filter((c) => c.parent_id)
+    const subsMap: Record<string, any[]> = {}
+    subCats.forEach((sub) => {
+      if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
+      subsMap[sub.parent_id].push(sub)
+    })
+    setCategories(mainCats)
+    setSubcategories(subsMap)
+    setTags(Array.isArray(tagData) ? tagData : [])
 
-      if (id && id !== 'new') {
-        const { data: txData, error: txError } = await supabase
-          .from('transactions')
-          .select('*')
-          .match({ id, user_id: user.id })
-          .single()
+    // 🔥 CORREÇÃO: Verifica se o ID existe e NÃO é 'new'
+    const isEditMode = id && id !== 'new' && typeof id === 'string' && id.length > 5
+    
+    if (isEditMode) {
+      console.log('🔍 Buscando transação com ID:', id)
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .match({ id, user_id: user.id })
+        .single()
 
-        if (txError) {
-          showToast('Erro ao buscar transação.', 'error')
-        } else if (txData) {
-          setTx(txData)
-          setTxType(txData.type)
-          setIsPaid(txData.status === 'done')
-          setDate(txData.date)
-          setDescription(txData.description || '')
-          setNotes(txData.notes || '')
-          setCategoryId(txData.category_id || '')
-          setAccountId(txData.account_id || '')
-          setCreditCardId(txData.credit_card_id || '')
-          setContactId(txData.contact_id || '')
-          setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
-          setIsReimbursable(txData.is_reimbursable || false)
-          const amountSafe = Number(txData.amount) || 0
-          setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-
-          if (txData.receipt_url) {
-            setReceiptUrl(txData.receipt_url)
-            const isPdf = txData.receipt_url.toLowerCase().includes('.pdf')
-            setReceiptType(isPdf ? 'pdf' : 'image')
-            setReceiptName(isPdf ? 'comprovante.pdf' : 'comprovante.jpg')
-            if (!isPdf) setReceiptPreview(txData.receipt_url)
-          }
-
-          if (txData.financing_id) setFinancingId(txData.financing_id)
-          if (txData.debt_id) setDebtId(txData.debt_id)
-          if (txData.notes?.includes('[Devolução/Estorno]')) setIsRefund(true)
-        }
-      } else {
+      if (txError) {
+        console.error('❌ Erro ao buscar transação:', txError)
+        showToast('Erro ao buscar transação.', 'error')
+        // 🔥 Se não encontrar, cria uma nova
         setIsNew(true)
-        const paramType = searchParams.get('type')
-        if (paramType === 'income' || paramType === 'expense') {
-          setTxType(paramType)
-          if (paramType === 'income') setIsPaid(true)
-        }
+        setIsPaid(false)
+        setDate(format(new Date(), 'yyyy-MM-dd'))
+        setAmountInput('0,00')
+        setDescription('')
+        setNotes('')
+        setCategoryId('')
+        setAccountId('')
+        setCreditCardId('')
+        setContactId('')
+        setSelectedTags([])
+        setIsReimbursable(false)
+        setReceiptUrl(null)
+        setReceiptPreview(null)
+        setReceiptName('')
+        setReceiptType(null)
+        setFinancingId(null)
+        setDebtId(null)
+        setIsRefund(false)
+        return
       }
-    } catch (err) {
-      console.error('Erro inesperado:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [id, user, txType, searchParams, context])
 
-  useEffect(() => { loadData() }, [loadData])
+      if (txData) {
+        // 🔥 CORREÇÃO: Define o tipo ANTES de preencher os campos
+        setTxType(txData.type)
+        setTx(txData)
+        setIsPaid(txData.status === 'done')
+        setDate(txData.date)
+        setDescription(txData.description || '')
+        setNotes(txData.notes || '')
+        setCategoryId(txData.category_id || '')
+        setAccountId(txData.account_id || '')
+        setCreditCardId(txData.credit_card_id || '')
+        setContactId(txData.contact_id || '')
+        setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
+        setIsReimbursable(txData.is_reimbursable || false)
+        const amountSafe = Number(txData.amount) || 0
+        setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+
+        if (txData.receipt_url) {
+          setReceiptUrl(txData.receipt_url)
+          const isPdf = txData.receipt_url.toLowerCase().includes('.pdf')
+          setReceiptType(isPdf ? 'pdf' : 'image')
+          setReceiptName(isPdf ? 'comprovante.pdf' : 'comprovante.jpg')
+          if (!isPdf) setReceiptPreview(txData.receipt_url)
+        }
+
+        if (txData.financing_id) setFinancingId(txData.financing_id)
+        if (txData.debt_id) setDebtId(txData.debt_id)
+        if (txData.notes?.includes('[Devolução/Estorno]')) setIsRefund(true)
+        setIsNew(false)
+      } else {
+        // Não encontrou dados
+        setIsNew(true)
+        setIsPaid(false)
+        setDate(format(new Date(), 'yyyy-MM-dd'))
+        setAmountInput('0,00')
+        setDescription('')
+        setNotes('')
+        setCategoryId('')
+        setAccountId('')
+        setCreditCardId('')
+        setContactId('')
+        setSelectedTags([])
+        setIsReimbursable(false)
+        setReceiptUrl(null)
+        setReceiptPreview(null)
+        setReceiptName('')
+        setReceiptType(null)
+        setFinancingId(null)
+        setDebtId(null)
+        setIsRefund(false)
+      }
+    } else {
+      // Modo de criação (nova transação)
+      setIsNew(true)
+      const paramType = searchParams.get('type')
+      if (paramType === 'income' || paramType === 'expense') {
+        setTxType(paramType)
+        if (paramType === 'income') setIsPaid(true)
+      }
+    }
+  } catch (err) {
+    console.error('Erro inesperado:', err)
+    // Em caso de erro, cria uma nova transação
+    setIsNew(true)
+    setIsPaid(false)
+    setDate(format(new Date(), 'yyyy-MM-dd'))
+    setAmountInput('0,00')
+    setDescription('')
+    setNotes('')
+    setCategoryId('')
+    setAccountId('')
+    setCreditCardId('')
+    setContactId('')
+    setSelectedTags([])
+    setIsReimbursable(false)
+    setReceiptUrl(null)
+    setReceiptPreview(null)
+    setReceiptName('')
+    setReceiptType(null)
+    setFinancingId(null)
+    setDebtId(null)
+    setIsRefund(false)
+  } finally {
+    setLoading(false)
+    setLoadingPulse(false)
+  }
+}, [id, user, txType, searchParams, context])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '')
