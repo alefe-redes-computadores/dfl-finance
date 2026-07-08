@@ -21,7 +21,9 @@ import BankLogo from '@/components/BankLogo'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 interface ExtractedTransaction {
   date: string
@@ -63,8 +65,11 @@ const ExtractionSkeleton = () => (
 export default function ImportInvoicePage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -100,26 +105,26 @@ export default function ImportInvoicePage() {
   const [isRefund, setIsRefund] = useState(false)
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removido realtime: false
+  // 🔥 CORRIGIDO: Usa effectiveContext
   // ============================================================
   const { data: localCreditCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const { data: localAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
     table: 'accounts' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context, type: 'expense' },
+    filters: { context: effectiveContext, type: 'expense' },
   })
 
   const { data: localTags, loading: tagsLoading, reload: reloadTags } = useLocalData({
     table: 'tags' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   useEffect(() => {
@@ -149,7 +154,7 @@ export default function ImportInvoicePage() {
       const formData = new FormData()
       formData.append('file', selectedFile)
       formData.append('user_id', user.id)
-      formData.append('context', context)
+      formData.append('context', effectiveContext)
 
       const response = await fetch('/api/extract-invoice', {
         method: 'POST',
@@ -185,7 +190,7 @@ export default function ImportInvoicePage() {
   }
 
   // ============================================================
-  // 🔥 HANDLE IMPORT CORRIGIDO COM addToSyncQueue
+  // 🔥 HANDLE IMPORT CORRIGIDO COM safeAdd E safeUpdate
   // ============================================================
   const handleImport = async () => {
     if (!user?.id || transactions.length === 0) return
@@ -218,13 +223,17 @@ export default function ImportInvoicePage() {
 
           const newTotal = (Number(currentInvoice?.total_amount) || 0) + totalAmount
 
-          // 🔥 ATUALIZA FATURA COM addToSyncQueue
+          // 🔥 ATUALIZA FATURA COM safeUpdate
           const updateData = {
             total_amount: newTotal,
             updated_at: new Date().toISOString(),
           }
-          await db.table('credit_invoices').update(invoiceId, updateData)
-          await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
+          const result = await safeUpdate('credit_invoices', invoiceId, updateData)
+          if (!result.success) {
+            showToast(`Erro ao atualizar fatura: ${result.error}`, 'error')
+            setImporting(false)
+            return
+          }
         } else {
           const today = new Date()
           const closingDay = 10
@@ -256,16 +265,20 @@ export default function ImportInvoicePage() {
             end_date: closingDate.toISOString().split('T')[0],
             total_amount: totalAmount,
             status: 'open',
-            context,
+            context: effectiveContext,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             sync_status: 'pending',
             sync_attempts: 0,
           }
 
-          // 🔥 CRIA FATURA COM addToSyncQueue
-          await db.table('credit_invoices').add(invoicePayload)
-          await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
+          // 🔥 CRIA FATURA COM safeAdd
+          const result = await safeAdd('credit_invoices', invoicePayload)
+          if (!result.success) {
+            showToast(`Erro ao criar fatura: ${result.error}`, 'error')
+            setImporting(false)
+            return
+          }
 
           invoiceId = newInvoiceId
         }
@@ -292,7 +305,7 @@ export default function ImportInvoicePage() {
           tag_ids: selectedTags.length > 0 ? selectedTags : null,
           date: tx.date,
           status: creditCardId ? 'done' : (accId ? 'done' : 'pending'),
-          context,
+          context: effectiveContext,
           notes: finalNotes || null,
           financing_id: financingId,
           debt_id: debtId,
@@ -304,13 +317,17 @@ export default function ImportInvoicePage() {
         }
       })
 
-      // 🔥 CRIA TRANSAÇÕES COM addToSyncQueue
+      // 🔥 CRIA TRANSAÇÕES COM safeAdd
       for (const tx of payload) {
-        await db.table('transactions').add(tx)
-        await addToSyncQueue(user.id, 'transactions', 'create', tx.id, tx)
+        const result = await safeAdd('transactions', tx)
+        if (!result.success) {
+          showToast(`Erro ao importar transação: ${result.error}`, 'error')
+          setImporting(false)
+          return
+        }
       }
 
-      // 🔥 CRIA NOTIFICAÇÃO COM addToSyncQueue
+      // 🔥 CRIA NOTIFICAÇÃO COM safeAdd
       const notifId = crypto.randomUUID()
       const notifPayload = {
         id: notifId,
@@ -328,8 +345,12 @@ export default function ImportInvoicePage() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.table('notifications').add(notifPayload)
-      await addToSyncQueue(user.id, 'notifications', 'create', notifId, notifPayload)
+      const result = await safeAdd('notifications', notifPayload)
+      if (!result.success) {
+        showToast(`Erro ao criar notificação: ${result.error}`, 'error')
+        setImporting(false)
+        return
+      }
 
       showToast(`${transactions.length} transações importadas!`, 'success')
       setStep('done')
