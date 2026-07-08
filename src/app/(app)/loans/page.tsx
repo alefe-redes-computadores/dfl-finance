@@ -26,7 +26,9 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Payment = {
   id: string
@@ -44,7 +46,9 @@ export default function LoansPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -57,16 +61,16 @@ export default function LoansPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 BUSCA DADOS LOCAIS
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: loans, loading, reload } = useLocalData({
     table: 'loans' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  // Busca pagamentos vinculados (todos de uma vez)
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: allPayments } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, type: 'loan_payment' },
+    filters: { context: effectiveContext, type: 'loan_payment' },
   })
 
   // Agrupa pagamentos por loan_id
@@ -78,19 +82,22 @@ export default function LoansPage() {
     return acc
   }, {})
 
-  // 🔥 CORRIGIDO: Remove empréstimo com db.table().delete() + addToSyncQueue
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.table('loans').delete(deleteModal)
-      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
-      await addToSyncQueue(user.id, 'loans', 'delete', deleteModal, { id: deleteModal })
+      const result = await safeDelete('loans', deleteModal)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, "error")
+        errorHaptic()
+        return
+      }
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
-      showToast("Erro ao excluir empréstimo", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir empréstimo: ${err.message}`, "error")
       errorHaptic()
     }
   }
@@ -172,14 +179,12 @@ export default function LoansPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      {/* Bolinha de loading sutil */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
 
-      {/* Pull-to-refresh */}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
@@ -189,9 +194,7 @@ export default function LoansPage() {
         </div>
       )}
 
-      {/* Header fixo */}
       <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
-        {/* Barra do topo */}
         <div className="flex items-center justify-between pt-4 mb-3">
           <div>
             <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
@@ -228,7 +231,6 @@ export default function LoansPage() {
           </div>
         </div>
 
-        {/* Search */}
         {showSearch && (
           <div className="relative mb-2">
             <Search
@@ -245,7 +247,6 @@ export default function LoansPage() {
           </div>
         )}
 
-        {/* Filtros */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setSortBy("updated_at")}
@@ -280,7 +281,6 @@ export default function LoansPage() {
         </div>
       </div>
 
-      {/* Lista */}
       <div
         ref={scrollRef}
         onTouchStart={handleTouchStart}
@@ -308,7 +308,6 @@ export default function LoansPage() {
                   key={loan.id}
                   className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all"
                 >
-                  {/* Card principal */}
                   <button
                     onClick={() => router.push(`/loans/${loan.id}`)}
                     className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
@@ -355,7 +354,6 @@ export default function LoansPage() {
                       </p>
                     )}
 
-                    {/* Pagamentos (expandido) */}
                     {payments.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                         <div className="flex items-center justify-between mb-2">
@@ -390,7 +388,6 @@ export default function LoansPage() {
                     )}
                   </button>
 
-                  {/* Ações */}
                   <div className="px-4 pb-3 flex gap-2">
                     {loan.status === "active" && (
                       <button
@@ -416,7 +413,6 @@ export default function LoansPage() {
         )}
       </div>
 
-      {/* Modal de exclusão */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
