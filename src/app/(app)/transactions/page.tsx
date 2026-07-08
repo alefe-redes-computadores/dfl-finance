@@ -9,7 +9,7 @@ import * as Icons from 'lucide-react'
 import { 
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, 
   ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, RefreshCw, Clock, ChevronDown,
-+ Check 
+  Check
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
