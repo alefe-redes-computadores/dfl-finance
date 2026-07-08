@@ -24,7 +24,9 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Installment = {
   id: string
@@ -42,7 +44,9 @@ export default function FinancingsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -55,16 +59,16 @@ export default function FinancingsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: financings, loading, reload } = useLocalData({
     table: 'financings' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  // Busca parcelas vinculadas (todos de uma vez)
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: allInstallments } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, type: 'financing_installment' },
+    filters: { context: effectiveContext, type: 'financing_installment' },
   })
 
   // Agrupa parcelas por financing_id
@@ -76,25 +80,35 @@ export default function FinancingsPage() {
     return acc
   }, {})
 
-  // 🔥 CORRIGIDO: Remove financiamento com db.table().delete() + addToSyncQueue
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
+      // Primeiro, exclui todas as parcelas vinculadas
       const installments = installmentsByFinancing[deleteModal] || []
       for (const inst of installments) {
-        await db.table('transactions').delete(inst.id)
-        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO (cada parcela)
-        await addToSyncQueue(user.id, 'transactions', 'delete', inst.id, { id: inst.id })
+        const result = await safeDelete('transactions', inst.id)
+        if (!result.success) {
+          showToast(`Erro ao excluir parcela: ${result.error}`, "error")
+          errorHaptic()
+          return
+        }
       }
-      await db.table('financings').delete(deleteModal)
-      // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO (o financiamento)
-      await addToSyncQueue(user.id, 'financings', 'delete', deleteModal, { id: deleteModal })
+      
+      // Depois, exclui o financiamento
+      const result = await safeDelete('financings', deleteModal)
+      if (!result.success) {
+        showToast(`Erro ao excluir financiamento: ${result.error}`, "error")
+        errorHaptic()
+        return
+      }
+      
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
-      showToast("Erro ao excluir financiamento", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir financiamento: ${err.message}`, "error")
       errorHaptic()
     }
   }
