@@ -50,6 +50,8 @@ import KPICard from '@/components/dashboard/KPICard'
 import ComparisonChart from '@/components/dashboard/ComparisonChart'
 import ProjectionChart from '@/components/dashboard/ProjectionChart'
 import CategoryPie from '@/components/dashboard/CategoryPie'
+// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const AnalysisSkeleton = () => (
   <div className="space-y-6 animate-pulse">
@@ -89,7 +91,10 @@ const AnalysisSkeleton = () => (
 
 function AnalysisContent() {
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem (preparatório)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
   const [previousSummary, setPreviousSummary] = useState({ income: 0, expense: 0, balance: 0 })
@@ -117,18 +122,18 @@ function AnalysisContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  // 🔥 DADOS LOCAIS - REMOVIDOS orderBy e orderDir
+  // 🔥 DADOS LOCAIS - CORRIGIDO: usa effectiveContext
   const { data: localTransactions, loading: txLoading } = useLocalData({ 
     table: 'transactions' as any, 
-    filters: { context },
+    filters: { context: effectiveContext },
   })
   const { data: localCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
-    filters: { context }
+    filters: { context: effectiveContext }
   })
   const { data: localAccounts, loading: accLoading } = useLocalData({ 
     table: 'accounts' as any, 
-    filters: { context }
+    filters: { context: effectiveContext }
   })
 
   // 🔥 DASHBOARD METRICS
@@ -245,13 +250,13 @@ function AnalysisContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [user?.id, context, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
+  }, [user?.id, effectiveContext, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
 
   useEffect(() => {
-    if (user?.id && context) {
+    if (user?.id && effectiveContext) {
       loadData()
     }
-  }, [user?.id, context, currentDate, filterAccount, filterCategory, loadData])
+  }, [user?.id, effectiveContext, currentDate, filterAccount, filterCategory, loadData])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -296,8 +301,8 @@ function AnalysisContent() {
   const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
   const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
 
-  const handleExport = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-analysis?userId=${user.id}&context=${context}&range=${range}`, '_blank') }
-  const handleExportPDF = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-pdf?userId=${user.id}&context=${context}&range=${range}`, '_blank') }
+  const handleExport = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-analysis?userId=${user.id}&context=${effectiveContext}&range=${range}`, '_blank') }
+  const handleExportPDF = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-pdf?userId=${user.id}&context=${effectiveContext}&range=${range}`, '_blank') }
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
 
