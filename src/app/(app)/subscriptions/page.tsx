@@ -24,7 +24,9 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
@@ -32,7 +34,9 @@ export default function SubscriptionsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -44,24 +48,28 @@ export default function SubscriptionsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: subscriptions, loading, reload } = useLocalData({
     table: 'subscriptions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Remove assinatura com db.table().delete() + addToSyncQueue
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.table('subscriptions').delete(deleteModal)
-      await addToSyncQueue(user.id, 'subscriptions', 'delete', deleteModal, { id: deleteModal })
+      const result = await safeDelete('subscriptions', deleteModal)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, "error")
+        errorHaptic()
+        return
+      }
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
-      showToast("Erro ao excluir assinatura", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir assinatura: ${err.message}`, "error")
       errorHaptic()
     }
   }
