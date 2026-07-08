@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag, Eraser } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
@@ -35,7 +35,6 @@ export default function CategoriesPage() {
   const [color, setColor] = useState('#16a34a')
   const [parentId, setParentId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [cleaning, setCleaning] = useState(false)
 
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
@@ -145,13 +144,13 @@ export default function CategoriesPage() {
     }
   }
 
+  // TRAVA ANTI-ÓRFÃO APLICADA
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria? ATENÇÃO: Todas as subcategorias dela também serão apagadas!')) return
     if (!user) return
     
     try {
-      // TypeScript Fix: Cast explícito para any[]
       const subsToDelete = (allLocalCategories || []).filter((c: any) => c.parent_id === id) as any[];
       for (const sub of subsToDelete) {
         await safeDelete('categories', sub.id);
@@ -170,58 +169,6 @@ export default function CategoriesPage() {
     }
   }
 
-  // 🔥 VASSOURA INTELIGENTE: SALVA OS RELATÓRIOS E APAGA CLONES
-  async function handleKillZombies() {
-    if (!confirm("Aviso: O app vai unificar categorias duplicadas e transferir as transações para proteger seus relatórios. Continuar?")) return;
-    setCleaning(true);
-    
-    try {
-      // TypeScript Fix: Cast explícito para any[]
-      const queue = await db.table('sync_queue').where('entity').equals('categories').toArray() as any[];
-      if (queue.length > 0) {
-        await db.table('sync_queue').bulkDelete(queue.map((q: any) => q.id));
-      }
-
-      const allCats = await db.table('categories').toArray() as any[];
-      allCats.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      
-      const seen = new Map();
-      const toDeleteAndMigrate = [];
-
-      for (const cat of allCats) {
-        const key = `${cat.name.trim().toLowerCase()}-${cat.type}-${cat.context}-${cat.parent_id || 'main'}`;
-        
-        if (seen.has(key)) {
-           toDeleteAndMigrate.push({ cloneId: cat.id, originalId: seen.get(key) });
-        } else {
-           seen.set(key, cat.id); 
-        }
-      }
-
-      let migratedCount = 0;
-
-      if (toDeleteAndMigrate.length > 0) {
-         for (const { cloneId, originalId } of toDeleteAndMigrate) {
-            const txsToMigrate = await db.table('transactions').where('category_id').equals(cloneId).toArray() as any[];
-            
-            for (const tx of txsToMigrate) {
-               await safeUpdate('transactions', tx.id, { category_id: originalId });
-               migratedCount++;
-            }
-
-            await safeDelete('categories', cloneId); 
-         }
-      }
-
-      showToast(`Limpeza concluída! ${toDeleteAndMigrate.length} clones removidos e ${migratedCount} transações preservadas.`, 'success');
-      await reloadCategories();
-    } catch (e: any) {
-      showToast(`Erro na limpeza: ${e.message}`, "error");
-    } finally {
-      setCleaning(false);
-    }
-  }
-
   const FormIconComp = (Icons as any)[icon] || Icons.Tag
 
   return (
@@ -234,28 +181,12 @@ export default function CategoriesPage() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Categorias</h1>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* BOTÃO VASSOURA INTELIGENTE */}
-          <button
-            onClick={handleKillZombies}
-            disabled={cleaning}
-            className="w-9 h-9 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center transition-opacity disabled:opacity-50"
-            title="Limpar Duplicatas"
-          >
-            {cleaning ? (
-              <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Eraser size={18} className="text-amber-600 dark:text-amber-400" />
-            )}
-          </button>
-          
-          <button
-            onClick={() => openNew()}
-            className="w-9 h-9 bg-brand-teal rounded-full flex items-center justify-center"
-          >
-            <Plus size={20} className="text-white" />
-          </button>
-        </div>
+        <button
+          onClick={() => openNew()}
+          className="w-9 h-9 bg-brand-teal rounded-full flex items-center justify-center"
+        >
+          <Plus size={20} className="text-white" />
+        </button>
       </div>
 
       <ContextToggle />
@@ -299,6 +230,7 @@ export default function CategoriesPage() {
             >
               <option value="">Nenhuma (categoria principal)</option>
               {categories.map((cat: any) => {
+                // BLOQUEIO: Evita categoria de se tornar pai dela mesma
                 if (editingCategory && cat.id === editingCategory.id) return null;
                 return <option key={cat.id} value={cat.id}>{cat.name}</option>
               })}
