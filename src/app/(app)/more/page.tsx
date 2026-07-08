@@ -14,6 +14,8 @@ import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
+// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -199,6 +201,8 @@ export default function MorePage() {
   const { theme, toggleTheme: toggleThemeOriginal } = useTheme()
   const { showToast } = useToast()
   const { appMode, setAppMode } = useContext_()
+  // 🔥 NOVO: Hook de blindagem (preparatório - mantém consistência)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
