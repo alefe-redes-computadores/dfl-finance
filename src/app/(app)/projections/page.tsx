@@ -13,6 +13,8 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 // ✅ Imports normais (sem lazy loading)
 import {
@@ -78,7 +80,10 @@ const ProjectionsSkeleton = () => (
 export default function ProjectionsPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
+  // 🔥 NOVO: Hook de blindagem (preparatório)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -87,11 +92,11 @@ export default function ProjectionsPage() {
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
   // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e realtime
+  // 🔥 CORRIGIDO: Usa effectiveContext
   // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -301,8 +306,7 @@ export default function ProjectionsPage() {
             <LineChart size={20} className="text-teal-500" />
             Projeções
           </h1>
-          <button
-            onClick={loadData}
+          <button            onClick={loadData}
             className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
           >
             <RefreshCw size={20} className={loadingPulse ? 'animate-spin' : ''} />
