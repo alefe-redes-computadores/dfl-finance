@@ -65,7 +65,7 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
 function HomeContent() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, appMode, effectiveContext } = useContext_() // 🔥 ADICIONADO effectiveContext
+  const { context, appMode, effectiveContext } = useContext_()
   const { showToast } = useToast()
   
   const [hideBalance, setHideBalance] = useState(false)
@@ -90,40 +90,37 @@ function HomeContent() {
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
-  // ============================================================
-  // 🔥 CORRIGIDO: USANDO effectiveContext em TODOS os useLocalData
-  // ============================================================
   const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
-    filters: { context: effectiveContext }, // 🔥 effectiveContext
+    filters: { context: effectiveContext },
   })
   const { data: localCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
-    filters: { context: effectiveContext } // 🔥 effectiveContext
+    filters: { context: effectiveContext }
   })
   const { data: localAccountsData, loading: accLoading } = useLocalData({ 
     table: 'accounts' as any, 
-    filters: { context: effectiveContext } // 🔥 effectiveContext
+    filters: { context: effectiveContext }
   })
   const { data: localDebts, loading: debtsLoading } = useLocalData({ 
     table: 'debts' as any, 
-    filters: { context: effectiveContext } // 🔥 effectiveContext
+    filters: { context: effectiveContext }
   })
   const { data: localFinancings, loading: finLoading } = useLocalData({ 
     table: 'financings' as any, 
-    filters: { context: effectiveContext, status: 'active' } // 🔥 effectiveContext
+    filters: { context: effectiveContext, status: 'active' }
   })
   const { data: localCards, loading: cardsLoading } = useLocalData({ 
     table: 'credit_cards' as any, 
-    filters: { context: effectiveContext, is_archived: false } // 🔥 effectiveContext
+    filters: { context: effectiveContext, is_archived: false }
   })
   const { data: localBudgets, loading: budgetsLoading } = useLocalData({
     table: 'budgets' as any,
-    filters: { context: effectiveContext } // 🔥 effectiveContext
+    filters: { context: effectiveContext }
   })
   const { data: localLoans, loading: loansLoading } = useLocalData({
     table: 'loans' as any,
-    filters: { context: effectiveContext } // 🔥 effectiveContext
+    filters: { context: effectiveContext }
   })
   const { data: localNotifications, reload: reloadNotifs } = useLocalData({
     table: 'notifications' as any,
@@ -142,10 +139,6 @@ function HomeContent() {
     }
   }, [isDataLoading, localTransactions, localAccountsData])
 
-  // ============================================================
-  // 🔥 CÁLCULOS EM TEMPO REAL (useMemo elimina o flicker)
-  // ============================================================
-  
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
 
@@ -209,16 +202,22 @@ function HomeContent() {
     })
   }, [localCards, monthTransactions])
 
+  // 🔥 CORRIGIDO: Pendências SEM filtro de mês
   const pendings = useMemo(() => {
-    const toPay = monthTransactions
-      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'pending' && !t.credit_card_id)
+    const allPending = (localTransactions || []).filter((t: any) => t.status === 'pending')
+    
+    const toPay = allPending
+      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && !t.credit_card_id)
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-    const toReceive = monthTransactions
-      .filter((t: any) => t.type === 'income' && t.status === 'pending')
+      
+    const toReceive = allPending
+      .filter((t: any) => t.type === 'income')
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      
     const faturas = cards.reduce((acc: number, c: any) => acc + c.faturaAtual, 0)
+    
     return { toPay, toReceive, faturas }
-  }, [monthTransactions, cards])
+  }, [localTransactions, cards])
 
   const debtsList = useMemo(() => {
     const allDebts = (localDebts || []).map((debt: any) => {
@@ -267,9 +266,6 @@ function HomeContent() {
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [localLoans])
 
-  // ============================================================
-  // 🔥 GERAÇÃO AUTOMÁTICA DE NOTIFICAÇÕES LOCAIS (Dexie)
-  // ============================================================
   useEffect(() => {
     if (!user?.id || cards.length === 0) return
     const generateNotifs = async () => {
@@ -328,9 +324,6 @@ function HomeContent() {
   const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
   const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
 
-  // ============================================================
-  // BUSCA REMOTA PARA LAYOUT
-  // ============================================================
   useEffect(() => {
     if (user?.id && isOnline) {
       supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single().then(({ data }) => {
@@ -349,9 +342,6 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
-  // ============================================================
-  // NAVEGAÇÃO INTELIGENTE (volta para Home se veio de lá)
-  // ============================================================
   const goBack = useCallback(() => {
     if (window.history.length > 2) {
       router.back()
@@ -360,9 +350,6 @@ function HomeContent() {
     }
   }, [router])
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -427,9 +414,6 @@ function HomeContent() {
 
   useEffect(() => { const saved = localStorage.getItem('dfl_notifications_enabled'); setNotificationsEnabled(saved !== 'false') }, [])
 
-  // ============================================================
-  // RENDERIZAÇÃO
-  // ============================================================
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
     const isFixed = FIXED_SECTIONS.includes(sectionId)
