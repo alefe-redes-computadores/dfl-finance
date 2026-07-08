@@ -21,19 +21,19 @@ import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { db, addToSyncQueue } from '@/lib/db'
+import { db } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function EditTransactionPage() {
   const { id } = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  
-  // 🔥 CORREÇÃO: Puxando o effectiveContext para blindar o App Duplo
   const { context, appMode, effectiveContext } = useContext_()
-  
   const { showToast } = useToast()
   const { vibrate, success } = useHapticFeedback()
+
+  const { safeAdd, safeUpdate, safeDelete, loading: safeLoading } = useSafeDb()
 
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -422,6 +422,9 @@ export default function EditTransactionPage() {
     })
   }, [])
 
+  // ============================================================
+  // 🔥 HANDLE SAVE CORRIGIDO COM VERIFICAÇÃO DE RETORNO
+  // ============================================================
   const handleSave = useCallback(async () => {
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     setSaving(true)
@@ -468,6 +471,7 @@ export default function EditTransactionPage() {
     }
 
     try {
+      // 🔥 REVERTE SALDO DA CONTA ORIGINAL (usando safeUpdate com verificação)
       if (!isNew && tx?.status === 'done' && tx?.account_id) {
         const { data: oldAcc } = await supabase
           .from('accounts')
@@ -479,11 +483,16 @@ export default function EditTransactionPage() {
             tx.type === 'income'
               ? Number(oldAcc.balance) - Number(tx.amount)
               : Number(oldAcc.balance) + Number(tx.amount)
-          await db.table('accounts').update(tx.account_id, { balance: revertedBalance })
-          await addToSyncQueue(user.id, 'accounts', 'update', tx.account_id, { balance: revertedBalance })
+          const result = await safeUpdate('accounts', tx.account_id, { balance: revertedBalance })
+          if (!result.success) {
+            showToast(`Erro ao reverter saldo: ${result.error}`, 'error')
+            setSaving(false)
+            return
+          }
         }
       }
 
+      // 🔥 APLICA NOVO SALDO (usando safeUpdate com verificação)
       if (isPaid && accountId && !creditCardId) {
         const { data: newAcc } = await supabase
           .from('accounts')
@@ -495,16 +504,32 @@ export default function EditTransactionPage() {
             txType === 'income'
               ? Number(newAcc.balance) + rawAmount
               : Number(newAcc.balance) - rawAmount
-          await db.table('accounts').update(accountId, { balance: updatedBalance })
-          await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: updatedBalance })
+          const result = await safeUpdate('accounts', accountId, { balance: updatedBalance })
+          if (!result.success) {
+            showToast(`Erro ao atualizar saldo: ${result.error}`, 'error')
+            setSaving(false)
+            return
+          }
         }
       }
 
+      // 🔥 CRIA OU ATUALIZA TRANSAÇÃO (com verificação)
+      let result;
       if (isNew) {
         const txId = crypto.randomUUID()
-        const fullPayload = { id: txId, ...payload, created_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0 }
-        await db.table('transactions').add(fullPayload)
-        await addToSyncQueue(user.id, 'transactions', 'create', txId, fullPayload)
+        const fullPayload = { 
+          id: txId, 
+          ...payload, 
+          created_at: new Date().toISOString(), 
+          sync_status: 'pending', 
+          sync_attempts: 0 
+        }
+        result = await safeAdd('transactions', fullPayload)
+        if (!result.success) {
+          showToast(`Erro ao criar transação: ${result.error}`, 'error')
+          setSaving(false)
+          return
+        }
 
         if (isReimbursable) {
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
@@ -526,15 +551,26 @@ export default function EditTransactionPage() {
             sync_status: 'pending',
             sync_attempts: 0,
           }
-          await db.table('transactions').add(reimbPayload)
-          await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
-
-          await db.table('transactions').update(txId, { linked_transaction_id: reimbTxId })
-          await addToSyncQueue(user.id, 'transactions', 'update', txId, { linked_transaction_id: reimbTxId })
+          const reimbResult = await safeAdd('transactions', reimbPayload)
+          if (!reimbResult.success) {
+            showToast(`Erro ao criar reembolso: ${reimbResult.error}`, 'error')
+            setSaving(false)
+            return
+          }
+          const linkResult = await safeUpdate('transactions', txId, { linked_transaction_id: reimbTxId })
+          if (!linkResult.success) {
+            showToast(`Erro ao vincular reembolso: ${linkResult.error}`, 'error')
+            setSaving(false)
+            return
+          }
         }
       } else {
-        await db.table('transactions').update(id as string, payload)
-        await addToSyncQueue(user.id, 'transactions', 'update', id as string, payload)
+        result = await safeUpdate('transactions', id as string, payload)
+        if (!result.success) {
+          showToast(`Erro ao atualizar transação: ${result.error}`, 'error')
+          setSaving(false)
+          return
+        }
 
         if (isReimbursable && !tx?.is_reimbursable) {
           const otherContext = context === 'dfl' ? 'personal' : 'dfl'
@@ -556,11 +592,18 @@ export default function EditTransactionPage() {
             sync_status: 'pending',
             sync_attempts: 0,
           }
-          await db.table('transactions').add(reimbPayload)
-          await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
-
-          await db.table('transactions').update(id as string, { linked_transaction_id: reimbTxId })
-          await addToSyncQueue(user.id, 'transactions', 'update', id as string, { linked_transaction_id: reimbTxId })
+          const reimbResult = await safeAdd('transactions', reimbPayload)
+          if (!reimbResult.success) {
+            showToast(`Erro ao criar reembolso: ${reimbResult.error}`, 'error')
+            setSaving(false)
+            return
+          }
+          const linkResult = await safeUpdate('transactions', id as string, { linked_transaction_id: reimbTxId })
+          if (!linkResult.success) {
+            showToast(`Erro ao vincular reembolso: ${linkResult.error}`, 'error')
+            setSaving(false)
+            return
+          }
         }
       }
 
@@ -573,11 +616,11 @@ export default function EditTransactionPage() {
       }, 800)
     } catch (err: any) {
       console.error('Erro ao salvar:', err)
-      showToast('Erro ao salvar transação.', 'error')
+      showToast(`Erro ao salvar transação: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
-  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, context, vibrate, showToast, router])
+  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, context, vibrate, showToast, router, safeAdd, safeUpdate])
 
   const hasInstallments = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
 
@@ -589,12 +632,16 @@ export default function EditTransactionPage() {
     }
   }
 
+  // ============================================================
+  // 🔥 CONFIRM DELETE CORRIGIDO COM VERIFICAÇÃO DE RETORNO
+  // ============================================================
   const confirmDelete = async (mode: 'single' | 'future' | 'all') => {
     if (!user?.id) return
     setSaving(true)
     setShowDeleteModal(false)
 
     try {
+      // 🔥 REVERTE SALDO DA CONTA
       if (tx?.status === 'done' && tx?.account_id) {
         const { data: accData } = await supabase
           .from('accounts')
@@ -606,14 +653,23 @@ export default function EditTransactionPage() {
             tx.type === 'income'
               ? Number(accData.balance) - Number(tx.amount)
               : Number(accData.balance) + Number(tx.amount)
-          await db.table('accounts').update(tx.account_id, { balance: newBalance })
-          await addToSyncQueue(user.id, 'accounts', 'update', tx.account_id, { balance: newBalance })
+          const result = await safeUpdate('accounts', tx.account_id, { balance: newBalance })
+          if (!result.success) {
+            showToast(`Erro ao reverter saldo: ${result.error}`, 'error')
+            setSaving(false)
+            return
+          }
         }
       }
 
+      // 🔥 DELETA TRANSAÇÕES (com verificação)
       if (mode === 'single' || !hasInstallments) {
-        await db.table('transactions').delete(id as string)
-        await addToSyncQueue(user.id, 'transactions', 'delete', id as string, { id: id as string })
+        const result = await safeDelete('transactions', id as string)
+        if (!result.success) {
+          showToast(`Erro ao excluir: ${result.error}`, 'error')
+          setSaving(false)
+          return
+        }
       } else if (mode === 'future' && tx?.recurring_group_id) {
         const { data: futureTxs } = await supabase
           .from('transactions')
@@ -623,8 +679,12 @@ export default function EditTransactionPage() {
 
         if (futureTxs) {
           for (const ftx of futureTxs) {
-            await db.table('transactions').delete(ftx.id)
-            await addToSyncQueue(user.id, 'transactions', 'delete', ftx.id, { id: ftx.id })
+            const result = await safeDelete('transactions', ftx.id)
+            if (!result.success) {
+              showToast(`Erro ao excluir parcela futura: ${result.error}`, 'error')
+              setSaving(false)
+              return
+            }
           }
         }
       } else if (mode === 'all' && tx?.recurring_group_id) {
@@ -635,8 +695,12 @@ export default function EditTransactionPage() {
 
         if (allTxs) {
           for (const atx of allTxs) {
-            await db.table('transactions').delete(atx.id)
-            await addToSyncQueue(user.id, 'transactions', 'delete', atx.id, { id: atx.id })
+            const result = await safeDelete('transactions', atx.id)
+            if (!result.success) {
+              showToast(`Erro ao excluir parcela: ${result.error}`, 'error')
+              setSaving(false)
+              return
+            }
           }
         }
       }
@@ -651,7 +715,7 @@ export default function EditTransactionPage() {
       router.back()
     } catch (err: any) {
       console.error('Erro ao excluir:', err)
-      showToast('Erro ao excluir transação.', 'error')
+      showToast(`Erro ao excluir transação: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
