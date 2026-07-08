@@ -14,7 +14,9 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const GoalsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
@@ -42,20 +44,25 @@ const GoalsSkeleton = () => (
 function GoalsContent() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
     table: 'goals' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
+  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   // ============================================================
@@ -145,13 +152,16 @@ function GoalsContent() {
     }
   })
 
-  // 🔥 CORRIGIDO: HANDLER DE DELETE COM addToSyncQueue
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir esta meta?')) return
     try {
-      await db.table('goals').delete(id)
-      await addToSyncQueue(user.id, 'goals', 'delete', id, { id })
+      const result = await safeDelete('goals', id)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, 'error')
+        return
+      }
       showToast('Meta excluída.', 'info')
       loadData()
     } catch (err: any) {
