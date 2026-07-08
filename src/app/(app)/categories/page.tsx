@@ -41,7 +41,6 @@ export default function CategoriesPage() {
     table: 'categories' as any,
   })
 
-  // Lista de pais (Apenas categorias principais)
   const allAvailableParents = useMemo(() => {
     if (!allLocalCategories) return []
     return allLocalCategories
@@ -61,7 +60,6 @@ export default function CategoriesPage() {
     return { categories: mainCats, subcategories: subsMap }
   }, [allLocalCategories, effectiveContext, tab])
 
-  // 🔥 LIMPEZA LOCAL DE EMERGÊNCIA
   async function forceCleanLocal() {
     if (!confirm("Isso apagará o cache local e recarregará tudo do servidor. Continue se as categorias estiverem zumbificadas.")) return;
     setCleaning(true);
@@ -130,7 +128,8 @@ export default function CategoriesPage() {
     e.stopPropagation()
     if (!confirm('Deseja excluir? ATENÇÃO: Subcategorias serão apagadas!')) return
     try {
-      const subs = (allLocalCategories || []).filter((c: any) => c.parent_id === id);
+      // 🔥 FIX: Cast para any[] para silenciar o erro de build
+      const subs = (allLocalCategories || []).filter((c: any) => c.parent_id === id) as any[];
       for (const sub of subs) await safeDelete('categories', sub.id);
       await safeDelete('categories', id)
       await reloadCategories()
