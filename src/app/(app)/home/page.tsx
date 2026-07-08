@@ -1,7 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-//IMPORTS
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -66,7 +65,7 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
 function HomeContent() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, appMode } = useContext_()
+  const { context, appMode, effectiveContext } = useContext_() // 🔥 ADICIONADO effectiveContext
   const { showToast } = useToast()
   
   const [hideBalance, setHideBalance] = useState(false)
@@ -92,39 +91,39 @@ function HomeContent() {
   const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
 
   // ============================================================
-  // 🔥 DADOS LOCAIS (Reativos - Dexie) - REMOVIDOS orderBy e orderDir
+  // 🔥 CORRIGIDO: USANDO effectiveContext em TODOS os useLocalData
   // ============================================================
   const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
-    filters: { context },
+    filters: { context: effectiveContext }, // 🔥 effectiveContext
   })
   const { data: localCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
-    filters: { context }
+    filters: { context: effectiveContext } // 🔥 effectiveContext
   })
   const { data: localAccountsData, loading: accLoading } = useLocalData({ 
     table: 'accounts' as any, 
-    filters: { context }
+    filters: { context: effectiveContext } // 🔥 effectiveContext
   })
   const { data: localDebts, loading: debtsLoading } = useLocalData({ 
     table: 'debts' as any, 
-    filters: { context }
+    filters: { context: effectiveContext } // 🔥 effectiveContext
   })
   const { data: localFinancings, loading: finLoading } = useLocalData({ 
     table: 'financings' as any, 
-    filters: { context, status: 'active' }
+    filters: { context: effectiveContext, status: 'active' } // 🔥 effectiveContext
   })
   const { data: localCards, loading: cardsLoading } = useLocalData({ 
     table: 'credit_cards' as any, 
-    filters: { context, is_archived: false }
+    filters: { context: effectiveContext, is_archived: false } // 🔥 effectiveContext
   })
   const { data: localBudgets, loading: budgetsLoading } = useLocalData({
     table: 'budgets' as any,
-    filters: { context }
+    filters: { context: effectiveContext } // 🔥 effectiveContext
   })
   const { data: localLoans, loading: loansLoading } = useLocalData({
     table: 'loans' as any,
-    filters: { context }
+    filters: { context: effectiveContext } // 🔥 effectiveContext
   })
   const { data: localNotifications, reload: reloadNotifs } = useLocalData({
     table: 'notifications' as any,
