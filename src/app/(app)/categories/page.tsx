@@ -151,7 +151,8 @@ export default function CategoriesPage() {
     if (!user) return
     
     try {
-      const subsToDelete = (allLocalCategories || []).filter((c: any) => c.parent_id === id);
+      // TypeScript Fix: Cast explícito para any[]
+      const subsToDelete = (allLocalCategories || []).filter((c: any) => c.parent_id === id) as any[];
       for (const sub of subsToDelete) {
         await safeDelete('categories', sub.id);
       }
@@ -175,13 +176,14 @@ export default function CategoriesPage() {
     setCleaning(true);
     
     try {
-      const queue = await db.table('sync_queue').where('entity').equals('categories').toArray();
+      // TypeScript Fix: Cast explícito para any[]
+      const queue = await db.table('sync_queue').where('entity').equals('categories').toArray() as any[];
       if (queue.length > 0) {
-        await db.table('sync_queue').bulkDelete(queue.map(q => q.id));
+        await db.table('sync_queue').bulkDelete(queue.map((q: any) => q.id));
       }
 
-      const allCats = await db.table('categories').toArray();
-      allCats.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const allCats = await db.table('categories').toArray() as any[];
+      allCats.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       const seen = new Map();
       const toDeleteAndMigrate = [];
@@ -190,7 +192,6 @@ export default function CategoriesPage() {
         const key = `${cat.name.trim().toLowerCase()}-${cat.type}-${cat.context}-${cat.parent_id || 'main'}`;
         
         if (seen.has(key)) {
-           // É clone! Anota qual é a original para transferir os dados.
            toDeleteAndMigrate.push({ cloneId: cat.id, originalId: seen.get(key) });
         } else {
            seen.set(key, cat.id); 
@@ -201,16 +202,13 @@ export default function CategoriesPage() {
 
       if (toDeleteAndMigrate.length > 0) {
          for (const { cloneId, originalId } of toDeleteAndMigrate) {
-            // 1. Busca transações do clone
-            const txsToMigrate = await db.table('transactions').where('category_id').equals(cloneId).toArray();
+            const txsToMigrate = await db.table('transactions').where('category_id').equals(cloneId).toArray() as any[];
             
-            // 2. Transfere para a original
             for (const tx of txsToMigrate) {
                await safeUpdate('transactions', tx.id, { category_id: originalId });
                migratedCount++;
             }
 
-            // 3. Deleta o clone com segurança
             await safeDelete('categories', cloneId); 
          }
       }
