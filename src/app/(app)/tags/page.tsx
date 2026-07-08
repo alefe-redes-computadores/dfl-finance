@@ -20,7 +20,9 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o useSafeDb para blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = [
   "#3B82F6",
@@ -42,6 +44,8 @@ export default function TagsPage() {
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
   const { user } = useAuth()
+  // 🔥 NOVO: Hook de blindagem
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -89,7 +93,7 @@ export default function TagsPage() {
     setShowForm(true)
   }
 
-  // 🔥 CORRIGIDO: Salvar tag com sincronização
+  // 🔥 CORRIGIDO: HANDLER DE SAVE COM safeAdd/safeUpdate
   const handleSave = async () => {
     if (!tagName.trim() || !user) {
       showToast("Informe o nome da tag", "warning")
@@ -107,8 +111,12 @@ export default function TagsPage() {
       }
 
       if (editId) {
-        await db.table('tags').update(editId, payload)
-        await addToSyncQueue(user.id, 'tags', 'update', editId, payload)
+        const result = await safeUpdate('tags', editId, payload)
+        if (!result.success) {
+          showToast(`Erro ao atualizar: ${result.error}`, "error")
+          errorHaptic()
+          return
+        }
         showToast("Tag atualizada com sucesso!", "success")
       } else {
         const id = crypto.randomUUID()
@@ -120,8 +128,12 @@ export default function TagsPage() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.table('tags').add(fullPayload)
-        await addToSyncQueue(user.id, 'tags', 'create', id, fullPayload)
+        const result = await safeAdd('tags', fullPayload)
+        if (!result.success) {
+          showToast(`Erro ao criar: ${result.error}`, "error")
+          errorHaptic()
+          return
+        }
         showToast("Tag criada com sucesso!", "success")
       }
 
@@ -138,12 +150,16 @@ export default function TagsPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: Excluir tag com sincronização
+  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.table('tags').delete(deleteModal)
-      await addToSyncQueue(user.id, 'tags', 'delete', deleteModal, { id: deleteModal })
+      const result = await safeDelete('tags', deleteModal)
+      if (!result.success) {
+        showToast(`Erro ao excluir: ${result.error}`, "error")
+        errorHaptic()
+        return
+      }
       showToast("Tag excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
