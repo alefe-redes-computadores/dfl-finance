@@ -3,13 +3,12 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, X, ChevronDown, ChevronRight, Tag, Edit3 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import IconPicker from '@/components/IconPicker'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#16a34a','#dc2626','#ea580c','#0891b2','#7c3aed','#ca8a04','#94a3b8','#ec4899','#14b8a6']
@@ -40,6 +39,13 @@ export default function CategoriesPage() {
     table: 'categories' as any,
   })
 
+  const allAvailableParents = useMemo(() => {
+    if (!allLocalCategories) return []
+    return allLocalCategories
+      .filter((c: any) => c.context === effectiveContext && c.type === tab)
+      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+  }, [allLocalCategories, effectiveContext, tab])
+
   const { categories, subcategories } = useMemo(() => {
     if (!allLocalCategories) return { categories: [], subcategories: {} }
     
@@ -64,7 +70,7 @@ export default function CategoriesPage() {
   }
 
   function openEdit(cat: any) {
-    if (cat.is_default) return
+    // 🔥 CORREÇÃO: Removida a trava de is_default para permitir que você edite os órfãos
     setEditingCategory(cat)
     setName(cat.name)
     setColor(cat.color)
@@ -144,7 +150,6 @@ export default function CategoriesPage() {
     }
   }
 
-  // TRAVA ANTI-ÓRFÃO APLICADA
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Deseja excluir esta categoria? ATENÇÃO: Todas as subcategorias dela também serão apagadas!')) return
@@ -229,8 +234,7 @@ export default function CategoriesPage() {
               className="w-full bg-gray-100 dark:bg-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800 dark:text-white"
             >
               <option value="">Nenhuma (categoria principal)</option>
-              {categories.map((cat: any) => {
-                // BLOQUEIO: Evita categoria de se tornar pai dela mesma
+              {allAvailableParents.map((cat: any) => {
                 if (editingCategory && cat.id === editingCategory.id) return null;
                 return <option key={cat.id} value={cat.id}>{cat.name}</option>
               })}
@@ -327,18 +331,21 @@ export default function CategoriesPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      {/* 🔥 O NOVO LÁPIS PARA EDITAR AS CATEGORIAS */}
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(cat); }} className="p-1.5 bg-blue-50 dark:bg-blue-500/10 rounded-lg transition-colors hover:bg-blue-100 dark:hover:bg-blue-500/20">
+                        <Edit3 size={16} className="text-blue-500" />
+                      </button>
+                      
                       {!cat.is_default && (
                         <button onClick={(e) => handleDelete(cat.id, e)} className="p-1">
                           <Trash2 size={16} className="text-red-400 hover:text-red-600 transition-colors" />
                         </button>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); openEdit(cat); }} className="p-1">
-                        <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
-                      </button>
+                      
                       {isExpanded ? 
-                        <ChevronDown size={18} className="text-gray-400 dark:text-gray-500" /> : 
-                        <ChevronRight size={18} className="text-gray-400 dark:text-gray-500" />
+                        <ChevronDown size={18} className="text-gray-400 dark:text-gray-500 ml-1" /> : 
+                        <ChevronRight size={18} className="text-gray-400 dark:text-gray-500 ml-1" />
                       }
                     </div>
                   </div>
