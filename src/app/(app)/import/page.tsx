@@ -29,7 +29,6 @@ import ContextToggle, { ContextProvider, useContext_ } from '@/components/Contex
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 async function processOCR(file: File): Promise<{
@@ -61,7 +60,6 @@ async function processOCR(file: File): Promise<{
     }
   }
 
-  // 🔥 Converte number para string formatada com vírgula (ex: 150.50 → "150,50")
   const formattedAmount = amount !== null && amount !== undefined
     ? amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : '0,00'
@@ -91,7 +89,6 @@ function ImportContent() {
   const router = useRouter()
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
-  // 🔥 NOVO: Hook de blindagem
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [step, setStep] = useState<'upload' | 'review' | 'saving'>('upload')
@@ -145,7 +142,7 @@ function ImportContent() {
     }
   }
 
-  // 🔥 CORRIGIDO: HANDLER DE SAVE COM safeAdd
+  // 🔥 HANDLE SAVE ATOMICO COM TRANSACTION
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) return
@@ -182,14 +179,11 @@ function ImportContent() {
         sync_attempts: 0,
       }
 
-      // 🔥 Substituído por safeAdd com verificação
-      const result = await safeAdd('transactions', txPayload)
-      if (!result.success) {
-        alert(`Erro ao salvar: ${result.error}`)
-        setStep('review')
-        setIsSubmitting(false)
-        return
-      }
+      // 🔥 Atomicidade: transaction garante que a transação e a fila sejam gravadas juntas
+      await db.transaction('rw', db.transactions, db.syncQueue, async () => {
+        const result = await safeAdd('transactions', txPayload)
+        if (!result.success) throw new Error(result.error)
+      })
 
       router.push('/home')
     } catch (err: any) {
@@ -397,3 +391,4 @@ export default function ImportPage() {
     </ContextProvider>
   )
 }
+// Blindagem Atômica Finalizada
