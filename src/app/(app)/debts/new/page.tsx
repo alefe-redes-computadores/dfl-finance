@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ChevronLeft, Check, Loader2, X, Wallet, Calendar, User, FileText, Tag } from 'lucide-react'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db' 
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -41,9 +41,6 @@ function NewDebtContent() {
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS — USAR DIRETAMENTE NO JSX
-  // ============================================================
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
@@ -54,14 +51,11 @@ function NewDebtContent() {
     filters: { context },
   })
 
-  const { data: localDebt, loading: debtLoading, reload: reloadDebt } = useLocalData({
+  const { data: localDebt, loading: debtLoading } = useLocalData({
     table: 'debts' as any,
     filters: { id: editId || '' },
   })
 
-  // ============================================================
-  // CARREGAR DADOS PARA EDIÇÃO
-  // ============================================================
   useEffect(() => {
     if (editId && localDebt && localDebt.length > 0) {
       const data = localDebt[0] as any
@@ -81,9 +75,6 @@ function NewDebtContent() {
     }
   }, [editId, localDebt])
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
@@ -96,7 +87,7 @@ function NewDebtContent() {
     setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // 🔥 CORRIGIDO: Salvar dívida com addToSyncQueue
+  // 🔥 SALVAR E EDITAR ATÔMICO
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -120,10 +111,10 @@ function NewDebtContent() {
 
     try {
       if (editId) {
-        // 🔥 ATUALIZA NO INDEXEDDB
-        await db.table('debts').update(editId, payload)
-        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
-        await addToSyncQueue(user.id, 'debts', 'update', editId, payload)
+        await db.transaction('rw', 'debts', 'syncQueue', async () => {
+          await db.table('debts').update(editId, payload)
+          await db.table('syncQueue').add({ table: 'debts', operation: 'update', record_id: editId, data: payload, user_id: user.id, created_at: new Date().toISOString() })
+        })
         showToast('Empréstimo atualizado com sucesso!', 'success')
       } else {
         const id = crypto.randomUUID()
@@ -136,10 +127,10 @@ function NewDebtContent() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        // 🔥 CRIA NO INDEXEDDB
-        await db.table('debts').add(fullPayload)
-        // 🔥 ADICIONA À FILA DE SINCRONIZAÇÃO
-        await addToSyncQueue(user.id, 'debts', 'create', id, fullPayload)
+        await db.transaction('rw', 'debts', 'syncQueue', async () => {
+          await db.table('debts').add(fullPayload)
+          await db.table('syncQueue').add({ table: 'debts', operation: 'create', record_id: id, data: fullPayload, user_id: user.id, created_at: new Date().toISOString() })
+        })
         showToast('Empréstimo registrado com sucesso!', 'success')
       }
       router.push('/debts')
@@ -150,9 +141,7 @@ function NewDebtContent() {
     }
   }
 
-  const handleBack = () => {
-    router.push('/debts')
-  }
+  const handleBack = () => router.push('/debts')
 
   if (loading || debtLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
@@ -160,7 +149,6 @@ function NewDebtContent() {
     </div>
   )
 
-  // 🔥 USAR localCategories E localAccounts DIRETAMENTE (SEM ESTADO INTERMEDIÁRIO)
   const selectedCat = (localCategories || []).find((c: any) => c.id === categoryId) as any
   const selectedAcc = (localAccounts || []).find((a: any) => a.id === accountId) as any
   const IconComp = getDynamicIcon(icon)
@@ -168,7 +156,6 @@ function NewDebtContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={handleBack} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
           <ChevronLeft size={24} />
@@ -180,7 +167,6 @@ function NewDebtContent() {
       </div>
 
       <div className="space-y-5">
-        {/* Contexto */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Contexto</label>
           <div className="flex gap-2">
@@ -196,7 +182,6 @@ function NewDebtContent() {
           </div>
         </div>
 
-        {/* Nome da pessoa */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome da pessoa</label>
           <div className="flex items-center gap-3">
@@ -211,7 +196,6 @@ function NewDebtContent() {
           </div>
         </div>
 
-        {/* Valor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor emprestado</label>
           <div className="flex items-center gap-2">
@@ -227,7 +211,6 @@ function NewDebtContent() {
           </div>
         </div>
 
-        {/* Data de vencimento */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Data de vencimento (opcional)</label>
           <div className="flex items-center gap-3">
@@ -241,7 +224,6 @@ function NewDebtContent() {
           </div>
         </div>
 
-        {/* Descrição */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
           <div className="flex items-center gap-3">
@@ -256,7 +238,6 @@ function NewDebtContent() {
           </div>
         </div>
 
-        {/* Categoria */}
         <button
           onClick={() => setShowCatModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -271,7 +252,6 @@ function NewDebtContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
-        {/* Conta */}
         <button
           onClick={() => setShowAccModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -286,7 +266,6 @@ function NewDebtContent() {
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
-        {/* Cor */}
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
@@ -301,7 +280,6 @@ function NewDebtContent() {
           </div>
         </div>
 
-        {/* Ícone */}
         <button
           onClick={() => setShowIconModal(true)}
           className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
@@ -319,7 +297,6 @@ function NewDebtContent() {
         </button>
       </div>
 
-      {/* Modal Categorias */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -358,7 +335,6 @@ function NewDebtContent() {
         </div>
       )}
 
-      {/* Modal Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
