@@ -24,7 +24,8 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function ContactDetailPage() {
   const router = useRouter()
@@ -34,7 +35,8 @@ export default function ContactDetailPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
-  const { user } = useAuth() // 🔥 ADICIONADO
+  const { user } = useAuth()
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -42,7 +44,6 @@ export default function ContactDetailPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Busca dados locais
   const { data: localContacts, loading, reload } = useLocalData({
     table: 'contacts' as any,
     filters: { context },
@@ -50,7 +51,6 @@ export default function ContactDetailPage() {
 
   const contactData = (localContacts || []).find((c: any) => c.id === contactId) as any
 
-  // Busca transações vinculadas
   const { data: allTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, contact_id: contactId },
@@ -58,7 +58,6 @@ export default function ContactDetailPage() {
 
   const transactions = allTransactions || []
 
-  // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -75,18 +74,20 @@ export default function ContactDetailPage() {
     }
   }, [refreshing, reload])
 
-  // 🔥 CORRIGIDO: Excluir contato com addToSyncQueue
+  // 🔥 DELETE ATOMICO COM TRANSACTION
   const handleDelete = async () => {
     if (!user) return
     if (!confirm("Tem certeza que deseja excluir este contato? As transações vinculadas não serão afetadas.")) return
     try {
-      await db.table('contacts').delete(contactId)
-      await addToSyncQueue(user.id, 'contacts', 'delete', contactId, { id: contactId })
+      await db.transaction('rw', db.contacts, db.syncQueue, async () => {
+        const result = await safeDelete('contacts', contactId)
+        if (!result.success) throw new Error(result.error)
+      })
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
-    } catch {
-      showToast("Erro ao excluir contato", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
     }
   }
@@ -108,7 +109,6 @@ export default function ContactDetailPage() {
     return name.substring(0, 2).toUpperCase()
   }
 
-  // Total de transações
   const totalAmount = transactions.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0)
 
   if (loading) {
