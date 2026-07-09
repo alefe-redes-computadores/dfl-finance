@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import * as Icons from 'lucide-react'
 import { ChevronLeft, Check, Loader2, X, Tag } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -11,7 +10,8 @@ import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -21,6 +21,7 @@ function NewBudgetContent() {
   const searchParams = useSearchParams()
   const { context } = useContext_()
   const { showToast } = useToast()
+  const { safeAdd, safeUpdate } = useSafeDb()
   const editId = searchParams.get('edit')
 
   const [loading, setLoading] = useState(false)
@@ -39,9 +40,6 @@ function NewBudgetContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB)
-  // ============================================================
   const { data: localCategories, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense', parent_id: null },
@@ -52,9 +50,6 @@ function NewBudgetContent() {
     filters: { id: editId || '' },
   })
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   useEffect(() => {
     if (localCategories) {
       setCategories(localCategories)
@@ -90,9 +85,7 @@ function NewBudgetContent() {
     }
   }, [user?.id, editId])
 
-  // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
-  // ============================================================
+  // 🔥 HANDLE SAVE ATOMICO COM TRANSACTION
   const handleSave = async () => {
     if (!user?.id || !name.trim() || amountNum <= 0) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -114,8 +107,10 @@ function NewBudgetContent() {
 
     try {
       if (editId) {
-        await db.table('budgets').update(editId, payload)
-        await addToSyncQueue(user.id, 'budgets', 'update', editId, payload)
+        await db.transaction('rw', db.budgets, db.syncQueue, async () => {
+          const result = await safeUpdate('budgets', editId, payload)
+          if (!result.success) throw new Error(result.error)
+        })
         showToast('Orçamento atualizado!', 'success')
       } else {
         const id = crypto.randomUUID()
@@ -131,8 +126,10 @@ function NewBudgetContent() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.table('budgets').add(fullPayload)
-        await addToSyncQueue(user.id, 'budgets', 'create', id, fullPayload)
+        await db.transaction('rw', db.budgets, db.syncQueue, async () => {
+          const result = await safeAdd('budgets', fullPayload)
+          if (!result.success) throw new Error(result.error)
+        })
         showToast('Orçamento criado!', 'success')
       }
       router.push('/budgets')
