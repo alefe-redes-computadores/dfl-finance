@@ -15,7 +15,8 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function NewContactPage() {
   const router = useRouter()
@@ -25,6 +26,7 @@ export default function NewContactPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { context } = useContext_()
   const { user } = useAuth()
+  const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -43,7 +45,6 @@ export default function NewContactPage() {
   const [zipCode, setZipCode] = useState("")
   const [notes, setNotes] = useState("")
 
-  // Busca dados locais para edição
   const { data: localContacts } = useLocalData({
     table: 'contacts' as any,
     filters: { context },
@@ -51,7 +52,6 @@ export default function NewContactPage() {
 
   const contactData = localContacts?.find((c: any) => c.id === editId) as any
 
-  // Preenche formulário para edição
   useEffect(() => {
     if (contactData) {
       setName(contactData.name || "")
@@ -69,7 +69,6 @@ export default function NewContactPage() {
     }
   }, [contactData])
 
-  // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -84,7 +83,7 @@ export default function NewContactPage() {
     }
   }, [refreshing])
 
-  // 🔥 CORRIGIDO: handleSave com addToSyncQueue
+  // 🔥 SAVE ATOMICO COM TRANSACTION
   const handleSave = async () => {
     if (!name.trim()) {
       showToast("Preencha o nome do contato", "warning")
@@ -112,8 +111,10 @@ export default function NewContactPage() {
       }
 
       if (editId) {
-        await db.table('contacts').update(editId, payload)
-        await addToSyncQueue(user!.id, 'contacts', 'update', editId, payload)
+        await db.transaction('rw', db.contacts, db.syncQueue, async () => {
+          const result = await safeUpdate('contacts', editId, payload)
+          if (!result.success) throw new Error(result.error)
+        })
         showToast("Contato atualizado com sucesso!", "success")
       } else {
         const id = crypto.randomUUID()
@@ -125,8 +126,10 @@ export default function NewContactPage() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.table('contacts').add(fullPayload)
-        await addToSyncQueue(user!.id, 'contacts', 'create', id, fullPayload)
+        await db.transaction('rw', db.contacts, db.syncQueue, async () => {
+          const result = await safeAdd('contacts', fullPayload)
+          if (!result.success) throw new Error(result.error)
+        })
         showToast("Contato criado com sucesso!", "success")
       }
 
@@ -140,18 +143,20 @@ export default function NewContactPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: handleDelete com addToSyncQueue
+  // 🔥 DELETE ATOMICO COM TRANSACTION
   const handleDelete = async () => {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este contato?")) return
     try {
-      await db.table('contacts').delete(editId)
-      await addToSyncQueue(user!.id, 'contacts', 'delete', editId, { id: editId })
+      await db.transaction('rw', db.contacts, db.syncQueue, async () => {
+        const result = await safeDelete('contacts', editId)
+        if (!result.success) throw new Error(result.error)
+      })
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
-    } catch {
-      showToast("Erro ao excluir contato", "error")
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
     }
   }
