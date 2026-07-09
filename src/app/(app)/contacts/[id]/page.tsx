@@ -1,21 +1,18 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import {
-  ArrowLeft,
-  Trash2,
+  Search,
+  Plus,
+  X,
   RefreshCw,
-  Pencil,
+  Trash2,
   User,
   Building2,
   Mail,
   Phone,
-  MapPin,
-  FileText,
-  Calendar,
-  ChevronDown,
-  Hash,
+  ChevronRight,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -27,36 +24,58 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
-export default function ContactDetailPage() {
+export default function ContactsPage() {
   const router = useRouter()
-  const params = useParams()
-  const contactId = params.id as string
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useContext_()
   const { user } = useAuth()
+  const { context, appMode, effectiveContext } = useContext_()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
+  const [search, setSearch] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
+  const [typeFilter, setTypeFilter] = useState("all")
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [expandedTransactions, setExpandedTransactions] = useState(false)
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: localContacts, loading, reload } = useLocalData({
+  const { data: contacts, loading, reload } = useLocalData({
     table: 'contacts' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  const contactData = (localContacts || []).find((c: any) => c.id === contactId) as any
-
-  const { data: allTransactions } = useLocalData({
+  const { data: transactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, contact_id: contactId },
+    filters: { context: effectiveContext },
   })
 
-  const transactions = allTransactions || []
+  const transactionCountByContact = (transactions || []).reduce((acc: Record<string, number>, tx: any) => {
+    if (tx.contact_id) {
+      acc[tx.contact_id] = (acc[tx.contact_id] || 0) + 1
+    }
+    return acc
+  }, {})
+
+  // 🔥 DELETE ATOMICO COM TRANSACTION
+  const handleDelete = async () => {
+    if (!deleteModal || !user) return
+    try {
+      await db.transaction('rw', db.contacts, db.syncQueue, async () => {
+        const result = await safeDelete('contacts', deleteModal)
+        if (!result.success) throw new Error(result.error)
+      })
+      showToast("Contato excluído com sucesso!", "success")
+      success()
+      setDeleteModal(null)
+      reload()
+    } catch (err: any) {
+      showToast(`Erro ao excluir: ${err.message}`, "error")
+      errorHaptic()
+    }
+  }
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -74,31 +93,27 @@ export default function ContactDetailPage() {
     }
   }, [refreshing, reload])
 
-  // 🔥 DELETE ATOMICO COM TRANSACTION
-  const handleDelete = async () => {
-    if (!user) return
-    if (!confirm("Tem certeza que deseja excluir este contato? As transações vinculadas não serão afetadas.")) return
-    try {
-      await db.transaction('rw', db.contacts, db.syncQueue, async () => {
-        const result = await safeDelete('contacts', contactId)
-        if (!result.success) throw new Error(result.error)
-      })
-      showToast("Contato excluído com sucesso!", "success")
-      success()
-      router.back()
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, "error")
-      errorHaptic()
-    }
-  }
+  const filteredContacts = (contacts || []).filter((c: any) => {
+    if (typeFilter !== "all" && c.type !== typeFilter) return false
+    if (!search) return true
+    const s = search.toLowerCase()
+    return (
+      (c.name && c.name.toLowerCase().includes(s)) ||
+      (c.email && c.email.toLowerCase().includes(s)) ||
+      (c.phone && c.phone.toLowerCase().includes(s)) ||
+      (c.company && c.company.toLowerCase().includes(s)) ||
+      (c.notes && c.notes.toLowerCase().includes(s))
+    )
+  })
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+  const groupedContacts = filteredContacts.reduce((acc: Record<string, any[]>, c: any) => {
+    const letter = (c.name || "?").charAt(0).toUpperCase()
+    if (!acc[letter]) acc[letter] = []
+    acc[letter].push(c)
+    return acc
+  }, {})
 
-  const formatDate = (date: string | null) => {
-    if (!date) return ""
-    return new Date(date).toLocaleDateString("pt-BR")
-  }
+  const sortedLetters = Object.keys(groupedContacts).sort()
 
   const formatInitials = (name: string) => {
     if (!name) return "?"
@@ -107,41 +122,6 @@ export default function ContactDetailPage() {
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
     }
     return name.substring(0, 2).toUpperCase()
-  }
-
-  const totalAmount = transactions.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0)
-
-  if (loading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <ArrowLeft size={20} />
-            </div>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Carregando...</h1>
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={3} />
-        </div>
-      </div>
-    )
-  }
-
-  if (!contactData) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Contato não encontrado</h1>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -161,32 +141,83 @@ export default function ContactDetailPage() {
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100 truncate max-w-[180px]">
-              {contactData.name}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pb-3">
+        <div className="flex items-center justify-between pt-4 mb-3">
+          <div>
+            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">
+              Contatos
             </h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Fornecedores, clientes e parceiros
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => router.push(`/contacts/new?edit=${contactId}`)}
+              onClick={() => setShowSearch(!showSearch)}
               className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              aria-label="Editar"
+              aria-label="Buscar"
             >
-              <Pencil size={18} />
+              {showSearch ? <X size={18} /> : <Search size={18} />}
             </button>
             <button
-              onClick={handleDelete}
-              className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
-              aria-label="Excluir"
+              onClick={() => router.push("/contacts/new")}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+              aria-label="Novo contato"
             >
-              <Trash2 size={18} />
+              <Plus size={18} />
             </button>
           </div>
+        </div>
+
+        {showSearch && (
+          <div className="relative mb-2">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Buscar por nome, email, telefone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+            />
+          </div>
+        )}
+
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setTypeFilter("all")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              typeFilter === "all"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setTypeFilter("individual")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              typeFilter === "individual"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            <User size={12} className="inline mr-1" />
+            Pessoas
+          </button>
+          <button
+            onClick={() => setTypeFilter("company")}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+              typeFilter === "company"
+                ? "bg-teal-500 text-white"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+            }`}
+          >
+            <Building2 size={12} className="inline mr-1" />
+            Empresas
+          </button>
         </div>
       </div>
 
@@ -194,163 +225,133 @@ export default function ContactDetailPage() {
         ref={scrollRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4"
+        className="flex-1 overflow-y-auto px-4 pt-3 pb-24"
       >
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center gap-4 mb-4">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-              contactData.type === "company"
-                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                : "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
-            }`}>
-              {contactData.type === "company" ? (
-                <Building2 size={28} />
-              ) : (
-                <span className="text-xl font-black">{formatInitials(contactData.name)}</span>
-              )}
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">
-                {contactData.name}
-              </h2>
-              <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mt-1 ${
-                contactData.type === "company"
-                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                  : "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
-              }`}>
-                {contactData.type === "company" ? "Empresa" : "Pessoa Física"}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
-            {contactData.email && (
-              <div className="flex items-center gap-3 text-sm">
-                <Mail size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-600 dark:text-slate-400">{contactData.email}</span>
-              </div>
-            )}
-            {contactData.phone && (
-              <div className="flex items-center gap-3 text-sm">
-                <Phone size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-600 dark:text-slate-400">{contactData.phone}</span>
-              </div>
-            )}
-            {contactData.document && (
-              <div className="flex items-center gap-3 text-sm">
-                <FileText size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-600 dark:text-slate-400">{contactData.document}</span>
-              </div>
-            )}
-            {contactData.address && (
-              <div className="flex items-center gap-3 text-sm">
-                <MapPin size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-600 dark:text-slate-400">
-                  {contactData.address}
-                  {contactData.city ? `, ${contactData.city}` : ""}
-                  {contactData.state ? `/${contactData.state}` : ""}
-                  {contactData.zip_code ? ` — ${contactData.zip_code}` : ""}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {contactData.type === "individual" && (contactData.company || contactData.position) && (
-            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-              {contactData.company && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Building2 size={16} className="text-slate-400 flex-shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-400">{contactData.company}</span>
-                </div>
-              )}
-              {contactData.position && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Hash size={16} className="text-slate-400 flex-shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-400">{contactData.position}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {contactData.notes && (
-            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Observações</p>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{contactData.notes}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <h3 className="font-black text-slate-800 dark:text-slate-200 mb-3">Resumo Financeiro</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Transações</p>
-              <p className="text-xl font-black text-slate-800 dark:text-slate-200">{transactions.length}</p>
-            </div>
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-1">Total</p>
-              <p className={`text-xl font-black ${totalAmount >= 0 ? "text-teal-500" : "text-red-500"}`}>
-                {formatCurrency(totalAmount)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="font-black text-slate-800 dark:text-slate-200">Transações</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {transactions.length} transação(s) vinculada(s)
-              </p>
-            </div>
-          </div>
-
-          {transactions.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">
-              Nenhuma transação vinculada a este contato
+        {loading ? (
+          <Skeleton count={8} />
+        ) : filteredContacts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <User size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">
+              {search ? "Nenhum contato encontrado" : "Nenhum contato"}
             </p>
-          ) : (
-            <div className="space-y-2">
-              {transactions
-                .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
-                .slice(0, expandedTransactions ? undefined : 5)
-                .map((tx: any) => (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
-                        {tx.description || "Sem descrição"}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Calendar size={10} className="text-slate-400" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          {formatDate(tx.date)}
-                        </span>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+              {search ? "Tente outro termo de busca" : "Toque no + para adicionar"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {sortedLetters.map((letter) => (
+              <div key={letter}>
+                <div className="sticky top-0 bg-slate-50 dark:bg-slate-950 py-1 z-10">
+                  <span className="text-xs font-black text-teal-500 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
+                    {letter}
+                  </span>
+                </div>
+                <div className="space-y-1 mt-2">
+                  {groupedContacts[letter].map((c: any) => {
+                    const txCount = transactionCountByContact[c.id] || 0
+                    return (
+                      <div
+                        key={c.id}
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+                      >
+                        <button
+                          onClick={() => router.push(`/contacts/${c.id}`)}
+                          className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                            c.type === "company"
+                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                              : "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
+                          }`}>
+                            {c.type === "company" ? (
+                              <Building2 size={18} />
+                            ) : (
+                              <span className="text-sm font-black">{formatInitials(c.name)}</span>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0 text-left">
+                            <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                              {c.name}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              {c.email && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                  <Mail size={10} />
+                                  <span className="truncate max-w-[120px]">{c.email}</span>
+                                </span>
+                              )}
+                              {c.phone && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                  <Phone size={10} />
+                                  {c.phone}
+                                </span>
+                              )}
+                            </div>
+                            {c.company && c.type !== "company" && (
+                              <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                                {c.company}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {txCount > 0 && (
+                              <span className="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">
+                                {txCount}
+                              </span>
+                            )}
+                            <ChevronRight size={18} className="text-slate-300 dark:text-slate-600" />
+                          </div>
+                        </button>
+
+                        <div className="px-3 pb-2 flex justify-end">
+                          <button
+                            onClick={() => setDeleteModal(c.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
+                            aria-label="Excluir contato"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <span className={`font-bold text-sm flex-shrink-0 ${
-                      (tx.amount || 0) >= 0 ? "text-teal-600 dark:text-teal-400" : "text-red-500"
-                    }`}>
-                      {formatCurrency(tx.amount || 0)}
-                    </span>
-                  </div>
-                ))}
-              {transactions.length > 5 && (
-                <button
-                  onClick={() => setExpandedTransactions(!expandedTransactions)}
-                  className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold py-2"
-                >
-                  {expandedTransactions ? "Ver menos" : `Ver todas (${transactions.length})`}
-                  <ChevronDown size={12} className={`inline ml-1 transition-transform ${expandedTransactions ? "rotate-180" : ""}`} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+              Excluir Contato
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir este contato? As transações vinculadas não serão afetadas.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
