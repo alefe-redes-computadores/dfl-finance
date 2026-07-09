@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Plus, Loader2, RefreshCw, 
   AlertTriangle, CheckCircle, Clock, Tag, MoreHorizontal,
@@ -16,12 +15,8 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const BudgetsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
     {[1, 2, 3].map((i) => (
@@ -51,7 +46,6 @@ function BudgetsContent() {
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
@@ -59,23 +53,16 @@ function BudgetsContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Usa effectiveContext
-  // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -115,9 +102,6 @@ function BudgetsContent() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadData = async () => {
     if (!user?.id) return
     setLoading(true)
@@ -136,9 +120,6 @@ function BudgetsContent() {
     if (user?.id) loadData()
   }, [user?.id, context])
 
-  // ============================================================
-  // PROCESSAMENTO EM MEMÓRIA
-  // ============================================================
   const monthStart = format(currentMonth, 'yyyy-MM-01')
   const monthEnd = format(currentMonth, 'yyyy-MM-31')
 
@@ -164,19 +145,15 @@ function BudgetsContent() {
     }
   })
 
-  // ============================================================
-  // 🔥 HANDLERS CORRIGIDOS COM safeDb
-  // ============================================================
+  // 🔥 HANDLERS ATOMICOS COM TRANSACTION
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir este orçamento?')) return
     try {
-      // 🔥 Substituído por safeDelete com verificação
-      const result = await safeDelete('budgets', id)
-      if (!result.success) {
-        showToast(`Erro ao excluir: ${result.error}`, 'error')
-        return
-      }
+      await db.transaction('rw', db.budgets, db.syncQueue, async () => {
+        const result = await safeDelete('budgets', id)
+        if (!result.success) throw new Error(result.error)
+      })
       showToast('Orçamento excluído.', 'info')
       loadData()
     } catch (err: any) {
@@ -192,12 +169,10 @@ function BudgetsContent() {
         status: newStatus,
         updated_at: new Date().toISOString()
       }
-      // 🔥 Substituído por safeUpdate com verificação
-      const result = await safeUpdate('budgets', budget.id, payload)
-      if (!result.success) {
-        showToast(`Erro ao atualizar: ${result.error}`, 'error')
-        return
-      }
+      await db.transaction('rw', db.budgets, db.syncQueue, async () => {
+        const result = await safeUpdate('budgets', budget.id, payload)
+        if (!result.success) throw new Error(result.error)
+      })
       showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
       loadData()
     } catch (err: any) {
