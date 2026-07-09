@@ -256,7 +256,6 @@ function NewTransactionContent() {
     return budget
   }, [categoryId, amountNum, type, budgets])
 
-  // 🔥 Leitura do orçamento Local-First
   useEffect(() => {
     if (!budgetAlertMemo || !user?.id) {
       setBudgetAlert(null)
@@ -464,7 +463,6 @@ function NewTransactionContent() {
     if (extractedDesc) setDesc(extractedDesc)
   }
 
-  // 🔥 Criação Local-First Atômica
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
     setSavingCategory(true)
@@ -483,7 +481,8 @@ function NewTransactionContent() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.transaction('rw', 'categories', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array no Dexie
+      await db.transaction('rw', ['categories', 'syncQueue'], async () => {
         await db.table('categories').add(payload)
         await db.table('syncQueue').add({ table: 'categories', operation: 'create', record_id: id, data: payload, user_id: user.id, created_at: new Date().toISOString() })
       })
@@ -499,7 +498,6 @@ function NewTransactionContent() {
     }
   }
 
-  // 🔥 Criação Local-First Atômica
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
     setSavingAccount(true)
@@ -518,7 +516,8 @@ function NewTransactionContent() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.transaction('rw', 'accounts', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array no Dexie
+      await db.transaction('rw', ['accounts', 'syncQueue'], async () => {
         await db.table('accounts').add(payload)
         await db.table('syncQueue').add({ table: 'accounts', operation: 'create', record_id: id, data: payload, user_id: user.id, created_at: new Date().toISOString() })
       })
@@ -534,7 +533,6 @@ function NewTransactionContent() {
     }
   }
 
-  // 🔥 Criação Local-First Atômica
   const handleSaveTag = async () => {
     if (!user?.id || !newTagName.trim()) return
     setSavingTag(true)
@@ -551,7 +549,8 @@ function NewTransactionContent() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.transaction('rw', 'tags', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array no Dexie
+      await db.transaction('rw', ['tags', 'syncQueue'], async () => {
         await db.table('tags').add(payload)
         await db.table('syncQueue').add({ table: 'tags', operation: 'create', record_id: id, data: payload, user_id: user.id, created_at: new Date().toISOString() })
       })
@@ -567,9 +566,6 @@ function NewTransactionContent() {
     }
   }
 
-  // ============================================================
-  // 🔥 HANDLE SAVE BLINDADO, ATÔMICO E LOCAL-FIRST (100% OFF)
-  // ============================================================
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
@@ -578,7 +574,6 @@ function NewTransactionContent() {
     setIsSubmitting(true)
 
     try {
-      // 1. CHECAGEM DE ORÇAMENTO LOCAL-FIRST
       if (type === 'expense' && categoryId && budgets.length > 0) {
         const budget = budgets.find((b) => b.category_id === categoryId)
         if (budget) {
@@ -627,7 +622,6 @@ function NewTransactionContent() {
         }
       }
 
-      // Garante valor absoluto e matemático seguro
       const installmentAmount = Math.abs(
         totalParcels > 1 && repetition === 'installments'
           ? amountNum / totalParcels
@@ -636,12 +630,11 @@ function NewTransactionContent() {
 
       const baseDate = createLocalDate(date)
 
-      // 🔥 A GRANDE TRANSAÇÃO ATÔMICA DO DEXIE
-      await db.transaction('rw', 'transactions', 'accounts', 'credit_cards', 'credit_invoices', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array no Dexie. Sem os colchetes, a transação crasha o botão silenciosamente!
+      await db.transaction('rw', ['transactions', 'accounts', 'credit_cards', 'credit_invoices', 'syncQueue'], async () => {
 
         let invoiceId: string | null = null
 
-        // 🔥 LÓGICA DO CARTÃO DE CRÉDITO LOCAL-FIRST
         if (type === 'expense' && creditCardId && !isRefund) {
           const txDate = new Date(date)
           const cardData = await db.table('credit_cards').get(creditCardId)
@@ -695,7 +688,6 @@ function NewTransactionContent() {
               invoiceId = newInvoiceId
             }
 
-            // Atualiza montante da fatura
             if (invoiceId) {
               const currentInvoice = await db.table('credit_invoices').get(invoiceId)
               const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
@@ -712,7 +704,6 @@ function NewTransactionContent() {
           }
         }
 
-        // 🔥 LÓGICA DO SALDO DA CONTA LOCAL-FIRST
         if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
           const acc = await db.table('accounts').get(accountId)
 
@@ -729,7 +720,7 @@ function NewTransactionContent() {
                 `Valor: ${formatCurrency(installmentAmount)}\nResultante: ${formatCurrency(newBalance)}\n\n` +
                 `Deseja continuar mesmo assim?`
               )
-              if (!proceed) throw new Error('ABORT') // Interrompe silenciosamente a transaction
+              if (!proceed) throw new Error('ABORT')
             }
 
             await db.table('accounts').update(accountId, { balance: newBalance })
@@ -739,7 +730,6 @@ function NewTransactionContent() {
           }
         }
 
-        // 🔥 CRIAÇÃO DAS TRANSAÇÕES / PARCELAS NO DEXIE
         for (let i = 0; i < totalParcels; i++) {
           let installmentDate: string
 
@@ -788,7 +778,6 @@ function NewTransactionContent() {
             table: 'transactions', operation: 'create', record_id: txId, data: payload, user_id: user.id, created_at: new Date().toISOString()
           })
 
-          // 🔥 LÓGICA DE REEMBOLSO
           if (i === 0 && isReimbursable) {
             const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
             const reimbursementDesc = `Reembolso: ${finalDescription}`
@@ -822,7 +811,7 @@ function NewTransactionContent() {
             })
           }
         }
-      }) // 🔴 FIM DA TRANSAÇÃO ATÔMICA DO DEXIE
+      })
 
       showToast('Transação salva com sucesso!', 'success')
       success()
@@ -832,7 +821,7 @@ function NewTransactionContent() {
     } catch (e: any) {
       if (e.message === 'ABORT') {
         setIsSubmitting(false)
-        return // Cancelado pelo usuário (Ex: saldo insuficiente)
+        return
       }
       console.error('Erro ao salvar:', e)
       showToast(`Erro ao salvar transação: ${e.message}`, 'error')
