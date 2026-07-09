@@ -27,7 +27,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -138,49 +138,36 @@ function NewTransactionContent() {
   const [newTagColor, setNewTagColor] = useState('#22c55e')
   const [savingTag, setSavingTag] = useState(false)
 
-  const { isOnline, saveToQueue } = useOfflineQueue()
-
-  // ============================================================
-  // 🔥 CORREÇÃO: USAR useLocalData EM VEZ DE supabase DIRETO
-  // ============================================================
-  
-  // 🔥 Contas — usando o contexto atual (effectiveContext)
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 Categorias — usando o contexto atual e tipo correto
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' },
   })
 
-  // 🔥 Tags — usando o contexto atual
   const { data: localTags } = useLocalData({
     table: 'tags' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 Cartões de crédito — usando o contexto atual
   const { data: localCreditCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { context: effectiveContext, is_archived: false },
   })
 
-  // 🔥 Contatos — usando o contexto atual
   const { data: localContacts } = useLocalData({
     table: 'contacts' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 Orçamentos — usando o contexto atual
   const { data: localBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 Sincroniza os dados locais com os estados
   useEffect(() => {
     if (localAccounts) setAccounts(localAccounts)
   }, [localAccounts])
@@ -215,7 +202,6 @@ function NewTransactionContent() {
     if (localBudgets) setBudgets(localBudgets)
   }, [localBudgets])
 
-  // 🔥 Atualiza o contexto quando o globalContext mudar
   useEffect(() => {
     setContext(effectiveContext)
     setAccountId('')
@@ -270,6 +256,7 @@ function NewTransactionContent() {
     return budget
   }, [categoryId, amountNum, type, budgets])
 
+  // 🔥 Leitura do orçamento Local-First
   useEffect(() => {
     if (!budgetAlertMemo || !user?.id) {
       setBudgetAlert(null)
@@ -280,15 +267,11 @@ function NewTransactionContent() {
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
-    // 🔥 Usando supabase para consulta de gastos (mantido - é leitura)
-    supabase
-      .from('transactions')
-      .select('amount')
-      .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
-      .eq('status', 'done')
-      .gte('date', start)
-      .lte('date', end)
-      .then(({ data }) => {
+    db.table('transactions')
+      .where('category_id').equals(categoryId)
+      .filter((t: any) => t.context === effectiveContext && t.status === 'done' && t.date >= start && t.date <= end)
+      .toArray()
+      .then((data) => {
         const spent = (data || []).reduce(
           (a: number, t: any) => a + (Number(t.amount) || 0), 0
         )
@@ -481,88 +464,103 @@ function NewTransactionContent() {
     if (extractedDesc) setDesc(extractedDesc)
   }
 
+  // 🔥 Criação Local-First Atômica
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
     setSavingCategory(true)
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .insert({
-          user_id: user.id,
-          name: newCatName.trim(),
-          icon: newCatIcon,
-          color: newCatColor,
-          context: effectiveContext,
-          type: type === 'income' ? 'income' : 'expense',
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setCategories((prev) => [...prev, data])
-      setCategoryId(data.id)
+      const id = crypto.randomUUID()
+      const payload = {
+        id,
+        user_id: user.id,
+        name: newCatName.trim(),
+        icon: newCatIcon,
+        color: newCatColor,
+        context: effectiveContext,
+        type: type === 'income' ? 'income' : 'expense',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+      await db.transaction('rw', 'categories', 'syncQueue', async () => {
+        await db.table('categories').add(payload)
+        await db.table('syncQueue').add({ table: 'categories', operation: 'create', record_id: id, data: payload, user_id: user.id, created_at: new Date().toISOString() })
+      })
+      setCategories((prev) => [...prev, payload])
+      setCategoryId(id)
       setShowCreateCatModal(false)
       setNewCatName('')
       showToast('Categoria criada!', 'success')
     } catch (err: any) {
-      console.error(err)
       showToast(`Erro ao criar categoria: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSavingCategory(false)
     }
   }
 
+  // 🔥 Criação Local-First Atômica
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
     setSavingAccount(true)
     try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .insert({ 
-          user_id: user.id, 
-          name: newAccName.trim(), 
-          color: newAccColor, 
-          context: effectiveContext,
-          balance: 0,
-          is_archived: false,
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setAccounts((prev) => [...prev, data])
-      setAccountId(data.id)
+      const id = crypto.randomUUID()
+      const payload = {
+        id,
+        user_id: user.id,
+        name: newAccName.trim(),
+        color: newAccColor,
+        context: effectiveContext,
+        balance: 0,
+        is_archived: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+      await db.transaction('rw', 'accounts', 'syncQueue', async () => {
+        await db.table('accounts').add(payload)
+        await db.table('syncQueue').add({ table: 'accounts', operation: 'create', record_id: id, data: payload, user_id: user.id, created_at: new Date().toISOString() })
+      })
+      setAccounts((prev) => [...prev, payload])
+      setAccountId(id)
       setShowCreateAccModal(false)
       setNewAccName('')
       showToast('Conta criada!', 'success')
     } catch (err: any) {
-      console.error(err)
       showToast(`Erro ao criar conta: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSavingAccount(false)
     }
   }
 
+  // 🔥 Criação Local-First Atômica
   const handleSaveTag = async () => {
     if (!user?.id || !newTagName.trim()) return
     setSavingTag(true)
     try {
-      const { data, error } = await supabase
-        .from('tags')
-        .insert({ 
-          user_id: user.id, 
-          name: newTagName.trim(), 
-          color: newTagColor, 
-          context: effectiveContext 
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setTags((prev) => [...prev, data])
-      setSelectedTags((prev) => (prev.length < 5 ? [...prev, data.id] : prev))
+      const id = crypto.randomUUID()
+      const payload = {
+        id,
+        user_id: user.id,
+        name: newTagName.trim(),
+        color: newTagColor,
+        context: effectiveContext,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+      await db.transaction('rw', 'tags', 'syncQueue', async () => {
+        await db.table('tags').add(payload)
+        await db.table('syncQueue').add({ table: 'tags', operation: 'create', record_id: id, data: payload, user_id: user.id, created_at: new Date().toISOString() })
+      })
+      setTags((prev) => [...prev, payload])
+      setSelectedTags((prev) => (prev.length < 5 ? [...prev, id] : prev))
       setShowCreateTagModal(false)
       setNewTagName('')
       showToast('Tag criada!', 'success')
     } catch (err: any) {
-      console.error(err)
       showToast(`Erro ao criar tag: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSavingTag(false)
@@ -570,7 +568,7 @@ function NewTransactionContent() {
   }
 
   // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO COM addToSyncQueue
+  // 🔥 HANDLE SAVE BLINDADO, ATÔMICO E LOCAL-FIRST (100% OFF)
   // ============================================================
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
@@ -579,278 +577,269 @@ function NewTransactionContent() {
 
     setIsSubmitting(true)
 
-    if (type === 'expense' && categoryId && budgets.length > 0) {
-      const budget = budgets.find((b) => b.category_id === categoryId)
-      if (budget) {
-        const start = format(startOfMonth(new Date(date)), 'yyyy-MM-dd')
-        const end = format(endOfMonth(new Date(date)), 'yyyy-MM-dd')
-        const { data: existingTxs } = await supabase
-          .from('transactions')
-          .select('amount')
-          .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
-          .eq('status', 'done')
-          .gte('date', start)
-          .lte('date', end)
-
-        const spent = (existingTxs || []).reduce(
-          (a: number, t: any) => a + (Number(t.amount) || 0), 0
-        )
-        const total = spent + amountNum
-        const limit = Number(budget.amount)
-
-        if (total > limit) {
-          const proceed = confirm(
-            `⚠️ Alerta de Orçamento!\n\n"${budget.name}" já tem ${formatCurrency(spent)} gasto(s).\n` +
-            `Com mais ${formatCurrency(amountNum)}, o total será ${formatCurrency(total)}.\n` +
-            `O orçamento é de ${formatCurrency(limit)}.\n\nDeseja continuar mesmo assim?`
-          )
-          if (!proceed) { setIsSubmitting(false); return }
-        }
-      }
-    }
-
-    const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
-
-    let totalParcels = 1
-    let recurringGroupId: string | null = null
-
-    if (repetition === 'installments') {
-      totalParcels = installments
-      recurringGroupId = crypto.randomUUID()
-    } else if (repetition === 'recurring') {
-      recurringGroupId = crypto.randomUUID()
-      switch (frequency) {
-        case 'weekly': totalParcels = 52; break
-        case 'biweekly': totalParcels = 24; break
-        case 'monthly': totalParcels = 12; break
-        case 'bimonthly': totalParcels = 6; break
-        case 'custom': totalParcels = customParcels; break
-        default: totalParcels = 12
-      }
-    }
-
-    const installmentAmount =
-      totalParcels > 1 && repetition === 'installments'
-        ? amountNum / totalParcels
-        : amountNum
-
     try {
-      const baseDate = createLocalDate(date)
+      // 1. CHECAGEM DE ORÇAMENTO LOCAL-FIRST
+      if (type === 'expense' && categoryId && budgets.length > 0) {
+        const budget = budgets.find((b) => b.category_id === categoryId)
+        if (budget) {
+          const start = format(startOfMonth(new Date(date)), 'yyyy-MM-dd')
+          const end = format(endOfMonth(new Date(date)), 'yyyy-MM-dd')
+          
+          const existingTxs = await db.table('transactions')
+            .where('category_id').equals(categoryId)
+            .filter((t: any) => t.context === effectiveContext && t.status === 'done' && t.date >= start && t.date <= end)
+            .toArray()
 
-      let invoiceId: string | null = null
+          const spent = existingTxs.reduce(
+            (a: number, t: any) => a + (Number(t.amount) || 0), 0
+          )
+          const total = spent + amountNum
+          const limit = Number(budget.amount)
 
-      // 🔥 Busca cartão (leitura via supabase - mantido)
-      if (type === 'expense' && creditCardId && !isRefund) {
-        const txDate = new Date(date)
-        const { data: cardData } = await supabase
-          .from('credit_cards')
-          .select('closing_day, due_day')
-          .eq('id', creditCardId)
-          .single()
-
-        if (cardData) {
-          let closingDate = new Date(txDate.getFullYear(), txDate.getMonth(), cardData.closing_day)
-          if (txDate > closingDate) {
-            closingDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, cardData.closing_day)
-          }
-
-          const startDate = new Date(closingDate)
-          startDate.setMonth(startDate.getMonth() - 1)
-          startDate.setDate(cardData.closing_day + 1)
-
-          const dueDate = new Date(closingDate)
-          dueDate.setDate(cardData.due_day)
-          if (dueDate <= closingDate) {
-            dueDate.setMonth(dueDate.getMonth() + 1)
-          }
-
-          // 🔥 Busca fatura (leitura via supabase - mantido)
-          const { data: existingInvoice } = await supabase
-            .from('credit_invoices')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('credit_card_id', creditCardId)
-            .eq('status', 'open')
-            .lte('start_date', date)
-            .gte('end_date', date)
-            .single()
-
-          if (existingInvoice) {
-            invoiceId = existingInvoice.id
-          } else {
-            // 🔥 CRIA FATURA COM addToSyncQueue
-            const newInvoiceId = crypto.randomUUID()
-            const invoicePayload = {
-              id: newInvoiceId,
-              user_id: user.id,
-              credit_card_id: creditCardId,
-              closing_date: closingDate.toISOString().split('T')[0],
-              due_date: dueDate.toISOString().split('T')[0],
-              start_date: startDate.toISOString().split('T')[0],
-              end_date: closingDate.toISOString().split('T')[0],
-              total_amount: 0,
-              paid_amount: 0,
-              status: 'open',
-              context: effectiveContext,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              sync_status: 'pending',
-              sync_attempts: 0,
-            }
-            await db.table('credit_invoices').add(invoicePayload)
-            await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
-            invoiceId = newInvoiceId
-          }
-
-          // 🔥 ATUALIZA FATURA COM addToSyncQueue
-          if (invoiceId) {
-            const { data: currentInvoice } = await supabase
-              .from('credit_invoices')
-              .select('total_amount')
-              .eq('id', invoiceId)
-              .single()
-
-            const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
-            const updateData = {
-              total_amount: newTotal,
-              updated_at: new Date().toISOString(),
-            }
-            await db.table('credit_invoices').update(invoiceId, updateData)
-            await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
-          }
-        }
-      }
-
-      // 🔥 ATUALIZA SALDO DA CONTA (se pago e não for cartão)
-      if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
-        const { data: acc } = await supabase
-          .from('accounts')
-          .select('balance, allow_negative')
-          .eq('id', accountId)
-          .single()
-
-        if (acc) {
-          const currentBalance = Number(acc.balance) || 0
-          const newBalance =
-            type === 'income'
-              ? currentBalance + installmentAmount
-              : currentBalance - installmentAmount
-
-          if (type === 'expense' && newBalance < 0 && !acc.allow_negative) {
+          if (total > limit) {
             const proceed = confirm(
-              `⚠️ Saldo Insuficiente!\n\nSaldo atual: ${formatCurrency(currentBalance)}\n` +
-              `Valor: ${formatCurrency(installmentAmount)}\nResultante: ${formatCurrency(newBalance)}\n\n` +
-              `Deseja continuar mesmo assim?`
+              `⚠️ Alerta de Orçamento!\n\n"${budget.name}" já tem ${formatCurrency(spent)} gasto(s).\n` +
+              `Com mais ${formatCurrency(amountNum)}, o total será ${formatCurrency(total)}.\n` +
+              `O orçamento é de ${formatCurrency(limit)}.\n\nDeseja continuar mesmo assim?`
             )
             if (!proceed) { setIsSubmitting(false); return }
           }
-
-          // 🔥 ATUALIZA CONTA COM addToSyncQueue
-          await db.table('accounts').update(accountId, { balance: newBalance })
-          await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newBalance })
         }
       }
 
-      let linkedTransactionId: string | null = null
+      const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
 
-      for (let i = 0; i < totalParcels; i++) {
-        let installmentDate: string
+      let totalParcels = 1
+      let recurringGroupId: string | null = null
 
-        if (repetition === 'recurring') {
-          if (frequency === 'weekly') installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
-          else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
-          else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
-          else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
-          else installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd')
-        } else {
-          installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+      if (repetition === 'installments') {
+        totalParcels = installments
+        recurringGroupId = crypto.randomUUID()
+      } else if (repetition === 'recurring') {
+        recurringGroupId = crypto.randomUUID()
+        switch (frequency) {
+          case 'weekly': totalParcels = 52; break
+          case 'biweekly': totalParcels = 24; break
+          case 'monthly': totalParcels = 12; break
+          case 'bimonthly': totalParcels = 6; break
+          case 'custom': totalParcels = customParcels; break
+          default: totalParcels = 12
         }
+      }
 
-        const txId = crypto.randomUUID()
-        const payload: any = {
-          id: txId,
-          user_id: user.id,
-          type,
-          amount: installmentAmount,
-          description: finalDescription,
-          category_id: categoryId || null,
-          account_id: creditCardId ? null : (accountId || null),
-          credit_card_id: creditCardId || null,
-          contact_id: contactId || null,
-          invoice_id: invoiceId,
-          tag_ids: selectedTags.length > 0 ? selectedTags : null,
-          date: installmentDate,
-          status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
-          context: effectiveContext,
-          receipt_url: i === 0 ? receiptUrl : null,
-          notes: notes || null,
-          recurring_group_id: recurringGroupId,
-          installment_index: totalParcels > 1 ? i + 1 : 1,
-          total_installments: totalParcels > 1 ? totalParcels : 1,
-          financing_id: financingId,
-          debt_id: debtId,
-          is_reimbursable: isReimbursable,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
+      // Garante valor absoluto e matemático seguro
+      const installmentAmount = Math.abs(
+        totalParcels > 1 && repetition === 'installments'
+          ? amountNum / totalParcels
+          : amountNum
+      )
 
-        if (!isOnline) {
-          await saveToQueue(payload)
-          if (i === totalParcels - 1) {
-            showToast('Salvo localmente. Será enviado quando houver conexão.', 'info')
-            router.push('/transactions')
+      const baseDate = createLocalDate(date)
+
+      // 🔥 A GRANDE TRANSAÇÃO ATÔMICA DO DEXIE
+      await db.transaction('rw', 'transactions', 'accounts', 'credit_cards', 'credit_invoices', 'syncQueue', async () => {
+
+        let invoiceId: string | null = null
+
+        // 🔥 LÓGICA DO CARTÃO DE CRÉDITO LOCAL-FIRST
+        if (type === 'expense' && creditCardId && !isRefund) {
+          const txDate = new Date(date)
+          const cardData = await db.table('credit_cards').get(creditCardId)
+
+          if (cardData) {
+            let closingDate = new Date(txDate.getFullYear(), txDate.getMonth(), cardData.closing_day)
+            if (txDate > closingDate) {
+              closingDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, cardData.closing_day)
+            }
+
+            const startDate = new Date(closingDate)
+            startDate.setMonth(startDate.getMonth() - 1)
+            startDate.setDate(cardData.closing_day + 1)
+
+            const dueDate = new Date(closingDate)
+            dueDate.setDate(cardData.due_day)
+            if (dueDate <= closingDate) {
+              dueDate.setMonth(dueDate.getMonth() + 1)
+            }
+
+            const existingInvoices = await db.table('credit_invoices')
+              .where('credit_card_id').equals(creditCardId)
+              .filter((i: any) => i.status === 'open' && i.start_date <= date && i.end_date >= date)
+              .toArray()
+
+            if (existingInvoices.length > 0) {
+              invoiceId = existingInvoices[0].id
+            } else {
+              const newInvoiceId = crypto.randomUUID()
+              const invoicePayload = {
+                id: newInvoiceId,
+                user_id: user.id,
+                credit_card_id: creditCardId,
+                closing_date: closingDate.toISOString().split('T')[0],
+                due_date: dueDate.toISOString().split('T')[0],
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: closingDate.toISOString().split('T')[0],
+                total_amount: 0,
+                paid_amount: 0,
+                status: 'open',
+                context: effectiveContext,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                sync_status: 'pending',
+                sync_attempts: 0,
+              }
+              await db.table('credit_invoices').add(invoicePayload)
+              await db.table('syncQueue').add({
+                table: 'credit_invoices', operation: 'create', record_id: newInvoiceId, data: invoicePayload, user_id: user.id, created_at: new Date().toISOString()
+              })
+              invoiceId = newInvoiceId
+            }
+
+            // Atualiza montante da fatura
+            if (invoiceId) {
+              const currentInvoice = await db.table('credit_invoices').get(invoiceId)
+              const newTotal = (Number(currentInvoice?.total_amount) || 0) + installmentAmount
+              const updateData = {
+                total_amount: newTotal,
+                updated_at: new Date().toISOString(),
+                sync_status: 'pending'
+              }
+              await db.table('credit_invoices').update(invoiceId, updateData)
+              await db.table('syncQueue').add({
+                table: 'credit_invoices', operation: 'update', record_id: invoiceId, data: updateData, user_id: user.id, created_at: new Date().toISOString()
+              })
+            }
           }
-          continue
         }
 
-        // 🔥 CRIA TRANSAÇÃO COM addToSyncQueue
-        await db.table('transactions').add(payload)
-        await addToSyncQueue(user.id, 'transactions', 'create', txId, payload)
+        // 🔥 LÓGICA DO SALDO DA CONTA LOCAL-FIRST
+        if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
+          const acc = await db.table('accounts').get(accountId)
 
-        if (i === 0 && isReimbursable) {
-          linkedTransactionId = txId
-          const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
-          const reimbursementDesc = `Reembolso: ${finalDescription}`
-          const reimbTxId = crypto.randomUUID()
-          const reimbPayload = {
-            id: reimbTxId,
+          if (acc) {
+            const currentBalance = Number(acc.balance) || 0
+            const newBalance =
+              type === 'income'
+                ? currentBalance + installmentAmount
+                : currentBalance - installmentAmount
+
+            if (type === 'expense' && newBalance < 0 && !acc.allow_negative) {
+              const proceed = confirm(
+                `⚠️ Saldo Insuficiente!\n\nSaldo atual: ${formatCurrency(currentBalance)}\n` +
+                `Valor: ${formatCurrency(installmentAmount)}\nResultante: ${formatCurrency(newBalance)}\n\n` +
+                `Deseja continuar mesmo assim?`
+              )
+              if (!proceed) throw new Error('ABORT') // Interrompe silenciosamente a transaction
+            }
+
+            await db.table('accounts').update(accountId, { balance: newBalance })
+            await db.table('syncQueue').add({
+              table: 'accounts', operation: 'update', record_id: accountId, data: { balance: newBalance }, user_id: user.id, created_at: new Date().toISOString()
+            })
+          }
+        }
+
+        // 🔥 CRIAÇÃO DAS TRANSAÇÕES / PARCELAS NO DEXIE
+        for (let i = 0; i < totalParcels; i++) {
+          let installmentDate: string
+
+          if (repetition === 'recurring') {
+            if (frequency === 'weekly') installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
+            else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
+            else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+            else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
+            else installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd')
+          } else {
+            installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+          }
+
+          const txId = crypto.randomUUID()
+          const payload: any = {
+            id: txId,
             user_id: user.id,
-            type: type === 'expense' ? 'income' : 'expense',
+            type,
             amount: installmentAmount,
-            description: reimbursementDesc,
+            description: finalDescription,
+            category_id: categoryId || null,
+            account_id: creditCardId ? null : (accountId || null),
+            credit_card_id: creditCardId || null,
+            contact_id: contactId || null,
+            invoice_id: invoiceId,
+            tag_ids: selectedTags.length > 0 ? selectedTags : null,
             date: installmentDate,
-            status: 'pending',
-            context: otherContext,
-            category_id: null,
-            linked_transaction_id: txId,
-            is_reimbursable: true,
+            status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
+            context: effectiveContext,
+            receipt_url: i === 0 ? receiptUrl : null,
+            notes: notes || null,
+            recurring_group_id: recurringGroupId,
+            installment_index: totalParcels > 1 ? i + 1 : 1,
+            total_installments: totalParcels > 1 ? totalParcels : 1,
+            financing_id: financingId,
+            debt_id: debtId,
+            is_reimbursable: isReimbursable,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             sync_status: 'pending',
             sync_attempts: 0,
           }
-          await db.table('transactions').add(reimbPayload)
-          await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
 
-          // 🔥 ATUALIZA A TRANSAÇÃO ORIGINAL COM O LINK
-          await db.table('transactions').update(txId, { linked_transaction_id: reimbTxId })
-          await addToSyncQueue(user.id, 'transactions', 'update', txId, { linked_transaction_id: reimbTxId })
+          await db.table('transactions').add(payload)
+          await db.table('syncQueue').add({
+            table: 'transactions', operation: 'create', record_id: txId, data: payload, user_id: user.id, created_at: new Date().toISOString()
+          })
+
+          // 🔥 LÓGICA DE REEMBOLSO
+          if (i === 0 && isReimbursable) {
+            const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
+            const reimbursementDesc = `Reembolso: ${finalDescription}`
+            const reimbTxId = crypto.randomUUID()
+            const reimbPayload = {
+              id: reimbTxId,
+              user_id: user.id,
+              type: type === 'expense' ? 'income' : 'expense',
+              amount: installmentAmount,
+              description: reimbursementDesc,
+              date: installmentDate,
+              status: 'pending',
+              context: otherContext,
+              category_id: null,
+              linked_transaction_id: txId,
+              is_reimbursable: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              sync_status: 'pending',
+              sync_attempts: 0,
+            }
+
+            await db.table('transactions').add(reimbPayload)
+            await db.table('syncQueue').add({
+              table: 'transactions', operation: 'create', record_id: reimbTxId, data: reimbPayload, user_id: user.id, created_at: new Date().toISOString()
+            })
+
+            await db.table('transactions').update(txId, { linked_transaction_id: reimbTxId })
+            await db.table('syncQueue').add({
+              table: 'transactions', operation: 'update', record_id: txId, data: { linked_transaction_id: reimbTxId }, user_id: user.id, created_at: new Date().toISOString()
+            })
+          }
         }
-      }
+      }) // 🔴 FIM DA TRANSAÇÃO ATÔMICA DO DEXIE
 
       showToast('Transação salva com sucesso!', 'success')
       success()
       router.refresh()
       router.push('/transactions')
+
     } catch (e: any) {
+      if (e.message === 'ABORT') {
+        setIsSubmitting(false)
+        return // Cancelado pelo usuário (Ex: saldo insuficiente)
+      }
       console.error('Erro ao salvar:', e)
-      showToast(`Erro ao salvar transação: ${e.message || 'Verifique sua conexão'}`, 'error')
+      showToast(`Erro ao salvar transação: ${e.message}`, 'error')
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, saveToQueue, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
+  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -1182,7 +1171,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modais - mantidos com supabase para criação (funciona) */}
+      {/* Modais */}
       {showReceiptModal && (
         <ReceiptModal
           isOpen={showReceiptModal}
@@ -1224,7 +1213,6 @@ function NewTransactionContent() {
         onSelect={setNewCatIcon}
       />
 
-      {/* Modais de criação e seleção - mantidos com supabase para criação (funciona) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
