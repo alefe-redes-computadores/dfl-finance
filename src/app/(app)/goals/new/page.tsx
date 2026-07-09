@@ -3,14 +3,13 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Check, Loader2, X, Target, Calendar, DollarSign } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { format } from 'date-fns'
-import { db, addToSyncQueue } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db' 
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
@@ -39,7 +38,6 @@ function NewGoalContent() {
   const [description, setDescription] = useState('')
 
   const [showCatModal, setShowCatModal] = useState(false)
-  const [showIconModal, setShowIconModal] = useState(false)
 
   const { data: localCategories, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
@@ -51,11 +49,7 @@ function NewGoalContent() {
     filters: { id: editId || '' },
   })
 
-  useEffect(() => {
-    if (localCategories) {
-      setCategories(localCategories)
-    }
-  }, [localCategories])
+  useEffect(() => { if (localCategories) setCategories(localCategories) }, [localCategories])
 
   useEffect(() => {
     if (editId && localGoal && localGoal.length > 0) {
@@ -84,17 +78,13 @@ function NewGoalContent() {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (num: number) => void, displaySetter: (val: string) => void) => {
     const digits = e.target.value.replace(/\D/g, '')
-    if (!digits) {
-      displaySetter('0,00')
-      setter(0)
-      return
-    }
+    if (!digits) { displaySetter('0,00'); setter(0); return }
     const num = parseFloat(digits) / 100
     setter(num)
     displaySetter(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // 🔥 CORRIGIDO: HANDLE SAVE COM addToSyncQueue
+  // 🔥 SALVAR E CRIAR META DE FORMA ATÔMICA
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -116,51 +106,52 @@ function NewGoalContent() {
     }
 
     try {
-      let goalId: string | undefined
+      await db.transaction('rw', 'goals', 'transactions', 'syncQueue', async () => {
+        let goalId = editId
 
-      if (editId) {
-        await db.table('goals').update(editId, payload)
-        await addToSyncQueue(user.id, 'goals', 'update', editId, payload)
-        goalId = editId
-        showToast('Meta atualizada!', 'success')
-      } else {
-        const newId = crypto.randomUUID()
-        const fullPayload = {
-          id: newId,
-          user_id: user.id,
-          ...payload,
-          saved_amount: 0,
-          created_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
+        if (editId) {
+          await db.table('goals').update(editId, payload)
+          await db.table('syncQueue').add({ table: 'goals', operation: 'update', record_id: editId, data: payload, user_id: user.id, created_at: new Date().toISOString() })
+          showToast('Meta atualizada!', 'success')
+        } else {
+          const newId = crypto.randomUUID()
+          const fullPayload = {
+            id: newId,
+            user_id: user.id,
+            ...payload,
+            saved_amount: 0,
+            created_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
+          }
+          await db.table('goals').add(fullPayload)
+          await db.table('syncQueue').add({ table: 'goals', operation: 'create', record_id: newId, data: fullPayload, user_id: user.id, created_at: new Date().toISOString() })
+          goalId = newId
+          showToast('Meta criada!', 'success')
         }
-        await db.table('goals').add(fullPayload)
-        await addToSyncQueue(user.id, 'goals', 'create', newId, fullPayload)
-        goalId = newId
-        showToast('Meta criada!', 'success')
-      }
 
-      if (initialContributionNum > 0 && goalId) {
-        const txId = crypto.randomUUID()
-        const txPayload = {
-          id: txId,
-          user_id: user.id,
-          context,
-          type: 'income',
-          amount: initialContributionNum,
-          description: `Contribuição inicial para ${name.trim()}`,
-          date: format(new Date(), 'yyyy-MM-dd'),
-          status: 'done',
-          affects_balance: true,
-          goal_id: goalId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
+        if (!editId && initialContributionNum > 0 && goalId) {
+          const txId = crypto.randomUUID()
+          const txPayload = {
+            id: txId,
+            user_id: user.id,
+            context,
+            type: 'income',
+            amount: initialContributionNum,
+            description: `Contribuição inicial para ${name.trim()}`,
+            date: format(new Date(), 'yyyy-MM-dd'),
+            status: 'done',
+            affects_balance: true,
+            goal_id: goalId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
+          }
+          await db.table('transactions').add(txPayload)
+          await db.table('syncQueue').add({ table: 'transactions', operation: 'create', record_id: txId, data: txPayload, user_id: user.id, created_at: new Date().toISOString() })
         }
-        await db.table('transactions').add(txPayload)
-        await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
-      }
+      })
 
       router.push('/goals')
     } catch (err: any) {
@@ -170,12 +161,8 @@ function NewGoalContent() {
     }
   }
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
-      <Loader2 className="animate-spin text-teal-700" size={40} />
-    </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900"><Loader2 className="animate-spin text-teal-700" size={40} /></div>
   )
 
   const selectedCat = categories.find((c: any) => c.id === categoryId)
@@ -184,9 +171,7 @@ function NewGoalContent() {
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
 
       <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-          <ChevronLeft size={24} />
-        </button>
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200"><ChevronLeft size={24} /></button>
         <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? 'Editar Meta' : 'Nova Meta'}</h2>
         <button onClick={handleSave} disabled={saving} className="w-10 h-10 bg-teal-700 rounded-full flex items-center justify-center">
           {saving ? <Loader2 size={20} className="text-white animate-spin" /> : <Check size={22} className="text-white" />}
@@ -196,68 +181,28 @@ function NewGoalContent() {
       <div className="space-y-5">
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome da meta</label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Ex: Viagem para Orlando"
-            className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
-          />
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Viagem para Orlando" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500" />
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Valor da meta</label>
-          <div className="flex items-center gap-2">
-            <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={targetAmount}
-              onChange={(e) => handleAmountChange(e, setTargetAmountNum, setTargetAmount)}
-              placeholder="0,00"
-              className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
-            />
-          </div>
+          <div className="flex items-center gap-2"><span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span><input type="text" inputMode="numeric" value={targetAmount} onChange={(e) => handleAmountChange(e, setTargetAmountNum, setTargetAmount)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" /></div>
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Data limite</label>
-          <div className="flex items-center gap-3">
-            <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
-            <input
-              type="date"
-              value={deadline}
-              onChange={e => setDeadline(e.target.value)}
-              className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none"
-            />
-          </div>
+          <div className="flex items-center gap-3"><Calendar size={18} className="text-gray-400 dark:text-gray-500" /><input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" /></div>
         </div>
 
-        <button
-          onClick={() => setShowCatModal(true)}
-          className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <Target size={18} className="text-gray-400 dark:text-gray-500" />
-            <div className="text-left">
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span>
-              <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span>
-            </div>
-          </div>
+        <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-3"><Target size={18} className="text-gray-400 dark:text-gray-500" /><div className="text-left"><span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span><span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span></div></div>
           <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
         </button>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
-            {COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`}
-                style={{ backgroundColor: c }}
-              />
-            ))}
+            {COLORS.map(c => (<button key={c} onClick={() => setColor(c)} className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}
           </div>
         </div>
 
@@ -268,14 +213,7 @@ function NewGoalContent() {
               const Ico = getDynamicIcon(iconName)
               const isSelected = icon === iconName
               return (
-                <button
-                  key={iconName}
-                  onClick={() => setIcon(iconName)}
-                  className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-                  style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}
-                >
-                  <Ico size={22} />
-                </button>
+                <button key={iconName} onClick={() => setIcon(iconName)} className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${isSelected ? 'scale-110 shadow-md' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`} style={isSelected ? { backgroundColor: `${color}20`, color: color } : { backgroundColor: '#f9fafb', color: '#9ca3af' }}><Ico size={22} /></button>
               )
             })}
           </div>
@@ -283,29 +221,13 @@ function NewGoalContent() {
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
-          <input
-            type="text"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="Detalhes sobre a meta..."
-            className="w-full bg-transparent text-[14px] text-gray-700 dark:text-gray-300 outline-none placeholder:text-gray-400"
-          />
+          <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalhes sobre a meta..." className="w-full bg-transparent text-[14px] text-gray-700 dark:text-gray-300 outline-none placeholder:text-gray-400" />
         </div>
 
         {!editId && (
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
             <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Contribuição inicial (opcional)</label>
-            <div className="flex items-center gap-2">
-              <span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={initialContribution}
-                onChange={(e) => handleAmountChange(e, setInitialContributionNum, setInitialContribution)}
-                placeholder="0,00"
-                className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
-              />
-            </div>
+            <div className="flex items-center gap-2"><span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span><input type="text" inputMode="numeric" value={initialContribution} onChange={(e) => handleAmountChange(e, setInitialContributionNum, setInitialContribution)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" /></div>
             <p className="text-[10px] text-gray-400 mt-1">Valor já guardado para esta meta.</p>
           </div>
         )}
@@ -319,10 +241,7 @@ function NewGoalContent() {
               <button onClick={() => setShowCatModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
             </div>
             <div className="space-y-2">
-              <button
-                onClick={() => { setCategoryId(''); setShowCatModal(false) }}
-                className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!categoryId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-              >
+              <button onClick={() => { setCategoryId(''); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!categoryId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-700 text-gray-400"><Target size={20} /></div>
                 <span className={`flex-1 text-left font-medium ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>Geral</span>
                 {!categoryId && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
@@ -331,14 +250,8 @@ function NewGoalContent() {
                 const CatIconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
-                  <button
-                    key={cat.id}
-                    onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
-                      <CatIconComp size={20} />
-                    </div>
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><CatIconComp size={20} /></div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
@@ -351,7 +264,6 @@ function NewGoalContent() {
     </div>
   )
 }
-
 
 export default function NewGoalPage() {
   return (
