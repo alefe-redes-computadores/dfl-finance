@@ -23,7 +23,7 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
-import { db, addToSyncQueue } from '@/lib/db'
+import { db } from '@/lib/db'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -66,13 +66,11 @@ export default function AccountDetailPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: localAccounts, loading, reload } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
   })
 
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: allTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context, account_id: accountId },
@@ -89,7 +87,7 @@ export default function AccountDetailPage() {
     return new Date(date).toLocaleDateString("pt-BR")
   }
 
-  // 🔥 CORRIGIDO: Ajuste de saldo com sincronização
+  // 🔥 TOTALMENTE ATÔMICO E LOCAL-FIRST
   const handleAdjustBalance = async () => {
     if (!user) return
     if (!adjustAmount || parseFloat(adjustAmount) === 0) {
@@ -97,44 +95,64 @@ export default function AccountDetailPage() {
       errorHaptic()
       return
     }
+    
     setSaving(true)
     try {
-      const amount = parseFloat(adjustAmount)
-      const newBalance = (accountData?.balance || 0) + amount
+      const rawDelta = parseFloat(adjustAmount)
+      const absAmount = Math.abs(rawDelta) // Garante amount sempre positivo
+      const isIncome = rawDelta >= 0
 
-      await db.table('accounts').update(accountId, { balance: newBalance })
-      await addToSyncQueue(
-        user.id,
-        'accounts',
-        'update',
-        accountId,
-        { balance: newBalance }
-      )
+      // Envelopa tudo numa transaction do Dexie
+      await db.transaction('rw', 'accounts', 'transactions', 'syncQueue', async () => {
+        // Lê do banco local para garantir precisão
+        const acc = await db.table('accounts').get(accountId)
+        if (!acc) throw new Error("Conta não encontrada localmente")
 
-      const txId = crypto.randomUUID()
-      const newTx = {
-        id: txId,
-        user_id: accountData.user_id,
-        description: adjustNotes || "Ajuste de saldo",
-        amount: amount,
-        type: amount >= 0 ? "income" : "expense",
-        account_id: accountId,
-        date: new Date().toISOString().split("T")[0],
-        status: "completed",
-        context,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sync_status: 'pending',
-        sync_attempts: 0,
-      }
-      await db.table('transactions').put(newTx)
-      await addToSyncQueue(
-        user.id,
-        'transactions',
-        'create',
-        txId,
-        newTx
-      )
+        const newBalance = acc.balance + rawDelta
+
+        // 1. Atualiza conta local
+        await db.table('accounts').update(accountId, { balance: newBalance })
+        
+        // 2. Enfileira sync da conta
+        await db.table('syncQueue').add({
+          table: 'accounts',
+          operation: 'update',
+          record_id: accountId,
+          data: { balance: newBalance },
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
+
+        const txId = crypto.randomUUID()
+        const newTx = {
+          id: txId,
+          user_id: user.id,
+          description: adjustNotes || (isIncome ? "Ajuste de saldo positivo" : "Ajuste de saldo negativo"),
+          amount: absAmount, // 🔥 Sempre positivo
+          type: isIncome ? "income" : "expense", // 🔥 Define o fluxo pelo tipo
+          account_id: accountId,
+          date: new Date().toISOString().split("T")[0],
+          status: "done", // 🔥 Corrigido de 'completed' para 'done'
+          context,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+
+        // 3. Cria a transação local
+        await db.table('transactions').add(newTx)
+        
+        // 4. Enfileira sync da transação
+        await db.table('syncQueue').add({
+          table: 'transactions',
+          operation: 'create',
+          record_id: txId,
+          data: newTx,
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
+      })
 
       showToast("Saldo ajustado com sucesso!", "success")
       success()
@@ -150,11 +168,11 @@ export default function AccountDetailPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: Transferência com sincronização
+  // 🔥 TOTALMENTE ATÔMICO E TIPOS CORRIGIDOS
   const handleTransfer = async () => {
     if (!user) return
     if (!transferAmount || parseFloat(transferAmount) <= 0) {
-      showToast("Informe um valor válido", "warning")
+      showToast("Informe um valor válido e positivo", "warning")
       errorHaptic()
       return
     }
@@ -163,71 +181,89 @@ export default function AccountDetailPage() {
       errorHaptic()
       return
     }
+    
     setSaving(true)
     try {
-      const amount = parseFloat(transferAmount)
+      const amount = Math.abs(parseFloat(transferAmount))
 
-      const fromTxId = crypto.randomUUID()
-      const toTxId = crypto.randomUUID()
+      await db.transaction('rw', 'accounts', 'transactions', 'syncQueue', async () => {
+        const fromAcc = await db.table('accounts').get(accountId)
+        const toAcc = await db.table('accounts').get(transferToAccount)
 
-      const fromTx = {
-        id: fromTxId,
-        user_id: accountData.user_id,
-        description: transferNotes || `Transferência para conta`,
-        amount: -amount,
-        type: "transfer_out",
-        account_id: accountId,
-        transfer_to: transferToAccount,
-        date: new Date().toISOString().split("T")[0],
-        status: "completed",
-        context,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sync_status: 'pending',
-        sync_attempts: 0,
-      }
-      await db.table('transactions').put(fromTx)
-      await addToSyncQueue(user.id, 'transactions', 'create', fromTxId, fromTx)
+        if (!fromAcc || !toAcc) throw new Error("Uma das contas não foi encontrada localmente")
 
-      const toTx = {
-        id: toTxId,
-        user_id: accountData.user_id,
-        description: transferNotes || `Transferência recebida`,
-        amount: amount,
-        type: "transfer_in",
-        account_id: transferToAccount,
-        transfer_from: accountId,
-        date: new Date().toISOString().split("T")[0],
-        status: "completed",
-        context,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sync_status: 'pending',
-        sync_attempts: 0,
-      }
-      await db.table('transactions').put(toTx)
-      await addToSyncQueue(user.id, 'transactions', 'create', toTxId, toTx)
+        const newFromBalance = fromAcc.balance - amount
+        const newToBalance = toAcc.balance + amount
 
-      const newFromBalance = (accountData?.balance || 0) - amount
-      await db.table('accounts').update(accountId, { balance: newFromBalance })
-      await addToSyncQueue(
-        user.id,
-        'accounts',
-        'update',
-        accountId,
-        { balance: newFromBalance }
-      )
+        // 1. Atualiza conta Origem
+        await db.table('accounts').update(accountId, { balance: newFromBalance })
+        await db.table('syncQueue').add({
+          table: 'accounts',
+          operation: 'update',
+          record_id: accountId,
+          data: { balance: newFromBalance },
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
 
-      const toAccount = (localAccounts || []).find((a: any) => a.id === transferToAccount) as any
-      const newToBalance = (toAccount?.balance || 0) + amount
-      await db.table('accounts').update(transferToAccount, { balance: newToBalance })
-      await addToSyncQueue(
-        user.id,
-        'accounts',
-        'update',
-        transferToAccount,
-        { balance: newToBalance }
-      )
+        // 2. Atualiza conta Destino
+        await db.table('accounts').update(transferToAccount, { balance: newToBalance })
+        await db.table('syncQueue').add({
+          table: 'accounts',
+          operation: 'update',
+          record_id: transferToAccount,
+          data: { balance: newToBalance },
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
+
+        const fromTxId = crypto.randomUUID()
+        const toTxId = crypto.randomUUID()
+
+        // 3. Transação Saída (Origem)
+        const fromTx = {
+          id: fromTxId,
+          user_id: user.id,
+          description: transferNotes || `Transferência enviada para ${toAcc.name || 'outra conta'}`,
+          amount: amount,
+          type: "expense", // 🔥 Corrigido de 'transfer_out' (compatível com visual/matemática)
+          account_id: accountId,
+          transfer_to: transferToAccount,
+          date: new Date().toISOString().split("T")[0],
+          status: "done", // 🔥 'done'
+          context,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+        await db.table('transactions').add(fromTx)
+        await db.table('syncQueue').add({
+          table: 'transactions', operation: 'create', record_id: fromTxId, data: fromTx, user_id: user.id, created_at: new Date().toISOString()
+        })
+
+        // 4. Transação Entrada (Destino)
+        const toTx = {
+          id: toTxId,
+          user_id: user.id,
+          description: transferNotes || `Transferência recebida de ${fromAcc.name || 'outra conta'}`,
+          amount: amount,
+          type: "income", // 🔥 Corrigido de 'transfer_in'
+          account_id: transferToAccount,
+          transfer_from: accountId,
+          date: new Date().toISOString().split("T")[0],
+          status: "done", // 🔥 'done'
+          context,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+        await db.table('transactions').add(toTx)
+        await db.table('syncQueue').add({
+          table: 'transactions', operation: 'create', record_id: toTxId, data: toTx, user_id: user.id, created_at: new Date().toISOString()
+        })
+      })
 
       showToast("Transferência realizada com sucesso!", "success")
       success()
@@ -244,19 +280,21 @@ export default function AccountDetailPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: Exclusão com sincronização
+  // 🔥 EXCLUSÃO ATÔMICA
   const handleDelete = async () => {
     if (!user) return
     if (!confirm("Tem certeza que deseja excluir esta conta?")) return
     try {
-      await db.table('accounts').delete(accountId)
-      await addToSyncQueue(
-        user.id,
-        'accounts',
-        'delete',
-        accountId,
-        { id: accountId }
-      )
+      await db.transaction('rw', 'accounts', 'syncQueue', async () => {
+        await db.table('accounts').delete(accountId)
+        await db.table('syncQueue').add({
+          table: 'accounts',
+          operation: 'delete',
+          record_id: accountId,
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
+      })
       showToast("Conta excluída com sucesso!", "success")
       success()
       router.back()
@@ -384,13 +422,13 @@ export default function AccountDetailPage() {
               {sortedTransactions.slice(0, expandedTransactions ? undefined : 5).map((tx: any) => (
                 <div key={tx.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {(tx.amount || 0) >= 0 ? <ArrowUpCircle size={16} className="text-teal-500 flex-shrink-0" /> : <ArrowDownCircle size={16} className="text-red-500 flex-shrink-0" />}
+                    {tx.type === 'income' ? <ArrowUpCircle size={16} className="text-teal-500 flex-shrink-0" /> : <ArrowDownCircle size={16} className="text-red-500 flex-shrink-0" />}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{tx.description || "Sem descrição"}</p>
                       <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(tx.date)}</span>
                     </div>
                   </div>
-                  <span className={`font-bold text-sm flex-shrink-0 ${(tx.amount || 0) >= 0 ? "text-teal-600 dark:text-teal-400" : "text-red-500"}`}>{formatCurrency(tx.amount || 0)}</span>
+                  <span className={`font-bold text-sm flex-shrink-0 ${tx.type === 'income' ? "text-teal-600 dark:text-teal-400" : "text-red-500"}`}>{formatCurrency(tx.amount || 0)}</span>
                 </div>
               ))}
               {sortedTransactions.length > 5 && (
