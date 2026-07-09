@@ -1,22 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
-  ChevronLeft, Plus, Loader2, RefreshCw, Target, TrendingUp, TrendingDown,
-  Clock, AlertTriangle, CheckCircle, Wallet, Calendar, Edit3, Trash2, Eye, EyeOff
+  ChevronLeft, Plus, Target, Check, RefreshCw
 } from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { differenceInDays } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
-import { useSafeDb } from '@/hooks/useSafeDb'
 
 const GoalsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
@@ -46,28 +40,21 @@ function GoalsContent() {
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
-  const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
+  const { data: localGoals, reload: reloadGoals } = useLocalData({
     table: 'goals' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -88,9 +75,7 @@ function GoalsContent() {
     }
   }
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  const handleTouchEnd = () => { isPulling.current = false }
 
   useEffect(() => {
     const container = containerRef.current
@@ -105,9 +90,6 @@ function GoalsContent() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadData = async () => {
     if (!user?.id) return
     setLoading(true)
@@ -126,16 +108,9 @@ function GoalsContent() {
     if (user?.id) loadData()
   }, [user?.id, context])
 
-  // ============================================================
-  // PROCESSAMENTO EM MEMÓRIA
-  // ============================================================
   const goalsWithProgress = (localGoals || []).map((goal: any) => {
     const saved = (localTransactions || [])
-      .filter((tx: any) => 
-        tx.goal_id === goal.id &&
-        tx.type === 'income' &&
-        tx.status === 'done'
-      )
+      .filter((tx: any) => tx.goal_id === goal.id && tx.type === 'income' && tx.status === 'done')
       .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
 
     const remaining = Number(goal.target_amount) - saved
@@ -152,23 +127,6 @@ function GoalsContent() {
     }
   })
 
-  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
-  const handleDelete = async (id: string) => {
-    if (!user) return
-    if (!confirm('Excluir esta meta?')) return
-    try {
-      const result = await safeDelete('goals', id)
-      if (!result.success) {
-        showToast(`Erro ao excluir: ${result.error}`, 'error')
-        return
-      }
-      showToast('Meta excluída.', 'info')
-      loadData()
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
-    }
-  }
-
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
@@ -176,6 +134,15 @@ function GoalsContent() {
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        </div>
+      )}
+
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+          </div>
         </div>
       )}
 
@@ -222,11 +189,7 @@ function GoalsContent() {
                 key={goal.id}
                 onClick={() => router.push(`/goals/${goal.id}`)}
                 className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] ${
-                  isCompleted 
-                    ? 'border-emerald-200 dark:border-emerald-800' 
-                    : isOverdue 
-                      ? 'border-red-200 dark:border-red-800' 
-                      : 'border-gray-50 dark:border-slate-700'
+                  isCompleted ? 'border-emerald-200 dark:border-emerald-800' : isOverdue ? 'border-red-200 dark:border-red-800' : 'border-gray-50 dark:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-3">
@@ -240,23 +203,14 @@ function GoalsContent() {
                     </p>
                   </div>
                   <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${
-                    isCompleted 
-                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' 
-                      : isOverdue 
-                        ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
-                        : 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400'
+                    isCompleted ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : isOverdue ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400'
                   }`}>
                     {goal.percent.toFixed(0)}%
                   </span>
                 </div>
 
                 <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${
-                      isCompleted ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'
-                    }`}
-                    style={{ width: `${goal.percent}%` }}
-                  />
+                  <div className={`h-full rounded-full transition-all duration-700 ${isCompleted ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${goal.percent}%` }} />
                 </div>
 
                 <div className="flex justify-between text-[11px]">
