@@ -3,13 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft, Loader2 } from 'lucide-react'
+import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useLocalData } from '@/hooks/useLocalData'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
-import { useSafeDb } from '@/hooks/useSafeDb'
 
 const DebtsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
@@ -53,8 +51,6 @@ function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
-  // 🔥 NOVO: Hook de blindagem para operações futuras
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
   const [loading, setLoading] = useState(true)
@@ -63,19 +59,16 @@ function DebtsContent() {
   const [debts, setDebts] = useState<any[]>([])
   const [totalToReceiveState, setTotalToReceiveState] = useState(0)
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localDebts, reload: reloadDebts } = useLocalData({
     table: 'debts' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localTransactions, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext, type: 'income' },
   })
 
-  // JOIN em memória
   const consolidateDebts = useCallback(() => {
     if (!localDebts || !localTransactions) return []
     const paymentsByDebt: Record<string, number> = {}
