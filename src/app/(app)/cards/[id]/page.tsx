@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Edit2, Trash2, Loader2, CreditCard, AlertTriangle,
   Calendar, CheckCircle2, TrendingUp, TrendingDown, RefreshCw,
@@ -14,7 +13,7 @@ import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
@@ -80,9 +79,6 @@ export default function CardDetailPage() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [paying, setPaying] = useState(false)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
-  // ============================================================
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { id: id as string },
@@ -98,14 +94,6 @@ export default function CardDetailPage() {
     filters: { context },
   })
 
-  // ============================================================
-  // 🔥 REMOVIDOS: hooks CRUD do useLocalData
-  // ============================================================
-  // Agora usamos db.table() diretamente
-
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -143,9 +131,6 @@ export default function CardDetailPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
@@ -176,9 +161,6 @@ export default function CardDetailPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ============================================================
-  // FUNÇÕES AUXILIARES
-  // ============================================================
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -206,9 +188,7 @@ export default function CardDetailPage() {
     return brands[brand.toLowerCase()] || brand
   }
 
-  // ============================================================
-  // 🔥 PAGAR FATURA (COM db.table() DIRETO)
-  // ============================================================
+  // 🔥 PAGAR FATURA: ATÔMICO E LOCAL-FIRST TOTAL
   const handlePayFatura = async () => {
     if (!user?.id || !card) return
     setPaying(true)
@@ -222,39 +202,67 @@ export default function CardDetailPage() {
         return
       }
 
-      // 🔥 1. Atualizar saldo da conta usando db.table().update()
-      await db.table('accounts').update(targetAccount.id, {
-        balance: Number(targetAccount.balance) - totalFatura
-      })
-
-      // 🔥 2. Criar transação de pagamento usando db.table().add()
-      await db.table('transactions').add({
-        id: crypto.randomUUID(),
-        user_id: user.id,
-        type: 'expense',
-        amount: totalFatura,
-        description: `Pagamento fatura ${card.name}`,
-        account_id: targetAccount.id,
-        credit_card_id: card.id,
-        date: format(new Date(), 'yyyy-MM-dd'),
-        status: 'done',
-        context: card.context,
-        affects_balance: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sync_status: 'pending',
-        sync_attempts: 0,
-      })
-
-      // 🔥 3. Atualizar transações do cartão (afetam saldo) usando db.table().update()
       const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
       const allTxs = (localTransactions || []) as any[]
       const cardTxs = allTxs.filter((t: any) => t.date >= start && t.date <= end)
 
-      for (const tx of cardTxs) {
-        await db.table('transactions').update(tx.id, { affects_balance: true })
-      }
+      // Usando transação para garantir que o saldo, o pagamento e o sync estejam amarrados
+      await db.transaction('rw', 'accounts', 'transactions', 'syncQueue', async () => {
+        // 1. Atualizar saldo da conta
+        const newBalance = Number(targetAccount.balance) - totalFatura
+        await db.table('accounts').update(targetAccount.id, { balance: newBalance })
+        await db.table('syncQueue').add({
+          table: 'accounts',
+          operation: 'update',
+          record_id: targetAccount.id,
+          data: { balance: newBalance },
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
+
+        // 2. Criar transação de pagamento
+        const txId = crypto.randomUUID()
+        const txPayload = {
+          id: txId,
+          user_id: user.id,
+          type: 'expense',
+          amount: totalFatura,
+          description: `Pagamento fatura ${card.name}`,
+          account_id: targetAccount.id,
+          credit_card_id: card.id,
+          date: format(new Date(), 'yyyy-MM-dd'),
+          status: 'done',
+          context: card.context,
+          affects_balance: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+        await db.table('transactions').add(txPayload)
+        await db.table('syncQueue').add({
+          table: 'transactions',
+          operation: 'create',
+          record_id: txId,
+          data: txPayload,
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        })
+
+        // 3. Atualizar transações do cartão (afetam saldo)
+        for (const tx of cardTxs) {
+          await db.table('transactions').update(tx.id, { affects_balance: true })
+          await db.table('syncQueue').add({
+            table: 'transactions',
+            operation: 'update',
+            record_id: tx.id,
+            data: { affects_balance: true },
+            user_id: user.id,
+            created_at: new Date().toISOString()
+          })
+        }
+      })
 
       showToast('Fatura paga com sucesso!', 'success')
       setShowPayModal(false)
