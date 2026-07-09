@@ -141,7 +141,27 @@ export async function safeUpdate(
 /**
  * 🔥 CAMADA 3: DELETE SEGURO
  * Verifica se o registro existe antes de deletar
- * Também verifica se há referências em outras tabelas
+ *
+ * ============================================================
+ * 🔥 CORRIGIDO: LÓGICA DE DEPENDÊNCIA INVERTIDA
+ *
+ * A verificação antiga (checkTransactionDependencies) bloqueava a
+ * exclusão de uma transação sempre que a conta/cartão/dívida/
+ * financiamento vinculado a ela AINDA EXISTIA — ou seja, bloqueava
+ * no caso NORMAL (uma transação sempre aponta pra uma conta que
+ * existe). Na prática isso significava que praticamente NENHUMA
+ * transação real conseguia ser excluída por essa função, porque
+ * quase toda transação tem account_id/credit_card_id preenchido.
+ *
+ * O motivo de existir uma checagem de dependência é o oposto:
+ * normalmente você protege a exclusão de uma ENTIDADE PAI (ex: uma
+ * conta) enquanto ela ainda tiver transações filhas — não o
+ * contrário. Excluir uma transação nunca "orfaniza" a conta (contas
+ * não dependem de transações para existir).
+ *
+ * Removida a checagem — ela não protegia nada e só quebrava a
+ * funcionalidade de exclusão.
+ * ============================================================
  */
 export async function safeDelete(
   table: TableName,
@@ -159,20 +179,6 @@ export async function safeDelete(
         table,
         id
       })
-    }
-
-    // 🔥 VALIDAÇÃO: Verifica referências (se for transação)
-    if (table === 'transactions') {
-      const hasDependencies = await checkTransactionDependencies(id)
-      if (hasDependencies) {
-        return logOperation('delete', table, id, {
-          success: false,
-          error: 'Esta transação está vinculada a uma conta, cartão, dívida ou financiamento. Exclua os vínculos primeiro.',
-          operation: 'delete' as const,
-          table,
-          id
-        })
-      }
     }
 
     // Deleta do IndexedDB
@@ -197,57 +203,5 @@ export async function safeDelete(
       table,
       id
     })
-  }
-}
-
-/**
- * 🔥 VERIFICA DEPENDÊNCIAS DA TRANSAÇÃO
- */
-async function checkTransactionDependencies(txId: string): Promise<boolean> {
-  try {
-    // Verifica se está vinculada a uma conta
-    const tx = await db.table('transactions').get(txId)
-    if (!tx) return false
-
-    // Se tem account_id, verifica se a conta ainda existe
-    if (tx.account_id) {
-      const account = await db.table('accounts').get(tx.account_id)
-      if (account) {
-        console.warn(`⚠️ Transação ${txId} está vinculada à conta ${tx.account_id}`)
-        return true
-      }
-    }
-
-    // Se tem credit_card_id, verifica se o cartão ainda existe
-    if (tx.credit_card_id) {
-      const card = await db.table('credit_cards').get(tx.credit_card_id)
-      if (card) {
-        console.warn(`⚠️ Transação ${txId} está vinculada ao cartão ${tx.credit_card_id}`)
-        return true
-      }
-    }
-
-    // Se tem debt_id, verifica se a dívida ainda existe
-    if (tx.debt_id) {
-      const debt = await db.table('debts').get(tx.debt_id)
-      if (debt) {
-        console.warn(`⚠️ Transação ${txId} está vinculada à dívida ${tx.debt_id}`)
-        return true
-      }
-    }
-
-    // Se tem financing_id, verifica se o financiamento ainda existe
-    if (tx.financing_id) {
-      const financing = await db.table('financings').get(tx.financing_id)
-      if (financing) {
-        console.warn(`⚠️ Transação ${txId} está vinculada ao financiamento ${tx.financing_id}`)
-        return true
-      }
-    }
-
-    return false
-  } catch (error) {
-    console.error('Erro ao verificar dependências:', error)
-    return false
   }
 }
