@@ -13,7 +13,14 @@ import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db'
+
+const safeNum = (val: any): number => {
+  if (val === null || val === undefined || val === '') return 0
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ''))
+  return isNaN(parsed) ? 0 : parsed
+}
 
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
@@ -188,14 +195,24 @@ export default function CardDetailPage() {
     return brands[brand.toLowerCase()] || brand
   }
 
-  // 🔥 PAGAR FATURA: ATÔMICO E LOCAL-FIRST TOTAL
+  // Pagar fatura. Correções:
+  // 1. A fila de sincronização é gravada via addToSyncQueue (que gera o
+  //    id corretamente) em vez de inserts manuais sem id — isso é o que
+  //    fazia o pagamento inteiro falhar (o Dexie rejeita um registro sem
+  //    chave primária, e por estar dentro de uma db.transaction, o erro
+  //    desfazia TUDO, incluindo o débito do saldo).
+  // 2. A conta debitada agora é a configurada em card.payment_account_id
+  //    (definida na criação do cartão). Antes pegava accounts[0] — a
+  //    primeira conta que aparecesse, arbitrariamente.
   const handlePayFatura = async () => {
     if (!user?.id || !card) return
     setPaying(true)
 
     try {
-      const accounts = localAccounts || []
-      const targetAccount = accounts[0] as any
+      const accounts = (localAccounts || []) as any[]
+      const targetAccount =
+        accounts.find((a) => a.id === card.payment_account_id) || accounts[0]
+
       if (!targetAccount) {
         showToast('Crie uma conta primeiro.', 'warning')
         setPaying(false)
@@ -207,21 +224,15 @@ export default function CardDetailPage() {
       const allTxs = (localTransactions || []) as any[]
       const cardTxs = allTxs.filter((t: any) => t.date >= start && t.date <= end)
 
-      // Usando transação para garantir que o saldo, o pagamento e o sync estejam amarrados
-      await db.transaction('rw', 'accounts', 'transactions', 'syncQueue', async () => {
-        // 1. Atualizar saldo da conta
-        const newBalance = Number(targetAccount.balance) - totalFatura
-        await db.table('accounts').update(targetAccount.id, { balance: newBalance })
-        await db.table('syncQueue').add({
-          table: 'accounts',
-          operation: 'update',
-          record_id: targetAccount.id,
-          data: { balance: newBalance },
-          user_id: user.id,
-          created_at: new Date().toISOString()
-        })
+      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
+        const freshAccount = await db.table('accounts').get(targetAccount.id)
+        if (!freshAccount) throw new Error('Conta de pagamento não encontrada')
 
-        // 2. Criar transação de pagamento
+        const newBalance = safeNum(freshAccount.balance) - totalFatura
+        const accUpdated = await db.table('accounts').update(targetAccount.id, { balance: newBalance })
+        if (!accUpdated) throw new Error('Falha ao debitar a conta')
+        await addToSyncQueue(user.id, 'accounts', 'update', targetAccount.id, { balance: newBalance })
+
         const txId = crypto.randomUUID()
         const txPayload = {
           id: txId,
@@ -241,26 +252,11 @@ export default function CardDetailPage() {
           sync_attempts: 0,
         }
         await db.table('transactions').add(txPayload)
-        await db.table('syncQueue').add({
-          table: 'transactions',
-          operation: 'create',
-          record_id: txId,
-          data: txPayload,
-          user_id: user.id,
-          created_at: new Date().toISOString()
-        })
+        await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
 
-        // 3. Atualizar transações do cartão (afetam saldo)
         for (const tx of cardTxs) {
           await db.table('transactions').update(tx.id, { affects_balance: true })
-          await db.table('syncQueue').add({
-            table: 'transactions',
-            operation: 'update',
-            record_id: tx.id,
-            data: { affects_balance: true },
-            user_id: user.id,
-            created_at: new Date().toISOString()
-          })
+          await addToSyncQueue(user.id, 'transactions', 'update', tx.id, { affects_balance: true })
         }
       })
 
