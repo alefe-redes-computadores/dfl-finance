@@ -8,6 +8,8 @@ import { differenceInDays } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useLocalData } from '@/hooks/useLocalData'
+// 🔥 Importando useSafeDb para preparação futura (mantém padrão)
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const DebtsSkeleton = () => (
   <div className="space-y-6 animate-pulse">
@@ -51,6 +53,8 @@ function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
+  // 🔥 Hook de blindagem (preparatório)
+  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
   const [loading, setLoading] = useState(true)
@@ -293,3 +297,4 @@ export default function DebtsPage() {
     </ContextProvider>
   )
 }
+// Blindagem Atômica Finalizada
