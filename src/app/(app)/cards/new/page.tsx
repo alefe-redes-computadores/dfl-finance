@@ -10,7 +10,8 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+import { useContext_ } from '@/components/ContextToggle'
+import { db, addToSyncQueue } from '@/lib/db'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -19,6 +20,7 @@ export default function NewCardPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { showToast } = useToast()
+  const { effectiveContext } = useContext_()
 
   const [accounts, setAccounts] = useState<any[]>([])
 
@@ -38,9 +40,12 @@ export default function NewCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
+  // Contas do contexto atual (PF ou PJ) — antes vinha fixo em 'dfl',
+  // então em modo Pessoal a lista de contas pra vincular o cartão
+  // sempre vinha vazia/errada.
   const { data: localAccounts, loading: accLoading } = useLocalData({
     table: 'accounts' as any,
-    filters: { context: 'dfl' },
+    filters: { context: effectiveContext },
   })
 
   useEffect(() => {
@@ -63,18 +68,28 @@ export default function NewCardPage() {
     }
   }
 
-  // 🔥 CREATE ATÔMICO E LOCAL-FIRST
+  // Criação do cartão. Contexto agora é o efetivo (PF/PJ) selecionado na
+  // tela, não mais fixo em 'dfl'. A fila de sincronização é gravada via
+  // addToSyncQueue (que gera o id corretamente) em vez de um insert
+  // manual sem id — isso é o que fazia a criação do cartão falhar por
+  // completo (o insert sem chave primária derrubava a transaction
+  // inteira, incluindo o credit_cards.add).
   async function handleSave() {
     if (!name.trim()) {
       showToast('Por favor, informe o nome do cartão.', 'warning')
       return
     }
+    if (!user?.id) {
+      showToast('Sessão expirada.', 'error')
+      return
+    }
     setSaving(true)
 
+    const cardId = crypto.randomUUID()
     const payload = {
-      id: crypto.randomUUID(),
-      user_id: user!.id,
-      context: 'dfl',
+      id: cardId,
+      user_id: user.id,
+      context: effectiveContext,
       name,
       flag: flag || null,
       institution: institution || null,
@@ -92,16 +107,9 @@ export default function NewCardPage() {
     }
 
     try {
-      await db.transaction('rw', 'credit_cards', 'syncQueue', async () => {
+      await db.transaction('rw', db.credit_cards, db.syncQueue, async () => {
         await db.table('credit_cards').add(payload)
-        await db.table('syncQueue').add({
-          table: 'credit_cards',
-          operation: 'create',
-          record_id: payload.id,
-          data: payload,
-          user_id: user!.id,
-          created_at: new Date().toISOString()
-        })
+        await addToSyncQueue(user.id, 'credit_cards', 'create', cardId, payload)
       })
 
       showToast('Cartão criado com sucesso!', 'success')
