@@ -24,6 +24,18 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
+// ============================================================
+// 🔥 CÁLCULO SEGURO CENTRALIZADO (mesmo padrão usado nas outras
+// telas corrigidas: transactions/page.tsx, useLocalData.ts, etc.)
+// Nunca retorna NaN/null/undefined.
+// ============================================================
+const safeNum = (val: any): number => {
+  if (val === null || val === undefined || val === '') return 0
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ''))
+  return isNaN(parsed) ? 0 : parsed
+}
+
 export default function EditTransactionPage() {
   const { id } = useParams()
   const router = useRouter()
@@ -245,14 +257,12 @@ export default function EditTransactionPage() {
     setShowCamera(false)
   }
 
-  // 🔥 CORREÇÃO: Refatorado para o padrão Local-First e Filtros Blindados
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
 
     try {
-      // 🔥 1. Busca os dados auxiliares no Banco Local (Dexie)
       const [accData, catData, tagData, cardsData, contactsData] = await Promise.all([
         db.table('accounts').where('user_id').equals(user.id).toArray(),
         db.table('categories').where('user_id').equals(user.id).toArray(),
@@ -261,12 +271,11 @@ export default function EditTransactionPage() {
         db.table('contacts').where('user_id').equals(user.id).toArray(),
       ])
 
-      // 🔥 2. Blinda os dados usando o effectiveContext
       setAccounts(accData.filter((a: any) => a.context === effectiveContext))
       setCreditCards(cardsData.filter((c: any) => c.context === effectiveContext))
       setContacts(contactsData.filter((c: any) => c.context === effectiveContext))
       setTags(tagData)
-      
+
       const allCats = catData.filter((c: any) => c.context === effectiveContext)
       const mainCats = allCats.filter((c: any) => !c.parent_id)
       const subCats = allCats.filter((c: any) => c.parent_id)
@@ -281,10 +290,8 @@ export default function EditTransactionPage() {
       const isEditMode = id && id !== 'new' && typeof id === 'string' && id.length > 5
 
       if (isEditMode) {
-        // 🔥 3. Busca a transação NO BANCO LOCAL (Dexie)
         let txData = await db.table('transactions').get(id as string)
 
-        // 🔥 Fallback: se não achou local, busca na nuvem
         if (!txData) {
           const { data: remoteTx } = await supabase
             .from('transactions')
@@ -295,7 +302,6 @@ export default function EditTransactionPage() {
         }
 
         if (txData && txData.user_id === user.id) {
-          // 🔥 PREENCHE OS DADOS COM SUCESSO
           setTx(txData)
           setTxType(txData.type)
           setIsNew(false)
@@ -309,7 +315,7 @@ export default function EditTransactionPage() {
           setContactId(txData.contact_id || '')
           setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
           setIsReimbursable(txData.is_reimbursable || false)
-          
+
           const amountSafe = Number(txData.amount) || 0
           setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
@@ -325,7 +331,6 @@ export default function EditTransactionPage() {
           if (txData.debt_id) setDebtId(txData.debt_id)
           if (txData.notes?.includes('[Devolução/Estorno]')) setIsRefund(true)
         } else {
-          // Transação não encontrada
           setIsNew(true)
           setTxType('expense')
           setIsPaid(false)
@@ -349,7 +354,6 @@ export default function EditTransactionPage() {
           showToast('Transação não encontrada.', 'error')
         }
       } else {
-        // 🔥 MODO DE CRIAÇÃO
         setIsNew(true)
         const paramType = searchParams.get('type')
         if (paramType === 'income') {
@@ -423,7 +427,14 @@ export default function EditTransactionPage() {
   }, [])
 
   // ============================================================
-  // 🔥 HANDLE SAVE CORRIGIDO COM VERIFICAÇÃO DE RETORNO
+  // 🔥 HANDLE SAVE — CORRIGIDO
+  //
+  // 1. Saldo agora é lido do BANCO LOCAL (db.table('accounts').get)
+  //    em vez de um select direto no Supabase. Funciona offline e
+  //    fica consistente com o que o app mostra na tela.
+  // 2. Reversão do saldo antigo + aplicação do saldo novo + gravação
+  //    da transação (+ reembolso) rodam dentro da MESMA
+  //    db.transaction('rw', ...) — tudo ou nada.
   // ============================================================
   const handleSave = useCallback(async () => {
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
@@ -471,141 +482,101 @@ export default function EditTransactionPage() {
     }
 
     try {
-      // 🔥 REVERTE SALDO DA CONTA ORIGINAL (usando safeUpdate com verificação)
-      if (!isNew && tx?.status === 'done' && tx?.account_id) {
-        const { data: oldAcc } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', tx.account_id)
-          .single()
-        if (oldAcc) {
-          const revertedBalance =
-            tx.type === 'income'
-              ? Number(oldAcc.balance) - Number(tx.amount)
-              : Number(oldAcc.balance) + Number(tx.amount)
-          const result = await safeUpdate('accounts', tx.account_id, { balance: revertedBalance })
-          if (!result.success) {
-            showToast(`Erro ao reverter saldo: ${result.error}`, 'error')
-            setSaving(false)
-            return
+      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
+        if (!isNew && tx?.status === 'done' && tx?.account_id) {
+          const oldAcc = await db.table('accounts').get(tx.account_id)
+          if (oldAcc) {
+            const revertedBalance =
+              tx.type === 'income'
+                ? safeNum(oldAcc.balance) - safeNum(tx.amount)
+                : safeNum(oldAcc.balance) + safeNum(tx.amount)
+            const result = await safeUpdate('accounts', tx.account_id, { balance: revertedBalance })
+            if (!result.success) throw new Error(result.error || 'Erro ao reverter saldo')
           }
         }
-      }
 
-      // 🔥 APLICA NOVO SALDO (usando safeUpdate com verificação)
-      if (isPaid && accountId && !creditCardId) {
-        const { data: newAcc } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', accountId)
-          .single()
-        if (newAcc) {
-          const updatedBalance =
-            txType === 'income'
-              ? Number(newAcc.balance) + rawAmount
-              : Number(newAcc.balance) - rawAmount
-          const result = await safeUpdate('accounts', accountId, { balance: updatedBalance })
-          if (!result.success) {
-            showToast(`Erro ao atualizar saldo: ${result.error}`, 'error')
-            setSaving(false)
-            return
+        if (isPaid && accountId && !creditCardId) {
+          const newAcc = await db.table('accounts').get(accountId)
+          if (newAcc) {
+            const updatedBalance =
+              txType === 'income'
+                ? safeNum(newAcc.balance) + rawAmount
+                : safeNum(newAcc.balance) - rawAmount
+            const result = await safeUpdate('accounts', accountId, { balance: updatedBalance })
+            if (!result.success) throw new Error(result.error || 'Erro ao atualizar saldo')
           }
         }
-      }
 
-      // 🔥 CRIA OU ATUALIZA TRANSAÇÃO (com verificação)
-      let result;
-      if (isNew) {
-        const txId = crypto.randomUUID()
-        const fullPayload = { 
-          id: txId, 
-          ...payload, 
-          created_at: new Date().toISOString(), 
-          sync_status: 'pending', 
-          sync_attempts: 0 
-        }
-        result = await safeAdd('transactions', fullPayload)
-        if (!result.success) {
-          showToast(`Erro ao criar transação: ${result.error}`, 'error')
-          setSaving(false)
-          return
-        }
-
-        if (isReimbursable) {
-          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
-          const reimbTxId = crypto.randomUUID()
-          const reimbPayload = {
-            id: reimbTxId,
-            user_id: user.id,
-            type: txType === 'expense' ? 'income' : 'expense',
-            amount: rawAmount,
-            description: `Reembolso: ${finalDescription}`,
-            date,
-            status: 'pending',
-            context: otherContext,
-            category_id: null,
-            linked_transaction_id: txId,
-            is_reimbursable: true,
+        if (isNew) {
+          const txId = crypto.randomUUID()
+          const fullPayload = {
+            id: txId,
+            ...payload,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
             sync_status: 'pending',
-            sync_attempts: 0,
+            sync_attempts: 0
           }
-          const reimbResult = await safeAdd('transactions', reimbPayload)
-          if (!reimbResult.success) {
-            showToast(`Erro ao criar reembolso: ${reimbResult.error}`, 'error')
-            setSaving(false)
-            return
-          }
-          const linkResult = await safeUpdate('transactions', txId, { linked_transaction_id: reimbTxId })
-          if (!linkResult.success) {
-            showToast(`Erro ao vincular reembolso: ${linkResult.error}`, 'error')
-            setSaving(false)
-            return
-          }
-        }
-      } else {
-        result = await safeUpdate('transactions', id as string, payload)
-        if (!result.success) {
-          showToast(`Erro ao atualizar transação: ${result.error}`, 'error')
-          setSaving(false)
-          return
-        }
+          const result = await safeAdd('transactions', fullPayload)
+          if (!result.success) throw new Error(result.error || 'Erro ao criar transação')
 
-        if (isReimbursable && !tx?.is_reimbursable) {
-          const otherContext = context === 'dfl' ? 'personal' : 'dfl'
-          const reimbTxId = crypto.randomUUID()
-          const reimbPayload = {
-            id: reimbTxId,
-            user_id: user.id,
-            type: txType === 'expense' ? 'income' : 'expense',
-            amount: rawAmount,
-            description: `Reembolso: ${finalDescription}`,
-            date,
-            status: 'pending',
-            context: otherContext,
-            category_id: null,
-            linked_transaction_id: id,
-            is_reimbursable: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
+          if (isReimbursable) {
+            const otherContext = context === 'dfl' ? 'personal' : 'dfl'
+            const reimbTxId = crypto.randomUUID()
+            const reimbPayload = {
+              id: reimbTxId,
+              user_id: user.id,
+              type: txType === 'expense' ? 'income' : 'expense',
+              amount: rawAmount,
+              description: `Reembolso: ${finalDescription}`,
+              date,
+              status: 'pending',
+              context: otherContext,
+              category_id: null,
+              linked_transaction_id: txId,
+              is_reimbursable: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              sync_status: 'pending',
+              sync_attempts: 0,
+            }
+            const reimbResult = await safeAdd('transactions', reimbPayload)
+            if (!reimbResult.success) throw new Error(reimbResult.error || 'Erro ao criar reembolso')
+
+            const linkResult = await safeUpdate('transactions', txId, { linked_transaction_id: reimbTxId })
+            if (!linkResult.success) throw new Error(linkResult.error || 'Erro ao vincular reembolso')
           }
-          const reimbResult = await safeAdd('transactions', reimbPayload)
-          if (!reimbResult.success) {
-            showToast(`Erro ao criar reembolso: ${reimbResult.error}`, 'error')
-            setSaving(false)
-            return
-          }
-          const linkResult = await safeUpdate('transactions', id as string, { linked_transaction_id: reimbTxId })
-          if (!linkResult.success) {
-            showToast(`Erro ao vincular reembolso: ${linkResult.error}`, 'error')
-            setSaving(false)
-            return
+        } else {
+          const result = await safeUpdate('transactions', id as string, payload)
+          if (!result.success) throw new Error(result.error || 'Erro ao atualizar transação')
+
+          if (isReimbursable && !tx?.is_reimbursable) {
+            const otherContext = context === 'dfl' ? 'personal' : 'dfl'
+            const reimbTxId = crypto.randomUUID()
+            const reimbPayload = {
+              id: reimbTxId,
+              user_id: user.id,
+              type: txType === 'expense' ? 'income' : 'expense',
+              amount: rawAmount,
+              description: `Reembolso: ${finalDescription}`,
+              date,
+              status: 'pending',
+              context: otherContext,
+              category_id: null,
+              linked_transaction_id: id,
+              is_reimbursable: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              sync_status: 'pending',
+              sync_attempts: 0,
+            }
+            const reimbResult = await safeAdd('transactions', reimbPayload)
+            if (!reimbResult.success) throw new Error(reimbResult.error || 'Erro ao criar reembolso')
+
+            const linkResult = await safeUpdate('transactions', id as string, { linked_transaction_id: reimbTxId })
+            if (!linkResult.success) throw new Error(linkResult.error || 'Erro ao vincular reembolso')
           }
         }
-      }
+      })
 
       vibrate([50])
       setSaved(true)
@@ -633,7 +604,13 @@ export default function EditTransactionPage() {
   }
 
   // ============================================================
-  // 🔥 CONFIRM DELETE CORRIGIDO COM VERIFICAÇÃO DE RETORNO
+  // 🔥 CONFIRM DELETE — CORRIGIDO
+  //
+  // 1. Lista de transações a excluir vem do BANCO LOCAL (Dexie).
+  // 2. Cada transação excluída tem SEU PRÓPRIO saldo revertido
+  //    individualmente (antes só a transação aberta na tela tinha
+  //    o saldo revertido, mesmo excluindo várias parcelas).
+  // 3. Tudo roda dentro da mesma db.transaction('rw', ...).
   // ============================================================
   const confirmDelete = async (mode: 'single' | 'future' | 'all') => {
     if (!user?.id) return
@@ -641,69 +618,50 @@ export default function EditTransactionPage() {
     setShowDeleteModal(false)
 
     try {
-      // 🔥 REVERTE SALDO DA CONTA
-      if (tx?.status === 'done' && tx?.account_id) {
-        const { data: accData } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', tx.account_id)
-          .single()
-        if (accData) {
-          const newBalance =
-            tx.type === 'income'
-              ? Number(accData.balance) - Number(tx.amount)
-              : Number(accData.balance) + Number(tx.amount)
-          const result = await safeUpdate('accounts', tx.account_id, { balance: newBalance })
-          if (!result.success) {
-            showToast(`Erro ao reverter saldo: ${result.error}`, 'error')
-            setSaving(false)
-            return
-          }
-        }
-      }
+      let idsToDelete: string[] = []
 
-      // 🔥 DELETA TRANSAÇÕES (com verificação)
       if (mode === 'single' || !hasInstallments) {
-        const result = await safeDelete('transactions', id as string)
-        if (!result.success) {
-          showToast(`Erro ao excluir: ${result.error}`, 'error')
-          setSaving(false)
-          return
-        }
+        idsToDelete = [id as string]
       } else if (mode === 'future' && tx?.recurring_group_id) {
-        const { data: futureTxs } = await supabase
-          .from('transactions')
-          .select('id')
-          .eq('recurring_group_id', tx.recurring_group_id)
-          .gte('date', tx.date)
-
-        if (futureTxs) {
-          for (const ftx of futureTxs) {
-            const result = await safeDelete('transactions', ftx.id)
-            if (!result.success) {
-              showToast(`Erro ao excluir parcela futura: ${result.error}`, 'error')
-              setSaving(false)
-              return
-            }
-          }
-        }
+        const futureTxs = await db.table('transactions')
+          .where('recurring_group_id').equals(tx.recurring_group_id)
+          .and((t: any) => t.date >= tx.date)
+          .toArray()
+        idsToDelete = futureTxs.map((t: any) => t.id)
       } else if (mode === 'all' && tx?.recurring_group_id) {
-        const { data: allTxs } = await supabase
-          .from('transactions')
-          .select('id')
-          .eq('recurring_group_id', tx.recurring_group_id)
+        const allTxs = await db.table('transactions')
+          .where('recurring_group_id').equals(tx.recurring_group_id)
+          .toArray()
+        idsToDelete = allTxs.map((t: any) => t.id)
+      }
 
-        if (allTxs) {
-          for (const atx of allTxs) {
-            const result = await safeDelete('transactions', atx.id)
-            if (!result.success) {
-              showToast(`Erro ao excluir parcela: ${result.error}`, 'error')
-              setSaving(false)
-              return
+      if (idsToDelete.length === 0) {
+        showToast('Nenhuma transação encontrada para excluir.', 'warning')
+        setSaving(false)
+        return
+      }
+
+      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
+        for (const txId of idsToDelete) {
+          const txRecord = await db.table('transactions').get(txId)
+          if (!txRecord) continue
+
+          if (txRecord.status === 'done' && txRecord.account_id) {
+            const acc = await db.table('accounts').get(txRecord.account_id)
+            if (acc) {
+              const newBalance =
+                txRecord.type === 'income'
+                  ? safeNum(acc.balance) - safeNum(txRecord.amount)
+                  : safeNum(acc.balance) + safeNum(txRecord.amount)
+              const result = await safeUpdate('accounts', txRecord.account_id, { balance: newBalance })
+              if (!result.success) throw new Error(result.error || `Erro ao reverter saldo da parcela ${txId}`)
             }
           }
+
+          const delResult = await safeDelete('transactions', txId)
+          if (!delResult.success) throw new Error(delResult.error || `Erro ao excluir parcela ${txId}`)
         }
-      }
+      })
 
       showToast(
         mode === 'single' ? 'Transação excluída.' :
@@ -767,7 +725,6 @@ export default function EditTransactionPage() {
       <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
       <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
 
-      {/* 🔥 HEADER CORRIGIDO - SEM CONTEXTTOGGLE */}
       <div className={`${headerGradient} px-4 pt-6 pb-4 shadow-sm border border-gray-100 dark:border-slate-700 sticky top-0 z-10 transition-all duration-300`}>
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
@@ -787,12 +744,8 @@ export default function EditTransactionPage() {
             {!isNew && <button onClick={handleDeleteClick} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"><Trash2 size={20} /></button>}
           </div>
         </div>
-        {/* ❌ ContextToggle REMOVIDO */}
       </div>
 
-      {/* ============================================================
-          TODO O RESTO DO CONTEÚDO DA PÁGINA PERMANECE IGUAL
-          ============================================================ */}
       <div className="px-4 pt-4 space-y-4">
         <div className={`bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 ${valueShadow} transition-shadow duration-300`}>
           <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Valor</label>
@@ -1108,7 +1061,6 @@ export default function EditTransactionPage() {
         </div>
       )}
 
-      {/* Modais */}
       {showReceiptModal && (
         <ReceiptModal
           isOpen={showReceiptModal}
