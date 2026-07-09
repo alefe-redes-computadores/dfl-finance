@@ -1,14 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import { ChevronLeft, Plus, CreditCard, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
-import { useSafeDb } from '@/hooks/useSafeDb'
 
 const CardsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
@@ -40,30 +37,21 @@ export default function CardsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
-  // 🔥 NOVO: Hook de blindagem para operações futuras
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Usa effectiveContext
-  // ============================================================
   const { data: localCards, loading: cardsLoading, reload: reloadCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { context: effectiveContext, is_archived: false },
   })
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -101,9 +89,6 @@ export default function CardsPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadCards = async () => {
     setLoading(true)
     setLoadingPulse(true)
@@ -123,9 +108,6 @@ export default function CardsPage() {
     loadCards()
   }, [user?.id, context])
 
-  // ============================================================
-  // PROCESSAMENTO EM MEMÓRIA (ELIMINANDO N+1)
-  // ============================================================
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
