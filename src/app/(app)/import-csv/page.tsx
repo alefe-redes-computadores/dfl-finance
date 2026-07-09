@@ -15,7 +15,6 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 const PreviewSkeleton = () => (
@@ -55,7 +54,6 @@ export default function ImportCSVPage() {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [file, setFile] = useState<File | null>(null)
@@ -73,7 +71,6 @@ export default function ImportCSVPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext },
@@ -163,9 +160,7 @@ export default function ImportCSVPage() {
     }
   }
 
-  // ============================================================
-  // 🔥 HANDLE IMPORT CORRIGIDO COM safeAdd
-  // ============================================================
+  // 🔥 HANDLE IMPORT ATOMICO COM TRANSACTION (ÚNICA PARA TODAS AS LINHAS)
   const handleImport = async () => {
     if (!user?.id) {
       showToast('Sessão expirada.', 'error')
@@ -211,90 +206,92 @@ export default function ImportCSVPage() {
 
       const categories = localCategories || []
 
-      for (let i = 0; i < dataRows.length; i++) {
-        const row = dataRows[i]
-        setImportProgress(((i + 1) / dataRows.length) * 100)
+      // 🔥 Única transaction para todas as transações
+      await db.transaction('rw', db.transactions, db.syncQueue, async () => {
+        for (let i = 0; i < dataRows.length; i++) {
+          const row = dataRows[i]
+          setImportProgress(((i + 1) / dataRows.length) * 100)
 
-        try {
-          const dateStr = colMap.date !== -1 ? row[headerRow[colMap.date]] : ''
-          const description = colMap.description !== -1 ? row[headerRow[colMap.description]] : ''
-          const amountStr = colMap.amount !== -1 ? row[headerRow[colMap.amount]] : ''
-          const typeRaw = colMap.type !== -1 ? row[headerRow[colMap.type]] : ''
-          const categoryName = colMap.category !== -1 ? row[headerRow[colMap.category]] : ''
+          try {
+            const dateStr = colMap.date !== -1 ? row[headerRow[colMap.date]] : ''
+            const description = colMap.description !== -1 ? row[headerRow[colMap.description]] : ''
+            const amountStr = colMap.amount !== -1 ? row[headerRow[colMap.amount]] : ''
+            const typeRaw = colMap.type !== -1 ? row[headerRow[colMap.type]] : ''
+            const categoryName = colMap.category !== -1 ? row[headerRow[colMap.category]] : ''
 
-          if (!dateStr || !description || !amountStr) {
-            failCount++
-            continue
-          }
-
-          let date = new Date(dateStr)
-          if (isNaN(date.getTime())) {
-            const parts = dateStr.split(/[\/\-.]/)
-            if (parts.length === 3) {
-              const day = parseInt(parts[0])
-              const month = parseInt(parts[1]) - 1
-              const year = parseInt(parts[2])
-              date = new Date(year, month, day)
+            if (!dateStr || !description || !amountStr) {
+              failCount++
+              continue
             }
-          }
-          if (isNaN(date.getTime())) {
+
+            let date = new Date(dateStr)
+            if (isNaN(date.getTime())) {
+              const parts = dateStr.split(/[\/\-.]/)
+              if (parts.length === 3) {
+                const day = parseInt(parts[0])
+                const month = parseInt(parts[1]) - 1
+                const year = parseInt(parts[2])
+                date = new Date(year, month, day)
+              }
+            }
+            if (isNaN(date.getTime())) {
+              failCount++
+              continue
+            }
+
+            const amount = parseFloat(amountStr.replace(',', '.').replace(/[^0-9.-]+/g, ''))
+            if (isNaN(amount) || amount <= 0) {
+              failCount++
+              continue
+            }
+
+            let type: 'income' | 'expense' | 'transfer' = 'expense'
+            const typeLower = typeRaw.toLowerCase()
+            if (typeLower.includes('receita') || typeLower.includes('income') || typeLower.includes('entrada')) {
+              type = 'income'
+            } else if (typeLower.includes('transferência') || typeLower.includes('transferencia') || typeLower.includes('transfer')) {
+              type = 'transfer'
+            }
+
+            let categoryId = null
+            if (categoryName) {
+              const found = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase()) as any
+              if (found) categoryId = found.id
+            }
+
+            const txId = crypto.randomUUID()
+            const txPayload = {
+              id: txId,
+              user_id: user.id,
+              context: effectiveContext,
+              type: type,
+              amount: amount,
+              description: description,
+              date: format(date, 'yyyy-MM-dd'),
+              status: 'done',
+              affects_balance: true,
+              category_id: categoryId,
+              notes: colMap.notes !== -1 ? row[headerRow[colMap.notes]] : null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              sync_status: 'pending',
+              sync_attempts: 0,
+            }
+
+            const result = await safeAdd('transactions', txPayload)
+            if (!result.success) {
+              failCount++
+              console.error(`Erro ao importar linha ${i + 1}: ${result.error}`)
+              continue
+            }
+
+            successCount++
+          } catch (err) {
             failCount++
-            continue
+            console.error('Erro na linha:', row, err)
           }
-
-          const amount = parseFloat(amountStr.replace(',', '.').replace(/[^0-9.-]+/g, ''))
-          if (isNaN(amount) || amount <= 0) {
-            failCount++
-            continue
-          }
-
-          let type: 'income' | 'expense' | 'transfer' = 'expense'
-          const typeLower = typeRaw.toLowerCase()
-          if (typeLower.includes('receita') || typeLower.includes('income') || typeLower.includes('entrada')) {
-            type = 'income'
-          } else if (typeLower.includes('transferência') || typeLower.includes('transferencia') || typeLower.includes('transfer')) {
-            type = 'transfer'
-          }
-
-          let categoryId = null
-          if (categoryName) {
-            const found = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase()) as any
-            if (found) categoryId = found.id
-          }
-
-          const txId = crypto.randomUUID()
-          const txPayload = {
-            id: txId,
-            user_id: user.id,
-            context: effectiveContext,
-            type: type,
-            amount: amount,
-            description: description,
-            date: format(date, 'yyyy-MM-dd'),
-            status: 'done',
-            affects_balance: true,
-            category_id: categoryId,
-            notes: colMap.notes !== -1 ? row[headerRow[colMap.notes]] : null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-          }
-
-          // 🔥 Substituído por safeAdd com verificação
-          const result = await safeAdd('transactions', txPayload)
-          if (!result.success) {
-            failCount++
-            console.error(`Erro ao importar linha ${i + 1}: ${result.error}`)
-            continue
-          }
-
-          successCount++
-        } catch (err) {
-          failCount++
-          console.error('Erro na linha:', row, err)
         }
-      }
+      })
 
       setImportedCount(successCount)
       setErrorCount(failCount)
@@ -570,3 +567,4 @@ export default function ImportCSVPage() {
     </div>
   )
 }
+// Blindagem Atômica Finalizada
