@@ -1,3 +1,4 @@
+
 // src/hooks/useLocalSync.ts
 'use client'
 
@@ -82,14 +83,15 @@ export function useLocalSync() {
 
           let error = null
 
-          if (operation === 'create') {
-            const { error: e } = await supabaseClient.insert(data)
-            error = e
-          } else if (operation === 'update') {
-            const { error: e } = await supabaseClient.update(data).eq('id', record_id)
-            error = e
-          } else if (operation === 'delete') {
+          // 🔥 SOLUÇÃO APLICADA AQUI:
+          if (operation === 'delete') {
+            // Se for exclusão, mantemos o delete
             const { error: e } = await supabaseClient.delete().eq('id', record_id)
+            error = e
+          } else {
+            // Para 'create' ou 'update', forçamos o UPSERT. 
+            // Se já existir, atualiza. Se não, cria. Resolve os conflitos de chave duplicada!
+            const { error: e } = await supabaseClient.upsert(data, { onConflict: 'id' })
             error = e
           }
 
@@ -97,10 +99,12 @@ export function useLocalSync() {
             throw new Error(`Erro ao sincronizar ${table} ${operation}: ${error.message}`)
           }
 
+          // Se deu sucesso, remove da fila
           await removeFromSyncQueue(item.id)
 
         } catch (err: any) {
-          console.error('Erro na sincronização:', err)
+          console.error('Erro na sincronização do item:', err)
+          // Falhou? Marca como erro, mas o laço 'for' continua para o próximo item
           await markSyncFailed(item.id, err.message)
         }
       }
