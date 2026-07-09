@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, ChevronRight, Edit2, Loader2, Check, Clock, Trash2,
   Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
@@ -17,7 +16,6 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { db } from '@/lib/db'
 
 const ICON_MAP: Record<string, React.ElementType> = {
   home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
@@ -28,9 +26,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
   receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
 }
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const BudgetDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6">
     <div className="flex items-center justify-between mb-6">
@@ -104,23 +99,16 @@ export default function BudgetDetailPage() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [projection, setProjection] = useState('')
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
-  // ============================================================
   const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { id: id as string },
   })
 
-  // 🔥 CORRIGIDO: Removidos orderBy e orderDir
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -158,9 +146,6 @@ export default function BudgetDetailPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadData = useCallback(async () => {
     if (!id || !user?.id) return
     setLoading(true)
