@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+// 🔥 NOVO: Importando o db para que o botão de pânico funcione
+import { db } from '@/lib/db'
 import {
   ChevronRight, Camera, Edit2, Check, LogOut, Sun, Moon, X, Bot, Lock,
   Download, ReceiptText, PieChart, Sparkles, Settings, Bell, BellOff, Building, RefreshCw
@@ -14,7 +16,6 @@ import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
-// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -201,7 +202,6 @@ export default function MorePage() {
   const { theme, toggleTheme: toggleThemeOriginal } = useTheme()
   const { showToast } = useToast()
   const { appMode, setAppMode } = useContext_()
-  // 🔥 NOVO: Hook de blindagem (preparatório - mantém consistência)
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [showExportModal, setShowExportModal] = useState(false)
@@ -362,7 +362,6 @@ export default function MorePage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 px-4 pt-8 font-sans transition-colors duration-300">
       
-      {/* Indicador de carregamento sutil no canto */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
@@ -472,7 +471,6 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* Perfil com Skeleton Loader */}
       {profileLoading ? (
         <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-pulse">
           <Skeleton variant="circle" width="64px" height="64px" />
@@ -571,9 +569,28 @@ export default function MorePage() {
           </div>
         </div>
       </div>
+
+      {/* 🔥 BOTÃO DE PÂNICO PARA LIMPAR A FILA DE SYNC */}
+      <button
+        onClick={async () => {
+          if (confirm("Você quer limpar a fila de sincronização travada? Os itens não salvos serão descartados.")) {
+            try {
+              await db.table('syncQueue').clear();
+              alert("Fila limpa com sucesso! Recarregue o app.");
+              window.location.reload();
+            } catch (e) {
+              alert("Erro ao limpar: " + e);
+            }
+          }
+        }}
+        className="w-full mt-10 mb-4 flex items-center justify-center gap-3 p-4 bg-rose-600 text-white hover:bg-rose-700 rounded-[20px] transition-colors font-bold text-[15px] shadow-lg shadow-rose-600/20 active:scale-[0.98]"
+      >
+        <RefreshCw size={20} /> LIMPAR FILA DE SYNC (Zumbis)
+      </button>
+
       <button
         onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
-        className="w-full mt-10 mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px] active:scale-[0.98]"
+        className="w-full mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px] active:scale-[0.98]"
       >
         <LogOut size={20} /> Encerrar Sessão
       </button>
