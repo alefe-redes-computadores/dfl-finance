@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, ChevronRight, Tag, Landmark,
   CreditCard, Calendar, PiggyBank, Palette, DollarSign,
@@ -11,7 +10,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
+import { db } from '@/lib/db'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -43,9 +42,6 @@ export default function EditCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
-  // ============================================================
-  // 🔥 BUSCAS LOCAIS (INDEXEDDB) - CORRIGIDO
-  // ============================================================
   const { data: localAccounts, loading: accLoading } = useLocalData({
     table: 'accounts' as any,
     filters: { context: 'dfl' },
@@ -56,11 +52,6 @@ export default function EditCardPage() {
     filters: { id: cardId },
   })
 
-  // 🔥 REMOVIDOS: const { update: updateCard, remove: removeCard } = useLocalData({ table: 'credit_cards' as any })
-
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   useEffect(() => {
     async function loadData() {
       if (!user?.id || !cardId) return
@@ -95,9 +86,6 @@ export default function EditCardPage() {
     loadData()
   }, [user?.id, cardId, localAccounts, localCards, reloadCards])
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '')
     if (value === '') value = '0'
@@ -112,6 +100,7 @@ export default function EditCardPage() {
     }
   }
 
+  // 🔥 UPDATE ATÔMICO E LOCAL-FIRST
   async function handleSave() {
     if (!name.trim()) {
       showToast('Por favor, informe o nome do cartão.', 'warning')
@@ -130,11 +119,22 @@ export default function EditCardPage() {
       color,
       limit_amount: parseFloat(limitAmount.replace(/\./g, '').replace(',', '.')) || 0,
       updated_at: new Date().toISOString(),
+      sync_status: 'pending'
     }
 
     try {
-      // 🔥 CORRIGIDO: Usando db.table().update() em vez de updateCard()
-      await db.table('credit_cards').update(cardId, payload)
+      await db.transaction('rw', 'credit_cards', 'syncQueue', async () => {
+        await db.table('credit_cards').update(cardId, payload)
+        await db.table('syncQueue').add({
+          table: 'credit_cards',
+          operation: 'update',
+          record_id: cardId,
+          data: payload,
+          user_id: user!.id,
+          created_at: new Date().toISOString()
+        })
+      })
+      
       showToast('Cartão atualizado!', 'success')
       router.push(`/cards/${cardId}`)
     } catch (error: any) {
@@ -144,13 +144,23 @@ export default function EditCardPage() {
     }
   }
 
+  // 🔥 DELETE ATÔMICO E LOCAL-FIRST
   async function handleDelete() {
     if (!confirm('Tem certeza que deseja excluir este cartão?')) return
     setDeleting(true)
 
     try {
-      // 🔥 CORRIGIDO: Usando db.table().delete() em vez de removeCard()
-      await db.table('credit_cards').delete(cardId)
+      await db.transaction('rw', 'credit_cards', 'syncQueue', async () => {
+        await db.table('credit_cards').delete(cardId)
+        await db.table('syncQueue').add({
+          table: 'credit_cards',
+          operation: 'delete',
+          record_id: cardId,
+          user_id: user!.id,
+          created_at: new Date().toISOString()
+        })
+      })
+
       showToast('Cartão excluído!', 'info')
       router.push('/cards')
     } catch (error: any) {
