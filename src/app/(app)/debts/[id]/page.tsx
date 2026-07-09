@@ -14,6 +14,8 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db' 
+// 🔥 Importando useSafeDb para operações atômicas
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 function DebtDetailContent() {
   const params = useParams()
@@ -21,6 +23,8 @@ function DebtDetailContent() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const { success, error } = useHapticFeedback()
+  // 🔥 Hook de blindagem
+  const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
   const debtId = Array.isArray(params.id) ? params.id[0] : params.id
 
@@ -130,33 +134,69 @@ function DebtDetailContent() {
   useEffect(() => { if (localTransactions) setPayments(localTransactions) }, [localTransactions])
   useEffect(() => { if (localAccounts) setAccounts(localAccounts) }, [localAccounts])
 
-  // 🔥 DELETAR DÍVIDA ATÔMICO
+  // 🔥 DELETAR DÍVIDA COM CASCATA (exclui pagamentos vinculados)
   const handleDeleteDebt = async () => {
     if (!user?.id) return
-    if (!confirm('Tem certeza que deseja excluir este registro?')) return
+    if (!confirm('Tem certeza que deseja excluir este registro? Todos os pagamentos vinculados também serão excluídos.')) return
     try {
-      await db.transaction('rw', 'debts', 'syncQueue', async () => {
-        await db.table('debts').delete(debtId)
-        await db.table('syncQueue').add({ table: 'debts', operation: 'delete', record_id: debtId, user_id: user.id, created_at: new Date().toISOString() })
+      await db.transaction('rw', db.debts, db.transactions, db.accounts, db.syncQueue, async () => {
+        // 1. Buscar todos os pagamentos vinculados
+        const paymentIds = payments.map(p => p.id)
+        
+        // 2. Para cada pagamento, reverter saldo da conta e deletar
+        for (const payment of payments) {
+          // Reverter saldo da conta (se tiver conta vinculada)
+          if (payment.account_id) {
+            const account = await db.table('accounts').get(payment.account_id)
+            if (account) {
+              const reversedBalance = Number(account.balance) - Number(payment.amount)
+              const result = await safeUpdate('accounts', payment.account_id, { balance: reversedBalance })
+              if (!result.success) throw new Error(`Erro ao reverter conta: ${result.error}`)
+            }
+          }
+          // Deletar o pagamento
+          const result = await safeDelete('transactions', payment.id)
+          if (!result.success) throw new Error(`Erro ao deletar pagamento: ${result.error}`)
+        }
+
+        // 3. Deletar a dívida
+        const result = await safeDelete('debts', debtId)
+        if (!result.success) throw new Error(`Erro ao excluir dívida: ${result.error}`)
       })
-      showToast('Dívida excluída.', 'info')
+
+      showToast('Dívida e pagamentos excluídos.', 'info')
       router.push('/debts')
     } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+      showToast(`Erro ao excluir: ${err.message || 'Erro desconhecido'}`, 'error')
     }
   }
 
-  // 🔥 EXCLUIR PAGAMENTO ATÔMICO E REVERTENDO SALDO
+  // 🔥 EXCLUIR PAGAMENTO ATÔMICO COM REVERSÃO DE SALDO
   const handleDeletePayment = async (paymentId: string, amount: number) => {
     if (!user?.id) return
     if (!confirm('Excluir este pagamento? O valor será removido do total pago e descontado da conta.')) return
 
     try {
-      await db.transaction('rw', 'transactions', 'debts', 'accounts', 'syncQueue', async () => {
-        
-        await db.table('transactions').delete(paymentId)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: paymentId, user_id: user.id, created_at: new Date().toISOString() })
+      await db.transaction('rw', db.transactions, db.debts, db.accounts, db.syncQueue, async () => {
+        // 1. Buscar o pagamento para saber a conta vinculada
+        const payment = payments.find(p => p.id === paymentId)
+        if (!payment) throw new Error('Pagamento não encontrado')
 
+        // 2. Reverter saldo da conta (se tiver)
+        if (payment.account_id) {
+          const account = await db.table('accounts').get(payment.account_id)
+          if (account) {
+            const reversedBalance = Number(account.balance) - Number(payment.amount)
+            const result = await safeUpdate('accounts', payment.account_id, { balance: reversedBalance })
+            if (!result.success) throw new Error(`Erro ao reverter conta: ${result.error}`)
+          }
+        }
+
+        // 3. Deletar a transação de pagamento
+        const result = await safeDelete('transactions', paymentId)
+        if (!result.success) throw new Error(`Erro ao excluir pagamento: ${result.error}`)
+
+        // 4. Recalcular total pago e atualizar status da dívida
         const updatedPayments = payments.filter(p => p.id !== paymentId)
         const totalPaid = updatedPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0)
 
@@ -170,24 +210,14 @@ function DebtDetailContent() {
           updated_at: new Date().toISOString()
         }
 
-        await db.table('debts').update(debtId, debtUpdates)
-        await db.table('syncQueue').add({ table: 'debts', operation: 'update', record_id: debtId, data: debtUpdates, user_id: user.id, created_at: new Date().toISOString() })
-
-        const deletedPayment = payments.find(p => p.id === paymentId)
-        if (deletedPayment?.account_id) {
-          const account = await db.table('accounts').get(deletedPayment.account_id)
-          if (account) {
-            const accUpdates = { balance: Number(account.balance) - amount } // Reverte a entrada
-            await db.table('accounts').update(deletedPayment.account_id, accUpdates)
-            await db.table('syncQueue').add({ table: 'accounts', operation: 'update', record_id: deletedPayment.account_id, data: accUpdates, user_id: user.id, created_at: new Date().toISOString() })
-          }
-        }
+        const debtResult = await safeUpdate('debts', debtId, debtUpdates)
+        if (!debtResult.success) throw new Error(`Erro ao atualizar dívida: ${debtResult.error}`)
       })
 
       showToast('Pagamento removido.', 'info')
       loadData()
     } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+      showToast(`Erro ao excluir: ${err.message || 'Erro desconhecido'}`, 'error')
     }
   }
 
@@ -250,18 +280,18 @@ function DebtDetailContent() {
         sync_attempts: 0,
       }
 
-      await db.transaction('rw', 'transactions', 'accounts', 'debts', 'syncQueue', async () => {
+      await db.transaction('rw', db.transactions, db.accounts, db.debts, db.syncQueue, async () => {
         // 1. Cria transação de pagamento
-        await db.table('transactions').add(newTx)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'create', record_id: txId, data: newTx, user_id: user.id, created_at: new Date().toISOString() })
+        const txResult = await safeAdd('transactions', newTx)
+        if (!txResult.success) throw new Error(`Erro ao criar pagamento: ${txResult.error}`)
 
-        // 2. Atualiza conta
+        // 2. Atualiza conta (se houver)
         if (targetAccountId) {
           const account = await db.table('accounts').get(targetAccountId)
           if (account) {
-            const accUpdates = { balance: Number(account.balance) + payAmountNum }
-            await db.table('accounts').update(targetAccountId, accUpdates)
-            await db.table('syncQueue').add({ table: 'accounts', operation: 'update', record_id: targetAccountId, data: accUpdates, user_id: user.id, created_at: new Date().toISOString() })
+            const newBalance = Number(account.balance) + payAmountNum
+            const accResult = await safeUpdate('accounts', targetAccountId, { balance: newBalance })
+            if (!accResult.success) throw new Error(`Erro ao atualizar conta: ${accResult.error}`)
           }
         }
 
@@ -275,8 +305,8 @@ function DebtDetailContent() {
           updated_at: new Date().toISOString()
         }
 
-        await db.table('debts').update(debtId, debtUpdates)
-        await db.table('syncQueue').add({ table: 'debts', operation: 'update', record_id: debtId, data: debtUpdates, user_id: user.id, created_at: new Date().toISOString() })
+        const debtResult = await safeUpdate('debts', debtId, debtUpdates)
+        if (!debtResult.success) throw new Error(`Erro ao atualizar dívida: ${debtResult.error}`)
       })
 
       success()
@@ -621,3 +651,4 @@ export default function DebtDetailPage() {
   if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
   return <DebtDetailContent />
 }
+// Blindagem Atômica Finalizada
