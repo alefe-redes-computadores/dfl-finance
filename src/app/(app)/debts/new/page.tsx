@@ -11,6 +11,8 @@ import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db' 
+// 🔥 Importando useSafeDb para operações atômicas
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -21,6 +23,8 @@ function NewDebtContent() {
   const searchParams = useSearchParams()
   const { context } = useContext_()
   const { showToast } = useToast()
+  // 🔥 Hook de blindagem
+  const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
   const editId = searchParams.get('edit')
 
   const [loading, setLoading] = useState(!!editId)
@@ -87,7 +91,7 @@ function NewDebtContent() {
     setAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // 🔥 SALVAR E EDITAR ATÔMICO
+  // 🔥 SALVAR E EDITAR ATÔMICO com safeAdd/safeUpdate
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -111,9 +115,10 @@ function NewDebtContent() {
 
     try {
       if (editId) {
-        await db.transaction('rw', 'debts', 'syncQueue', async () => {
-          await db.table('debts').update(editId, payload)
-          await db.table('syncQueue').add({ table: 'debts', operation: 'update', record_id: editId, data: payload, user_id: user.id, created_at: new Date().toISOString() })
+        // 🔥 ATUALIZAÇÃO COM safeUpdate + transaction
+        await db.transaction('rw', db.debts, db.syncQueue, async () => {
+          const result = await safeUpdate('debts', editId, payload)
+          if (!result.success) throw new Error(result.error)
         })
         showToast('Empréstimo atualizado com sucesso!', 'success')
       } else {
@@ -127,15 +132,16 @@ function NewDebtContent() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.transaction('rw', 'debts', 'syncQueue', async () => {
-          await db.table('debts').add(fullPayload)
-          await db.table('syncQueue').add({ table: 'debts', operation: 'create', record_id: id, data: fullPayload, user_id: user.id, created_at: new Date().toISOString() })
+        // 🔥 CRIAÇÃO COM safeAdd + transaction
+        await db.transaction('rw', db.debts, db.syncQueue, async () => {
+          const result = await safeAdd('debts', fullPayload)
+          if (!result.success) throw new Error(result.error)
         })
         showToast('Empréstimo registrado com sucesso!', 'success')
       }
       router.push('/debts')
     } catch (err: any) {
-      showToast('Erro ao salvar empréstimo.', 'error')
+      showToast(`Erro ao salvar: ${err.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -388,3 +394,4 @@ export default function NewDebtPage() {
     </ContextProvider>
   )
 }
+// Blindagem Atômica Finalizada
