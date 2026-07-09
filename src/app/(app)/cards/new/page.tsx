@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import { 
   ChevronLeft, ChevronRight, Tag, Landmark, 
   CreditCard, Calendar, PiggyBank, Palette, DollarSign, 
@@ -11,8 +10,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' // 🔥 ADICIONADO
-
+import { db } from '@/lib/db'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -40,15 +38,10 @@ export default function NewCardPage() {
 
   const [showAccountModal, setShowAccountModal] = useState(false)
 
-  // ============================================================
-  // 🔥 BUSCA LOCAL DE CONTAS
-  // ============================================================
   const { data: localAccounts, loading: accLoading } = useLocalData({
     table: 'accounts' as any,
     filters: { context: 'dfl' },
   })
-
-  // 🔥 REMOVIDO: const { create: createCard } = useLocalData({ table: 'credit_cards' as any })
 
   useEffect(() => {
     if (localAccounts) {
@@ -70,6 +63,7 @@ export default function NewCardPage() {
     }
   }
 
+  // 🔥 CREATE ATÔMICO E LOCAL-FIRST
   async function handleSave() {
     if (!name.trim()) {
       showToast('Por favor, informe o nome do cartão.', 'warning')
@@ -78,7 +72,7 @@ export default function NewCardPage() {
     setSaving(true)
 
     const payload = {
-      id: crypto.randomUUID(), // 🔥 ADICIONADO: ID gerado localmente
+      id: crypto.randomUUID(),
       user_id: user!.id,
       context: 'dfl',
       name,
@@ -98,8 +92,18 @@ export default function NewCardPage() {
     }
 
     try {
-      // 🔥 CORRIGIDO: Usando db.table().add() em vez de create()
-      await db.table('credit_cards').add(payload)
+      await db.transaction('rw', 'credit_cards', 'syncQueue', async () => {
+        await db.table('credit_cards').add(payload)
+        await db.table('syncQueue').add({
+          table: 'credit_cards',
+          operation: 'create',
+          record_id: payload.id,
+          data: payload,
+          user_id: user!.id,
+          created_at: new Date().toISOString()
+        })
+      })
+
       showToast('Cartão criado com sucesso!', 'success')
       router.push('/cards')
     } catch (error: any) {
