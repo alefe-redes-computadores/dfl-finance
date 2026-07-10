@@ -16,18 +16,24 @@ const ThemeContext = createContext<ThemeContextType>({
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // 1. Inicialize sempre com um valor padrão (evita o erro de hidratação)
   const [theme, setTheme] = useState<Theme>('light')
   const [userId, setUserId] = useState<string | null>(null)
-  const [loaded, setLoaded] = useState(false)
 
-  // Obtém o usuário logado
   useEffect(() => {
+    // 2. Aplica o tema imediatamente ao montar
+    const saved = localStorage.getItem('theme') as Theme | null
+    if (saved) {
+      setTheme(saved)
+      document.documentElement.classList.toggle('dark', saved === 'dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('dark')
+      document.documentElement.classList.add('dark')
+    }
+
+    // Carrega o usuário
     supabase.auth.getSession().then(({ data }) => {
-      if (data?.session?.user?.id) {
-        setUserId(data.session.user.id)
-      } else {
-        setLoaded(true)
-      }
+      if (data?.session?.user?.id) setUserId(data.session.user.id)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -37,16 +43,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  // Busca o tema do banco (se logado) ou do localStorage
+  // Efeito separado para sincronizar tema do banco se o usuário logar
   useEffect(() => {
-    if (!userId) {
-      const saved = localStorage.getItem('theme') as Theme | null
-      if (saved) {
-        setTheme(saved)
-        document.documentElement.classList.toggle('dark', saved === 'dark')
-      }
-      return
-    }
+    if (!userId) return
 
     supabase
       .from('user_settings')
@@ -55,17 +54,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       .single()
       .then(({ data }) => {
         if (data?.theme) {
-          setTheme(data.theme as Theme)
-          document.documentElement.classList.toggle('dark', data.theme === 'dark')
-        } else {
-          // Fallback localStorage
-          const saved = localStorage.getItem('theme') as Theme | null
-          if (saved) {
-            setTheme(saved)
-            document.documentElement.classList.toggle('dark', saved === 'dark')
-          }
+          const t = data.theme as Theme
+          setTheme(t)
+          document.documentElement.classList.toggle('dark', t === 'dark')
+          localStorage.setItem('theme', t)
         }
-        setLoaded(true)
       })
   }, [userId])
 
@@ -76,7 +69,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', newTheme === 'dark')
 
     if (userId) {
-      // Salva no banco
       await supabase.from('user_settings').upsert({
         user_id: userId,
         theme: newTheme,
@@ -85,8 +77,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (!loaded) return null
-
+  // REMOVEMOS O "if (!loaded) return null" AQUI
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
