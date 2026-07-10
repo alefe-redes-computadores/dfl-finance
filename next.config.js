@@ -33,17 +33,15 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export', 
-  trailingSlash: true, 
   
-  // 🔥 A MÁGICA ACONTECE AQUI: IGNORAR A CHATICE DO TYPESCRIPT NO BUILD
+  // As linhas 'output' e 'trailingSlash' foram removidas para corrigir o build
+  
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // 🔥 FIM DA MÁGICA
 
   images: {
     domains: ['bwggczkzsqcdeayyysmx.supabase.co'],
