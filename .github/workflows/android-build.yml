@@ -26,7 +26,7 @@ jobs:
         run: npm install
 
       - name: Gerar Ícones Nativo
-        run: npx @capacitor/assets generate --silent
+        run: npx @capacitor/assets generate
 
       - name: Build do Next.js
         run: npm run build
