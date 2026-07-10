@@ -38,7 +38,9 @@ export function useAuth() {
         }
       }
 
-      // 2. Fluxo Normal (Online/Refresh de sessão)
+     
+
+ // 2. Fluxo Normal (Online/Refresh de sessão)
       try {
         const { data } = await supabase.auth.getSession()
         if (mounted) {
