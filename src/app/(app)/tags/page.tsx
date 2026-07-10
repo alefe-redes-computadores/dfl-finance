@@ -21,7 +21,6 @@ import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = [
@@ -42,10 +41,13 @@ export default function TagsPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useContext_()
+  // 🔥 CORREÇÃO: Pegando o appMode para calcular o effectiveContext
+  const { context, appMode } = useContext_()
   const { user } = useAuth()
-  // 🔥 NOVO: Hook de blindagem
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+
+  // 🔥 CORREÇÃO: Aplicando o effectiveContext para o modo Apenas PF funcionar
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -62,12 +64,12 @@ export default function TagsPage() {
 
   const { data: tags, loading, reload } = useLocalData({
     table: 'tags' as any,
-    filters: { context },
+    filters: { context: effectiveContext }, // 🔥 Usando effectiveContext
   })
 
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
-    filters: { context },
+    filters: { context: effectiveContext }, // 🔥 Usando effectiveContext
   })
 
   const transactionCountByTag = (transactions || []).reduce((acc: Record<string, number>, tx: any) => {
@@ -93,7 +95,6 @@ export default function TagsPage() {
     setShowForm(true)
   }
 
-  // 🔥 CORRIGIDO: HANDLER DE SAVE COM safeAdd/safeUpdate
   const handleSave = async () => {
     if (!tagName.trim() || !user) {
       showToast("Informe o nome da tag", "warning")
@@ -106,7 +107,7 @@ export default function TagsPage() {
       const payload = {
         name: tagName.trim(),
         color: tagColor,
-        context,
+        context: effectiveContext, // 🔥 Usando effectiveContext
         updated_at: new Date().toISOString(),
       }
 
@@ -150,7 +151,6 @@ export default function TagsPage() {
     }
   }
 
-  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
