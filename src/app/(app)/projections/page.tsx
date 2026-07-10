@@ -13,10 +13,8 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
-// ✅ Imports normais (sem lazy loading)
 import {
   AreaChart,
   Area,
@@ -29,9 +27,6 @@ import {
   ResponsiveContainer
 } from 'recharts'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const ProjectionsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     <div className="grid grid-cols-3 gap-3">
@@ -81,7 +76,6 @@ export default function ProjectionsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
-  // 🔥 NOVO: Hook de blindagem (preparatório)
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
@@ -91,9 +85,6 @@ export default function ProjectionsPage() {
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m')
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Usa effectiveContext
-  // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -136,9 +127,6 @@ export default function ProjectionsPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
   const loadData = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
@@ -154,9 +142,6 @@ export default function ProjectionsPage() {
     }
   }, [user?.id, reloadTransactions])
 
-  // ============================================================
-  // EFEITO PARA PROCESSAR DADOS SEMPRE QUE LOCALTRANSACTIONS MUDAR
-  // ============================================================
   useEffect(() => {
     if (!localTransactions || localTransactions.length === 0) {
       setProjections([])
@@ -168,10 +153,10 @@ export default function ProjectionsPage() {
     const endDate = new Date()
     const startDate = subMonths(endDate, 6)
 
-    // 🔥 FILTRA TRANSAÇÕES PELO PERÍODO (últimos 6 meses)
+    // 🔥 FILTRA TRANSAÇÕES E IGNORA COMPLETAMENTE AS TRANSFERÊNCIAS
     const filtered = localTransactions.filter((tx: any) => {
       const txDate = new Date(tx.date)
-      return txDate >= startDate && txDate <= endDate
+      return txDate >= startDate && txDate <= endDate && tx.type !== 'transfer'
     })
 
     if (filtered.length === 0) {
@@ -181,7 +166,6 @@ export default function ProjectionsPage() {
       return
     }
 
-    // 🔥 AGRUPAMENTO POR MÊS
     const months = new Map()
     filtered.forEach((tx: any) => {
       const month = format(new Date(tx.date), 'yyyy-MM')
@@ -191,7 +175,7 @@ export default function ProjectionsPage() {
       const data = months.get(month)
       if (tx.type === 'income') {
         data.income += Number(tx.amount)
-      } else {
+      } else if (tx.type === 'expense') {
         data.expense += Number(tx.amount)
       }
     })
@@ -206,13 +190,16 @@ export default function ProjectionsPage() {
     const avgIncome = totalIncome / months.size
     const avgExpense = totalExpense / months.size
 
-    // 🔥 SALDO ATUAL (CÁLCULO CUMULATIVO)
+    // 🔥 SALDO ATUAL DO PERÍODO
     let currentBalance = 0
     filtered.forEach((tx: any) => {
-      currentBalance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)
+      if (tx.type === 'income') {
+        currentBalance += Number(tx.amount)
+      } else if (tx.type === 'expense') {
+        currentBalance -= Number(tx.amount)
+      }
     })
 
-    // 🔥 PROJEÇÃO
     const monthsToProject = parseInt(period)
     const projectionData = []
     let balance = currentBalance
@@ -250,18 +237,12 @@ export default function ProjectionsPage() {
     setLoadingPulse(false)
   }, [localTransactions, period, scenario])
 
-  // ============================================================
-  // CARREGA DADOS INICIALMENTE
-  // ============================================================
   useEffect(() => {
     if (user?.id && context) {
       loadData()
     }
   }, [user?.id, context, loadData])
 
-  // ============================================================
-  // CONFIGURAÇÕES DE UI
-  // ============================================================
   const periods = [
     { key: '3m', label: '3 meses' },
     { key: '6m', label: '6 meses' },
