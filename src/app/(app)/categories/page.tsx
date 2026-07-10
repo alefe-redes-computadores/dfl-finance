@@ -71,11 +71,25 @@ export default function CategoriesPage() {
 
   async function handleSave() {
     if (!name || !user) return
+    
+    // 🔥 NOVA TRAVA LOCAL: Impede de salvar com nome repetido
+    const cleanedName = name.trim().toLowerCase()
+    const exists = allLocalCategories?.find((c: any) => 
+      (c.name || '').trim().toLowerCase() === cleanedName && 
+      c.context === effectiveContext &&
+      c.id !== editingCategory?.id // Ignora a si mesmo na hora de editar
+    )
+
+    if (exists) {
+      showToast('Já existe uma categoria com este nome!', 'warning')
+      return
+    }
+
     setSaving(true)
 
     try {
       if (editingCategory) {
-        // 🔥 UPDATE BLINDADO
+        // UPDATE BLINDADO
         const updatePayload = {
           name: name.trim(),
           icon: icon.toLowerCase(),
@@ -95,7 +109,7 @@ export default function CategoriesPage() {
         }
         showToast('Categoria atualizada e salva!', 'success')
       } else {
-        // 🔥 CREATE BLINDADO
+        // CREATE BLINDADO
         const id = crypto.randomUUID()
         const fullPayload = {
           id,
