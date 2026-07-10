@@ -12,7 +12,6 @@ interface ContextCtx {
   setContext: (c: Context) => void
   appMode: 'personal_only' | 'full' | null
   setAppMode: (m: 'personal_only' | 'full') => void
-  // 🔥 NOVO: contexto efetivo (já calculado)
   effectiveContext: Context
 }
 
@@ -21,15 +20,14 @@ const ContextCtx = createContext<ContextCtx>({
   setContext: () => {},
   appMode: null,
   setAppMode: () => {},
-  effectiveContext: 'dfl', // 🔥 NOVO
+  effectiveContext: 'dfl',
 })
 
 export const useContext_ = () => useContext(ContextCtx)
 
-// Função auxiliar para sincronizar o cookie (usado pelo middleware)
 const setAppModeCookie = (mode: 'personal_only' | 'full') => {
   if (typeof document !== 'undefined') {
-    document.cookie = `dfl_app_mode=${mode}; path=/; max-age=${60 * 60 * 24 * 30}` // 30 dias
+    document.cookie = `dfl_app_mode=${mode}; path=/; max-age=${60 * 60 * 24 * 30}`
   }
 }
 
@@ -37,33 +35,26 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const hasSynced = useRef(false)
 
-  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('dfl_app_mode')
-      return (cached as 'personal_only' | 'full') || null
-    }
-    return null
-  })
+  // 1. Inicializamos com valores neutros/padrão (não lemos localStorage aqui para evitar erro de hidratação)
+  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
+  const [context, setContextState] = useState<Context>('dfl')
 
-  const [context, setContextState] = useState<Context>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('dfl_app_mode') === 'personal_only' ? 'personal' : 'dfl'
+  // 2. useEffect só roda no cliente. É aqui que lemos o localStorage com segurança.
+  useEffect(() => {
+    const cached = localStorage.getItem('dfl_app_mode') as 'personal_only' | 'full' | null
+    if (cached) {
+      setAppModeState(cached)
+      setContextState(cached === 'personal_only' ? 'personal' : 'dfl')
+    } else {
+      setAppModeState('full')
+      setContextState('dfl')
     }
-    return 'dfl'
-  })
+  }, [])
 
-  // 🔥 NOVO: effectiveContext calculado automaticamente
   const effectiveContext: Context = appMode === 'personal_only' ? 'personal' : context
 
   useEffect(() => {
-    if (!user?.id) return
-    if (hasSynced.current) return
-
-    const cached = localStorage.getItem('dfl_app_mode')
-    if (cached === 'personal_only' || cached === 'full') {
-      hasSynced.current = true
-      return
-    }
+    if (!user?.id || hasSynced.current) return
 
     async function fetchFromSupabase() {
       try {
@@ -78,16 +69,9 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('dfl_app_mode', data.app_mode)
           setAppModeCookie(data.app_mode)
           setContextState(data.app_mode === 'personal_only' ? 'personal' : 'dfl')
-        } else {
-          setAppModeState('full')
-          localStorage.setItem('dfl_app_mode', 'full')
-          setAppModeCookie('full')
-          setContextState('dfl')
         }
       } catch (err) {
         console.error('Erro na sincronização:', err)
-        setAppModeState('full')
-        setContextState('dfl')
       } finally {
         hasSynced.current = true
       }
@@ -105,11 +89,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
     setAppModeState(mode)
     localStorage.setItem('dfl_app_mode', mode)
     setAppModeCookie(mode)
-    if (mode === 'personal_only') {
-      setContextState('personal')
-    } else {
-      setContextState('dfl')
-    }
+    setContextState(mode === 'personal_only' ? 'personal' : 'dfl')
   }
 
   return (
@@ -118,7 +98,7 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
       setContext,
       appMode,
       setAppMode,
-      effectiveContext, // 🔥 EXPORTA o effectiveContext!
+      effectiveContext,
     }}>
       {children}
     </ContextCtx.Provider>
@@ -128,7 +108,8 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
 
-  // 🔥 Se for personal_only, NÃO RENDERIZA NADA
+  // Se o appMode ainda está carregando (null), não renderiza o toggle para evitar erro de layout
+  if (appMode === null) return null
   if (appMode !== 'full') return null
 
   return (
@@ -139,7 +120,7 @@ export default function ContextToggle() {
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
             context === 'dfl'
               ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              : 'text-gray-500 dark:bg-transparent dark:text-gray-400'
           }`}
         >
           <Building2 className="w-3.5 h-3.5" />
@@ -150,7 +131,7 @@ export default function ContextToggle() {
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wide transition-all duration-300 ${
             context === 'personal'
               ? 'bg-white dark:bg-slate-600 shadow-sm text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              : 'text-gray-500 dark:bg-transparent dark:text-gray-400'
           }`}
         >
           <User className="w-3.5 h-3.5" />
