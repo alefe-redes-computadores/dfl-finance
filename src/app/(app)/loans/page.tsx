@@ -12,7 +12,8 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
+// 🔥 NOVO: Hook de blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Payment = { id: string, loan_id: string, amount: number, date: string }
 
@@ -22,7 +23,12 @@ export default function LoansPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { appMode, effectiveContext } = useContext_()
+  
+  // 🔥 CORRIGIDO: effectiveContext garantindo a separação PF/PJ
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+
+  const { safeDelete } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -35,8 +41,15 @@ export default function LoansPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: loans, loading, reload } = useLocalData({ table: 'loans' as any, filters: { context: effectiveContext } })
-  const { data: allPayments } = useLocalData({ table: 'transactions' as any, filters: { context: effectiveContext, type: 'loan_payment' } })
+  const { data: loans, loading, reload } = useLocalData({ 
+    table: 'loans' as any, 
+    filters: { context: effectiveContext } 
+  })
+  
+  const { data: allPayments } = useLocalData({ 
+    table: 'transactions' as any, 
+    filters: { context: effectiveContext, type: 'loan_payment' } 
+  })
 
   const paymentsByLoan = (allPayments || []).reduce((acc: Record<string, Payment[]>, p: any) => {
     if (p.loan_id) {
@@ -46,19 +59,22 @@ export default function LoansPage() {
     return acc
   }, {})
 
-  // 🔥 EXCLUIR EMPRÉSTIMO ATÔMICO PELA LISTAGEM
+  // 🔥 EXCLUIR EMPRÉSTIMO ATÔMICO PELA LISTAGEM E BLINDADO
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.transaction('rw', 'loans', 'transactions', 'syncQueue', async () => {
-        const payments = paymentsByLoan[deleteModal] || []
-        for (const p of payments) {
-          await db.table('transactions').delete(p.id)
-          await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: p.id, user_id: user.id, created_at: new Date().toISOString() })
-        }
-        await db.table('loans').delete(deleteModal)
-        await db.table('syncQueue').add({ table: 'loans', operation: 'delete', record_id: deleteModal, user_id: user.id, created_at: new Date().toISOString() })
-      })
+      const payments = paymentsByLoan[deleteModal] || []
+      
+      // Apaga todos os pagamentos vinculados
+      for (const p of payments) {
+        const res1 = await safeDelete('transactions', p.id)
+        if (!res1.success) throw new Error(res1.error)
+      }
+      
+      // Apaga o empréstimo
+      const res2 = await safeDelete('loans', deleteModal)
+      if (!res2.success) throw new Error(res2.error)
+
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
