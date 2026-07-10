@@ -15,7 +15,6 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function NewContactPage() {
@@ -24,9 +23,12 @@ export default function NewContactPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useContext_()
   const { user } = useAuth()
   const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
+
+  // 🔥 CORRIGIDO: Aplicando o effectiveContext para o vazamento de modo
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -47,7 +49,7 @@ export default function NewContactPage() {
 
   const { data: localContacts } = useLocalData({
     table: 'contacts' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const contactData = localContacts?.find((c: any) => c.id === editId) as any
@@ -83,7 +85,7 @@ export default function NewContactPage() {
     }
   }, [refreshing])
 
-  // 🔥 SAVE ATOMICO COM TRANSACTION
+  // 🔥 CORRIGIDO: Remoção do db.transaction redundante e adição do effectiveContext
   const handleSave = async () => {
     if (!name.trim()) {
       showToast("Preencha o nome do contato", "warning")
@@ -106,15 +108,13 @@ export default function NewContactPage() {
         state: state.trim() || null,
         zip_code: zipCode.trim() || null,
         notes: notes.trim() || null,
-        context,
+        context: effectiveContext,
         updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        await db.transaction('rw', db.contacts, db.syncQueue, async () => {
-          const result = await safeUpdate('contacts', editId, payload)
-          if (!result.success) throw new Error(result.error)
-        })
+        const result = await safeUpdate('contacts', editId, payload)
+        if (!result.success) throw new Error(result.error)
         showToast("Contato atualizado com sucesso!", "success")
       } else {
         const id = crypto.randomUUID()
@@ -126,10 +126,8 @@ export default function NewContactPage() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.transaction('rw', db.contacts, db.syncQueue, async () => {
-          const result = await safeAdd('contacts', fullPayload)
-          if (!result.success) throw new Error(result.error)
-        })
+        const result = await safeAdd('contacts', fullPayload)
+        if (!result.success) throw new Error(result.error)
         showToast("Contato criado com sucesso!", "success")
       }
 
@@ -143,15 +141,13 @@ export default function NewContactPage() {
     }
   }
 
-  // 🔥 DELETE ATOMICO COM TRANSACTION
+  // 🔥 CORRIGIDO: Remoção do db.transaction redundante
   const handleDelete = async () => {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este contato?")) return
     try {
-      await db.transaction('rw', db.contacts, db.syncQueue, async () => {
-        const result = await safeDelete('contacts', editId)
-        if (!result.success) throw new Error(result.error)
-      })
+      const result = await safeDelete('contacts', editId)
+      if (!result.success) throw new Error(result.error)
       showToast("Contato excluído com sucesso!", "success")
       success()
       router.back()
@@ -161,7 +157,7 @@ export default function NewContactPage() {
     }
   }
 
-  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = effectiveContext === "dfl" ? "da Empresa" : "Pessoal"
 
   return (
     <div
