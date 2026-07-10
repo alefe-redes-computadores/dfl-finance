@@ -12,7 +12,8 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
+// 🔥 NOVO: Hook de blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Installment = { id: string, financing_id: string, amount: number, due_date: string, paid: boolean, number: number }
 
@@ -22,7 +23,12 @@ export default function FinancingsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { appMode, effectiveContext } = useContext_()
+  
+  // 🔥 CORRIGIDO: effectiveContext blindando o vazamento
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+  
+  const { safeDelete } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -35,8 +41,15 @@ export default function FinancingsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: financings, loading, reload } = useLocalData({ table: 'financings' as any, filters: { context: effectiveContext } })
-  const { data: allInstallments } = useLocalData({ table: 'transactions' as any, filters: { context: effectiveContext, type: 'financing_installment' } })
+  const { data: financings, loading, reload } = useLocalData({ 
+    table: 'financings' as any, 
+    filters: { context: effectiveContext } 
+  })
+  
+  const { data: allInstallments } = useLocalData({ 
+    table: 'transactions' as any, 
+    filters: { context: effectiveContext, type: 'financing_installment' } 
+  })
 
   const installmentsByFinancing = (allInstallments || []).reduce((acc: Record<string, Installment[]>, inst: any) => {
     if (inst.financing_id) {
@@ -46,19 +59,22 @@ export default function FinancingsPage() {
     return acc
   }, {})
 
-  // 🔥 EXCLUSÃO ATÔMICA DA LISTA
+  // 🔥 EXCLUSÃO ATÔMICA E SEGURA (Removido db.transaction manual)
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.transaction('rw', 'financings', 'transactions', 'syncQueue', async () => {
-        const installments = installmentsByFinancing[deleteModal] || []
-        for (const inst of installments) {
-          await db.table('transactions').delete(inst.id)
-          await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: inst.id, user_id: user.id, created_at: new Date().toISOString() })
-        }
-        await db.table('financings').delete(deleteModal)
-        await db.table('syncQueue').add({ table: 'financings', operation: 'delete', record_id: deleteModal, user_id: user.id, created_at: new Date().toISOString() })
-      })
+      const installments = installmentsByFinancing[deleteModal] || []
+      
+      // Apaga todas as parcelas primeiro
+      for (const inst of installments) {
+        const res1 = await safeDelete('transactions', inst.id)
+        if (!res1.success) throw new Error(res1.error)
+      }
+      
+      // Apaga o financiamento pai
+      const res2 = await safeDelete('financings', deleteModal)
+      if (!res2.success) throw new Error(res2.error)
+
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
