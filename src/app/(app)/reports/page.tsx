@@ -15,7 +15,6 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 import {
@@ -115,7 +114,6 @@ export default function ReportsPage() {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem (preparatório)
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
@@ -125,9 +123,6 @@ export default function ReportsPage() {
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
   const [showExportModal, setShowExportModal] = useState(false)
 
-  // ============================================================
-  // 🔥 CORRIGIDO: Usa effectiveContext
-  // ============================================================
   const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -195,9 +190,11 @@ export default function ReportsPage() {
 
   const endDate = new Date()
   const startDate = subMonths(endDate, parseInt(period))
+
+  // 🔥 Ignorar "transfer" nos cálculos gerais de relatório
   const filteredByPeriod = transactions.filter((t: any) => {
     const txDate = new Date(t.date)
-    return txDate >= startDate && txDate <= endDate
+    return txDate >= startDate && txDate <= endDate && t.type !== 'transfer'
   })
 
   const filteredTransactions = filterType === 'all'
@@ -214,16 +211,23 @@ export default function ReportsPage() {
 
   const balance = totalIncome - totalExpense
 
-  const categoryData = filteredTransactions.reduce((acc: any[], t: any) => {
-    const categoryName = t.categories?.name || 'Outros'
-    const existing = acc.find(item => item.name === categoryName)
-    if (existing) {
-      existing.value += Number(t.amount)
-    } else {
-      acc.push({ name: categoryName, value: Number(t.amount) })
-    }
-    return acc
-  }, []).sort((a, b) => b.value - a.value).slice(0, 6)
+  // 🔥 O Gráfico de Pizza não deve misturar Despesa com Receita
+  // Se o filtro for 'Todas', mostramos 'Despesas' por padrão. 
+  const pieChartType = filterType === 'income' ? 'income' : 'expense'
+  const pieChartTitle = filterType === 'income' ? 'Receitas por Categoria' : 'Despesas por Categoria'
+
+  const categoryData = filteredTransactions
+    .filter((t: any) => t.type === pieChartType) // Pega só o tipo selecionado para não distorcer a pizza
+    .reduce((acc: any[], t: any) => {
+      const categoryName = t.categories?.name || 'Outros'
+      const existing = acc.find(item => item.name === categoryName)
+      if (existing) {
+        existing.value += Number(t.amount)
+      } else {
+        acc.push({ name: categoryName, value: Number(t.amount) })
+      }
+      return acc
+    }, []).sort((a, b) => b.value - a.value).slice(0, 6)
 
   const COLORS = ['#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
@@ -428,7 +432,8 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 gap-3">
               {categoryData.length > 0 && (
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-                  <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Categorias</h3>
+                  {/* 🔥 TÍTULO INTELIGENTE: Mostra Receitas ou Despesas */}
+                  <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">{pieChartTitle}</h3>
                   <div className="h-[150px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RePieChart>
