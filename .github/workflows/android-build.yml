@@ -3,12 +3,10 @@ name: Compilar APK DFL
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # Permite rodar manualmente se precisar!
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Clonar Repositório
         uses: actions/checkout@v4
@@ -17,6 +15,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Configurar Java JDK 17
         uses: actions/setup-java@v4
@@ -25,23 +24,24 @@ jobs:
           java-version: '17'
 
       - name: Instalar Dependências
-        run: npm install
+        run: npm ci
 
-      - name: Build do Next.js (Arquivos estáticos)
+      - name: Gerar Ícones Nativo (Automático)
+        run: npx @capacitor/assets generate --silent
+
+      - name: Build do Next.js
         run: npm run build
 
-      - name: Criar o App Android (A Mágica da Nuvem)
-        run: |
-          npx cap add android
-          npx cap sync android
+      - name: Sincronizar com Android
+        run: npx cap sync android
 
-      - name: Compilar o APK (Gradle)
+      - name: Compilar APK (Gradle)
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Disponibilizar o APK para Download
+      - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
         with:
           name: DFL-Finance-App
