@@ -1,7 +1,6 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { Building2, User } from 'lucide-react'
 
 type Context = 'dfl' | 'personal'
 
@@ -57,7 +56,6 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-// O BOTÃO VISUAL QUE FALTAVA!
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
   const [mounted, setMounted] = useState(false)
@@ -66,31 +64,34 @@ export default function ContextToggle() {
     setMounted(true)
   }, [])
 
-  // Proteção contra erro de hidratação: mostra um "esqueleto" até carregar
   if (!mounted) {
-    return <div className="w-[70px] h-[34px] bg-gray-200 dark:bg-slate-700 animate-pulse rounded-[16px]"></div>
+    return <div className="w-[100px] h-[32px] bg-gray-200 dark:bg-zinc-800 rounded-full animate-pulse" />
   }
 
   if (appMode === 'personal_only') return null
 
-  const isDfl = context === 'dfl'
-
   return (
-    <button
-      onClick={() => setContext(isDfl ? 'personal' : 'dfl')}
-      className="flex items-center gap-2 bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 px-3 py-1.5 rounded-[16px] transition-colors"
-    >
-      {isDfl ? (
-        <>
-          <Building2 size={16} className="text-blue-500" />
-          <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">PJ</span>
-        </>
-      ) : (
-        <>
-          <User size={16} className="text-emerald-500" />
-          <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">PF</span>
-        </>
-      )}
-    </button>
+    <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 gap-1">
+      <button
+        onClick={() => setContext('dfl')}
+        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+          context === 'dfl'
+            ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
+            : 'text-gray-500 dark:text-gray-400'
+        }`}
+      >
+        PJ
+      </button>
+      <button
+        onClick={() => setContext('personal')}
+        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+          context === 'personal'
+            ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
+            : 'text-gray-500 dark:text-gray-400'
+        }`}
+      >
+        PF
+      </button>
+    </div>
   )
 }
