@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -14,7 +14,8 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db' 
+// 🔥 NOVO: Hook de blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const GoalDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6 space-y-4">
@@ -28,34 +29,54 @@ export default function GoalDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const { context } = useContext_()
+  
+  // Respeitando o modo de visualização
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+  
   const { showToast } = useToast()
+  const { safeDelete, safeAdd } = useSafeDb()
 
-  const [goal, setGoal] = useState<any>(null)
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [saved, setSaved] = useState(0)
   const [showContributionModal, setShowContributionModal] = useState(false)
   const [contribAmount, setContribAmount] = useState('0,00')
   const [contribAmountNum, setContribAmountNum] = useState(0)
   const [contribDate, setContribDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [contribNote, setContribNote] = useState('')
 
-  const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
-    table: 'goals' as any,
-    filters: { id: id as string },
-  })
-
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { goal_id: id as string },
-  })
-
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
+
+  // Leitura 100% offline
+  const { data: goals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
+    table: 'goals' as any,
+    filters: { id: id as string, context: effectiveContext },
+  })
+
+  const { data: allTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+    table: 'transactions' as any,
+    filters: { goal_id: id as string, context: effectiveContext },
+  })
+
+  const goal = useMemo(() => {
+    return goals?.find((g: any) => g.id === id)
+  }, [goals, id])
+
+  const transactions = useMemo(() => {
+    if (!allTransactions || !goal) return []
+    return allTransactions
+      .filter((tx: any) => tx.goal_id === goal.id)
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [allTransactions, goal])
+
+  const saved = useMemo(() => {
+    return transactions
+      .filter((tx: any) => tx.type === 'income' && tx.status === 'done')
+      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
+  }, [transactions])
+
+  const loading = goalsLoading || txLoading
 
   const handleTouchStart = (e: TouchEvent) => {
     if (window.scrollY > 10 || loading) return
@@ -69,7 +90,7 @@ export default function GoalDetailPage() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
+      Promise.all([reloadGoals(), reloadTransactions()]).finally(() => setRefreshing(false))
     }
   }
 
@@ -88,38 +109,15 @@ export default function GoalDetailPage() {
     }
   }, [loading, refreshing])
 
-  const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-    try {
-      await Promise.all([reloadGoals(), reloadTransactions()])
-      const goalData = (localGoals || [])[0] as any
-      if (!goalData) { router.push('/goals'); return }
-      setGoal(goalData)
-      const txs = localTransactions || []
-      setTransactions(txs)
-      const totalSaved = txs.filter((tx: any) => tx.type === 'income' && tx.status === 'done').reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-      setSaved(totalSaved)
-    } catch (err) {
-      console.error('Erro ao carregar meta:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [id, user, localGoals, localTransactions, router])
-
-  useEffect(() => { loadData() }, [loadData])
-
-  // 🔥 EXCLUIR META ATÔMICO
+  // 🔥 EXCLUIR META ATÔMICA E SEGURA
   const handleDelete = async () => {
     if (!user) return
-    if (!confirm('Excluir esta meta? As contribuições vinculadas não serão apagadas, apenas desvinculadas.')) return
+    if (!confirm('Excluir esta meta? As contribuições vinculadas não serão apagadas, apenas perderão a categoria da meta.')) return
+    
     try {
-      await db.transaction('rw', 'goals', 'syncQueue', async () => {
-        await db.table('goals').delete(id as string)
-        await db.table('syncQueue').add({ table: 'goals', operation: 'delete', record_id: id as string, user_id: user.id, created_at: new Date().toISOString() })
-      })
+      const res = await safeDelete('goals', id as string)
+      if (!res.success) throw new Error(res.error)
+
       showToast('Meta excluída.', 'info')
       router.push('/goals')
     } catch (err: any) {
@@ -127,9 +125,9 @@ export default function GoalDetailPage() {
     }
   }
 
-  // 🔥 CONTRIBUIÇÃO ATÔMICA
+  // 🔥 CONTRIBUIÇÃO ATÔMICA E SEGURA
   const handleContribution = async () => {
-    if (!user?.id || contribAmountNum <= 0) {
+    if (!user?.id || contribAmountNum <= 0 || !goal) {
       showToast('Digite um valor válido.', 'warning')
       return
     }
@@ -139,7 +137,7 @@ export default function GoalDetailPage() {
       const txPayload = {
         id: txId,
         user_id: user.id,
-        context: context || 'dfl',
+        context: effectiveContext || 'dfl',
         type: 'income',
         amount: contribAmountNum,
         description: contribNote || `Contribuição para ${goal.name}`,
@@ -152,17 +150,16 @@ export default function GoalDetailPage() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.transaction('rw', 'transactions', 'syncQueue', async () => {
-        await db.table('transactions').add(txPayload)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'create', record_id: txId, data: txPayload, user_id: user.id, created_at: new Date().toISOString() })
-      })
+      
+      const res = await safeAdd('transactions', txPayload)
+      if (!res.success) throw new Error(res.error)
 
       showToast('Contribuição registrada!', 'success')
       setShowContributionModal(false)
       setContribAmount('0,00')
       setContribAmountNum(0)
       setContribNote('')
-      loadData()
+      reloadTransactions()
     } catch (err: any) {
       showToast(`Erro ao registrar: ${err.message}`, 'error')
     }
@@ -185,14 +182,16 @@ export default function GoalDetailPage() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  if (loading) return (
+  if (loading && !goal) return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-      {loadingPulse && <div className="fixed top-20 right-4 z-50"><div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" /></div>}
       <GoalDetailSkeleton />
     </div>
   )
 
-  if (!goal) return null
+  if (!loading && !goal) {
+    router.push('/goals')
+    return null
+  }
 
   const IconComp = getDynamicIcon(goal.icon || 'target')
   const remaining = Number(goal.target_amount) - saved
@@ -203,8 +202,6 @@ export default function GoalDetailPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans px-4 pt-6 transition-colors duration-300">
-      {loadingPulse && <div className="fixed top-20 right-4 z-50"><div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" /></div>}
-
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
