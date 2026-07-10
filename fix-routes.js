@@ -19,31 +19,31 @@ function processDirectory(dir) {
 
         let content = fs.readFileSync(fullPath, 'utf8');
 
-        // Verifica se a gente já tinha criado a ponte antes
-        const isAlreadyBridge = content.includes('import ClientPage from');
+        // Verifica se a gente já tinha criado a ponte antes (inclusive as versões antigas do robô)
+        const isAlreadyBridge = content.includes('import ClientPage from') || content.includes('import dynamic from');
 
         if (!isAlreadyBridge) {
-          // Salva o seu código original no ClientPage (se ainda não fez)
+          // Salva o seu código original no ClientPage
           fs.writeFileSync(clientPagePath, content);
         }
 
-        console.log(`🔧 Injetando Suspense (Anti-Bug) na rota: ${fullPath}`);
+        console.log(`🔧 Vendando os olhos do Next.js (SSR: false) na rota: ${fullPath}`);
         
-        // Reescreve o page.tsx colocando o <Suspense> exigido pelo Next.js
+        // Reescreve o page.tsx forçando o Next.js a IGNORAR essa página no servidor
         const newPageContent = `
-import ClientPage from './ClientPage';
-import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
+
+const ClientPage = dynamic(() => import('./ClientPage'), {
+  ssr: false,
+  loading: () => <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#0f766e', fontWeight: 'bold' }}>Carregando...</div>
+});
 
 export async function generateStaticParams() {
   return [{ ${paramName}: '1' }];
 }
 
 export default function Page(props) {
-  return (
-    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#0f766e', fontWeight: 'bold' }}>Carregando...</div>}>
-      <ClientPage {...props} />
-    </Suspense>
-  );
+  return <ClientPage {...props} />;
 }
 `;
         fs.writeFileSync(fullPath, newPageContent.trim());
@@ -52,6 +52,6 @@ export default function Page(props) {
   }
 }
 
-console.log('🤖 Iniciando o Robô Definitivo v3 (Com Suspense Anti-Bug)...');
+console.log('🤖 Iniciando o Robô Nuclear (SSR OFF)...');
 processDirectory('./src/app');
-console.log('🚀 Hacks aplicados com sucesso! Next.js dominado.');
+console.log('🚀 Next.js completamente vendado! O Build vai passar.');
