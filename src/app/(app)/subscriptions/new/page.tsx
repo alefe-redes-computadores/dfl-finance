@@ -10,7 +10,8 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' 
+// 🔥 CORREÇÃO: Importando o addToSyncQueue
+import { db, addToSyncQueue } from '@/lib/db' 
 
 const CATEGORIES = [
   "Streaming", "Software", "Academia", "Clube", "Seguro", "Internet", "Telefone", "TV", "Educação", "Saúde", "Outros",
@@ -30,8 +31,12 @@ export default function NewSubscriptionPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useContext_()
+  // 🔥 CORREÇÃO: Pegando o appMode para calcular o effectiveContext
+  const { context, appMode } = useContext_()
   const { user } = useAuth()
+
+  // 🔥 CORREÇÃO: Aplicando o effectiveContext
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -48,7 +53,7 @@ export default function NewSubscriptionPage() {
 
   const { data: localSubscriptions } = useLocalData({
     table: 'subscriptions' as any,
-    filters: { context },
+    filters: { context: effectiveContext }, // 🔥 Usando effectiveContext
   })
 
   const subscriptionData = localSubscriptions?.find((s: any) => s.id === editId) as any
@@ -77,7 +82,7 @@ export default function NewSubscriptionPage() {
     }
   }, [refreshing])
 
-  // 🔥 SALVAR ATÔMICO
+  // 🔥 SALVAR ATÔMICO (COM addToSyncQueue)
   const handleSave = async () => {
     if (!name.trim()) {
       showToast("Preencha o nome da assinatura", "warning")
@@ -101,14 +106,15 @@ export default function NewSubscriptionPage() {
         payment_method: paymentMethod.trim() || null,
         notes: notes.trim() || null,
         status,
-        context,
+        context: effectiveContext, // 🔥 Usando effectiveContext
         updated_at: new Date().toISOString(),
       }
 
-      await db.transaction('rw', 'subscriptions', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array de tabelas e uso do addToSyncQueue
+      await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
         if (editId) {
           await db.table('subscriptions').update(editId, payload)
-          await db.table('syncQueue').add({ table: 'subscriptions', operation: 'update', record_id: editId, data: payload, user_id: user!.id, created_at: new Date().toISOString() })
+          await addToSyncQueue(user!.id, 'subscriptions', 'update', editId, payload)
         } else {
           const id = crypto.randomUUID()
           const fullPayload = {
@@ -120,7 +126,7 @@ export default function NewSubscriptionPage() {
             sync_attempts: 0,
           }
           await db.table('subscriptions').add(fullPayload)
-          await db.table('syncQueue').add({ table: 'subscriptions', operation: 'create', record_id: id, data: fullPayload, user_id: user!.id, created_at: new Date().toISOString() })
+          await addToSyncQueue(user!.id, 'subscriptions', 'create', id, fullPayload)
         }
       })
 
@@ -135,14 +141,15 @@ export default function NewSubscriptionPage() {
     }
   }
 
-  // 🔥 EXCLUIR ATÔMICO
+  // 🔥 EXCLUIR ATÔMICO (COM addToSyncQueue)
   const handleDelete = async () => {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir esta assinatura?")) return
     try {
-      await db.transaction('rw', 'subscriptions', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array de tabelas e uso do addToSyncQueue
+      await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
         await db.table('subscriptions').delete(editId)
-        await db.table('syncQueue').add({ table: 'subscriptions', operation: 'delete', record_id: editId, user_id: user!.id, created_at: new Date().toISOString() })
+        await addToSyncQueue(user!.id, 'subscriptions', 'delete', editId, null)
       })
       showToast("Assinatura excluída com sucesso!", "success")
       success()
@@ -153,7 +160,7 @@ export default function NewSubscriptionPage() {
     }
   }
 
-  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = effectiveContext === "dfl" ? "da Empresa" : "Pessoal"
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
