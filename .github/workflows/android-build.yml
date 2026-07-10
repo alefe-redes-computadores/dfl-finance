@@ -32,8 +32,15 @@ jobs:
         run: |
           rm -rf android
           npx cap add android
-          npx @capacitor/assets generate --android
           npx cap sync android
+          
+          # 🔥 MODO FORÇA BRUTA: Copiar a sua logo pro lugar exato que ele exige
+          mkdir -p assets
+          cp public/icon-512*.png assets/icon.png
+          cp public/icon-512*.png assets/splash.png
+          
+          # Agora sim, forçar a geração por cima do projeto Android criado
+          npx @capacitor/assets generate --android
 
       - name: Compilar APK (Gradle)
         run: |
