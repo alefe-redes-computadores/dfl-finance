@@ -21,6 +21,7 @@ export default function CategoriesPage() {
   
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
+  // 🔥 CORRIGIDO: effectiveContext garantindo separação PF/PJ
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [tab, setTab] = useState<'expense'|'income'>('expense')
@@ -33,18 +34,17 @@ export default function CategoriesPage() {
   const [color, setColor] = useState('#16a34a')
   const [saving, setSaving] = useState(false)
 
+  // Lê todas as categorias do banco local, filtrando por contexto e tipo
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
+    filters: { context: effectiveContext, type: tab }
   })
 
   // Categorias simples e diretas, sem subcategorias
   const categories = useMemo(() => {
     if (!allLocalCategories) return []
-    
-    return allLocalCategories
-      .filter((c: any) => c.context === effectiveContext && c.type === tab)
-      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
-  }, [allLocalCategories, effectiveContext, tab])
+    return [...allLocalCategories].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+  }, [allLocalCategories])
 
   function openEdit(cat: any) {
     setEditingCategory(cat)
@@ -72,16 +72,15 @@ export default function CategoriesPage() {
   async function handleSave() {
     if (!name || !user) return
     
-    // 🔥 NOVA TRAVA LOCAL: Impede de salvar com nome repetido
+    // 🔥 TRAVA LOCAL: Impede de salvar com nome repetido no MESMO contexto e tipo
     const cleanedName = name.trim().toLowerCase()
     const exists = allLocalCategories?.find((c: any) => 
       (c.name || '').trim().toLowerCase() === cleanedName && 
-      c.context === effectiveContext &&
       c.id !== editingCategory?.id // Ignora a si mesmo na hora de editar
     )
 
     if (exists) {
-      showToast('Já existe uma categoria com este nome!', 'warning')
+      showToast('Já existe uma categoria com este nome neste contexto!', 'warning')
       return
     }
 
@@ -147,7 +146,7 @@ export default function CategoriesPage() {
 
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm('Deseja realmente excluir esta categoria?')) return
+    if (!confirm('Deseja realmente excluir esta categoria? As transações vinculadas perderão a categoria.')) return
     if (!user) return
     
     try {
@@ -188,7 +187,7 @@ export default function CategoriesPage() {
 
       <ContextToggle />
 
-      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4">
+      <div className="flex bg-gray-100 dark:bg-slate-800 rounded-full p-1 gap-1 mb-4 mt-4">
         {([['expense','Despesas'],['income','Receitas']] as const).map(([k,l]) => (
           <button
             key={k}
