@@ -32,7 +32,10 @@ jobs:
         run: npm run build
 
       - name: Sincronizar com Android
-        run: npx cap sync android
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
 
       - name: Compilar APK (Gradle)
         run: |
