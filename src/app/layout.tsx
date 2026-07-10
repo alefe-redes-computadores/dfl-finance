@@ -3,7 +3,10 @@ import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
-import Script from 'next/script' // Adicionamos este import
+import Script from 'next/script'
+
+// Força a renderização dinâmica para evitar o erro de Static Page Generation Timeout
+export const dynamic = 'force-dynamic'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -54,7 +57,9 @@ export default function RootLayout({
           src="https://cdn.jsdelivr.net/npm/eruda"
           onLoad={() => {
             // @ts-ignore
-            eruda.init();
+            if (typeof eruda !== 'undefined') {
+              eruda.init();
+            }
           }}
         />
       </body>
