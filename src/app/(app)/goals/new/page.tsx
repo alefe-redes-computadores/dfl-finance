@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { ChevronLeft, Check, Loader2, X, Target, Calendar, DollarSign } from 'lucide-react'
+import { ChevronLeft, Check, Loader2, X, Target, Calendar } from 'lucide-react'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { format } from 'date-fns'
-import { db } from '@/lib/db' 
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
@@ -18,11 +18,15 @@ function NewGoalContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { context } = useContext_()
   const { showToast } = useToast()
   const editId = searchParams.get('edit')
+  const { safeAdd, safeUpdate } = useSafeDb()
 
-  const [loading, setLoading] = useState(false)
+  // 🔥 CORRIGIDO: effectiveContext contra vazamento de dados entre PF/PJ
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [categories, setCategories] = useState<any[]>([])
 
@@ -39,42 +43,39 @@ function NewGoalContent() {
 
   const [showCatModal, setShowCatModal] = useState(false)
 
-  const { data: localCategories, reload: reloadCategories } = useLocalData({
+  const { data: localCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  const { data: localGoal, loading: goalLoading, reload: reloadGoal } = useLocalData({
+  const { data: localGoal } = useLocalData({
     table: 'goals' as any,
-    filters: { id: editId || '' },
+    filters: { context: effectiveContext },
   })
 
-  useEffect(() => { if (localCategories) setCategories(localCategories) }, [localCategories])
+  useEffect(() => { 
+    if (localCategories) setCategories(localCategories) 
+  }, [localCategories])
 
   useEffect(() => {
-    if (editId && localGoal && localGoal.length > 0) {
-      const data = localGoal[0] as any
-      setName(data.name)
-      const numValue = Number(data.target_amount) || 0
-      setTargetAmountNum(numValue)
-      setTargetAmount(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-      setDeadline(data.deadline || '')
-      setCategoryId(data.category_id || '')
-      setColor(data.color)
-      setIcon(data.icon || 'target')
-      setDescription(data.description || '')
+    if (editId && localGoal) {
+      const data = localGoal.find((g: any) => g.id === editId) as any
+      if (data) {
+        setName(data.name)
+        const numValue = Number(data.target_amount) || 0
+        setTargetAmountNum(numValue)
+        setTargetAmount(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+        setDeadline(data.deadline || '')
+        setCategoryId(data.category_id || '')
+        setColor(data.color)
+        setIcon(data.icon || 'target')
+        setDescription(data.description || '')
+      }
       setLoading(false)
-    } else if (!editId) {
+    } else {
       setLoading(false)
     }
   }, [editId, localGoal])
-
-  useEffect(() => {
-    if (user?.id) {
-      reloadCategories()
-      if (editId) reloadGoal()
-    }
-  }, [user?.id, editId])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (num: number) => void, displaySetter: (val: string) => void) => {
     const digits = e.target.value.replace(/\D/g, '')
@@ -84,7 +85,7 @@ function NewGoalContent() {
     displaySetter(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // 🔥 SALVAR E CRIAR META DE FORMA ATÔMICA
+  // 🔥 SALVAR ATÔMICO E BLINDADO (Sem db.transaction manual)
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -101,57 +102,56 @@ function NewGoalContent() {
       icon,
       description: description || null,
       status: 'active',
-      context,
+      context: effectiveContext,
       updated_at: new Date().toISOString(),
     }
 
     try {
-      await db.transaction('rw', 'goals', 'transactions', 'syncQueue', async () => {
-        let goalId = editId
+      let goalId = editId
 
-        if (editId) {
-          await db.table('goals').update(editId, payload)
-          await db.table('syncQueue').add({ table: 'goals', operation: 'update', record_id: editId, data: payload, user_id: user.id, created_at: new Date().toISOString() })
-          showToast('Meta atualizada!', 'success')
-        } else {
-          const newId = crypto.randomUUID()
-          const fullPayload = {
-            id: newId,
-            user_id: user.id,
-            ...payload,
-            saved_amount: 0,
-            created_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-          }
-          await db.table('goals').add(fullPayload)
-          await db.table('syncQueue').add({ table: 'goals', operation: 'create', record_id: newId, data: fullPayload, user_id: user.id, created_at: new Date().toISOString() })
-          goalId = newId
-          showToast('Meta criada!', 'success')
+      if (editId) {
+        const res = await safeUpdate('goals', editId, payload)
+        if (!res.success) throw new Error(res.error)
+        showToast('Meta atualizada!', 'success')
+      } else {
+        const newId = crypto.randomUUID()
+        const fullPayload = {
+          id: newId,
+          user_id: user.id,
+          ...payload,
+          saved_amount: 0,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
+        const res = await safeAdd('goals', fullPayload)
+        if (!res.success) throw new Error(res.error)
+        goalId = newId
+        showToast('Meta criada!', 'success')
+      }
 
-        if (!editId && initialContributionNum > 0 && goalId) {
-          const txId = crypto.randomUUID()
-          const txPayload = {
-            id: txId,
-            user_id: user.id,
-            context,
-            type: 'income',
-            amount: initialContributionNum,
-            description: `Contribuição inicial para ${name.trim()}`,
-            date: format(new Date(), 'yyyy-MM-dd'),
-            status: 'done',
-            affects_balance: true,
-            goal_id: goalId,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-          }
-          await db.table('transactions').add(txPayload)
-          await db.table('syncQueue').add({ table: 'transactions', operation: 'create', record_id: txId, data: txPayload, user_id: user.id, created_at: new Date().toISOString() })
+      // Se houver contribuição inicial na criação da meta, cria a transação de forma segura
+      if (!editId && initialContributionNum > 0 && goalId) {
+        const txId = crypto.randomUUID()
+        const txPayload = {
+          id: txId,
+          user_id: user.id,
+          context: effectiveContext,
+          type: 'income',
+          amount: initialContributionNum,
+          description: `Contribuição inicial para ${name.trim()}`,
+          date: format(new Date(), 'yyyy-MM-dd'),
+          status: 'done',
+          affects_balance: true,
+          goal_id: goalId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
-      })
+        const resTx = await safeAdd('transactions', txPayload)
+        if (!resTx.success) throw new Error(resTx.error)
+      }
 
       router.push('/goals')
     } catch (err: any) {
@@ -169,7 +169,6 @@ function NewGoalContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200"><ChevronLeft size={24} /></button>
         <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? 'Editar Meta' : 'Nova Meta'}</h2>
@@ -181,7 +180,7 @@ function NewGoalContent() {
       <div className="space-y-5">
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Nome da meta</label>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Viagem para Orlando" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500" />
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Viagem para Orlando" className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300" />
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
@@ -191,23 +190,23 @@ function NewGoalContent() {
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Data limite</label>
-          <div className="flex items-center gap-3"><Calendar size={18} className="text-gray-400 dark:text-gray-500" /><input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" /></div>
+          <div className="flex items-center gap-3"><Calendar size={18} className="text-gray-400" /><input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className="bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" /></div>
         </div>
 
         <button onClick={() => setShowCatModal(true)} className="w-full bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3"><Target size={18} className="text-gray-400 dark:text-gray-500" /><div className="text-left"><span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider block">Categoria</span><span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span></div></div>
-          <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180" />
+          <div className="flex items-center gap-3"><Target size={18} className="text-gray-400" /><div className="text-left"><span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider block">Categoria</span><span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{selectedCat ? selectedCat.name : 'Geral'}</span></div></div>
+          <ChevronLeft size={18} className="text-gray-300 rotate-180" />
         </button>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3 block">Cor</label>
+          <label className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-3 block">Cor</label>
           <div className="flex flex-wrap gap-3">
             {COLORS.map(c => (<button key={c} onClick={() => setColor(c)} className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-3">Ícone</p>
+          <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-3">Ícone</p>
           <div className="flex flex-wrap gap-3">
             {ICON_NAMES.map(iconName => {
               const Ico = getDynamicIcon(iconName)
@@ -220,14 +219,14 @@ function NewGoalContent() {
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-          <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
+          <label className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-2 block">Descrição (opcional)</label>
           <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalhes sobre a meta..." className="w-full bg-transparent text-[14px] text-gray-700 dark:text-gray-300 outline-none placeholder:text-gray-400" />
         </div>
 
         {!editId && (
           <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-            <label className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-2 block">Contribuição inicial (opcional)</label>
-            <div className="flex items-center gap-2"><span className="text-xl text-gray-400 dark:text-gray-500 font-light">R$</span><input type="text" inputMode="numeric" value={initialContribution} onChange={(e) => handleAmountChange(e, setInitialContributionNum, setInitialContribution)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" /></div>
+            <label className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-2 block">Contribuição inicial (opcional)</label>
+            <div className="flex items-center gap-2"><span className="text-xl text-gray-400 font-light">R$</span><input type="text" inputMode="numeric" value={initialContribution} onChange={(e) => handleAmountChange(e, setInitialContributionNum, setInitialContribution)} placeholder="0,00" className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200" /></div>
             <p className="text-[10px] text-gray-400 mt-1">Valor já guardado para esta meta.</p>
           </div>
         )}
@@ -238,7 +237,7 @@ function NewGoalContent() {
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => setShowCatModal(false)} className="text-gray-400 dark:text-gray-500 p-2"><X size={20} /></button>
+              <button onClick={() => setShowCatModal(false)} className="text-gray-400 p-2"><X size={20} /></button>
             </div>
             <div className="space-y-2">
               <button onClick={() => { setCategoryId(''); setShowCatModal(false) }} className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${!categoryId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
