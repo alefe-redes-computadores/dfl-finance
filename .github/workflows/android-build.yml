@@ -33,8 +33,10 @@ jobs:
 
       - name: Sincronizar com Android
         run: |
+          rm -rf android  # 🔥 ISSO AQUI VAI FORÇAR A RECRIAÇÃO TOTAL!
           npx cap add android || true
           npx cap sync android
+
 
 
       - name: Compilar APK (Gradle)
