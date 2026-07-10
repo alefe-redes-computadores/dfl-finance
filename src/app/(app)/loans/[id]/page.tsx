@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -24,7 +24,8 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' 
+// 🔥 NOVO: Hook de blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Payment = {
   id: string
@@ -43,8 +44,13 @@ export default function LoanDetailPage() {
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useContext_()
   const { user } = useAuth()
+  
+  // 🔥 CORRIGIDO: effectiveContext garantindo a separação de contas
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+
+  const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -60,14 +66,14 @@ export default function LoanDetailPage() {
 
   const { data: localLoans, loading, reload } = useLocalData({
     table: 'loans' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const loanData = (localLoans || []).find((l: any) => l.id === loanId) as any
 
   const { data: allPayments } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, type: 'loan_payment' },
+    filters: { context: effectiveContext, type: 'loan_payment' },
   })
 
   const payments = (allPayments || []).filter((p: any) => p.loan_id === loanId) as Payment[]
@@ -84,7 +90,7 @@ export default function LoanDetailPage() {
     }
   }, [refreshing, reload])
 
-  // 🔥 REGISTRAR PAGAMENTO ATÔMICO
+  // 🔥 REGISTRAR PAGAMENTO ATÔMICO E BLINDADO
   const handleRegisterPayment = async () => {
     if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
       showToast("Informe um valor válido", "warning")
@@ -112,7 +118,7 @@ export default function LoanDetailPage() {
         status: "completed",
         account_id: null,
         category_id: null,
-        context,
+        context: effectiveContext,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
@@ -124,13 +130,11 @@ export default function LoanDetailPage() {
         updated_at: new Date().toISOString()
       }
 
-      await db.transaction('rw', 'transactions', 'loans', 'syncQueue', async () => {
-        await db.table('transactions').add(txPayload)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'create', record_id: txId, data: txPayload, user_id: user!.id, created_at: new Date().toISOString() })
-        
-        await db.table('loans').update(loanId, loanUpdate)
-        await db.table('syncQueue').add({ table: 'loans', operation: 'update', record_id: loanId, data: loanUpdate, user_id: user!.id, created_at: new Date().toISOString() })
-      })
+      const res1 = await safeAdd('transactions', txPayload)
+      if (!res1.success) throw new Error(res1.error)
+      
+      const res2 = await safeUpdate('loans', loanId, loanUpdate)
+      if (!res2.success) throw new Error(res2.error)
 
       showToast("Pagamento registrado com sucesso!", "success")
       success()
@@ -146,27 +150,25 @@ export default function LoanDetailPage() {
     }
   }
 
-  // 🔥 EXCLUIR PAGAMENTO ATÔMICO
+  // 🔥 EXCLUIR PAGAMENTO ATÔMICO E BLINDADO
   const handleDeletePayment = async (paymentId: string) => {
     try {
-      await db.transaction('rw', 'transactions', 'loans', 'syncQueue', async () => {
-        await db.table('transactions').delete(paymentId)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: paymentId, user_id: user!.id, created_at: new Date().toISOString() })
+      const res1 = await safeDelete('transactions', paymentId)
+      if (!res1.success) throw new Error(res1.error)
 
-        const updatedPayments = payments.filter(p => p.id !== paymentId)
-        const totalPaid = updatedPayments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
-        const totalAmountCents = Math.round((loanData?.amount || 0) * 100)
-        const totalPaidCents = Math.round(totalPaid * 100)
-        const newStatus = totalPaidCents >= totalAmountCents ? "paid" : "active"
+      const updatedPayments = payments.filter(p => p.id !== paymentId)
+      const totalPaid = updatedPayments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
+      const totalAmountCents = Math.round((loanData?.amount || 0) * 100)
+      const totalPaidCents = Math.round(totalPaid * 100)
+      const newStatus = totalPaidCents >= totalAmountCents ? "paid" : "active"
 
-        const loanUpdate = {
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        }
-        
-        await db.table('loans').update(loanId, loanUpdate)
-        await db.table('syncQueue').add({ table: 'loans', operation: 'update', record_id: loanId, data: loanUpdate, user_id: user!.id, created_at: new Date().toISOString() })
-      })
+      const loanUpdate = {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      }
+      
+      const res2 = await safeUpdate('loans', loanId, loanUpdate)
+      if (!res2.success) throw new Error(res2.error)
 
       showToast("Pagamento excluído com sucesso!", "success")
       success()
@@ -178,17 +180,18 @@ export default function LoanDetailPage() {
     }
   }
 
-  // 🔥 EXCLUIR EMPRÉSTIMO ATÔMICO (Cascata)
+  // 🔥 EXCLUIR EMPRÉSTIMO ATÔMICO E BLINDADO (Cascata)
   const handleDeleteLoan = async () => {
+    if (!confirm("Tem certeza que deseja excluir este empréstimo e todos os seus pagamentos?")) return
     try {
-      await db.transaction('rw', 'transactions', 'loans', 'syncQueue', async () => {
-        for (const p of payments) {
-          await db.table('transactions').delete(p.id)
-          await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: p.id, user_id: user!.id, created_at: new Date().toISOString() })
-        }
-        await db.table('loans').delete(loanId)
-        await db.table('syncQueue').add({ table: 'loans', operation: 'delete', record_id: loanId, user_id: user!.id, created_at: new Date().toISOString() })
-      })
+      for (const p of payments) {
+        const res1 = await safeDelete('transactions', p.id)
+        if (!res1.success) throw new Error(res1.error)
+      }
+      
+      const res2 = await safeDelete('loans', loanId)
+      if (!res2.success) throw new Error(res2.error)
+
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       router.back()
