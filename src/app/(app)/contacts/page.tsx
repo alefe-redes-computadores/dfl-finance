@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   Search,
@@ -21,8 +21,6 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function ContactsPage() {
@@ -31,9 +29,8 @@ export default function ContactsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode, effectiveContext } = useContext_()
-  // 🔥 NOVO: Hook de blindagem
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  const { appMode, effectiveContext } = useContext_()
+  const { safeDelete } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -44,13 +41,11 @@ export default function ContactsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: contacts, loading, reload } = useLocalData({
     table: 'contacts' as any,
     filters: { context: effectiveContext },
   })
 
-  // 🔥 CORRIGIDO: Usa effectiveContext
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -63,16 +58,13 @@ export default function ContactsPage() {
     return acc
   }, {})
 
-  // 🔥 CORRIGIDO: HANDLER DE DELETE COM safeDelete
+  // 🔥 CORRIGIDO: Remoção do db.transaction redundante
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
       const result = await safeDelete('contacts', deleteModal)
-      if (!result.success) {
-        showToast(`Erro ao excluir: ${result.error}`, "error")
-        errorHaptic()
-        return
-      }
+      if (!result.success) throw new Error(result.error)
+      
       showToast("Contato excluído com sucesso!", "success")
       success()
       setDeleteModal(null)
@@ -83,7 +75,6 @@ export default function ContactsPage() {
     }
   }
 
-  // Pull-to-refresh
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -100,7 +91,6 @@ export default function ContactsPage() {
     }
   }, [refreshing, reload])
 
-  // Filtros
   const filteredContacts = (contacts || []).filter((c: any) => {
     if (typeFilter !== "all" && c.type !== typeFilter) return false
     if (!search) return true
@@ -114,7 +104,6 @@ export default function ContactsPage() {
     )
   })
 
-  // Agrupa por letra inicial
   const groupedContacts = filteredContacts.reduce((acc: Record<string, any[]>, c: any) => {
     const letter = (c.name || "?").charAt(0).toUpperCase()
     if (!acc[letter]) acc[letter] = []
