@@ -47,10 +47,6 @@ export default function RootLayout({
             {children}
           </ToastProvider>
         </ThemeProvider>
-
-        {/* 🔥 DEBUGGER PARA IDENTIFICAR O ERRO DO SYNC INFINITO */}
-        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-        <script dangerouslySetInnerHTML={{ __html: 'eruda.init();' }} />
       </body>
     </html>
   )
