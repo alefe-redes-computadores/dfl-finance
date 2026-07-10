@@ -24,8 +24,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 pb-20">
-      {/* COMENTAMOS A LINHA ABAIXO PARA ESCONDER O CONTEÚDO DA PÁGINA TEMPORARIAMENTE */}
-      {/* {children} */}
+      {children}
       <BottomNav />
     </div>
   )
