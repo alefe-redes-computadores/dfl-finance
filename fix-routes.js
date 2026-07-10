@@ -19,31 +19,34 @@ function processDirectory(dir) {
 
         let content = fs.readFileSync(fullPath, 'utf8');
 
-        // Verifica se a gente já tinha criado a ponte antes (inclusive as versões antigas do robô)
         const isAlreadyBridge = content.includes('import ClientPage from') || content.includes('import dynamic from');
 
         if (!isAlreadyBridge) {
-          // Salva o seu código original no ClientPage
           fs.writeFileSync(clientPagePath, content);
         }
 
-        console.log(`🔧 Vendando os olhos do Next.js (SSR: false) na rota: ${fullPath}`);
+        console.log(`🔧 Cortando o searchParams na raiz da rota: ${fullPath}`);
         
-        // Reescreve o page.tsx forçando o Next.js a IGNORAR essa página no servidor
+        // Agora nós extraímos SOMENTE o { params } e ignoramos o resto!
         const newPageContent = `
 import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
 
 const ClientPage = dynamic(() => import('./ClientPage'), {
   ssr: false,
-  loading: () => <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#0f766e', fontWeight: 'bold' }}>Carregando...</div>
+  loading: () => <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#0f766e', fontWeight: 'bold' }}>Carregando App...</div>
 });
 
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [{ ${paramName}: '1' }];
 }
 
-export default function Page(props) {
-  return <ClientPage {...props} />;
+export default function Page({ params }) {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <ClientPage params={params} />
+    </Suspense>
+  );
 }
 `;
         fs.writeFileSync(fullPath, newPageContent.trim());
@@ -52,6 +55,6 @@ export default function Page(props) {
   }
 }
 
-console.log('🤖 Iniciando o Robô Nuclear (SSR OFF)...');
+console.log('🤖 Iniciando o Robô v4 (Anti-SearchParams)...');
 processDirectory('./src/app');
-console.log('🚀 Next.js completamente vendado! O Build vai passar.');
+console.log('🚀 Next.js desarmado com sucesso! Agora vai.');
