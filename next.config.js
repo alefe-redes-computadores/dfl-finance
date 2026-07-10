@@ -33,8 +33,11 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'export', // 🔥 ADICIONADO: Obrigatório para o Capacitor ler os arquivos
+  trailingSlash: true, // 🔥 ADICIONADO: Evita erros de navegação dentro do app nativo
   images: {
     domains: ['bwggczkzsqcdeayyysmx.supabase.co'],
+    unoptimized: true, // 🔥 ADICIONADO: O Capacitor não tem servidor backend para processar imagens
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
