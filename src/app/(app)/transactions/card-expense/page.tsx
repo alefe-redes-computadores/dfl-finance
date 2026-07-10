@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Calendar, Edit3, Tag, CreditCard, RefreshCw, Check, Loader2, ChevronRight, Hash,
@@ -11,17 +10,22 @@ import {
 import { format } from 'date-fns'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+// 🔥 NOVO: Arquitetura Local-First e Blindada
+import { useLocalData } from '@/hooks/useLocalData'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function CardExpensePage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { safeAdd } = useSafeDb()
+
+  // 🔥 CORRIGIDO: effectiveContext garantindo a trava PF/PJ
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   
-  const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
-  const [cards, setCards] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
-  const [tags, setTags] = useState<any[]>([])
+  const [loadingPulse, setLoadingPulse] = useState(false)
 
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
@@ -39,28 +43,25 @@ export default function CardExpensePage() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
 
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    try {
-      const [{ data: cardData }, { data: catData }, { data: tagData }] = await Promise.all([
-        supabase.from('credit_cards').select('id, name, last_four, color, flag').match({ user_id: user.id, is_archived: false }).order('name'),
-        supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, type: 'expense' }).order('name'),
-        supabase.from('tags').select('id, name').match({ user_id: user.id }).order('name')
-      ])
-      
-      setCards(Array.isArray(cardData) ? cardData : [])
-      setCategories(Array.isArray(catData) ? catData : [])
-      setTags(Array.isArray(tagData) ? tagData : [])
-    } catch (err) {
-      console.error("Erro ao carregar dados:", err)
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
+  // 🔥 LEITURA 100% OFFLINE (Sem vazamento e sem bugs de internet)
+  const { data: cards, loading: cardsLoading } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { context: effectiveContext, is_archived: false },
+  })
 
-  useEffect(() => { loadData() }, [loadData])
+  const { data: categories, loading: catsLoading } = useLocalData({
+    table: 'categories' as any,
+    filters: { context: effectiveContext, type: 'expense' },
+  })
 
+  const { data: tags, loading: tagsLoading } = useLocalData({
+    table: 'tags' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const loading = cardsLoading || catsLoading || tagsLoading
+
+  // 🔥 SALVAMENTO ATÔMICO E BLINDADO
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) {
@@ -73,30 +74,34 @@ export default function CardExpensePage() {
     }
 
     setIsSubmitting(true)
-    const rawAmount = amountNum
     const idempotencyKey = crypto.randomUUID()
     
     const parcelasTexto = installments > 1 ? `[Parcelado em ${installments}x] ` : ''
     const finalNotes = `${parcelasTexto}${notes}`.trim()
     
     const payload = {
+      id: idempotencyKey, // Gerado localmente para o Dexie
       user_id: user.id,
-      amount: rawAmount,
+      amount: amountNum,
       status: 'pending',
       date,
       description: description || null,
       category_id: categoryId || null,
       credit_card_id: creditCardId,
-      tag_id: tagId || null,
+      tag_ids: tagId ? [tagId] : null,
       notes: finalNotes || null,
       type: 'expense',
-      context: 'dfl',
-      idempotency_key: idempotencyKey,
+      context: effectiveContext,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending',
+      sync_attempts: 0
     }
 
     try {
-      const { error } = await supabase.from('transactions').insert([payload])
-      if (error) throw error
+      const res = await safeAdd('transactions', payload)
+      if (!res.success) throw new Error(res.error)
+
       router.push('/home')
     } catch (err: any) {
       console.error("Erro ao salvar:", err)
@@ -128,9 +133,9 @@ export default function CardExpensePage() {
     </div>
   )
 
-  const selectedCard = cards.find(c => c.id === creditCardId)
-  const selectedCat = categories.find(c => c.id === categoryId)
-  const selectedTag = tags.find(t => t.id === tagId)
+  const selectedCard = (cards || []).find((c: any) => c.id === creditCardId)
+  const selectedCat = (categories || []).find((c: any) => c.id === categoryId)
+  const selectedTag = (tags || []).find((t: any) => t.id === tagId)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
@@ -141,6 +146,10 @@ export default function CardExpensePage() {
         </button>
         <h1 className="font-bold text-[16px] text-gray-800 dark:text-gray-100">Despesa no Cartão</h1>
         <div className="w-8" />
+      </div>
+
+      <div className="px-4 pb-2">
+        <ContextToggle />
       </div>
 
       <div className="px-6 py-4 mb-4">
@@ -251,7 +260,7 @@ export default function CardExpensePage() {
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-2">
-              {cards.map(card => {
+              {(cards || []).map((card: any) => {
                 const isActive = card.id === creditCardId
                 return (
                   <button
@@ -270,7 +279,7 @@ export default function CardExpensePage() {
                   </button>
                 )
               })}
-              {cards.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhum cartão cadastrado.</p>}
+              {(cards || []).length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhum cartão cadastrado neste contexto.</p>}
             </div>
           </div>
         </div>
@@ -285,7 +294,7 @@ export default function CardExpensePage() {
               <button onClick={() => { setShowCatModal(false); router.push('/categories'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {categories.map(cat => {
+              {(categories || []).map((cat: any) => {
                 const IconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
@@ -302,7 +311,7 @@ export default function CardExpensePage() {
                   </button>
                 )
               })}
-              {categories.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma categoria encontrada.</p>}
+              {(categories || []).length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
         </div>
@@ -317,7 +326,7 @@ export default function CardExpensePage() {
               <button onClick={() => { setShowTagModal(false); router.push('/tags'); }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {tags.map(tag => {
+              {(tags || []).map((tag: any) => {
                 const isActive = tag.id === tagId
                 return (
                   <button
@@ -331,7 +340,7 @@ export default function CardExpensePage() {
                   </button>
                 )
               })}
-              {tags.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma tag encontrada.</p>}
+              {(tags || []).length === 0 && <p className="text-center text-gray-400 dark:text-gray-500 mt-10">Nenhuma tag encontrada.</p>}
             </div>
           </div>
         </div>
