@@ -265,9 +265,6 @@ function NewTransactionContent() {
     return budget
   }, [categoryId, amountNum, type, budgets])
 
-  // Este alerta é só informativo (não grava nada), então manter a leitura
-  // via Supabase aqui é aceitável — não é o mesmo risco de um cálculo que
-  // será escrito no banco.
   useEffect(() => {
     if (!budgetAlertMemo || !user?.id) {
       setBudgetAlert(null)
@@ -478,25 +475,67 @@ function NewTransactionContent() {
     if (extractedDesc) setDesc(extractedDesc)
   }
 
+  // =========================================================================
+  // 🔥 SALVAR CATEGORIA COM TRAVA ANTI-DUPLICIDADE E SUPORTE OFFLINE
+  // =========================================================================
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
+
+    const cleanedName = newCatName.trim().toLowerCase()
+    
+    // 1. Verifica se já existe na UI atual
+    const existsInState = categories.find(
+      (c) => c.name.trim().toLowerCase() === cleanedName && c.context === effectiveContext
+    )
+    
+    if (existsInState) {
+      showToast('Esta categoria já existe! Selecionando...', 'info')
+      setCategoryId(existsInState.id)
+      setShowCreateCatModal(false)
+      setNewCatName('')
+      return
+    }
+
     setSavingCategory(true)
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .insert({
-          user_id: user.id,
-          name: newCatName.trim(),
-          icon: newCatIcon,
-          color: newCatColor,
-          context: effectiveContext,
-          type: type === 'income' ? 'income' : 'expense',
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setCategories((prev) => [...prev, data])
-      setCategoryId(data.id)
+      // 2. Verifica se já existe no banco local (Dexie)
+      const allLocalCats = await db.table('categories')
+        .where('context').equals(effectiveContext)
+        .toArray()
+
+      const existsInDb = allLocalCats.find((c: any) => c.name.trim().toLowerCase() === cleanedName && c.user_id === user.id)
+
+      if (existsInDb) {
+        showToast('Esta categoria já existe (localmente)! Selecionando...', 'info')
+        setCategoryId(existsInDb.id)
+        setShowCreateCatModal(false)
+        setNewCatName('')
+        return
+      }
+
+      // 3. Salva no formato Local-First Atômico (Evita o supabase.insert direto)
+      const id = crypto.randomUUID()
+      const payload = {
+        id,
+        user_id: user.id,
+        name: newCatName.trim(),
+        icon: newCatIcon,
+        color: newCatColor,
+        context: effectiveContext,
+        type: type === 'income' ? 'income' : 'expense',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+
+      await db.transaction('rw', ['categories', 'syncQueue'], async () => {
+        await db.table('categories').add(payload)
+        await addToSyncQueue(user.id, 'categories', 'create', id, payload)
+      })
+
+      setCategories((prev) => [...prev, payload])
+      setCategoryId(id)
       setShowCreateCatModal(false)
       setNewCatName('')
       showToast('Categoria criada!', 'success')
@@ -508,25 +547,58 @@ function NewTransactionContent() {
     }
   }
 
+  // =========================================================================
+  // 🔥 SALVAR CONTA COM TRAVA ANTI-DUPLICIDADE E SUPORTE OFFLINE
+  // =========================================================================
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
+
+    const cleanedName = newAccName.trim().toLowerCase()
+    const existsInState = accounts.find((a) => a.name.trim().toLowerCase() === cleanedName && a.context === effectiveContext)
+    
+    if (existsInState) {
+      showToast('Esta conta já existe! Selecionando...', 'info')
+      setAccountId(existsInState.id)
+      setShowCreateAccModal(false)
+      setNewAccName('')
+      return
+    }
+
     setSavingAccount(true)
     try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .insert({ 
-          user_id: user.id, 
-          name: newAccName.trim(), 
-          color: newAccColor, 
-          context: effectiveContext,
-          balance: 0,
-          is_archived: false,
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setAccounts((prev) => [...prev, data])
-      setAccountId(data.id)
+      const allLocalAccounts = await db.table('accounts').where('context').equals(effectiveContext).toArray()
+      const existsInDb = allLocalAccounts.find((a: any) => a.name.trim().toLowerCase() === cleanedName && a.user_id === user.id)
+
+      if (existsInDb) {
+        showToast('Esta conta já existe! Selecionando...', 'info')
+        setAccountId(existsInDb.id)
+        setShowCreateAccModal(false)
+        setNewAccName('')
+        return
+      }
+
+      const id = crypto.randomUUID()
+      const payload = {
+        id,
+        user_id: user.id,
+        name: newAccName.trim(),
+        color: newAccColor,
+        context: effectiveContext,
+        balance: 0,
+        is_archived: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+
+      await db.transaction('rw', ['accounts', 'syncQueue'], async () => {
+        await db.table('accounts').add(payload)
+        await addToSyncQueue(user.id, 'accounts', 'create', id, payload)
+      })
+
+      setAccounts((prev) => [...prev, payload])
+      setAccountId(id)
       setShowCreateAccModal(false)
       setNewAccName('')
       showToast('Conta criada!', 'success')
@@ -538,23 +610,56 @@ function NewTransactionContent() {
     }
   }
 
+  // =========================================================================
+  // 🔥 SALVAR TAG COM TRAVA ANTI-DUPLICIDADE E SUPORTE OFFLINE
+  // =========================================================================
   const handleSaveTag = async () => {
     if (!user?.id || !newTagName.trim()) return
+
+    const cleanedName = newTagName.trim().toLowerCase()
+    const existsInState = tags.find((t) => t.name.trim().toLowerCase() === cleanedName && t.context === effectiveContext)
+    
+    if (existsInState) {
+      showToast('Esta tag já existe! Selecionando...', 'info')
+      setSelectedTags((prev) => (prev.length < 5 && !prev.includes(existsInState.id) ? [...prev, existsInState.id] : prev))
+      setShowCreateTagModal(false)
+      setNewTagName('')
+      return
+    }
+
     setSavingTag(true)
     try {
-      const { data, error } = await supabase
-        .from('tags')
-        .insert({ 
-          user_id: user.id, 
-          name: newTagName.trim(), 
-          color: newTagColor, 
-          context: effectiveContext 
-        })
-        .select()
-        .single()
-      if (error) throw error
-      setTags((prev) => [...prev, data])
-      setSelectedTags((prev) => (prev.length < 5 ? [...prev, data.id] : prev))
+      const allLocalTags = await db.table('tags').where('context').equals(effectiveContext).toArray()
+      const existsInDb = allLocalTags.find((t: any) => t.name.trim().toLowerCase() === cleanedName && t.user_id === user.id)
+
+      if (existsInDb) {
+        showToast('Esta tag já existe! Selecionando...', 'info')
+        setSelectedTags((prev) => (prev.length < 5 && !prev.includes(existsInDb.id) ? [...prev, existsInDb.id] : prev))
+        setShowCreateTagModal(false)
+        setNewTagName('')
+        return
+      }
+
+      const id = crypto.randomUUID()
+      const payload = {
+        id,
+        user_id: user.id,
+        name: newTagName.trim(),
+        color: newTagColor,
+        context: effectiveContext,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+
+      await db.transaction('rw', ['tags', 'syncQueue'], async () => {
+        await db.table('tags').add(payload)
+        await addToSyncQueue(user.id, 'tags', 'create', id, payload)
+      })
+
+      setTags((prev) => [...prev, payload])
+      setSelectedTags((prev) => (prev.length < 5 ? [...prev, id] : prev))
       setShowCreateTagModal(false)
       setNewTagName('')
       showToast('Tag criada!', 'success')
@@ -566,15 +671,6 @@ function NewTransactionContent() {
     }
   }
 
-  // Salva a transação (ou as N parcelas). Fatura de cartão, saldo da conta
-  // e todas as transações da série são gravadas dentro da MESMA
-  // db.transaction — atômico de ponta a ponta. As leituras que alimentam
-  // esses cálculos (saldo atual, dados do cartão, fatura aberta) agora
-  // vêm sempre do banco local (Dexie), nunca do Supabase — funciona
-  // offline e fica consistente com o que a tela está mostrando. A escrita
-  // no Dexie acontece sempre, online ou offline; a sincronização com o
-  // Supabase é responsabilidade do useOfflineQueue, que roda em segundo
-  // plano quando a conexão volta.
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
@@ -641,10 +737,7 @@ function NewTransactionContent() {
       const baseDate = createLocalDate(date)
       let invoiceId: string | null = null
 
-      await db.transaction('rw', db.accounts, db.transactions, db.credit_invoices, db.syncQueue, async () => {
-        // ------------------------------------------------------------
-        // Fatura do cartão (se aplicável) — tudo lido/gravado local
-        // ------------------------------------------------------------
+      await db.transaction('rw', [db.accounts, db.transactions, db.credit_invoices, db.syncQueue], async () => {
         if (type === 'expense' && creditCardId && !isRefund) {
           const txDate = new Date(date)
           const cardData = await db.table('credit_cards').get(creditCardId)
@@ -713,9 +806,6 @@ function NewTransactionContent() {
           }
         }
 
-        // ------------------------------------------------------------
-        // Saldo da conta (se pago e não for no cartão) — lido local
-        // ------------------------------------------------------------
         if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
           const acc = await db.table('accounts').get(accountId)
 
@@ -741,11 +831,6 @@ function NewTransactionContent() {
           }
         }
 
-        // ------------------------------------------------------------
-        // Transação(ões) — sempre grava local, mesmo offline. A
-        // sincronização com o Supabase é feita depois, em segundo
-        // plano, pelo useOfflineQueue.
-        // ------------------------------------------------------------
         for (let i = 0; i < totalParcels; i++) {
           let installmentDate: string
 
@@ -1171,6 +1256,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
+      {/* Modais */}
       {showReceiptModal && (
         <ReceiptModal
           isOpen={showReceiptModal}
