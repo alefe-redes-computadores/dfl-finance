@@ -35,7 +35,10 @@ export default function LoginPage() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/home` }
+      options: { 
+        // 👇 A MUDANÇA ESTÁ AQUI: Redirecionando para a ponte!
+        redirectTo: `${window.location.origin}/auth/callback` 
+      }
     })
     if (error) {
       setError('Erro ao entrar com Google.')
@@ -47,7 +50,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
       
       {/* Luzes de Fundo (Efeito moderno) */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brand-teal/20 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-teal-500/20 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="w-full max-w-sm relative z-10">
@@ -55,12 +58,12 @@ export default function LoginPage() {
           {/* Novo Logotipo DFL em SVG */}
           <div className="flex justify-center mb-4">
             <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 drop-shadow-xl">
-              <rect width="40" height="40" rx="12" className="fill-brand-teal dark:fill-brand-teal" />
+              <rect width="40" height="40" rx="12" className="fill-teal-600 dark:fill-teal-600" />
               <path d="M12 28V12H20C23.3137 12 26 14.6863 26 18C26 21.3137 23.3137 24 20 24H16V28H12Z" fill="white"/>
               <path d="M28 28V12H24V28H28Z" fill="white" fillOpacity="0.7"/>
               <defs>
                 <linearGradient id="paint0_linear" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#14b8a6" />
+                  <stop stopColor="#0d9488" />
                   <stop offset="1" stopColor="#0f766e" />
                 </linearGradient>
               </defs>
@@ -83,7 +86,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-teal text-gray-800 dark:text-white transition-all shadow-sm"
+                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-teal-600 text-gray-800 dark:text-white transition-all shadow-sm"
                 placeholder="Seu melhor e-mail"
               />
             </div>
@@ -98,7 +101,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleEmail()}
-                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-teal text-gray-800 dark:text-white transition-all shadow-sm"
+                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-teal-600 text-gray-800 dark:text-white transition-all shadow-sm"
                 placeholder="Sua senha"
               />
             </div>
@@ -113,7 +116,7 @@ export default function LoginPage() {
             <button
               onClick={handleEmail}
               disabled={loading || !email || !password}
-              className="w-full bg-brand-teal hover:opacity-90 text-white rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-brand-teal/30 transition-all disabled:opacity-50 disabled:shadow-none"
+              className="w-full bg-teal-600 hover:opacity-90 text-white rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 transition-all disabled:opacity-50 disabled:shadow-none"
             >
               {loading ? 'Processando...' : (
                 <>
