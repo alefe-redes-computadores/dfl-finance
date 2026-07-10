@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -21,7 +21,7 @@ import BankLogo from '@/components/BankLogo'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
+import { db, addToSyncQueue } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 interface ExtractedTransaction {
@@ -64,7 +64,9 @@ const ExtractionSkeleton = () => (
 export default function ImportInvoicePage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { context, effectiveContext } = useContext_()
+  // 🔥 CORREÇÃO: Usando appMode e effectiveContext
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   const { showToast } = useToast()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
@@ -128,7 +130,7 @@ export default function ImportInvoicePage() {
     reloadAccounts()
     reloadCategories()
     reloadTags()
-  }, [user?.id, context])
+  }, [user?.id, effectiveContext]) // 🔥 Dependência arrumada
 
   useEffect(() => {
     if (localCreditCards) setCreditCards(localCreditCards)
@@ -184,7 +186,7 @@ export default function ImportInvoicePage() {
     setTransactions(prev => prev.filter((_, i) => i !== index))
   }
 
-  // 🔥 HANDLE IMPORT ATOMICO COM TRANSACTION
+  // 🔥 IMPORT ATÔMICO E 100% LOCAL-FIRST (SEM REDE DENTRO DO db.transaction)
   const handleImport = async () => {
     if (!user?.id || transactions.length === 0) return
     setImporting(true)
@@ -192,40 +194,32 @@ export default function ImportInvoicePage() {
     try {
       let invoiceId: string | null = null
 
-      // 🔥 Inicia a transação principal
-      await db.transaction('rw', db.credit_invoices, db.transactions, db.notifications, db.syncQueue, async () => {
+      // 🔥 CORREÇÃO: Array no transaction do Dexie e removida a chamada de internet (Supabase) interna
+      await db.transaction('rw', ['credit_invoices', 'transactions', 'notifications', 'syncQueue'], async () => {
 
         if (creditCardId) {
           const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
 
-          // Busca fatura aberta existente no Supabase (para manter compatibilidade)
-          const { data: existingInvoice } = await supabase
-            .from('credit_invoices')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('credit_card_id', creditCardId)
-            .eq('status', 'open')
-            .single()
+          // 🔥 LEITURA 100% LOCAL (Dexie) - Conserta o bug do Claude
+          const allInvoices = await db.table('credit_invoices')
+            .where('credit_card_id').equals(creditCardId)
+            .toArray()
+          
+          const existingInvoice = allInvoices.find((inv: any) => inv.status === 'open')
 
           if (existingInvoice) {
             invoiceId = existingInvoice.id
 
-            // Busca total atual
-            const { data: currentInvoice } = await supabase
-              .from('credit_invoices')
-              .select('total_amount')
-              .eq('id', invoiceId)
-              .single()
+            const newTotal = (Number(existingInvoice.total_amount) || 0) + totalAmount
 
-            const newTotal = (Number(currentInvoice?.total_amount) || 0) + totalAmount
-
-            // ATUALIZA FATURA COM safeUpdate
+            // ATUALIZA FATURA LOCAL E FILA
             const updateData = {
               total_amount: newTotal,
               updated_at: new Date().toISOString(),
             }
-            const result = await safeUpdate('credit_invoices', invoiceId, updateData)
-            if (!result.success) throw new Error(result.error)
+            await db.table('credit_invoices').update(invoiceId, updateData)
+            await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
+
           } else {
             const today = new Date()
             const closingDay = 10
@@ -264,8 +258,8 @@ export default function ImportInvoicePage() {
               sync_attempts: 0,
             }
 
-            const result = await safeAdd('credit_invoices', invoicePayload)
-            if (!result.success) throw new Error(result.error)
+            await db.table('credit_invoices').add(invoicePayload)
+            await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
 
             invoiceId = newInvoiceId
           }
@@ -304,13 +298,13 @@ export default function ImportInvoicePage() {
           }
         })
 
-        // CRIA TRANSAÇÕES COM safeAdd
+        // CRIA TRANSAÇÕES
         for (const tx of payload) {
-          const result = await safeAdd('transactions', tx)
-          if (!result.success) throw new Error(result.error)
+          await db.table('transactions').add(tx)
+          await addToSyncQueue(user.id, 'transactions', 'create', tx.id, tx)
         }
 
-        // CRIA NOTIFICAÇÃO COM safeAdd
+        // CRIA NOTIFICAÇÃO 
         const notifId = crypto.randomUUID()
         const notifPayload = {
           id: notifId,
@@ -323,13 +317,14 @@ export default function ImportInvoicePage() {
             count: transactions.length,
             card_name: creditCards.find(c => c.id === creditCardId)?.name || 'Conta'
           },
-          read: false,
+          // 🔥 CORREÇÃO: O banco pede "is_read" e não "read"
+          is_read: false,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        const result = await safeAdd('notifications', notifPayload)
-        if (!result.success) throw new Error(result.error)
+        await db.table('notifications').add(notifPayload)
+        await addToSyncQueue(user.id, 'notifications', 'create', notifId, notifPayload)
 
       }) // fim da transaction
 
@@ -774,4 +769,3 @@ export default function ImportInvoicePage() {
     </div>
   )
 }
-// Blindagem Atômica Finalizada
