@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -24,7 +24,8 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
+// 🔥 NOVO: Importando o hook de blindagem seguro
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Installment = {
   id: string
@@ -44,7 +45,12 @@ export default function FinancingDetailPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context } = useContext_()
+  
+  // 🔥 CORRIGIDO: effectiveContext para respeitar o modo "Apenas PF"
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+
+  const { safeUpdate, safeDelete } = useSafeDb()
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -55,40 +61,41 @@ export default function FinancingDetailPage() {
 
   const { data: localFinancings, loading, reload } = useLocalData({
     table: 'financings' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
-  const financingData = (localFinancings || []).find((f: any) => f.id === financingId) as any
+  const financingData = useMemo(() => {
+    return (localFinancings || []).find((f: any) => f.id === financingId) as any
+  }, [localFinancings, financingId])
 
   const { data: allInstallments } = useLocalData({
     table: 'transactions' as any,
-    filters: { context, type: 'financing_installment', financing_id: financingId },
+    filters: { context: effectiveContext, type: 'financing_installment', financing_id: financingId },
   })
 
   const installments = (allInstallments || []) as Installment[]
 
-  // 🔥 PAGAMENTO ATÔMICO
+  // 🔥 PAGAMENTO ATÔMICO E SEGURO (Sem db.transaction manual)
   const handlePayInstallment = async (installment: Installment) => {
     if (!user) return
     try {
-      await db.transaction('rw', 'transactions', 'financings', 'syncQueue', async () => {
-        const updateData = {
-          paid: true,
-          paid_date: new Date().toISOString().split("T")[0],
-          updated_at: new Date().toISOString()
-        }
-        await db.table('transactions').update(installment.id, updateData)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'update', record_id: installment.id, data: updateData, user_id: user.id, created_at: new Date().toISOString() })
+      const updateData = {
+        paid: true,
+        paid_date: new Date().toISOString().split("T")[0],
+        updated_at: new Date().toISOString()
+      }
+      
+      const res1 = await safeUpdate('transactions', installment.id, updateData)
+      if (!res1.success) throw new Error(res1.error)
 
-        const updatedInstallments = installments.map((i: Installment) => i.id === installment.id ? { ...i, paid: true } : i)
-        const allPaid = updatedInstallments.every((i: Installment) => i.paid)
-        
-        if (allPaid && financingData?.status !== "paid") {
-          const statusUpdate = { status: "paid", updated_at: new Date().toISOString() }
-          await db.table('financings').update(financingId, statusUpdate)
-          await db.table('syncQueue').add({ table: 'financings', operation: 'update', record_id: financingId, data: statusUpdate, user_id: user.id, created_at: new Date().toISOString() })
-        }
-      })
+      const updatedInstallments = installments.map((i: Installment) => i.id === installment.id ? { ...i, paid: true } : i)
+      const allPaid = updatedInstallments.every((i: Installment) => i.paid)
+      
+      if (allPaid && financingData?.status !== "paid") {
+        const statusUpdate = { status: "paid", updated_at: new Date().toISOString() }
+        const res2 = await safeUpdate('financings', financingId, statusUpdate)
+        if (!res2.success) throw new Error(res2.error)
+      }
 
       showToast("Parcela paga com sucesso!", "success")
       success()
@@ -99,25 +106,24 @@ export default function FinancingDetailPage() {
     }
   }
 
-  // 🔥 DESFAZER PAGAMENTO ATÔMICO
+  // 🔥 DESFAZER PAGAMENTO ATÔMICO E SEGURO
   const handleUndoPayment = async (installment: Installment) => {
     if (!user) return
     try {
-      await db.transaction('rw', 'transactions', 'financings', 'syncQueue', async () => {
-        const updateData = {
-          paid: false,
-          paid_date: null,
-          updated_at: new Date().toISOString()
-        }
-        await db.table('transactions').update(installment.id, updateData)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'update', record_id: installment.id, data: updateData, user_id: user.id, created_at: new Date().toISOString() })
+      const updateData = {
+        paid: false,
+        paid_date: null,
+        updated_at: new Date().toISOString()
+      }
 
-        if (financingData?.status === "paid") {
-          const statusUpdate = { status: "active", updated_at: new Date().toISOString() }
-          await db.table('financings').update(financingId, statusUpdate)
-          await db.table('syncQueue').add({ table: 'financings', operation: 'update', record_id: financingId, data: statusUpdate, user_id: user.id, created_at: new Date().toISOString() })
-        }
-      })
+      const res1 = await safeUpdate('transactions', installment.id, updateData)
+      if (!res1.success) throw new Error(res1.error)
+
+      if (financingData?.status === "paid") {
+        const statusUpdate = { status: "active", updated_at: new Date().toISOString() }
+        const res2 = await safeUpdate('financings', financingId, statusUpdate)
+        if (!res2.success) throw new Error(res2.error)
+      }
 
       showToast("Pagamento desfeito com sucesso!", "success")
       success()
@@ -132,37 +138,36 @@ export default function FinancingDetailPage() {
   const handleDeleteInstallment = async (installmentId: string) => {
     if (!user) return
     try {
-      await db.transaction('rw', 'transactions', 'syncQueue', async () => {
-        await db.table('transactions').delete(installmentId)
-        await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: installmentId, user_id: user.id, created_at: new Date().toISOString() })
-      })
+      const res = await safeDelete('transactions', installmentId)
+      if (!res.success) throw new Error(res.error)
+
       showToast("Parcela excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
       reload()
-    } catch {
+    } catch (err: any) {
       showToast("Erro ao excluir parcela", "error")
       errorHaptic()
     }
   }
 
-  // 🔥 EXCLUIR FINANCIAMENTO ATÔMICO (Cascata)
+  // 🔥 EXCLUIR FINANCIAMENTO EM CASCATA ATÔMICO
   const handleDeleteFinancing = async () => {
     if (!user) return
     if (!confirm("Tem certeza que deseja excluir este financiamento e todas as suas parcelas?")) return
     try {
-      await db.transaction('rw', 'financings', 'transactions', 'syncQueue', async () => {
-        for (const inst of installments) {
-          await db.table('transactions').delete(inst.id)
-          await db.table('syncQueue').add({ table: 'transactions', operation: 'delete', record_id: inst.id, user_id: user.id, created_at: new Date().toISOString() })
-        }
-        await db.table('financings').delete(financingId)
-        await db.table('syncQueue').add({ table: 'financings', operation: 'delete', record_id: financingId, user_id: user.id, created_at: new Date().toISOString() })
-      })
+      for (const inst of installments) {
+        const res1 = await safeDelete('transactions', inst.id)
+        if (!res1.success) throw new Error(res1.error)
+      }
+      
+      const res2 = await safeDelete('financings', financingId)
+      if (!res2.success) throw new Error(res2.error)
+
       showToast("Financiamento excluído com sucesso!", "success")
       success()
       router.back()
-    } catch {
+    } catch (err: any) {
       showToast("Erro ao excluir financiamento", "error")
       errorHaptic()
     }
@@ -325,7 +330,7 @@ export default function FinancingDetailPage() {
                     <button onClick={() => inst.paid ? handleUndoPayment(inst) : handlePayInstallment(inst)} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${inst.paid ? "bg-teal-500 border-teal-500 text-white" : "border-slate-300 dark:border-slate-600 hover:border-teal-500"}`}>{inst.paid && <CheckCircle2 size={14} />}</button>
                     <div className="min-w-0">
                       <p className={`text-sm font-semibold truncate ${inst.paid ? "text-teal-700 dark:text-teal-300" : "text-slate-800 dark:text-slate-200"}`}>Parcela #{inst.number}</p>
-                      <p className={`text-xs ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500 dark:text-slate-400"}`}>{formatDate(inst.due_date)}{inst.paid && inst.paid_date && ` — Pago em ${formatDate(inst.paid_date)}`}</p>
+                      <p className={`text-xs ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-slate-500"}`}>{formatDate(inst.due_date)}{inst.paid && inst.paid_date && ` — Pago em ${formatDate(inst.paid_date)}`}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
