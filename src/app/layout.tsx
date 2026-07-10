@@ -3,6 +3,7 @@ import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
+import Script from 'next/script' // Adicionamos este import
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -47,6 +48,15 @@ export default function RootLayout({
             {children}
           </ToastProvider>
         </ThemeProvider>
+
+        {/* Injeção do Eruda */}
+        <Script
+          src="https://cdn.jsdelivr.net/npm/eruda"
+          onLoad={() => {
+            // @ts-ignore
+            eruda.init();
+          }}
+        />
       </body>
     </html>
   )
