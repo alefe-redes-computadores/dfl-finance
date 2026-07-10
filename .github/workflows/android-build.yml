@@ -15,7 +15,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Configurar Java JDK 17
         uses: actions/setup-java@v4
@@ -24,9 +23,9 @@ jobs:
           java-version: '17'
 
       - name: Instalar Dependências
-        run: npm ci
+        run: npm install
 
-      - name: Gerar Ícones Nativo (Automático)
+      - name: Gerar Ícones Nativo
         run: npx @capacitor/assets generate --silent
 
       - name: Build do Next.js
