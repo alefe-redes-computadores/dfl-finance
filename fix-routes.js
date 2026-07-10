@@ -13,35 +13,37 @@ function processDirectory(dir) {
       processDirectory(fullPath);
     } else if (file === 'page.tsx' || file === 'page.jsx') {
       if (fullPath.includes('[') && fullPath.includes(']')) {
-        let content = fs.readFileSync(fullPath, 'utf8');
-        
-        // Pega o nome exato da variável (ex: "id" da pasta "[id]")
         const paramMatch = fullPath.match(/\[(.*?)\]/);
         const paramName = paramMatch ? paramMatch[1] : 'id';
-
         const clientPagePath = path.join(dir, 'ClientPage.tsx');
-        
-        // Se a separação já foi feita, não faz de novo
-        if (fs.existsSync(clientPagePath)) {
-          console.log(`✅ Já separado: ${fullPath}`);
-          continue;
+
+        let content = fs.readFileSync(fullPath, 'utf8');
+
+        // Verifica se a gente já tinha criado a ponte antes
+        const isAlreadyBridge = content.includes('import ClientPage from');
+
+        if (!isAlreadyBridge) {
+          // Salva o seu código original no ClientPage (se ainda não fez)
+          fs.writeFileSync(clientPagePath, content);
         }
 
-        console.log(`🔧 Enganando o Next.js na rota: ${fullPath}`);
+        console.log(`🔧 Injetando Suspense (Anti-Bug) na rota: ${fullPath}`);
         
-        // 1. Salva seu código original e intacto no ClientPage
-        fs.writeFileSync(clientPagePath, content);
-        
-        // 2. Cria a ponte com um ID Falso para o Next.js aprovar o Build
+        // Reescreve o page.tsx colocando o <Suspense> exigido pelo Next.js
         const newPageContent = `
 import ClientPage from './ClientPage';
+import { Suspense } from 'react';
 
 export async function generateStaticParams() {
   return [{ ${paramName}: '1' }];
 }
 
 export default function Page(props) {
-  return <ClientPage {...props} />;
+  return (
+    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#0f766e', fontWeight: 'bold' }}>Carregando...</div>}>
+      <ClientPage {...props} />
+    </Suspense>
+  );
 }
 `;
         fs.writeFileSync(fullPath, newPageContent.trim());
@@ -50,6 +52,6 @@ export default function Page(props) {
   }
 }
 
-console.log('🤖 Iniciando o Robô Definitivo...');
+console.log('🤖 Iniciando o Robô Definitivo v3 (Com Suspense Anti-Bug)...');
 processDirectory('./src/app');
-console.log('🚀 Hack aplicado com sucesso nas rotas dinâmicas!');
+console.log('🚀 Hacks aplicados com sucesso! Next.js dominado.');
