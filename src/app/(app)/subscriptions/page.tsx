@@ -12,7 +12,8 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db'
+// 🔥 CORREÇÃO: Importando o addToSyncQueue
+import { db, addToSyncQueue } from '@/lib/db'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
@@ -20,7 +21,10 @@ export default function SubscriptionsPage() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { appMode, effectiveContext } = useContext_()
+  
+  // 🔥 CORREÇÃO: Pegando o context e appMode para criar o effectiveContext
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
@@ -34,17 +38,19 @@ export default function SubscriptionsPage() {
 
   const { data: subscriptions, loading, reload } = useLocalData({
     table: 'subscriptions' as any,
-    filters: { context: effectiveContext },
+    filters: { context: effectiveContext }, // 🔥 Usando effectiveContext
   })
 
-  // 🔥 EXCLUSÃO ATÔMICA DA LISTA
+  // 🔥 EXCLUSÃO ATÔMICA DA LISTA COM addToSyncQueue E ARRAY
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      await db.transaction('rw', 'subscriptions', 'syncQueue', async () => {
+      // 🔥 CORREÇÃO: Array de tabelas e addToSyncQueue em vez de insert solto
+      await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
         await db.table('subscriptions').delete(deleteModal)
-        await db.table('syncQueue').add({ table: 'subscriptions', operation: 'delete', record_id: deleteModal, user_id: user.id, created_at: new Date().toISOString() })
+        await addToSyncQueue(user.id, 'subscriptions', 'delete', deleteModal, null)
       })
+      
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
