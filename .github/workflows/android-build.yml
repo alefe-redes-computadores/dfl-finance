@@ -25,25 +25,21 @@ jobs:
       - name: Instalar Dependências
         run: npm install
 
-      - name: Gerar Ícones Nativo
-        run: npx @capacitor/assets generate
-
       - name: Build do Next.js
         run: npm run build
 
-      - name: Sincronizar com Android
+      - name: Sincronizar e Preparar Android
         run: |
-          rm -rf android  # 🔥 ISSO AQUI VAI FORÇAR A RECRIAÇÃO TOTAL!
-          npx cap add android || true
+          rm -rf android
+          npx cap add android
+          npx @capacitor/assets generate --android
           npx cap sync android
-
-
 
       - name: Compilar APK (Gradle)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew clean assembleDebug
 
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
