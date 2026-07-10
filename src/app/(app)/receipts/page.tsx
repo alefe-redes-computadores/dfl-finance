@@ -13,7 +13,6 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import Skeleton from '@/components/Skeleton'
-// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 interface ReceiptFile {
@@ -31,7 +30,6 @@ export default function ReceiptsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem (preparatório - mantém consistência)
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [receipts, setReceipts] = useState<ReceiptFile[]>([])
@@ -40,7 +38,7 @@ export default function ReceiptsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'image' | 'pdf'>('all')
-  const [expandedId, setExpandedId] = useState<string | null>(null) // 🆕 controle de expansão
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({})
@@ -48,7 +46,6 @@ export default function ReceiptsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Pull to refresh (sem toast de "Atualizando...", só a bolinha)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
@@ -57,14 +54,12 @@ export default function ReceiptsPage() {
     loadReceipts()
   }, [user?.id])
 
-  // 🔄 Carrega os comprovantes com signed URLs
   const loadReceipts = async (showPulse = true) => {
     if (showPulse) setLoadingPulse(true)
     setLoading(true)
     setError('')
 
     try {
-      // Lista os arquivos do bucket
       const { data: files, error: listError } = await supabase
         .storage
         .from('receipts')
@@ -88,12 +83,10 @@ export default function ReceiptsPage() {
         return
       }
 
-      // Gera signed URLs para cada arquivo (garante acesso mesmo com bucket privado)
       const receiptsData: ReceiptFile[] = await Promise.all(files.map(async file => {
         const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(file.name)
         const filePath = `${user.id}/${file.name}`
 
-        // Usa signed URL (válida por 1 hora)
         const { data: signedData, error: signedError } = await supabase
           .storage
           .from('receipts')
@@ -103,7 +96,6 @@ export default function ReceiptsPage() {
         if (signedData?.signedUrl) {
           url = signedData.signedUrl
         } else {
-          // Fallback: tenta URL pública
           const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(filePath)
           if (urlData?.publicUrl) url = urlData.publicUrl
         }
@@ -117,7 +109,6 @@ export default function ReceiptsPage() {
         }
       }))
 
-      // Busca transações vinculadas (opcional, para mostrar descrição)
       const { data: txs } = await supabase
         .from('transactions')
         .select('id, receipt_url, description, date')
@@ -196,15 +187,19 @@ export default function ReceiptsPage() {
     if (!confirm(`Excluir o comprovante "${receipt.name}"?`)) return
 
     try {
+      // 1. Apaga a imagem real do Storage (Nuvem)
       const path = `${user.id}/${receipt.name}`
       const { error: deleteError } = await supabase.storage.from('receipts').remove([path])
       if (deleteError) throw deleteError
 
+      // 2. 🔥 ATUALIZAÇÃO LOCAL-FIRST DA TRANSAÇÃO
+      // Em vez de ir no Supabase, limpa o link da imagem no banco local do celular e joga na fila
       if (receipt.transaction_id) {
-        await supabase
-          .from('transactions')
-          .update({ receipt_url: null })
-          .eq('id', receipt.transaction_id)
+        const result = await safeUpdate('transactions', receipt.transaction_id, { 
+          receipt_url: null,
+          updated_at: new Date().toISOString()
+        })
+        if (!result.success) throw new Error(result.error)
       }
 
       showToast('Comprovante excluído.', 'success')
@@ -237,7 +232,6 @@ export default function ReceiptsPage() {
   const totalImages = receipts.filter(r => r.isImage).length
   const totalPdfs = receipts.filter(r => !r.isImage).length
 
-  // Pull to refresh handlers (sem toast de "Atualizando...", apenas a bolinha)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -254,7 +248,7 @@ export default function ReceiptsPage() {
       if (distance > 60) {
         setRefreshing(true)
         isPulling.current = false
-        loadReceipts(false) // recarrega sem mostrar o toast
+        loadReceipts(false)
       }
     }
 
@@ -273,14 +267,11 @@ export default function ReceiptsPage() {
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-      {/* 🔵 Bolinha de carregamento sutil (igual à home) */}
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
-
-      {/* ⚠️ REMOVIDO o toast de "Atualizando..." para não dar impressão de lentidão */}
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
@@ -323,7 +314,6 @@ export default function ReceiptsPage() {
           )}
         </div>
 
-        {/* Filtros com contagem */}
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scrollbar-hide">
           {[
             { id: 'all', label: 'Todos', count: receipts.length },
@@ -401,9 +391,7 @@ export default function ReceiptsPage() {
                   key={receipt.name}
                   className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all"
                 >
-                  {/* Cabeçalho do item */}
                   <div className="flex items-center gap-3">
-                    {/* Miniatura com proporção 1:1 e fallback melhorado */}
                     <div
                       className="w-14 h-14 aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0 cursor-pointer flex items-center justify-center"
                       onClick={() => {
@@ -453,7 +441,6 @@ export default function ReceiptsPage() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      {/* Botão de expandir (só para imagens) */}
                       {receipt.isImage && !hasError && (
                         <button
                           onClick={() => toggleExpand(receipt.name)}
@@ -480,7 +467,6 @@ export default function ReceiptsPage() {
                     </div>
                   </div>
 
-                  {/* Área de expansão (imagem em tamanho maior) */}
                   {isExpanded && receipt.isImage && !hasError && (
                     <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700">
                       <img
@@ -500,7 +486,6 @@ export default function ReceiptsPage() {
         )}
       </div>
 
-      {/* Input file oculto */}
       <input
         ref={fileInputRef}
         type="file"
