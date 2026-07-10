@@ -15,7 +15,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from '@/lib/db' 
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function NewFinancingPage() {
   const router = useRouter()
@@ -23,8 +23,12 @@ export default function NewFinancingPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useContext_()
   const { user } = useAuth()
+  const { safeAdd, safeUpdate } = useSafeDb()
+
+  // 🔥 CORRIGIDO: effectiveContext injetado contra o vazamento de dados do appMode
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -45,7 +49,7 @@ export default function NewFinancingPage() {
 
   const { data: localFinancings } = useLocalData({
     table: 'financings' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const financingData = localFinancings?.find((f: any) => f.id === editId) as any
@@ -90,7 +94,7 @@ export default function NewFinancingPage() {
     }
   }, [refreshing])
 
-  // 🔥 SALVAR ATÔMICO
+  // 🔥 SALVAR ATÔMICO E SEGURO (Sem loops manuais de syncQueue)
   const handleSave = async () => {
     if (!description.trim()) {
       showToast("Preencha a descrição do financiamento", "warning")
@@ -123,29 +127,27 @@ export default function NewFinancingPage() {
         first_due_date: firstDueDate || null,
         notes: notes.trim() || null,
         status,
-        context,
+        context: effectiveContext,
         updated_at: new Date().toISOString(),
       }
 
-      await db.transaction('rw', 'financings', 'syncQueue', async () => {
-        if (editId) {
-          await db.table('financings').update(editId, payload)
-          await db.table('syncQueue').add({ table: 'financings', operation: 'update', record_id: editId, data: payload, user_id: user!.id, created_at: new Date().toISOString() })
-        } else {
-          const id = crypto.randomUUID()
-          const fullPayload = {
-            id,
-            user_id: user!.id,
-            ...payload,
-            remaining_amount: parseFloat(totalAmount),
-            created_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-          }
-          await db.table('financings').add(fullPayload)
-          await db.table('syncQueue').add({ table: 'financings', operation: 'create', record_id: id, data: fullPayload, user_id: user!.id, created_at: new Date().toISOString() })
+      if (editId) {
+        const res = await safeUpdate('financings', editId, payload)
+        if (!res.success) throw new Error(res.error)
+      } else {
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
+          user_id: user!.id,
+          ...payload,
+          remaining_amount: parseFloat(totalAmount),
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
-      })
+        const res = await safeAdd('financings', fullPayload)
+        if (!res.success) throw new Error(res.error)
+      }
 
       showToast(editId ? "Financiamento atualizado com sucesso!" : "Financiamento criado com sucesso!", "success")
       success()
@@ -158,7 +160,7 @@ export default function NewFinancingPage() {
     }
   }
 
-  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = effectiveContext === "pj" ? "da Empresa" : "Pessoal"
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
