@@ -4,9 +4,6 @@ import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
 
-// ESSENCIAL: Mantemos isso aqui para o Vercel não travar no build
-export const dynamic = 'force-dynamic'
-
 const poppins = Poppins({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700'],
@@ -50,10 +47,6 @@ export default function RootLayout({
             {children}
           </ToastProvider>
         </ThemeProvider>
-
-        {/* MODO ANTIGO DE INJEÇÃO DO ERUDA */}
-        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-        <script dangerouslySetInnerHTML={{ __html: 'eruda.init();' }} />
       </body>
     </html>
   )
