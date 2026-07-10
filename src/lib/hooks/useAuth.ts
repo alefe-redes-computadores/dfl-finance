@@ -11,14 +11,15 @@ export function useAuth() {
     let mounted = true
 
     const initializeAuth = async () => {
-      // 1. Verificação Agressiva Offline
-      if (typeof window !== 'undefined' && !window.navigator.onLine) {
+      setLoading(true) 
+
+      // 1. Tenta recuperar do Cache Offline primeiro
+      if (typeof window !== 'undefined') {
         try {
-          // Procura a chave do Supabase salva no celular
           const storageKey = Object.keys(window.localStorage).find(key => 
             key.startsWith('sb-') && key.endsWith('-auth-token')
           )
-          
+
           if (storageKey) {
             const sessionStr = window.localStorage.getItem(storageKey)
             if (sessionStr) {
@@ -26,10 +27,9 @@ export function useAuth() {
               if (sessionData?.user) {
                 if (mounted) {
                   setUser(sessionData.user)
-                  setLoading(false)
+                  setLoading(false) 
+                  return // Cache encontrado, encerra a verificação aqui
                 }
-                // Aborta a requisição para o servidor e confia no cache
-                return 
               }
             }
           }
@@ -38,35 +38,24 @@ export function useAuth() {
         }
       }
 
-      // 2. Fluxo Normal (Online)
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      // 2. Fluxo Normal (Online/Refresh de sessão)
+      try {
+        const { data } = await supabase.auth.getSession()
         if (mounted) {
-          setUser(session?.user ?? null)
-          setLoading(false)
+          setUser(data.session?.user ?? null)
         }
-      })
+      } catch (e) {
+        console.error('Erro na verificação online:', e)
+        if (mounted) setUser(null)
+      } finally {
+        // Garantia: O loading sempre para, não importa o resultado
+        if (mounted) setLoading(false)
+      }
     }
 
     initializeAuth()
 
-    // 3. Listener protegido contra falso-negativo de rede
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted) {
-        // Se a internet cair e o Supabase disparar um evento vazio por erro de rede, ignoramos.
-        // Isso evita deslogar o usuário indevidamente.
-        if (typeof window !== 'undefined' && !window.navigator.onLine && !session) {
-          return
-        }
-        
-        setUser(session?.user ?? null)
-        setLoading(false)
-      }
-    })
-
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
+    return () => { mounted = false }
   }, [])
 
   return { user, loading }
