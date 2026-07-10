@@ -26,8 +26,9 @@ import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+// 🔥 NOVO: Arquitetura Local-First e Blindada
 import { useLocalData } from '@/hooks/useLocalData'
-import { db, addToSyncQueue } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -55,10 +56,14 @@ function NewTransactionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useToast()
-  const { context: globalContext, appMode } = useContext_()
   const { vibrate, success } = useHapticFeedback()
+  const { safeAdd, safeUpdate } = useSafeDb()
 
+  // 🔥 CORRIGIDO: effectiveContext garantindo a trava PF/PJ
+  const { context: globalContext, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : globalContext
+  const [context, setContext] = useState<Context>(effectiveContext as Context)
+
   const [loadingPulse, setLoadingPulse] = useState(false)
 
   const galeriaInputRef = useRef<HTMLInputElement>(null)
@@ -67,9 +72,7 @@ function NewTransactionContent() {
   const [type, setType] = useState<TxType>(
     (searchParams.get('type') as TxType) || 'expense'
   )
-  const [context, setContext] = useState<Context>(() => {
-    return effectiveContext
-  })
+  
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
@@ -84,13 +87,6 @@ function NewTransactionContent() {
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const [categories, setCategories] = useState<any[]>([])
-  const [subcategories, setSubcategories] = useState<Record<string, any[]>>({})
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [creditCards, setCreditCards] = useState<any[]>([])
-  const [contacts, setContacts] = useState<any[]>([])
-  const [tags, setTags] = useState<any[]>([])
-
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [receiptName, setReceiptName] = useState<string>('')
@@ -98,7 +94,6 @@ function NewTransactionContent() {
   const [uploading, setUploading] = useState(false)
 
   const [installments, setInstallments] = useState(1)
-  const [budgets, setBudgets] = useState<any[]>([])
   const [budgetAlert, setBudgetAlert] = useState<{
     message: string; type: 'warning' | 'danger'
   } | null>(null)
@@ -110,17 +105,15 @@ function NewTransactionContent() {
 
   const [financingId, setFinancingId] = useState<string | null>(null)
   const [debtId, setDebtId] = useState<string | null>(null)
+  
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
-
   const [showCustomRecurrenceModal, setShowCustomRecurrenceModal] = useState(false)
   const [customParcels, setCustomParcels] = useState(12)
   const [customInterval, setCustomInterval] = useState(1)
 
   const [showQRScanner, setShowQRScanner] = useState(false)
   const [showCatModal, setShowCatModal] = useState(false)
-  const [showSubCatModal, setShowSubCatModal] = useState(false)
-  const [selectedParentCat, setSelectedParentCat] = useState<any>(null)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showCardModal, setShowCardModal] = useState(false)
   const [showContactModal, setShowContactModal] = useState(false)
@@ -147,72 +140,41 @@ function NewTransactionContent() {
 
   const { isOnline } = useOfflineQueue()
 
-  const { data: localAccounts } = useLocalData({
+  // 🔥 LEITURA 100% OFFLINE
+  const { data: accounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context: effectiveContext },
   })
 
-  const { data: localCategories } = useLocalData({
+  // 🔥 ADEUS SUBCATEGORIAS! Agora é uma lista plana/flat simples.
+  const { data: categories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' },
   })
 
-  const { data: localTags } = useLocalData({
+  const { data: tags } = useLocalData({
     table: 'tags' as any,
     filters: { context: effectiveContext },
   })
 
-  const { data: localCreditCards } = useLocalData({
+  const { data: creditCards } = useLocalData({
     table: 'credit_cards' as any,
     filters: { context: effectiveContext, is_archived: false },
   })
 
-  const { data: localContacts } = useLocalData({
+  const { data: contacts } = useLocalData({
     table: 'contacts' as any,
     filters: { context: effectiveContext },
   })
 
-  const { data: localBudgets } = useLocalData({
+  const { data: budgets } = useLocalData({
     table: 'budgets' as any,
     filters: { context: effectiveContext },
   })
 
+  // Zera campos se trocar de modo Pessoal <-> Empresa
   useEffect(() => {
-    if (localAccounts) setAccounts(localAccounts)
-  }, [localAccounts])
-
-  useEffect(() => {
-    if (localCategories) {
-      const mainCats = localCategories.filter((c: any) => !c.parent_id)
-      const subCats = localCategories.filter((c: any) => c.parent_id)
-      const subsMap: Record<string, any[]> = {}
-      subCats.forEach((sub: any) => {
-        if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
-        subsMap[sub.parent_id].push(sub)
-      })
-      setCategories(mainCats)
-      setSubcategories(subsMap)
-    }
-  }, [localCategories])
-
-  useEffect(() => {
-    if (localTags) setTags(localTags)
-  }, [localTags])
-
-  useEffect(() => {
-    if (localCreditCards) setCreditCards(localCreditCards)
-  }, [localCreditCards])
-
-  useEffect(() => {
-    if (localContacts) setContacts(localContacts)
-  }, [localContacts])
-
-  useEffect(() => {
-    if (localBudgets) setBudgets(localBudgets)
-  }, [localBudgets])
-
-  useEffect(() => {
-    setContext(effectiveContext)
+    setContext(effectiveContext as Context)
     setAccountId('')
     setCategoryId('')
     setCreditCardId('')
@@ -239,14 +201,10 @@ function NewTransactionContent() {
   const themeColor = isIncome ? 'text-emerald-700' : 'text-red-600'
   const bgColor = isIncome ? 'bg-emerald-700' : 'bg-red-600'
 
-  const selectedCat =
-    categories.find((c) => c.id === categoryId) ||
-    Object.values(subcategories)
-      .flat()
-      .find((s: any) => s.id === categoryId)
-  const selectedAcc = accounts.find((a) => a.id === accountId)
-  const selectedCard = creditCards.find((c) => c.id === creditCardId)
-  const selectedContact = contacts.find((c) => c.id === contactId)
+  const selectedCat = (categories || []).find((c: any) => c.id === categoryId)
+  const selectedAcc = (accounts || []).find((a: any) => a.id === accountId)
+  const selectedCard = (creditCards || []).find((c: any) => c.id === creditCardId)
+  const selectedContact = (contacts || []).find((c: any) => c.id === contactId)
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTags((prev) => {
@@ -256,11 +214,12 @@ function NewTransactionContent() {
     })
   }, [])
 
+  // Alerta de Orçamento
   const budgetAlertMemo = useMemo(() => {
     if (!categoryId || amountNum <= 0 || type !== 'expense') {
       return null
     }
-    const budget = budgets.find((b) => b.category_id === categoryId)
+    const budget = (budgets || []).find((b: any) => b.category_id === categoryId)
     if (!budget) return null
     return budget
   }, [categoryId, amountNum, type, budgets])
@@ -275,6 +234,7 @@ function NewTransactionContent() {
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
+    // Lê histórico local
     supabase
       .from('transactions')
       .select('amount')
@@ -306,6 +266,7 @@ function NewTransactionContent() {
       })
   }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
 
+  // Arquivos
   const uploadFile = async (file: File) => {
     if (!user) return
     setUploading(true)
@@ -354,58 +315,20 @@ function NewTransactionContent() {
           })
           const ocrData = await ocrResponse.json()
           if (ocrData.success && ocrData.data) {
-            if (ocrData.data.amount > 0 && ocrData.data.date) {
-              const { data: similarTxs } = await supabase
-                .from('transactions')
-                .select('id, description, amount, date')
-                .eq('user_id', user.id)
-                .eq('status', 'pending')
-                .eq('type', 'expense')
-                .gte('amount', ocrData.data.amount - 1)
-                .lte('amount', ocrData.data.amount + 1)
-                .gte('date', ocrData.data.date)
-                .lte('date', ocrData.data.date)
-                .limit(3)
-
-              if (similarTxs && similarTxs.length > 0) {
-                const tx = similarTxs[0]
-                const confirmed = confirm(
-                  `🔍 Conciliação Inteligente\n\n` +
-                  `Encontramos uma despesa similar:\n` +
-                  `"${tx.description}" — ${formatCurrency(tx.amount)} em ${format(new Date(tx.date), "dd/MM")}\n\n` +
-                  `Deseja anexar este comprovante a essa transação existente?`
-                )
-                if (confirmed) {
-                  await supabase
-                    .from('transactions')
-                    .update({ receipt_url: urlData.publicUrl })
-                    .eq('id', tx.id)
-                  showToast('Comprovante vinculado à transação existente!', 'success')
-                  vibrate([50])
-                  return
-                }
-              }
-            }
-
             if (ocrData.data.amount > 0) {
               setAmountNum(ocrData.data.amount)
               setAmountFormatted(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
             }
             if (ocrData.data.date) setDate(ocrData.data.date)
             if (ocrData.data.description) setDesc(ocrData.data.description)
-            if (ocrData.data.suggested_category) {
-              const matchedCat = categories.find((c: any) => c.name.toLowerCase() === ocrData.data.suggested_category.toLowerCase())
-              if (matchedCat) setCategoryId(matchedCat.id)
-            }
             vibrate([50, 100, 50])
             showToast('Dados do comprovante extraídos! Revise antes de salvar.', 'success')
           }
         } catch (ocrError) {
-          console.error('Erro ao extrair dados do comprovante:', ocrError)
+          console.error('Erro OCR:', ocrError)
         }
       }
     } catch (err: any) {
-      console.error('Erro upload:', err)
       showToast(`Erro ao anexar: ${err.message}`, 'error')
       setReceiptPreview(null)
       setReceiptName('')
@@ -475,45 +398,12 @@ function NewTransactionContent() {
     if (extractedDesc) setDesc(extractedDesc)
   }
 
-  // =========================================================================
-  // 🔥 SALVAR CATEGORIA COM TRAVA ANTI-DUPLICIDADE E SUPORTE OFFLINE
-  // =========================================================================
+  // 🔥 SALVAR NOVA CATEGORIA ATÔMICO
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
 
-    const cleanedName = newCatName.trim().toLowerCase()
-    
-    // 1. Verifica se já existe na UI atual
-    const existsInState = categories.find(
-      (c) => c.name.trim().toLowerCase() === cleanedName && c.context === effectiveContext
-    )
-    
-    if (existsInState) {
-      showToast('Esta categoria já existe! Selecionando...', 'info')
-      setCategoryId(existsInState.id)
-      setShowCreateCatModal(false)
-      setNewCatName('')
-      return
-    }
-
     setSavingCategory(true)
     try {
-      // 2. Verifica se já existe no banco local (Dexie)
-      const allLocalCats = await db.table('categories')
-        .where('context').equals(effectiveContext)
-        .toArray()
-
-      const existsInDb = allLocalCats.find((c: any) => c.name.trim().toLowerCase() === cleanedName && c.user_id === user.id)
-
-      if (existsInDb) {
-        showToast('Esta categoria já existe (localmente)! Selecionando...', 'info')
-        setCategoryId(existsInDb.id)
-        setShowCreateCatModal(false)
-        setNewCatName('')
-        return
-      }
-
-      // 3. Salva no formato Local-First Atômico (Evita o supabase.insert direto)
       const id = crypto.randomUUID()
       const payload = {
         id,
@@ -529,54 +419,26 @@ function NewTransactionContent() {
         sync_attempts: 0,
       }
 
-      await db.transaction('rw', ['categories', 'syncQueue'], async () => {
-        await db.table('categories').add(payload)
-        await addToSyncQueue(user.id, 'categories', 'create', id, payload)
-      })
+      const res = await safeAdd('categories', payload)
+      if (!res.success) throw new Error(res.error)
 
-      setCategories((prev) => [...prev, payload])
       setCategoryId(id)
       setShowCreateCatModal(false)
       setNewCatName('')
       showToast('Categoria criada!', 'success')
     } catch (err: any) {
-      console.error(err)
-      showToast(`Erro ao criar categoria: ${err.message || 'Erro desconhecido'}`, 'error')
+      showToast(`Erro ao criar categoria: ${err.message}`, 'error')
     } finally {
       setSavingCategory(false)
     }
   }
 
-  // =========================================================================
-  // 🔥 SALVAR CONTA COM TRAVA ANTI-DUPLICIDADE E SUPORTE OFFLINE
-  // =========================================================================
+  // 🔥 SALVAR NOVA CONTA ATÔMICO
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
 
-    const cleanedName = newAccName.trim().toLowerCase()
-    const existsInState = accounts.find((a) => a.name.trim().toLowerCase() === cleanedName && a.context === effectiveContext)
-    
-    if (existsInState) {
-      showToast('Esta conta já existe! Selecionando...', 'info')
-      setAccountId(existsInState.id)
-      setShowCreateAccModal(false)
-      setNewAccName('')
-      return
-    }
-
     setSavingAccount(true)
     try {
-      const allLocalAccounts = await db.table('accounts').where('context').equals(effectiveContext).toArray()
-      const existsInDb = allLocalAccounts.find((a: any) => a.name.trim().toLowerCase() === cleanedName && a.user_id === user.id)
-
-      if (existsInDb) {
-        showToast('Esta conta já existe! Selecionando...', 'info')
-        setAccountId(existsInDb.id)
-        setShowCreateAccModal(false)
-        setNewAccName('')
-        return
-      }
-
       const id = crypto.randomUUID()
       const payload = {
         id,
@@ -592,54 +454,26 @@ function NewTransactionContent() {
         sync_attempts: 0,
       }
 
-      await db.transaction('rw', ['accounts', 'syncQueue'], async () => {
-        await db.table('accounts').add(payload)
-        await addToSyncQueue(user.id, 'accounts', 'create', id, payload)
-      })
+      const res = await safeAdd('accounts', payload)
+      if (!res.success) throw new Error(res.error)
 
-      setAccounts((prev) => [...prev, payload])
       setAccountId(id)
       setShowCreateAccModal(false)
       setNewAccName('')
       showToast('Conta criada!', 'success')
     } catch (err: any) {
-      console.error(err)
-      showToast(`Erro ao criar conta: ${err.message || 'Erro desconhecido'}`, 'error')
+      showToast(`Erro ao criar conta: ${err.message}`, 'error')
     } finally {
       setSavingAccount(false)
     }
   }
 
-  // =========================================================================
-  // 🔥 SALVAR TAG COM TRAVA ANTI-DUPLICIDADE E SUPORTE OFFLINE
-  // =========================================================================
+  // 🔥 SALVAR NOVA TAG ATÔMICO
   const handleSaveTag = async () => {
     if (!user?.id || !newTagName.trim()) return
 
-    const cleanedName = newTagName.trim().toLowerCase()
-    const existsInState = tags.find((t) => t.name.trim().toLowerCase() === cleanedName && t.context === effectiveContext)
-    
-    if (existsInState) {
-      showToast('Esta tag já existe! Selecionando...', 'info')
-      setSelectedTags((prev) => (prev.length < 5 && !prev.includes(existsInState.id) ? [...prev, existsInState.id] : prev))
-      setShowCreateTagModal(false)
-      setNewTagName('')
-      return
-    }
-
     setSavingTag(true)
     try {
-      const allLocalTags = await db.table('tags').where('context').equals(effectiveContext).toArray()
-      const existsInDb = allLocalTags.find((t: any) => t.name.trim().toLowerCase() === cleanedName && t.user_id === user.id)
-
-      if (existsInDb) {
-        showToast('Esta tag já existe! Selecionando...', 'info')
-        setSelectedTags((prev) => (prev.length < 5 && !prev.includes(existsInDb.id) ? [...prev, existsInDb.id] : prev))
-        setShowCreateTagModal(false)
-        setNewTagName('')
-        return
-      }
-
       const id = crypto.randomUUID()
       const payload = {
         id,
@@ -653,61 +487,27 @@ function NewTransactionContent() {
         sync_attempts: 0,
       }
 
-      await db.transaction('rw', ['tags', 'syncQueue'], async () => {
-        await db.table('tags').add(payload)
-        await addToSyncQueue(user.id, 'tags', 'create', id, payload)
-      })
+      const res = await safeAdd('tags', payload)
+      if (!res.success) throw new Error(res.error)
 
-      setTags((prev) => [...prev, payload])
       setSelectedTags((prev) => (prev.length < 5 ? [...prev, id] : prev))
       setShowCreateTagModal(false)
       setNewTagName('')
       showToast('Tag criada!', 'success')
     } catch (err: any) {
-      console.error(err)
-      showToast(`Erro ao criar tag: ${err.message || 'Erro desconhecido'}`, 'error')
+      showToast(`Erro ao criar tag: ${err.message}`, 'error')
     } finally {
       setSavingTag(false)
     }
   }
 
+  // 🔥 SALVAR TRANSAÇÃO ATÔMICO
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
     if (amountNum <= 0) { showToast('Valor deve ser maior que zero.', 'warning'); return }
 
     setIsSubmitting(true)
-
-    if (type === 'expense' && categoryId && budgets.length > 0) {
-      const budget = budgets.find((b) => b.category_id === categoryId)
-      if (budget) {
-        const start = format(startOfMonth(new Date(date)), 'yyyy-MM-dd')
-        const end = format(endOfMonth(new Date(date)), 'yyyy-MM-dd')
-        const { data: existingTxs } = await supabase
-          .from('transactions')
-          .select('amount')
-          .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
-          .eq('status', 'done')
-          .gte('date', start)
-          .lte('date', end)
-
-        const spent = (existingTxs || []).reduce(
-          (a: number, t: any) => a + (Number(t.amount) || 0), 0
-        )
-        const total = spent + amountNum
-        const limit = Number(budget.amount)
-
-        if (total > limit) {
-          const proceed = confirm(
-            `⚠️ Alerta de Orçamento!\n\n"${budget.name}" já tem ${formatCurrency(spent)} gasto(s).\n` +
-            `Com mais ${formatCurrency(amountNum)}, o total será ${formatCurrency(total)}.\n` +
-            `O orçamento é de ${formatCurrency(limit)}.\n\nDeseja continuar mesmo assim?`
-          )
-          if (!proceed) { setIsSubmitting(false); return }
-        }
-      }
-    }
-
     const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
 
     let totalParcels = 1
@@ -735,196 +535,86 @@ function NewTransactionContent() {
 
     try {
       const baseDate = createLocalDate(date)
-      let invoiceId: string | null = null
-
-      await db.transaction('rw', [db.accounts, db.transactions, db.credit_invoices, db.syncQueue], async () => {
-        if (type === 'expense' && creditCardId && !isRefund) {
-          const txDate = new Date(date)
-          const cardData = await db.table('credit_cards').get(creditCardId)
-
-          if (cardData) {
-            let closingDate = new Date(txDate.getFullYear(), txDate.getMonth(), cardData.closing_day)
-            if (txDate > closingDate) {
-              closingDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, cardData.closing_day)
-            }
-
-            const startDate = new Date(closingDate)
-            startDate.setMonth(startDate.getMonth() - 1)
-            startDate.setDate(cardData.closing_day + 1)
-
-            const dueDate = new Date(closingDate)
-            dueDate.setDate(cardData.due_day)
-            if (dueDate <= closingDate) {
-              dueDate.setMonth(dueDate.getMonth() + 1)
-            }
-
-            const dateStr = format(txDate, 'yyyy-MM-dd')
-            const allInvoices = await db.table('credit_invoices')
-              .where('credit_card_id').equals(creditCardId)
-              .toArray()
-            const existingInvoice = allInvoices.find((inv: any) =>
-              inv.status === 'open' && inv.start_date <= dateStr && inv.end_date >= dateStr
-            )
-
-            if (existingInvoice) {
-              invoiceId = existingInvoice.id
-            } else {
-              const newInvoiceId = crypto.randomUUID()
-              const invoicePayload = {
-                id: newInvoiceId,
-                user_id: user.id,
-                credit_card_id: creditCardId,
-                closing_date: closingDate.toISOString().split('T')[0],
-                due_date: dueDate.toISOString().split('T')[0],
-                start_date: startDate.toISOString().split('T')[0],
-                end_date: closingDate.toISOString().split('T')[0],
-                total_amount: 0,
-                paid_amount: 0,
-                status: 'open',
-                context: effectiveContext,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                sync_status: 'pending',
-                sync_attempts: 0,
-              }
-              await db.table('credit_invoices').add(invoicePayload)
-              await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
-              invoiceId = newInvoiceId
-            }
-
-            if (invoiceId) {
-              const currentInvoice = await db.table('credit_invoices').get(invoiceId)
-              const newTotal = safeNum(currentInvoice?.total_amount) + installmentAmount
-              const updateData = {
-                total_amount: newTotal,
-                updated_at: new Date().toISOString(),
-              }
-              const updated = await db.table('credit_invoices').update(invoiceId, updateData)
-              if (!updated) throw new Error('Falha ao atualizar fatura do cartão')
-              await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
-            }
+      
+      // Checagem de saldo (Opcional, mas seguro)
+      if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
+        const acc = (accounts || []).find((a: any) => a.id === accountId)
+        if (acc) {
+          const currentBalance = safeNum(acc.balance)
+          const newBalance = type === 'income' ? currentBalance + installmentAmount : currentBalance - installmentAmount
+          if (type === 'expense' && newBalance < 0 && !acc.allow_negative) {
+            const proceed = confirm(`⚠️ Saldo Insuficiente!\nSaldo: ${formatCurrency(currentBalance)}\nContinuar mesmo assim?`)
+            if (!proceed) throw new Error('__CANCELLED_BY_USER__')
           }
         }
+      }
 
-        if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
-          const acc = await db.table('accounts').get(accountId)
+      for (let i = 0; i < totalParcels; i++) {
+        let installmentDate: string
 
+        if (repetition === 'recurring') {
+          if (frequency === 'weekly') installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
+          else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
+          else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+          else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
+          else installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd')
+        } else {
+          installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+        }
+
+        const txId = crypto.randomUUID()
+        const payload: any = {
+          id: txId,
+          user_id: user.id,
+          type,
+          amount: installmentAmount,
+          description: finalDescription,
+          category_id: categoryId || null,
+          account_id: creditCardId ? null : (accountId || null),
+          credit_card_id: creditCardId || null,
+          contact_id: contactId || null,
+          tag_ids: selectedTags.length > 0 ? selectedTags : null,
+          date: installmentDate,
+          status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
+          context: effectiveContext,
+          receipt_url: i === 0 ? receiptUrl : null,
+          notes: notes || null,
+          recurring_group_id: recurringGroupId,
+          installment_index: totalParcels > 1 ? i + 1 : 1,
+          total_installments: totalParcels > 1 ? totalParcels : 1,
+          financing_id: financingId,
+          debt_id: debtId,
+          is_reimbursable: isReimbursable,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+
+        const res = await safeAdd('transactions', payload)
+        if (!res.success) throw new Error(res.error)
+
+        // Se a conta de depósito estiver selecionada e não for cartão, atualiza o saldo
+        if (accountId && !creditCardId && isPaid) {
+          const acc = (accounts || []).find((a: any) => a.id === accountId)
           if (acc) {
-            const currentBalance = safeNum(acc.balance)
-            const newBalance =
-              type === 'income'
-                ? currentBalance + installmentAmount
-                : currentBalance - installmentAmount
-
-            if (type === 'expense' && newBalance < 0 && !acc.allow_negative) {
-              const proceed = confirm(
-                `⚠️ Saldo Insuficiente!\n\nSaldo atual: ${formatCurrency(currentBalance)}\n` +
-                `Valor: ${formatCurrency(installmentAmount)}\nResultante: ${formatCurrency(newBalance)}\n\n` +
-                `Deseja continuar mesmo assim?`
-              )
-              if (!proceed) throw new Error('__CANCELLED_BY_USER__')
-            }
-
-            const accUpdated = await db.table('accounts').update(accountId, { balance: newBalance })
-            if (!accUpdated) throw new Error('Falha ao atualizar saldo da conta')
-            await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newBalance })
+             const newBal = type === 'income' ? safeNum(acc.balance) + installmentAmount : safeNum(acc.balance) - installmentAmount
+             await safeUpdate('accounts', accountId, { balance: newBal })
           }
         }
+      }
 
-        for (let i = 0; i < totalParcels; i++) {
-          let installmentDate: string
-
-          if (repetition === 'recurring') {
-            if (frequency === 'weekly') installmentDate = format(addWeeks(baseDate, i), 'yyyy-MM-dd')
-            else if (frequency === 'biweekly') installmentDate = format(addWeeks(baseDate, i * 2), 'yyyy-MM-dd')
-            else if (frequency === 'monthly') installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
-            else if (frequency === 'bimonthly') installmentDate = format(addMonths(baseDate, i * 2), 'yyyy-MM-dd')
-            else installmentDate = format(addMonths(baseDate, i * customInterval), 'yyyy-MM-dd')
-          } else {
-            installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
-          }
-
-          const txId = crypto.randomUUID()
-          const payload: any = {
-            id: txId,
-            user_id: user.id,
-            type,
-            amount: installmentAmount,
-            description: finalDescription,
-            category_id: categoryId || null,
-            account_id: creditCardId ? null : (accountId || null),
-            credit_card_id: creditCardId || null,
-            contact_id: contactId || null,
-            invoice_id: invoiceId,
-            tag_ids: selectedTags.length > 0 ? selectedTags : null,
-            date: installmentDate,
-            status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
-            context: effectiveContext,
-            receipt_url: i === 0 ? receiptUrl : null,
-            notes: notes || null,
-            recurring_group_id: recurringGroupId,
-            installment_index: totalParcels > 1 ? i + 1 : 1,
-            total_installments: totalParcels > 1 ? totalParcels : 1,
-            financing_id: financingId,
-            debt_id: debtId,
-            is_reimbursable: isReimbursable,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-          }
-
-          await db.table('transactions').add(payload)
-          await addToSyncQueue(user.id, 'transactions', 'create', txId, payload)
-
-          if (i === 0 && isReimbursable) {
-            const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
-            const reimbursementDesc = `Reembolso: ${finalDescription}`
-            const reimbTxId = crypto.randomUUID()
-            const reimbPayload = {
-              id: reimbTxId,
-              user_id: user.id,
-              type: type === 'expense' ? 'income' : 'expense',
-              amount: installmentAmount,
-              description: reimbursementDesc,
-              date: installmentDate,
-              status: 'pending',
-              context: otherContext,
-              category_id: null,
-              linked_transaction_id: txId,
-              is_reimbursable: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              sync_status: 'pending',
-              sync_attempts: 0,
-            }
-            await db.table('transactions').add(reimbPayload)
-            await addToSyncQueue(user.id, 'transactions', 'create', reimbTxId, reimbPayload)
-
-            await db.table('transactions').update(txId, { linked_transaction_id: reimbTxId })
-            await addToSyncQueue(user.id, 'transactions', 'update', txId, { linked_transaction_id: reimbTxId })
-          }
-        }
-      })
-
-      showToast(
-        isOnline ? 'Transação salva com sucesso!' : 'Salvo localmente. Será sincronizado quando houver conexão.',
-        isOnline ? 'success' : 'info'
-      )
+      showToast(isOnline ? 'Transação salva!' : 'Salvo localmente.', 'success')
       success()
-      router.refresh()
       router.push('/transactions')
     } catch (e: any) {
-      if (e?.message === '__CANCELLED_BY_USER__') {
-        // Usuário cancelou no aviso de saldo insuficiente — não é erro.
-      } else {
-        console.error('Erro ao salvar:', e)
-        showToast(`Erro ao salvar transação: ${e.message || 'Verifique sua conexão'}`, 'error')
+      if (e?.message !== '__CANCELLED_BY_USER__') {
+        showToast(`Erro ao salvar: ${e.message}`, 'error')
       }
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, budgets, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success])
+  }, [isSubmitting, user, amountNum, type, categoryId, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, accounts, safeAdd, safeUpdate])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -966,7 +656,6 @@ function NewTransactionContent() {
         }}
       />
 
-      {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
         <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
           <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
@@ -986,7 +675,6 @@ function NewTransactionContent() {
 
       <ContextToggle />
 
-      {/* Valor */}
       <div className="py-6 text-center px-6">
         <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">
           Valor {isIncome ? 'da Receita' : creditCardId ? 'da Compra' : 'da Despesa'}
@@ -1009,7 +697,6 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Preview do comprovante */}
       {uploading ? (
         <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
           <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -1036,7 +723,6 @@ function NewTransactionContent() {
         </div>
       ) : null}
 
-      {/* Campos principais */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
         
         <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
@@ -1061,7 +747,7 @@ function NewTransactionContent() {
           )}
         </div>
 
-        {!isIncome && creditCards.length > 0 && (
+        {!isIncome && (creditCards || []).length > 0 && (
           <button onClick={() => setShowCardModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
             <div className="flex items-center gap-4">
               <CreditCard size={20} className="text-gray-400 dark:text-gray-500" />
@@ -1110,7 +796,7 @@ function NewTransactionContent() {
           </button>
         )}
 
-        {contacts.length > 0 && (
+        {(contacts || []).length > 0 && (
           <button onClick={() => setShowContactModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
             <div className="flex items-center gap-4">
               <Users size={20} className="text-gray-400 dark:text-gray-500" />
@@ -1125,7 +811,6 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Mais detalhes */}
       <div className="mx-4 mt-4">
         <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
@@ -1241,7 +926,6 @@ function NewTransactionContent() {
         )}
       </div>
 
-      {/* Botão salvar */}
       <div className="fixed bottom-8 w-full flex justify-center z-40 pointer-events-none">
         <button
           onClick={handleSave}
@@ -1256,48 +940,15 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* Modais */}
-      {showReceiptModal && (
-        <ReceiptModal
-          isOpen={showReceiptModal}
-          onClose={() => setShowReceiptModal(false)}
-          onOptionSelect={handleReceiptOption}
-        />
-      )}
-      {showCamera && (
-        <CameraCapture
-          isOpen={showCamera}
-          onClose={() => setShowCamera(false)}
-          onCapture={handleCameraCapture}
-        />
-      )}
-      {showQRScanner && (
-        <QRCodeScanner
-          onClose={() => setShowQRScanner(false)}
-          onResult={handleQRResult}
-        />
-      )}
-      {showFinancingModal && (
-        <ModalFinancing
-          isOpen={showFinancingModal}
-          onClose={() => setShowFinancingModal(false)}
-          onSave={(id) => setFinancingId(id)}
-        />
-      )}
-      {showLoanModal && (
-        <ModalEmprestimo
-          isOpen={showLoanModal}
-          onClose={() => setShowLoanModal(false)}
-          onSave={(id) => setDebtId(id)}
-        />
-      )}
-      <IconPicker
-        isOpen={showIconPicker}
-        onClose={() => setShowIconPicker(false)}
-        selectedIcon={newCatIcon}
-        onSelect={setNewCatIcon}
-      />
+      {/* Modais Componentizados */}
+      {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
+      {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
+      {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
+      {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
+      {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
+      <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={newCatIcon} onSelect={setNewCatIcon} />
 
+      {/* Modal de Categoria Plano */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1306,55 +957,25 @@ function NewTransactionContent() {
               <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {categories.map((cat) => {
+              {(categories || []).map((cat: any) => {
                 const IconComp = getDynamicIcon(cat.icon)
-                const subCount = subcategories[cat.id]?.length || 0
                 const isActive = cat.id === categoryId
                 return (
-                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setSelectedParentCat(cat); subCount > 0 ? setShowSubCatModal(true) : setShowCatModal(false) }}
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
                     className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={20} /></div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
-                    {subCount > 0 && <span className="text-xs text-gray-400 font-medium mr-2">{subCount}</span>}
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                    {subCount > 0 && <ChevronRight size={18} className="text-gray-300" />}
                   </button>
                 )
               })}
-              {categories.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
+              {(categories || []).length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
-      {showSubCatModal && selectedParentCat && (
-        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50" onClick={() => setShowSubCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <button onClick={() => setShowSubCatModal(false)} className="p-1 -ml-2"><ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" /></button>
-              <div><h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Subcategorias</h3><p className="text-xs text-gray-500">{selectedParentCat.name}</p></div>
-            </div>
-            <div className="space-y-2">
-              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
-                const SubIcon = getDynamicIcon(sub.icon)
-                const isActive = sub.id === categoryId
-                return (
-                  <button key={sub.id} onClick={() => { setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${sub.color}20`, color: sub.color }}><SubIcon size={20} /></div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{sub.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                  </button>
-                )
-              })}
-              <button onClick={() => { setShowSubCatModal(false); setShowCatModal(false) }} className="w-full p-3 flex items-center justify-center gap-2 rounded-2xl bg-gray-50 dark:bg-slate-700 text-gray-500 font-medium">
-                Usar "{selectedParentCat.name}" sem subcategoria
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Modal Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1363,7 +984,7 @@ function NewTransactionContent() {
               <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {accounts.map((acc) => {
+              {(accounts || []).map((acc: any) => {
                 const isActive = acc.id === accountId
                 return (
                   <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
@@ -1374,12 +995,13 @@ function NewTransactionContent() {
                   </button>
                 )
               })}
-              {accounts.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
+              {(accounts || []).length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
+      {/* Outros modais */}
       {showCardModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
           <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1388,7 +1010,7 @@ function NewTransactionContent() {
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-2">
-              {creditCards.map((card) => {
+              {(creditCards || []).map((card: any) => {
                 const isActive = card.id === creditCardId
                 return (
                   <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
@@ -1399,7 +1021,6 @@ function NewTransactionContent() {
                   </button>
                 )
               })}
-              {creditCards.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhum cartão cadastrado.</p>}
             </div>
           </div>
         </div>
@@ -1413,7 +1034,7 @@ function NewTransactionContent() {
               <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
             </div>
             <div className="space-y-2">
-              {contacts.map((contact) => {
+              {(contacts || []).map((contact: any) => {
                 const isActive = contact.id === contactId
                 const IconComp = getDynamicIcon(contact.icon || 'user')
                 return (
@@ -1423,17 +1044,10 @@ function NewTransactionContent() {
                       <IconComp size={20} />
                     </div>
                     <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</span>
-                    <span className="text-xs text-gray-400">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
-              {contacts.length === 0 && (
-                <div className="text-center py-8 text-gray-400">
-                  <p className="text-sm">Nenhum contato cadastrado.</p>
-                  <button onClick={() => { setShowContactModal(false); router.push('/contacts/new') }} className="text-teal-600 text-sm font-bold mt-2">Criar contato</button>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1447,7 +1061,7 @@ function NewTransactionContent() {
               <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {tags.map((tag) => {
+              {(tags || []).map((tag: any) => {
                 const isActive = selectedTags.includes(tag.id)
                 return (
                   <button key={tag.id} onClick={() => toggleTag(tag.id)}
@@ -1458,7 +1072,6 @@ function NewTransactionContent() {
                   </button>
                 )
               })}
-              {tags.length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma tag encontrada.</p>}
             </div>
           </div>
         </div>
