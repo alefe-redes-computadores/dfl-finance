@@ -13,7 +13,8 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' 
+// 🔥 NOVO: Hook de blindagem
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function NewLoanPage() {
   const router = useRouter()
@@ -21,8 +22,13 @@ export default function NewLoanPage() {
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
-  const { context } = useContext_()
   const { user } = useAuth()
+  
+  const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
+
+  // 🔥 CORRIGIDO: effectiveContext garantindo a separação de contas
+  const { context, appMode } = useContext_()
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -40,7 +46,7 @@ export default function NewLoanPage() {
 
   const { data: localLoans } = useLocalData({
     table: 'loans' as any,
-    filters: { context },
+    filters: { context: effectiveContext },
   })
 
   const loanData = localLoans?.find((l: any) => l.id === editId) as any
@@ -70,7 +76,7 @@ export default function NewLoanPage() {
     }
   }, [refreshing])
 
-  // 🔥 SALVAR ATÔMICO
+  // 🔥 SALVAR ATÔMICO E BLINDADO
   const handleSave = async () => {
     if (!description.trim()) {
       showToast("Preencha a descrição do empréstimo", "warning")
@@ -95,29 +101,27 @@ export default function NewLoanPage() {
         interest_rate: interestRate ? parseFloat(interestRate) : null,
         notes: notes.trim() || null,
         status,
-        context,
+        context: effectiveContext,
         updated_at: new Date().toISOString(),
       }
 
-      await db.transaction('rw', 'loans', 'syncQueue', async () => {
-        if (editId) {
-          await db.table('loans').update(editId, payload)
-          await db.table('syncQueue').add({ table: 'loans', operation: 'update', record_id: editId, data: payload, user_id: user!.id, created_at: new Date().toISOString() })
-        } else {
-          const id = crypto.randomUUID()
-          const fullPayload = {
-            id,
-            user_id: user!.id,
-            ...payload,
-            remaining_amount: parseFloat(amount),
-            created_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-          }
-          await db.table('loans').add(fullPayload)
-          await db.table('syncQueue').add({ table: 'loans', operation: 'create', record_id: id, data: fullPayload, user_id: user!.id, created_at: new Date().toISOString() })
+      if (editId) {
+        const res = await safeUpdate('loans', editId, payload)
+        if (!res.success) throw new Error(res.error)
+      } else {
+        const id = crypto.randomUUID()
+        const fullPayload = {
+          id,
+          user_id: user!.id,
+          ...payload,
+          remaining_amount: parseFloat(amount),
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
         }
-      })
+        const res = await safeAdd('loans', fullPayload)
+        if (!res.success) throw new Error(res.error)
+      }
 
       showToast(editId ? "Empréstimo atualizado com sucesso!" : "Empréstimo criado com sucesso!", "success")
       success()
@@ -130,25 +134,24 @@ export default function NewLoanPage() {
     }
   }
 
-  // 🔥 EXCLUIR ATÔMICO
+  // 🔥 EXCLUIR ATÔMICO E BLINDADO
   const handleDelete = async () => {
     if (!editId) return
     if (!confirm("Tem certeza que deseja excluir este empréstimo?")) return
     try {
-      await db.transaction('rw', 'loans', 'syncQueue', async () => {
-        await db.table('loans').delete(editId)
-        await db.table('syncQueue').add({ table: 'loans', operation: 'delete', record_id: editId, user_id: user!.id, created_at: new Date().toISOString() })
-      })
+      const res = await safeDelete('loans', editId)
+      if (!res.success) throw new Error(res.error)
+
       showToast("Empréstimo excluído com sucesso!", "success")
       success()
       router.back()
-    } catch {
+    } catch (err: any) {
       showToast("Erro ao excluir empréstimo", "error")
       errorHaptic()
     }
   }
 
-  const contextTitle = (context as string) === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = effectiveContext === "pj" ? "da Empresa" : "Pessoal"
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
