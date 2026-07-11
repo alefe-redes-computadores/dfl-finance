@@ -33,15 +33,9 @@ jobs:
           rm -rf android
           npx cap add android
           
-          # 🔥 INJEÇÃO DO INTENT FILTER PARA O LOGIN FUNCIONAR (Deep Linking dfl://callback)
-          # Este bloco insere o filtro de intenção logo após a abertura da tag <activity>
-          sed -i '/android:name=".MainActivity"/a \
-            <intent-filter>\
-                <action android:name="android.intent.action.VIEW" />\
-                <category android:name="android.intent.category.DEFAULT" />\
-                <category android:name="android.intent.category.BROWSABLE" />\
-                <data android:scheme="dfl" android:host="callback" />\
-            </intent-filter>' android/app/src/main/AndroidManifest.xml
+          # 🔥 INJEÇÃO SEGURA COM PERL (Não quebra o XML)
+          # Este comando localiza a tag <activity> e insere o filtro logo abaixo dela de forma limpa
+          perl -i -pe 's|(<activity.*?>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="dfl" android:host="callback" />\n            </intent-filter>|' android/app/src/main/AndroidManifest.xml
 
           npx cap sync android
           
