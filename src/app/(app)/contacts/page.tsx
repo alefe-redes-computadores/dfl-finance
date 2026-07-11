@@ -255,7 +255,7 @@ export default function ContactsPage() {
                         className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
                       >
                         <button
-                          onClick={() => router.push(`/contacts/${c.id}`)}
+                          onClick={() => router.push(`/contacts/details?id=${c.id}`)}
                           className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                         >
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
