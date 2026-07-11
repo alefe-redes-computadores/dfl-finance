@@ -214,7 +214,7 @@ export default function CardsPage() {
             return (
               <div
                 key={card.id}
-                onClick={() => router.push(`/cards/${card.id}`)}
+                onClick={() => router.push(`/cards/details?id=${card.id}`)}
                 className={`relative overflow-hidden bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] animate-in fade-in slide-in-from-bottom-4 ${
                   isNearLimit ? 'border-red-200 dark:border-red-800' : 'border-gray-100 dark:border-slate-700'
                 }`}
