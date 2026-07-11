@@ -57,7 +57,7 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
   const handleDragEnd = (event: any, info: any) => {
     const offset = info.offset.x
     if (offset > 60) {
-      router.push(`/transactions/${transaction.id}`)
+      router.push(`/transactions/details?id=${transaction.id}`)
     } else if (offset < -100) {
       onDelete(transaction)
     } else if (offset < -40) {
@@ -127,7 +127,7 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
         onDragEnd={handleDragEnd}
         animate={controls}
         style={{ x }}
-        onClick={() => router.push(`/transactions/${transaction.id}`)}
+        onClick={() => router.push(`/transactions/details?id=${transaction.id}`)}
         className="relative bg-white dark:bg-slate-800 px-4 py-4 flex items-center gap-3 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.03)] dark:shadow-none rounded-[20px] border border-gray-100/50 dark:border-slate-700/50"
       >
         {isPending ? (
