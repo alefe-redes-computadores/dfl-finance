@@ -9,7 +9,7 @@ import * as Icons from 'lucide-react'
 import { 
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2, 
   ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, RefreshCw, Clock, ChevronDown,
-  Check, Image as ImageIcon, Paperclip
+  Check, Image as ImageIcon, Paperclip, CheckCircle // 🔥 CheckCircle adicionado
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -20,6 +20,10 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { useToast } from '@/contexts/ToastContext' // 🔥 Importado para os avisos de erro/sucesso
+
+// 🔥 IMPORTANDO OS SERVIÇOS CLIENT-SIDE
+import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 
 type Filter = 'all' | 'income' | 'expense' | 'transfer'
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -82,6 +86,38 @@ const TransactionsSkeleton = () => (
   </div>
 )
 
+// 🔥 OVERLAY ANIMADO PARA EXPORTAÇÃO
+function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exporting' | 'success', onClose: () => void }) {
+  if (status === 'idle') return null;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={status === 'exporting' ? undefined : onClose}>
+      <div className="bg-white dark:bg-slate-800 w-11/12 max-w-sm rounded-3xl p-6 animate-in zoom-in-95 duration-300 shadow-2xl flex flex-col items-center" onClick={e => e.stopPropagation()}>
+        {status === 'exporting' ? (
+          <div className="flex flex-col items-center py-6">
+            <Loader2 size={48} className="text-teal-500 animate-spin mb-4" />
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Gerando Extrato...</h3>
+            <p className="text-sm text-gray-500 mt-2 text-center">Processando suas transações localmente.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-6 animate-in zoom-in duration-500">
+            <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/20">
+              <CheckCircle size={40} className="text-emerald-500 animate-bounce" />
+            </div>
+            <h3 className="font-black text-xl text-gray-800 dark:text-gray-100 mb-2 text-center">Extrato Gerado!</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-[250px] mb-6 font-medium">
+              O download foi iniciado. Acesse a <strong className="text-emerald-600 dark:text-emerald-400">pasta de downloads</strong> do seu dispositivo para abrir o arquivo.
+            </p>
+            <button type="button" onClick={onClose} className="w-full bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-3.5 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
+              Concluir
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -108,6 +144,7 @@ function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
   return (
     <div className="mb-6">
       <button
+        type="button"
         onClick={() => setCollapsed(c => !c)}
         className="w-full flex items-center justify-between px-4 py-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-[20px] mb-1 transition-all active:scale-[0.99]"
       >
@@ -248,6 +285,7 @@ export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { effectiveContext } = useContext_()
+  const { showToast } = useToast()
   
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
@@ -257,6 +295,9 @@ export default function TransactionsPage() {
 
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  
+  // 🔥 ESTADO DE ANIMAÇÃO DO EXPORT
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
 
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
@@ -331,9 +372,6 @@ export default function TransactionsPage() {
   const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
   const doneTxs = filtered.filter((t: any) => t.status === 'done')
 
-  // ============================================================
-  // 🔥 CORRIGIDO: DUPLICAÇÃO DE PENDENTES NO FILTRO "TODAS"
-  // ============================================================
   const displayTxs = statusFilter === 'pending' ? pendingTxs : doneTxs
 
   const grouped = groupByDate(displayTxs)
@@ -381,10 +419,30 @@ export default function TransactionsPage() {
     { key: 'transfer', label: 'Transferências', icon: <ArrowLeftRight size={14} /> },
   ]
 
-  const handleExport = (range: string) => {
+  // 🔥 A MÁGICA DA EXPORTAÇÃO (Agorta Funcional e sem Refresh)
+  const handleExport = async (range: string) => {
     setShowExportMenu(false)
-    if (!user) return
-    window.open(`/api/export-transactions?userId=${user.id}&context=${effectiveContext}&range=${range}`, '_blank')
+    if (!user?.id) return
+
+    setExportStatus('exporting')
+    
+    try {
+      const blob = await exportTransactionsToCSV(user.id, effectiveContext, range)
+      const filename = `Extrato_DFL_${effectiveContext}_${range}dias_${new Date().toISOString().split('T')[0]}.csv`
+      
+      await downloadCSV(blob, filename)
+      
+      setExportStatus('success')
+      
+      setTimeout(() => {
+        setExportStatus('idle')
+      }, 5000)
+      
+    } catch (err: any) {
+      console.error(err)
+      showToast(err.message || 'Erro ao exportar extrato.', 'error')
+      setExportStatus('idle')
+    }
   }
 
   return (
@@ -395,12 +453,19 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {/* OVERLAY DE ANIMAÇÃO */}
+      <ExportFeedbackOverlay 
+        status={exportStatus} 
+        onClose={() => setExportStatus('idle')} 
+      />
+
       <div className="sticky top-0 z-50 bg-[#f8f9fa]/85 dark:bg-slate-900/85 backdrop-blur-xl pt-2 pb-2 px-4 mb-0 border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
         <div className="flex items-center justify-between mb-2 mt-1">
           <h1 className="text-[22px] font-bold text-gray-800 dark:text-gray-100">Transações</h1>
           <div className="flex items-center gap-2">
             <div className="relative" ref={exportMenuRef}>
               <button 
+                type="button"
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center transition-colors hover:bg-gray-50 dark:hover:bg-slate-700"
               >
@@ -410,16 +475,16 @@ export default function TransactionsPage() {
                 <div className="absolute right-0 top-[42px] w-40 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-40 animate-in fade-in zoom-in-95 duration-200">
                   <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Exportar extrato</p>
                   {[{ key: '7', label: '7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
-                    <button key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
+                    <button type="button" key={opt.key} onClick={() => handleExport(opt.key)} className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700">{opt.label}</button>
                   ))}
                 </div>
               )}
             </div>
 
             <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-              <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
+              <button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
               <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-24 text-center">{monthLabel}</span>
-              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
+              <button type="button" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
             </div>
           </div>
         </div>
@@ -437,6 +502,7 @@ export default function TransactionsPage() {
 
           <div className="relative" ref={statusMenuRef}>
             <button 
+              type="button"
               onClick={() => setShowStatusMenu(!showStatusMenu)} 
               className={`w-[48px] h-[48px] rounded-[16px] flex items-center justify-center transition-colors shadow-sm border ${showStatusMenu || statusFilter !== 'all' ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-100 dark:border-teal-800 text-teal-700 dark:text-teal-400' : 'bg-white dark:bg-slate-800 border-gray-100 border-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
             >
@@ -446,9 +512,9 @@ export default function TransactionsPage() {
             {showStatusMenu && (
               <div className="absolute right-0 top-[54px] w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-40 animate-in fade-in zoom-in-95 duration-200">
                 <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">Filtrar por Status</p>
-                <button onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
-                <button onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
-                <button onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
+                <button type="button" onClick={() => { setStatusFilter('all'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'all' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Todas</button>
+                <button type="button" onClick={() => { setStatusFilter('pending'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'pending' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Pendentes</button>
+                <button type="button" onClick={() => { setStatusFilter('done'); setShowStatusMenu(false); }} className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-bold ${statusFilter === 'done' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>Efetivadas</button>
               </div>
             )}
           </div>
@@ -456,7 +522,7 @@ export default function TransactionsPage() {
 
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {filters.map(f => (
-            <button key={f.key} onClick={() => setFilter(f.key)}
+            <button type="button" key={f.key} onClick={() => setFilter(f.key)}
               className={`px-5 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${filter === f.key ? 'bg-teal-700 text-white border-teal-700 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
               {f.icon}
               {f.label}
