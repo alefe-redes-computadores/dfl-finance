@@ -157,7 +157,7 @@ export default function LoansPage() {
 
               return (
                 <div key={loan.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
-                  <button onClick={() => router.push(`/loans/${loan.id}`)} className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <button onClick={() => router.push(`/loans/details?id=${loan.id}`)} className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1"><Landmark size={16} className="text-teal-500 flex-shrink-0" /><h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">{loan.description || "Empréstimo"}</h3></div>
@@ -183,7 +183,7 @@ export default function LoansPage() {
                     )}
                   </button>
                   <div className="px-4 pb-3 flex gap-2">
-                    {loan.status === "active" && <button onClick={() => router.push(`/loans/${loan.id}`)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors"><ArrowLeftRight size={14} /> Registrar Pagamento</button>}
+                    {loan.status === "active" && <button onClick={() => router.push(`/loans/details?id=${loan.id}`)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors"><ArrowLeftRight size={14} /> Registrar Pagamento</button>}
                     <button onClick={() => setDeleteModal(loan.id)} className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" aria-label="Excluir"><Trash2 size={16} /></button>
                   </div>
                 </div>
