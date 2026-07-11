@@ -33,8 +33,7 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
-  // As linhas 'output' e 'trailingSlash' foram removidas para corrigir o build
+  output: 'export', // ESSA LINHA GERA A PASTA 'out' QUE O CAPACITOR PRECISA
   
   typescript: {
     ignoreBuildErrors: true,
