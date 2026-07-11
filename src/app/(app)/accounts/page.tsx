@@ -215,7 +215,7 @@ function AccountsContent() {
               const label = ACCOUNT_LABELS[acc.type] || acc.type
               return (
                 <div key={acc.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                  <button onClick={() => router.push(`/accounts/${acc.id}`)} className="w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <button onClick={() => router.push(`/accounts/details?id=${acc.id}`)} className="w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${(acc.balance || 0) >= 0 ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"}`}>
                       <Icon size={22} />
                     </div>
