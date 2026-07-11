@@ -166,7 +166,7 @@ export default function FinancingsPage() {
 
               return (
                 <div key={fin.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
-                  <button onClick={() => router.push(`/financings/${fin.id}`)} className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <button onClick={() => router.push(`/financings/details?id=${fin.id}`)} className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">{getAssetIcon(fin.asset_type)}<h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">{fin.description || "Financiamento"}</h3></div>
@@ -198,7 +198,7 @@ export default function FinancingsPage() {
                     )}
                   </button>
                   <div className="px-4 pb-3 flex gap-2">
-                    <button onClick={() => router.push(`/financings/${fin.id}`)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors">Ver Detalhes</button>
+                    <button onClick={() => router.push(`/financings/details?id=${fin.id}`)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors">Ver Detalhes</button>
                     <button onClick={() => setDeleteModal(fin.id)} className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" aria-label="Excluir"><Trash2 size={16} /></button>
                   </div>
                 </div>
