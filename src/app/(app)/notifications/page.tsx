@@ -1,19 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, Bell, BellOff, Check, X, RefreshCw,
-  AlertTriangle, Info, CheckCircle, Clock, Loader2
+  AlertTriangle, Info, CheckCircle, Loader2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
-// 🔥 NOVO: Importando o useSafeDb para blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 // ============================================================
@@ -40,8 +37,9 @@ export default function NotificationsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
-  // 🔥 NOVO: Hook de blindagem
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  
+  // Hook de blindagem atômica
+  const { safeDelete, safeUpdate } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -50,7 +48,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
 
-  const { data: localNotifications, loading: notifLoading, reload: reloadNotifications } = useLocalData({
+  const { data: localNotifications, reload: reloadNotifications } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id },
   })
@@ -126,93 +124,89 @@ export default function NotificationsPage() {
     if (localNotifications) {
       const mapped = localNotifications.map((n: any) => ({
         ...n,
-        is_read: n.is_read !== undefined ? n.is_read : n.read || false,
-        read: n.read !== undefined ? n.read : n.is_read || false,
+        // Garante que ambos os campos de "lida" fiquem unificados (compatibilidade Supabase vs Local)
+        is_read: n.is_read || n.read || false,
+        read: n.is_read || n.read || false,
       }))
       setNotifications(mapped)
-      const unread = mapped.filter((n: any) => !n.is_read && !n.read).length
+      const unread = mapped.filter((n: any) => !n.is_read).length
       setUnreadCount(unread)
     }
   }, [localNotifications])
 
   // ============================================================
-  // 🔥 CORRIGIDO: markAsRead COM safeUpdate
+  // 🔥 MARCAR COMO LIDA (ATÔMICO)
   // ============================================================
   const markAsRead = async (id: string) => {
     if (!user) return
     try {
-      const updateData = {
-        is_read: true,
-        read: true,
-        updated_at: new Date().toISOString()
-      }
-      const result = await safeUpdate('notifications', id, updateData)
-      if (!result.success) {
-        showToast(`Erro ao marcar como lida: ${result.error}`, 'error')
-        return
-      }
-      
-      // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
-      const updated = notifications.map((n: any) => 
+      // 1. Atualiza estado visual instantaneamente (Optmistic UI)
+      const updatedList = notifications.map((n: any) => 
         n.id === id ? { ...n, is_read: true, read: true } : n
       )
-      setNotifications(updated)
-      setUnreadCount(updated.filter((n: any) => !n.is_read && !n.read).length)
+      setNotifications(updatedList)
+      setUnreadCount(updatedList.filter((n: any) => !n.is_read).length)
+
+      // 2. Salva no banco local e na fila
+      const updateData = { is_read: true, read: true, updated_at: new Date().toISOString() }
+      const result = await safeUpdate('notifications', id, updateData)
       
-      showToast('Notificação marcada como lida.', 'info')
+      if (!result.success) {
+        throw new Error(result.error)
+      }
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      console.error('Erro ao marcar como lida:', err)
+      await reloadNotifications() // Reverte visualmente em caso de erro
     }
   }
 
   // ============================================================
-  // 🔥 CORRIGIDO: markAllAsRead COM safeUpdate
+  // 🔥 MARCAR TODAS COMO LIDAS (ATÔMICO)
   // ============================================================
   const markAllAsRead = async () => {
     if (!user?.id || notifications.length === 0) return
 
     try {
-      const unread = notifications.filter((n: any) => !n.is_read && !n.read)
-      for (const notif of unread) {
-        const updateData = {
-          is_read: true,
-          read: true,
-          updated_at: new Date().toISOString()
-        }
-        const result = await safeUpdate('notifications', notif.id, updateData)
-        if (!result.success) {
-          showToast(`Erro ao marcar como lida: ${result.error}`, 'error')
-          return
-        }
-      }
+      const unread = notifications.filter((n: any) => !n.is_read)
       
-      // 🔥 ATUALIZA O ESTADO LOCAL IMEDIATAMENTE
-      const updated = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
-      setNotifications(updated)
+      // 1. Atualiza visual instantaneamente
+      const updatedList = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
+      setNotifications(updatedList)
       setUnreadCount(0)
+
+      // 2. Salva no banco em loop
+      for (const notif of unread) {
+        const updateData = { is_read: true, read: true, updated_at: new Date().toISOString() }
+        await safeUpdate('notifications', notif.id, updateData)
+      }
       
       showToast('Todas as notificações marcadas como lidas!', 'success')
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      console.error('Erro:', err)
+      await reloadNotifications()
     }
   }
 
   // ============================================================
-  // 🔥 CORRIGIDO: deleteNotification COM safeDelete
+  // 🔥 DELETAR NOTIFICAÇÃO (ATÔMICO)
   // ============================================================
   const deleteNotification = async (id: string) => {
     if (!user) return
     try {
+      // 1. Atualiza visual instantaneamente
+      const filteredList = notifications.filter(n => n.id !== id)
+      setNotifications(filteredList)
+      setUnreadCount(filteredList.filter((n: any) => !n.is_read).length)
+
+      // 2. Apaga do banco local e coloca na fila de sync
       const result = await safeDelete('notifications', id)
+      
       if (!result.success) {
-        showToast(`Erro ao remover: ${result.error}`, 'error')
-        return
+        throw new Error(result.error)
       }
-      showToast('Notificação removida.', 'info')
-      // 🔥 Recarregar para remover da lista
-      loadNotifications()
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      console.error('Erro ao deletar:', err)
+      await reloadNotifications() // Reverte visualmente
     }
   }
 
@@ -235,10 +229,10 @@ export default function NotificationsPage() {
   }
 
   const filteredNotifications = notifications.filter((n: any) => {
-    if (filter === 'unread') return !n.is_read && !n.read
+    if (filter === 'unread') return !n.is_read
     if (filter === 'critical') return n.severity === 'critical'
     return true
-  })
+  }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Mais recentes primeiro
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -309,7 +303,7 @@ export default function NotificationsPage() {
       ) : (
         <div className="space-y-3 animate-in fade-in duration-300">
           {filteredNotifications.map((notif: any) => {
-            const isUnread = !notif.is_read && !notif.read
+            const isUnread = !notif.is_read
             return (
               <div
                 key={notif.id}
