@@ -75,17 +75,28 @@ export async function exportTransactionsToCSV(
 }
 
 export async function downloadCSV(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.setAttribute('href', url)
-  link.setAttribute('download', filename)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
+  try {
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', filename)
+    // Essencial para funcionar no Capacitor
+    document.body.appendChild(link)
+    
+    // Dispara o download
+    link.click()
 
+    // Atraso de 1 segundo (1000ms) para dar tempo ao Android de processar o download
+    setTimeout(() => {
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    }, 1000)
+    
+  } catch (error) {
+    console.error('Erro ao baixar arquivo:', error)
+    throw new Error('Falha ao tentar salvar o arquivo no dispositivo.')
+  }
+}
 export async function exportAnalysisToCSV(
   userId: string,
   context: 'dfl' | 'personal',
