@@ -24,6 +24,7 @@ import {
   Flame,
   Clock,
   Percent,
+  CheckCircle // 🔥 Adicionado para a animação
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -50,8 +51,10 @@ import KPICard from '@/components/dashboard/KPICard'
 import ComparisonChart from '@/components/dashboard/ComparisonChart'
 import ProjectionChart from '@/components/dashboard/ProjectionChart'
 import CategoryPie from '@/components/dashboard/CategoryPie'
-// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
 import { useSafeDb } from '@/hooks/useSafeDb'
+
+// 🔥 IMPORTANDO OS SERVIÇOS CLIENT-SIDE
+import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 
 const AnalysisSkeleton = () => (
   <div className="space-y-6 animate-pulse">
@@ -89,10 +92,42 @@ const AnalysisSkeleton = () => (
   </div>
 )
 
+// 🔥 MODAL OVERLAY DE SUCESSO/CARREGAMENTO
+function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exporting' | 'success', onClose: () => void }) {
+  if (status === 'idle') return null;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={status === 'exporting' ? undefined : onClose}>
+      <div className="bg-white dark:bg-slate-800 w-11/12 max-w-sm rounded-3xl p-6 animate-in zoom-in-95 duration-300 shadow-2xl flex flex-col items-center" onClick={e => e.stopPropagation()}>
+        {status === 'exporting' ? (
+          <div className="flex flex-col items-center py-6">
+            <Loader2 size={48} className="text-teal-500 animate-spin mb-4" />
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Gerando Relatório...</h3>
+            <p className="text-sm text-gray-500 mt-2 text-center">Processando seus dados localmente.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-6 animate-in zoom-in duration-500">
+            <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/20">
+              <CheckCircle size={40} className="text-emerald-500 animate-bounce" />
+            </div>
+            <h3 className="font-black text-xl text-gray-800 dark:text-gray-100 mb-2 text-center">Relatório Gerado!</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-[250px] mb-6 font-medium">
+              O download foi iniciado. Acesse a <strong className="text-emerald-600 dark:text-emerald-400">pasta de downloads</strong> do seu dispositivo para abrir o arquivo.
+            </p>
+            <button type="button" onClick={onClose} className="w-full bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-3.5 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
+              Concluir
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AnalysisContent() {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
-  // 🔥 NOVO: Hook de blindagem (preparatório)
+  const { showToast } = useToast()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -108,6 +143,10 @@ function AnalysisContent() {
   const [activeTab, setActiveTab] = useState<'month' | 'new' | 'dashboard'>('dashboard')
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  
+  // 🔥 NOVO: Estado de Exportação
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
+
   const [newGastos, setNewGastos] = useState<any[]>([])
   const [newGastosSummary, setNewGastosSummary] = useState({
     total: 0,
@@ -122,7 +161,6 @@ function AnalysisContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const hasActiveFilters = filterAccount || filterCategory
 
-  // 🔥 DADOS LOCAIS - CORRIGIDO: usa effectiveContext
   const { data: localTransactions, loading: txLoading } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext },
@@ -136,7 +174,6 @@ function AnalysisContent() {
     filters: { context: effectiveContext }
   })
 
-  // 🔥 DASHBOARD METRICS
   const { metrics, loading: metricsLoading, reload: reloadMetrics } = useDashboardMetrics(currentDate)
 
   const loadData = useCallback(async () => {
@@ -301,12 +338,42 @@ function AnalysisContent() {
   const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
   const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
 
-  const handleExport = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-analysis?userId=${user.id}&context=${effectiveContext}&range=${range}`, '_blank') }
-  const handleExportPDF = (range: string) => { setShowExportMenu(false); if (!user) return; window.open(`/api/export-pdf?userId=${user.id}&context=${effectiveContext}&range=${range}`, '_blank') }
+  // 🔥 O NOVO HANDLE EXPORT (Client-Side e Animado)
+  const handleExport = async (range: string, format: 'csv' | 'pdf') => {
+    setShowExportMenu(false)
+    if (!user?.id) return
+
+    if (format === 'pdf') {
+      showToast('A exportação em PDF estará disponível em breve.', 'info')
+      return
+    }
+
+    setExportStatus('exporting')
+    
+    try {
+      // Gera o Blob a partir do banco local (usando o range escolhido no dropdown)
+      const blob = await exportTransactionsToCSV(user.id, effectiveContext, range)
+      const filename = `Analise_DFL_${effectiveContext}_${range}dias_${new Date().toISOString().split('T')[0]}.csv`
+      
+      await downloadCSV(blob, filename)
+      
+      setExportStatus('success')
+      
+      // Auto fechar após 5 segundos
+      setTimeout(() => {
+        setExportStatus('idle')
+      }, 5000)
+      
+    } catch (err: any) {
+      console.error(err)
+      showToast(err.message || 'Erro ao exportar análise.', 'error')
+      setExportStatus('idle')
+    }
+  }
+
   const handleApplyFilters = () => { setShowFilterDrawer(false); loadData() }
   const handleClearFilters = () => { setFilterAccount(''); setFilterCategory(''); setShowFilterDrawer(false) }
 
-  // 🔥 OTIMIZAÇÃO: dashboardContent com useMemo
   const dashboardContent = useMemo(() => {
     if (metricsLoading || !metrics) {
       return (
@@ -329,39 +396,13 @@ function AnalysisContent() {
 
     return (
       <div className="space-y-4 animate-in fade-in duration-300">
-        {/* KPIs */}
         <div className="grid grid-cols-2 gap-3">
-          <KPICard
-            title="Burn Rate"
-            value={metrics.kpis.burnRate}
-            icon="fire"
-            prefix="R$ "
-            color="red"
-          />
-          <KPICard
-            title="Runway"
-            value={metrics.kpis.runway}
-            icon="gauge"
-            suffix=" meses"
-            color="teal"
-          />
-          <KPICard
-            title="Taxa de Economia"
-            value={metrics.kpis.savingsRate}
-            icon="percent"
-            suffix="%"
-            color="emerald"
-          />
-          <KPICard
-            title="Gasto Médio Diário"
-            value={metrics.kpis.averageDailyExpense}
-            icon="clock"
-            prefix="R$ "
-            color="orange"
-          />
+          <KPICard title="Burn Rate" value={metrics.kpis.burnRate} icon="fire" prefix="R$ " color="red" />
+          <KPICard title="Runway" value={metrics.kpis.runway} icon="gauge" suffix=" meses" color="teal" />
+          <KPICard title="Taxa de Economia" value={metrics.kpis.savingsRate} icon="percent" suffix="%" color="emerald" />
+          <KPICard title="Gasto Médio Diário" value={metrics.kpis.averageDailyExpense} icon="clock" prefix="R$ " color="orange" />
         </div>
 
-        {/* Cards de Consolidação */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 text-white shadow-lg">
             <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Saldo Total</p>
@@ -375,17 +416,9 @@ function AnalysisContent() {
           </div>
         </div>
 
-        {/* Gráfico Comparativo PF vs PJ */}
         <ComparisonChart data={metrics.comparisonChart} />
-
-        {/* Gráfico de Projeção 12 Meses */}
         <ProjectionChart data={metrics.projections} />
-
-        {/* Categorias PF vs PJ */}
-        <CategoryPie
-          pfData={metrics.categoryPie.pf}
-          pjData={metrics.categoryPie.pj}
-        />
+        <CategoryPie pfData={metrics.categoryPie.pf} pjData={metrics.categoryPie.pj} />
       </div>
     )
   }, [metrics, metricsLoading])
@@ -399,13 +432,19 @@ function AnalysisContent() {
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
         </div>
       )}
+      
+      {/* OVERLAY DE ANIMAÇÃO */}
+      <ExportFeedbackOverlay 
+        status={exportStatus} 
+        onClose={() => setExportStatus('idle')} 
+      />
 
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <ContextToggle />
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
             <button
+              type="button"
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
               className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"
             >
@@ -415,6 +454,7 @@ function AnalysisContent() {
               {monthLabel}
             </span>
             <button
+              type="button"
               onClick={() => setCurrentDate(addMonths(currentDate, 1))}
               className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"
             >
@@ -424,6 +464,7 @@ function AnalysisContent() {
 
           <div className="relative">
             <button
+              type="button"
               onClick={() => setShowExportMenu(!showExportMenu)}
               className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
             >
@@ -442,7 +483,8 @@ function AnalysisContent() {
                 ].map((opt) => (
                   <button
                     key={opt.key}
-                    onClick={() => handleExport(opt.key)}
+                    type="button"
+                    onClick={() => handleExport(opt.key, 'csv')}
                     className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     CSV {opt.label}
@@ -457,7 +499,8 @@ function AnalysisContent() {
                 ].map((opt) => (
                   <button
                     key={`pdf-${opt.key}`}
-                    onClick={() => handleExportPDF(opt.key)}
+                    type="button"
+                    onClick={() => handleExport(opt.key, 'pdf')}
                     className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
                   >
                     <FileText size={14} className="text-teal-600" />
@@ -469,6 +512,7 @@ function AnalysisContent() {
           </div>
 
           <button
+            type="button"
             onClick={() => setShowFilterDrawer(true)}
             className={`w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border rounded-full flex items-center justify-center relative transition-colors ${
               hasActiveFilters
@@ -489,6 +533,7 @@ function AnalysisContent() {
           <Filter size={14} className="text-teal-600 dark:text-teal-400" />
           <span className="text-xs font-medium text-teal-600 dark:text-teal-400">Filtros ativos</span>
           <button
+            type="button"
             onClick={handleClearFilters}
             className="text-xs font-bold text-red-500 hover:text-red-600 ml-auto"
           >
@@ -499,9 +544,9 @@ function AnalysisContent() {
 
       <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Análise</h2>
 
-      {/* 🔥 ABAS */}
       <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
         <button
+          type="button"
           onClick={() => setActiveTab('dashboard')}
           className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
             activeTab === 'dashboard'
@@ -512,6 +557,7 @@ function AnalysisContent() {
           Dashboard
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('month')}
           className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
             activeTab === 'month'
@@ -522,6 +568,7 @@ function AnalysisContent() {
           No mês
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('new')}
           className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
             activeTab === 'new'
@@ -533,7 +580,6 @@ function AnalysisContent() {
         </button>
       </div>
 
-      {/* 🔥 RENDERIZA O DASHBOARD COM useMemo */}
       {activeTab === 'dashboard' && dashboardContent}
 
       {activeTab === 'new' && (
@@ -651,7 +697,6 @@ function AnalysisContent() {
 
       {activeTab === 'month' && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          {/* Cards de resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
               <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
@@ -711,7 +756,6 @@ function AnalysisContent() {
             </div>
           </div>
 
-          {/* Distribuição de Gastos */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
               Distribuição de Gastos
@@ -753,7 +797,6 @@ function AnalysisContent() {
             )}
           </div>
 
-          {/* Gastos por Categoria */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
               Gastos por Categoria
@@ -800,7 +843,6 @@ function AnalysisContent() {
             )}
           </div>
 
-          {/* Fluxo Mensal */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
             <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
               Fluxo Mensal
@@ -823,7 +865,6 @@ function AnalysisContent() {
             )}
           </div>
 
-          {/* Patrimônio */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Patrimônio</h3>
@@ -875,6 +916,7 @@ function AnalysisContent() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Filtros</h3>
               <button
+                type="button"
                 onClick={() => setShowFilterDrawer(false)}
                 className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"
               >
@@ -918,12 +960,14 @@ function AnalysisContent() {
               </div>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={handleClearFilters}
                   className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-3 rounded-xl font-bold text-sm"
                 >
                   Limpar
                 </button>
                 <button
+                  type="button"
                   onClick={handleApplyFilters}
                   className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm"
                 >
