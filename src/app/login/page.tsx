@@ -1,10 +1,12 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Mail, Lock, ArrowRight } from 'lucide-react'
+import { Browser } from '@capacitor/browser'
+import { Capacitor } from '@capacitor/core'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -12,17 +14,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  // A PONTE: Esta parte é essencial para o aplicativo nativo
-  // Ele monitora se o login foi concluído no servidor e te joga para home automaticamente
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        router.replace('/home')
-      }
-    })
-    return () => authListener.subscription.unsubscribe()
-  }, [router])
 
   async function handleEmail() {
     setLoading(true)
@@ -44,39 +35,56 @@ export default function LoginPage() {
   async function handleGoogle() {
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithOAuth({
+    
+    // O pulo do gato do Capacitor
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { 
-        redirectTo: 'https://bwggczkzsqcdeayyysmx.supabase.co/auth/v1/callback' 
+        redirectTo: 'dfl://callback',
+        skipBrowserRedirect: Capacitor.isNativePlatform(), 
       }
     })
+
     if (error) {
       setError('Erro ao entrar com Google.')
       setLoading(false)
+      return
+    }
+
+    // Se estiver no celular, abre o Custom Tab que o Capacitor consegue monitorar
+    if (Capacitor.isNativePlatform() && data?.url) {
+      await Browser.open({ url: data.url, presentationStyle: 'popover' })
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
       
-      {/* Luzes de Fundo */}
+      {/* Luzes de Fundo (Efeito moderno) */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brand-teal/20 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="w-full max-w-sm relative z-10">
         <div className="text-center mb-8">
-          {/* Logotipo DFL em SVG */}
+          {/* Novo Logotipo DFL em SVG */}
           <div className="flex justify-center mb-4">
             <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 drop-shadow-xl">
               <rect width="40" height="40" rx="12" className="fill-brand-teal dark:fill-brand-teal" />
               <path d="M12 28V12H20C23.3137 12 26 14.6863 26 18C26 21.3137 23.3137 24 20 24H16V28H12Z" fill="white"/>
               <path d="M28 28V12H24V28H28Z" fill="white" fillOpacity="0.7"/>
+              <defs>
+                <linearGradient id="paint0_linear" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#14b8a6" />
+                  <stop offset="1" stopColor="#0f766e" />
+                </linearGradient>
+              </defs>
             </svg>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">DFL Finance</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gestão inteligente do seu dinheiro</p>
         </div>
 
+        {/* Card Principal */}
         <div className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-zinc-800/50">
           <div className="space-y-4">
             
@@ -150,6 +158,10 @@ export default function LoginPage() {
               {loading ? 'Conectando...' : 'Google'}
             </button>
           </div>
+        </div>
+        
+        <div className="mt-8 text-center">
+          <p className="text-xs text-gray-400 font-medium">Uso Interno e Pessoal</p>
         </div>
       </div>
     </div>
