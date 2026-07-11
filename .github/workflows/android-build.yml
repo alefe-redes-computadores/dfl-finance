@@ -27,6 +27,7 @@ jobs:
 
       - name: Build do Next.js
         run: npm run build
+        # Agora, com output: 'export', isso cria a pasta 'out'
 
       - name: Sincronizar e Preparar Android
         run: |
@@ -34,12 +35,12 @@ jobs:
           npx cap add android
           npx cap sync android
           
-          # 🔥 MODO FORÇA BRUTA: Copiar a sua logo pro lugar exato que ele exige
+          # Copia assets
           mkdir -p assets
-          cp public/icon-512*.png assets/icon.png
-          cp public/icon-512*.png assets/splash.png
+          cp public/icon-512*.png assets/icon.png || echo "Logo não encontrada"
+          cp public/icon-512*.png assets/splash.png || echo "Splash não encontrada"
           
-          # Agora sim, forçar a geração por cima do projeto Android criado
+          # Gera assets do capacitor
           npx @capacitor/assets generate --android
 
       - name: Compilar APK (Gradle)
