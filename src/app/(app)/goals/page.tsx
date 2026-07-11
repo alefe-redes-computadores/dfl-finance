@@ -187,7 +187,7 @@ function GoalsContent() {
             return (
               <div
                 key={goal.id}
-                onClick={() => router.push(`/goals/${goal.id}`)}
+                onClick={() => router.push(`/goals/details?id=${goal.id}`)}
                 className={`bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] ${
                   isCompleted ? 'border-emerald-200 dark:border-emerald-800' : isOverdue ? 'border-red-200 dark:border-red-800' : 'border-gray-50 dark:border-slate-700'
                 }`}
