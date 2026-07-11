@@ -154,7 +154,6 @@ function HomeContent() {
     })
   }, [localTransactions, localCategories, localAccountsData])
 
-  // 🔥 CORREÇÃO DA ORDENAÇÃO
   const monthTransactions = useMemo(() => 
     transactionsWithJoin
       .filter((t: any) => t.date >= start && t.date <= end)
@@ -189,7 +188,6 @@ function HomeContent() {
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
 
-  // Por causa do sort no monthTransactions, aqui ele já recorta os 5 mais recentes
   const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
 
   const accounts = useMemo(() => {
@@ -407,7 +405,6 @@ function HomeContent() {
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
   const allCardsPaid = cards.length > 0 && cards.every((c) => (c.faturaAtual || 0) === 0)
 
-  // 🔥 CORREÇÃO DO ÍCONE DE ANEXO
   const getAttachmentIcon = (url: string | null) => { 
     if (!url) return null; 
     const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase()); 
@@ -520,7 +517,7 @@ function HomeContent() {
                   const progress = Number(loan.total_amount) > 0 ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100 : 0
                   const isOverdue = loan.due_date && differenceInDays(new Date(loan.due_date), today) < 0
                   return (
-                    <div key={loan.id} onClick={() => router.push(`/loans/${loan.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={loan.id} onClick={() => router.push(`/loans/details?id=${loan.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                       <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
                         <ArrowRightLeft size={18} className="text-teal-600 dark:text-teal-400" />
                       </div>
@@ -564,7 +561,7 @@ function HomeContent() {
               </button>
             )}
             {nextCard ? (
-              <div onClick={() => router.push(`/cards/${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
+              <div onClick={() => router.push(`/cards/details?id=${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-[18px] bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500">
                     <CreditCard size={24} />
@@ -649,7 +646,7 @@ function HomeContent() {
                   const isOverdue = daysUntilDue !== null && daysUntilDue < 0
                   const percent = Math.min(debt.percent, 100)
                   return (
-                    <div key={debt.id} onClick={() => router.push(`/debts/${debt.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={debt.id} onClick={() => router.push(`/debts/details?id=${debt.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                       <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}>
                         <IconComp size={20} />
                       </div>
@@ -699,7 +696,7 @@ function HomeContent() {
                   const remaining = fin.total_installments - fin.current_installment + 1
                   const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), today) < 0
                   return (
-                    <div key={fin.id} onClick={() => router.push(`/financings/${fin.id}`)} className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={fin.id} onClick={() => router.push(`/financings/details?id=${fin.id}`)} className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${fin.color}15`, color: fin.color }}><IconComp size={20} /></div>
                         <div>
@@ -739,7 +736,7 @@ function HomeContent() {
                   const isWarning = budget.percent >= 80 && budget.remaining >= 0
                   const isDanger = budget.remaining < 0
                   return (
-                    <div key={budget.id} onClick={() => router.push(`/budgets/${budget.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors border-b border-gray-50 dark:border-slate-700/50 last:border-0">
+                    <div key={budget.id} onClick={() => router.push(`/budgets/details?id=${budget.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors border-b border-gray-50 dark:border-slate-700/50 last:border-0">
                       <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${budget.color}15`, color: budget.color }}><IconComp size={20} /></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1.5">
@@ -777,7 +774,7 @@ function HomeContent() {
                 ) : (
                   <>
                     {accounts.map((acc: any) => (
-                      <div key={acc.id} onClick={() => router.push(`/accounts/${acc.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                      <div key={acc.id} onClick={() => router.push(`/accounts/details?id=${acc.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                         <div className="flex items-center gap-4">
                           <BankLogo color={acc.color} name={acc.name} size="md" />
                           <div>
@@ -812,7 +809,7 @@ function HomeContent() {
                   </button>
                 ) : (
                   cards.map((card: any) => (
-                    <div key={card.id} onClick={() => router.push(`/cards/${card.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={card.id} onClick={() => router.push(`/cards/details?id=${card.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
                         <div>
@@ -848,7 +845,6 @@ function HomeContent() {
                     const IconComp = tx.type === 'transfer' ? ArrowRightLeft : getDynamicIcon(tx.categories?.icon)
                     const attachmentIcon = getAttachmentIcon(tx.receipt_url)
                     
-                    // 🔥 CORREÇÃO DE CORES E SINAIS PARA RECENTES
                     const isIncome = tx.type === 'income';
                     const isExpense = tx.type === 'expense' || tx.type === 'sangria';
                     const isTransfer = tx.type === 'transfer';
@@ -872,7 +868,7 @@ function HomeContent() {
                     }
 
                     return (
-                      <div key={tx.id} onClick={() => router.push(`/transactions/${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
+                      <div key={tx.id} onClick={() => router.push(`/transactions/details?id=${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
                         {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
                         <div className="flex items-center gap-4 flex-1 min-w-0">
                           <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
