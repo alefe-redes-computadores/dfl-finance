@@ -252,7 +252,7 @@ function DebtsContent() {
             return (
               <div
                 key={debt.id}
-                onClick={() => router.push(`/debts/${debt.id}`)}
+                onClick={() => router.push(`/debts/details?id=${debt.id}`)}
                 className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${isPaid ? 'border-emerald-200 dark:border-emerald-800' : isOverdue ? 'border-red-200 dark:border-red-800' : 'border-gray-50 dark:border-slate-700'}`}
               >
                 <div className="flex items-center justify-between mb-3">
