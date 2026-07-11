@@ -266,7 +266,7 @@ function BudgetsContent() {
                       {isActive ? 'Ativo' : 'Inativo'}
                     </button>
                     <button 
-                      onClick={() => router.push(`/budgets/${budget.id}`)} 
+                      onClick={() => router.push(`/budgets/details?id=${budget.id}`)} 
                       className="text-gray-400 hover:text-teal-600 transition-colors"
                     >
                       <MoreHorizontal size={16} />
