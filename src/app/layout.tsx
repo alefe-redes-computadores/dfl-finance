@@ -3,6 +3,7 @@ import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
+import { DeepLinkListener } from '@/components/DeepLinkListener'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="antialiased bg-gray-50 dark:bg-slate-900">
         <ThemeProvider>
           <ToastProvider>
+            <DeepLinkListener />
             {children}
           </ToastProvider>
         </ThemeProvider>
