@@ -27,12 +27,22 @@ jobs:
 
       - name: Build do Next.js
         run: npm run build
-        # Agora, com output: 'export', isso cria a pasta 'out'
 
       - name: Sincronizar e Preparar Android
         run: |
           rm -rf android
           npx cap add android
+          
+          # 🔥 INJEÇÃO DO INTENT FILTER PARA O LOGIN FUNCIONAR (Deep Linking dfl://callback)
+          # Este bloco insere o filtro de intenção logo após a abertura da tag <activity>
+          sed -i '/android:name=".MainActivity"/a \
+            <intent-filter>\
+                <action android:name="android.intent.action.VIEW" />\
+                <category android:name="android.intent.category.DEFAULT" />\
+                <category android:name="android.intent.category.BROWSABLE" />\
+                <data android:scheme="dfl" android:host="callback" />\
+            </intent-filter>' android/app/src/main/AndroidManifest.xml
+
           npx cap sync android
           
           # Copia assets
