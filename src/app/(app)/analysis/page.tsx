@@ -53,6 +53,9 @@ import ProjectionChart from '@/components/dashboard/ProjectionChart'
 import CategoryPie from '@/components/dashboard/CategoryPie'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
+// 🔥 AQUI ESTÁ A IMPORTAÇÃO QUE FALTAVA!
+import { useToast } from '@/contexts/ToastContext'
+
 // 🔥 IMPORTANDO OS SERVIÇOS CLIENT-SIDE
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 
