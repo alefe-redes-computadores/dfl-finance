@@ -17,6 +17,9 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
 
+// 🔥 NOVO: Importando o serviço Client-Side do Chat
+import { sendChatMessage } from '@/lib/services/chatService'
+
 interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -75,7 +78,7 @@ export default function AssistantChatPage() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   // ============================================================
-  // 🔥 BUSCA LOCAL (INDEXEDDB) — sem orderBy/realtime
+  // 🔥 BUSCA LOCAL (INDEXEDDB)
   // ============================================================
   const { data: localMessages, reload: reloadMessages } = useLocalData({
     table: 'chat_history' as any,
@@ -153,7 +156,6 @@ export default function AssistantChatPage() {
     setLoadingPulse(true)
 
     try {
-      // Busca sessão ativa
       const { data: session } = await supabase
         .from('chat_sessions')
         .select('id')
@@ -180,10 +182,16 @@ export default function AssistantChatPage() {
   }, [user?.id])
 
   // ============================================================
-  // 🔥 ENVIAR MENSAGEM CORRIGIDO COM addToSyncQueue
+  // 🔥 ENVIAR MENSAGEM (INTEGRADO AO NOVO CLIENT-SIDE SERVICE)
   // ============================================================
   const handleSend = async () => {
     if (!input.trim() || isSending || !user?.id) return
+
+    const apiKey = localStorage.getItem('gemini_api_key')
+    if (!apiKey) {
+      showToast('Chave da API não configurada. Volte e clique na engrenagem.', 'error')
+      return
+    }
 
     const userMessage = input.trim()
     setInput('')
@@ -192,7 +200,6 @@ export default function AssistantChatPage() {
     try {
       let currentSessionId = sessionId
 
-      // Cria sessão se ainda não existir
       if (!currentSessionId) {
         const sessionIdNew = crypto.randomUUID()
         const sessionPayload = {
@@ -211,7 +218,7 @@ export default function AssistantChatPage() {
         setSessionId(currentSessionId)
       }
 
-      // Salva mensagem do usuário
+      // 1. Salva mensagem do usuário localmente
       const userMsgId = crypto.randomUUID()
       const userMsgPayload = {
         id: userMsgId,
@@ -225,44 +232,42 @@ export default function AssistantChatPage() {
       }
       await db.table('chat_history').add(userMsgPayload)
       await addToSyncQueue(user.id, 'chat_history', 'create', userMsgId, userMsgPayload)
-      await reloadMessages()
+      
+      // Atualiza estado local antes da API responder para fluidez
+      const newMessagesList = [...messages, userMsgPayload]
+      setMessages(newMessagesList as Message[])
 
-      // Chama a API do assistente
-      const response = await fetch('/api/assistant/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage,
-          context: context,
-          userId: user.id,
-        }),
-      })
+      // 2. Chama a API do Gemini via Client-Side Service
+      // Prepara o array de histórico exatamente como a IA pediu
+      const chatHistoryForGemini = newMessagesList.map(m => ({
+        role: m.role,
+        content: m.content
+      }))
 
-      const data = await response.json()
+      const aiResponseText = await sendChatMessage(chatHistoryForGemini, apiKey)
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao processar mensagem')
-      }
-
-      // Salva resposta do assistente
+      // 3. Salva resposta do assistente localmente
       const assistantMsgId = crypto.randomUUID()
       const assistantMsgPayload = {
         id: assistantMsgId,
         user_id: user.id,
         session_id: currentSessionId,
         role: 'assistant' as const,
-        content: data.response,
-        type: data.type || 'text',
+        content: aiResponseText,
+        type: 'text',
         created_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
       }
       await db.table('chat_history').add(assistantMsgPayload)
       await addToSyncQueue(user.id, 'chat_history', 'create', assistantMsgId, assistantMsgPayload)
+      
       await reloadMessages()
 
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      showToast(`Erro ao responder: ${err.message}`, 'error')
+      // Força o reload para limpar mensagens "fantasmas" se a IA falhar
+      await reloadMessages()
     } finally {
       setIsSending(false)
       inputRef.current?.focus()
@@ -277,7 +282,7 @@ export default function AssistantChatPage() {
   }
 
   // ============================================================
-  // 🔥 LIMPAR CHAT CORRIGIDO COM addToSyncQueue
+  // 🔥 LIMPAR CHAT
   // ============================================================
   const handleClearChat = async () => {
     if (!confirm('Limpar todo o histórico da conversa?')) return
