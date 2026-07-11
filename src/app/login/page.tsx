@@ -36,7 +36,6 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { 
-        // Aqui está a mudança: usamos o nosso protocolo personalizado
         redirectTo: 'dfl://callback' 
       }
     })
@@ -48,7 +47,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-teal-500/20 blur-[100px] rounded-full pointer-events-none" />
+      {/* Luzes de Fundo */}
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-teal-500/10 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="w-full max-w-sm relative z-10">
@@ -61,35 +61,63 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">DFL Finance</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gestão inteligente</p>
         </div>
 
         <div className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-zinc-800/50">
           <div className="space-y-4">
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl p-4 text-sm outline-none"
-              placeholder="Seu melhor e-mail"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl p-4 text-sm outline-none"
-              placeholder="Sua senha"
-            />
+            {/* E-mail */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Mail size={18} className="text-gray-400" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-teal-600"
+                placeholder="Seu e-mail"
+              />
+            </div>
+
+            {/* Senha */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Lock size={18} className="text-gray-400" />
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-teal-600"
+                placeholder="Sua senha"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-xl text-xs text-center font-medium">
+                {error}
+              </div>
+            )}
+
             <button
               onClick={handleEmail}
               disabled={loading}
-              className="w-full bg-teal-600 text-white rounded-2xl py-3.5 font-semibold text-sm"
+              className="w-full bg-teal-600 text-white rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2"
             >
-              Entrar na conta
+              Entrar na conta <ArrowRight size={16} />
             </button>
+
+            <div className="flex items-center gap-3 py-2">
+              <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-800" />
+              <span className="text-xs text-gray-400 uppercase">ou</span>
+              <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-800" />
+            </div>
+
             <button
               onClick={handleGoogle}
               disabled={loading}
-              className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-800 dark:text-white rounded-2xl py-3.5 font-semibold text-sm"
+              className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-800 dark:text-white rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center"
             >
               {loading ? 'Conectando...' : 'Google'}
             </button>
