@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
@@ -9,19 +9,23 @@ import { useRouter } from 'next/navigation'
 
 export function useAuthDeepLink() {
   const router = useRouter()
+  // Novo estado para controlar a tela de carregamento
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
 
     const listener = App.addListener('appUrlOpen', async ({ url }) => {
-      // DEBUG: Se aparecer esse alerta na tela, o Deep Link está funcionando!
-      alert('Deep Link recebido: ' + url) 
-
+      // Ativa a tela de feedback visual
+      setIsProcessing(true) 
       await Browser.close().catch(() => {})
 
       try {
         const hashPart = url.split('#')[1]
-        if (!hashPart) return
+        if (!hashPart) {
+          setIsProcessing(false)
+          return
+        }
 
         const params = new URLSearchParams(hashPart)
         const access_token = params.get('access_token')
@@ -34,13 +38,20 @@ export function useAuthDeepLink() {
           })
           
           if (!error) {
-            router.replace('/home')
+            // Um pequeno delay de 1.5s só para a animação ficar fluida 
+            // e dar tempo de ler a mensagem bonita antes de pular pra home
+            setTimeout(() => {
+              router.replace('/home')
+              setIsProcessing(false)
+            }, 1500)
           } else {
-            alert('Erro no Supabase: ' + error.message)
+            console.error(error.message)
+            setIsProcessing(false)
           }
         }
       } catch (err) {
-        alert('Erro no processamento: ' + err)
+        console.error(err)
+        setIsProcessing(false)
       }
     })
 
@@ -48,4 +59,6 @@ export function useAuthDeepLink() {
       listener.remove()
     }
   }, [router])
+
+  return { isProcessing }
 }
