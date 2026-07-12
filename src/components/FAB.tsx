@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import {
   Plus, X, Zap, ArrowDown, ArrowUp, Wallet, Check,
   Coffee, ShoppingCart, Car, Home, Smartphone, Utensils, Heart,
   Briefcase, Gamepad2, BookOpen, Loader2, ChevronRight,
   TrendingUp, PiggyBank, Gift, Repeat, Coins, Shield
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { format } from 'date-fns'
 import BankLogo from '@/components/BankLogo'
@@ -15,6 +14,11 @@ import MoneyInput from '@/components/MoneyInput'
 import IconPicker from '@/components/IconPicker'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
+
+// 🔥 NOVO: Arquitetura Local-First e Haptic
+import { useLocalData } from '@/hooks/useLocalData'
+import { useSafeDb } from '@/hooks/useSafeDb'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const EXPENSE_CATS = [
   { icon: Coffee, label: 'Café', color: '#8B4513' },
@@ -44,6 +48,9 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
   const { user } = useAuth()
   const { context } = useContext_()
   const { showToast } = useToast()
+  
+  const { safeAdd, safeUpdate } = useSafeDb()
+  const { vibrate, success, error: hapticError } = useHapticFeedback()
 
   const [showModal, setShowModal] = useState(false)
   const [quickType, setQuickType] = useState<'expense' | 'income'>('expense')
@@ -52,7 +59,6 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
   const [category, setCategory] = useState('')
   const [saving, setSaving] = useState(false)
   const [accountId, setAccountId] = useState('')
-  const [accounts, setAccounts] = useState<any[]>([])
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconPicker, setShowIconPicker] = useState(false)
 
@@ -64,23 +70,32 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
   const isTouchMove = useRef(false)
   const fabRef = useRef<HTMLButtonElement>(null)
 
+  // Leitura de contas local
+  const { data: allAccounts } = useLocalData({ table: 'accounts' as any })
+
+  const accounts = useMemo(() => {
+    return (allAccounts || [])
+      .filter((a: any) => a.context === quickContext)
+      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+  }, [allAccounts, quickContext])
+
   const handleTouchStart = () => {
     isTouchMove.current = false
     setIsDragging(true)
+    vibrate([10]) // Dá o feedback de que o botão foi "agarrado"
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // Se moveu, ativamos o modo arraste livre
     isTouchMove.current = true
     setShowDeleteZone(true)
     
     const touch = e.touches[0]
     
-    // Calcula a posição do dedo invertida para aplicar no right/bottom (respeitando limites)
-    const newX = window.innerWidth - touch.clientX - 28 // 28 é metade da largura do botão
+    // Calcula a posição do dedo invertida para aplicar no right/bottom
+    const newX = window.innerWidth - touch.clientX - 28 
     const newY = window.innerHeight - touch.clientY - 28
 
-    // Limites da tela (não deixa sumir nem ficar em cima do menu)
+    // Limites da tela
     const clampedX = Math.max(10, Math.min(window.innerWidth - 60, newX))
     const clampedY = Math.max(80, Math.min(window.innerHeight - 100, newY))
 
@@ -92,43 +107,91 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
     setShowDeleteZone(false)
 
     if (!isTouchMove.current) {
-      // Se não moveu, foi apenas um clique. Abre o Modal.
+      // Apenas clique (Não moveu)
+      vibrate([10])
       setShowModal(true)
       return
     }
 
-    // Se moveu, verifica se soltou na zona de exclusão (inferior central)
+    // Se moveu, verifica zona de exclusão (inferior)
     const touch = e.changedTouches[0]
     if (touch.clientY > window.innerHeight * 0.8) {
-      setVisible(false) // Oculta da sessão (não vai pro banco)
+      setVisible(false)
+      hapticError() // Vibração de exclusão/alerta
       showToast('Botão oculto até à próxima sessão.', 'info')
+    } else {
+      vibrate([5]) // Soltou em lugar seguro
     }
   }
 
+  // Define o contexto rápido inicial como o contexto principal do app
   useEffect(() => {
-    if (showModal && user) {
-      supabase.from('accounts').select('id,name,color,balance').match({ user_id: user.id, context: quickContext }).order('name').then(({ data }) => setAccounts(data || []))
-    }
-  }, [showModal, quickContext, user])
+    if (showModal) setQuickContext(context === 'dfl' ? 'dfl' : 'personal')
+  }, [showModal, context])
 
   const save = async () => {
-    if (!user || amount <= 0) { showToast('Informe um valor', 'warning'); return }
-    setSaving(true)
-    const { error } = await supabase.from('transactions').insert({
-      user_id: user.id, type: quickType, amount, description: category || (quickType === 'income' ? 'Receita rápida' : 'Despesa rápida'),
-      date: format(new Date(), 'yyyy-MM-dd'), status: 'done', context: quickContext, account_id: accountId || null,
-    })
-    if (error) showToast('Erro ao salvar', 'error')
-    else {
-      showToast(`${quickType === 'income' ? 'Receita' : 'Despesa'} salva!`, 'success')
-      setShowModal(false); setAmount(0); setCategory(''); setAccountId('')
-      onSave?.()
+    if (!user || amount <= 0) { 
+      showToast('⚠️ Informe um valor válido.', 'warning')
+      hapticError()
+      return 
     }
-    setSaving(false)
+    
+    setSaving(true)
+
+    try {
+      const txId = crypto.randomUUID()
+
+      // 1. Abate o saldo da conta atômicamente se selecionada
+      if (accountId) {
+        const acc = accounts.find((a: any) => a.id === accountId)
+        if (acc) {
+          const newBal = quickType === 'income' 
+            ? Number(acc.balance || 0) + amount 
+            : Number(acc.balance || 0) - amount
+          const accRes = await safeUpdate('accounts', accountId, { balance: newBal })
+          if (!accRes.success) throw new Error(accRes.error)
+        }
+      }
+
+      // 2. Cria transação
+      const payload = {
+        id: txId,
+        user_id: user.id, 
+        type: quickType, 
+        amount, 
+        description: category || (quickType === 'income' ? 'Receita rápida' : 'Despesa rápida'),
+        date: format(new Date(), 'yyyy-MM-dd'), 
+        status: 'done', 
+        context: quickContext, 
+        account_id: accountId || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0
+      }
+
+      const res = await safeAdd('transactions', payload)
+      if (!res.success) throw new Error(res.error)
+
+      success()
+      showToast(`✅ ${quickType === 'income' ? 'Receita' : 'Despesa'} salva!`, 'success')
+      setShowModal(false)
+      setAmount(0)
+      setCategory('')
+      setAccountId('')
+      onSave?.()
+
+    } catch (err: any) {
+      console.error('Erro FAB:', err)
+      hapticError()
+      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const cats = quickType === 'expense' ? EXPENSE_CATS : INCOME_CATS
-  const selAcc = accounts.find(a => a.id === accountId)
+  const selAcc = accounts.find((a: any) => a.id === accountId)
 
   if (!visible) return null
 
@@ -136,8 +199,8 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
     <>
       {/* Zona Vermelha de Exclusão Temporária */}
       {showDeleteZone && (
-        <div className="fixed bottom-4 left-0 right-0 flex justify-center z-[499] pointer-events-none animate-in fade-in slide-in-from-bottom-5">
-          <div className="bg-red-500 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-2 font-bold text-sm shadow-red-500/30">
+        <div className="fixed bottom-6 left-0 right-0 flex justify-center z-[499] pointer-events-none animate-in fade-in slide-in-from-bottom-5">
+          <div className="bg-red-500 text-white px-6 py-4 rounded-[24px] shadow-2xl flex items-center gap-2 font-bold text-sm shadow-red-500/30">
             <X size={20} /> Solte aqui para ocultar
           </div>
         </div>
@@ -149,7 +212,7 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className={`fixed z-[500] w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-transform active:scale-90 touch-none ${
+        className={`fixed z-[500] w-[56px] h-[56px] rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-90 touch-none ${
           isDragging ? 'scale-110 shadow-2xl opacity-90' : ''
         } ${quickType === 'expense' ? 'bg-red-500 shadow-red-500/30' : 'bg-emerald-500 shadow-emerald-500/30'} text-white`}
         style={{ right: `${position.x}px`, bottom: `${position.y}px` }}
@@ -160,30 +223,32 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
       {/* Modal de Ação Rápida */}
       {showModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-10 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full mx-auto mb-6" />
+            
             <div className="flex items-center justify-between mb-8">
               <h2 className="font-bold text-xl text-gray-800 dark:text-gray-100 tracking-tight">Ação Rápida</h2>
-              <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={20} /></button>
+              <button onClick={() => { vibrate([10]); setShowModal(false); }} className="p-2 text-gray-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full transition-colors active:scale-95"><X size={20} /></button>
             </div>
 
             {/* Alternância de Tipo e Contexto */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-[16px]">
-                <button onClick={() => setQuickType('expense')} className={`flex-1 py-2.5 rounded-[12px] font-bold text-[13px] transition-all ${quickType==='expense'?'bg-white dark:bg-slate-800 text-red-500 shadow-sm':'text-gray-500'}`}>Despesa</button>
-                <button onClick={() => setQuickType('income')} className={`flex-1 py-2.5 rounded-[12px] font-bold text-[13px] transition-all ${quickType==='income'?'bg-white dark:bg-slate-800 text-emerald-500 shadow-sm':'text-gray-500'}`}>Receita</button>
+              <div className="flex bg-gray-50 dark:bg-slate-700 p-1 rounded-full border border-gray-100 dark:border-slate-600">
+                <button onClick={() => { setQuickType('expense'); vibrate([10]); }} className={`flex-1 py-2.5 rounded-full font-bold text-[13px] transition-all active:scale-[0.95] ${quickType==='expense'?'bg-white dark:bg-slate-800 text-red-500 shadow-sm':'text-gray-500'}`}>Despesa</button>
+                <button onClick={() => { setQuickType('income'); vibrate([10]); }} className={`flex-1 py-2.5 rounded-full font-bold text-[13px] transition-all active:scale-[0.95] ${quickType==='income'?'bg-white dark:bg-slate-800 text-emerald-500 shadow-sm':'text-gray-500'}`}>Receita</button>
               </div>
-              <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-[16px]">
+              <div className="flex bg-gray-50 dark:bg-slate-700 p-1 rounded-full border border-gray-100 dark:border-slate-600">
                 {(['dfl','personal'] as const).map(c => (
-                  <button key={c} onClick={() => { setQuickContext(c); setAccountId('') }} className={`flex-1 py-2.5 rounded-[12px] font-bold text-[13px] transition-all ${quickContext===c?'bg-teal-700 text-white shadow-sm':'text-gray-500'}`}>{c==='dfl'?'DFL':'Pessoal'}</button>
+                  <button key={c} onClick={() => { setQuickContext(c); setAccountId(''); vibrate([10]); }} className={`flex-1 py-2.5 rounded-full font-bold text-[13px] transition-all active:scale-[0.95] ${quickContext===c?'bg-teal-700 text-white shadow-sm':'text-gray-500'}`}>{c==='dfl'?'Empresa':'Pessoal'}</button>
                 ))}
               </div>
             </div>
 
             {/* Valor */}
             <div className="mb-6">
-              <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-5 border border-gray-100 dark:border-slate-700">
+              <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700/50 rounded-[24px] p-5 border border-gray-100 dark:border-slate-700">
                 <span className="text-2xl text-gray-400 font-medium">R$</span>
                 <MoneyInput value={amount} onChange={(n) => setAmount(n)} className="text-4xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-100 placeholder:text-gray-300" placeholder="0,00" />
               </div>
@@ -191,10 +256,10 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
 
             {/* Conta */}
             <div className="mb-6">
-              <label className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block ml-2">Conta Destino</label>
-              <button onClick={() => setShowAccModal(true)} className="w-full bg-gray-50 dark:bg-slate-700/50 p-4 rounded-[20px] border border-gray-100 dark:border-slate-700 flex items-center justify-between hover:bg-gray-100 transition-colors">
+              <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block ml-2">Conta Destino</label>
+              <button onClick={() => { setShowAccModal(true); vibrate([10]); }} className="w-full bg-gray-50 dark:bg-slate-700/50 p-4 rounded-[24px] border border-gray-100 dark:border-slate-700 flex items-center justify-between hover:bg-gray-100 transition-colors active:scale-[0.98]">
                 <div className="flex items-center gap-3">
-                  {selAcc ? <BankLogo color={selAcc.color} name={selAcc.name} size="md" /> : <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-slate-600 flex items-center justify-center"><Wallet size={20} className="text-gray-400" /></div>}
+                  {selAcc ? <BankLogo color={selAcc.color} name={selAcc.name} size="md" /> : <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-600 flex items-center justify-center shadow-sm"><Wallet size={20} className="text-gray-400" /></div>}
                   <span className={`font-bold text-[15px] ${selAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>{selAcc ? selAcc.name : 'Selecionar conta'}</span>
                 </div>
                 <ChevronRight size={20} className="text-gray-300 dark:text-gray-600" />
@@ -203,22 +268,22 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
 
             {/* Categorias (Grid Premium) */}
             <div className="mb-8">
-              <label className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block ml-2">Categoria</label>
+              <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block ml-2">Categoria</label>
               <div className="grid grid-cols-4 gap-3">
                 {cats.map(c => {
                   const Icon = c.icon
                   const sel = category === c.label
                   return (
-                    <button key={c.label} onClick={() => setCategory(sel ? '' : c.label)} className={`flex flex-col items-center gap-2 p-3 rounded-[16px] transition-all ${sel ? 'bg-teal-50 dark:bg-teal-900/30 ring-2 ring-teal-500 shadow-sm' : 'bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 border border-gray-100 dark:border-slate-700'}`}>
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${c.color}15`, color: c.color }}>
+                    <button key={c.label} onClick={() => { setCategory(sel ? '' : c.label); vibrate([5]); }} className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all active:scale-95 ${sel ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 shadow-sm' : 'bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 border border-transparent'}`}>
+                      <div className="w-10 h-10 rounded-[14px] flex items-center justify-center" style={{ backgroundColor: `${c.color}20`, color: c.color }}>
                         <Icon size={20} />
                       </div>
-                      <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate w-full text-center">{c.label}</span>
+                      <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 truncate w-full text-center">{c.label}</span>
                     </button>
                   )
                 })}
-                <button onClick={() => setShowIconPicker(true)} className="flex flex-col items-center gap-2 p-3 rounded-[16px] bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 border border-gray-100 dark:border-slate-700 border-dashed">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 dark:bg-slate-600 text-gray-500">
+                <button onClick={() => { setShowIconPicker(true); vibrate([10]); }} className="flex flex-col items-center gap-2 p-3 rounded-[20px] bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 border border-gray-200 dark:border-slate-600 border-dashed active:scale-95">
+                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center bg-gray-200 dark:bg-slate-600 text-gray-500">
                     <Plus size={20} />
                   </div>
                   <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate w-full text-center">Outro</span>
@@ -227,7 +292,7 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
             </div>
 
             {/* Salvar */}
-            <button onClick={save} disabled={saving || amount <= 0} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[16px] disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg shadow-teal-600/30">
+            <button onClick={() => { vibrate([10, 50]); save(); }} disabled={saving || amount <= 0} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-teal-600/30">
               {saving ? <Loader2 size={24} className="animate-spin" /> : <><Zap size={22} /> Salvar Lançamento</>}
             </button>
           </div>
@@ -238,18 +303,21 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
       {showAccModal && (
         <div className="fixed inset-0 z-[610] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[70vh] overflow-y-auto animate-in slide-in-from-bottom-10" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[70vh] overflow-y-auto animate-in slide-in-from-bottom-8" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2">
                 <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Escolha a Conta</h3>
-                <button onClick={() => setShowAccModal(false)} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full"><X size={18}/></button>
+                <button onClick={() => setShowAccModal(false)} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95"><X size={18}/></button>
             </div>
-            <div className="space-y-2">
-                {accounts.length === 0 ? <p className="text-gray-400 text-sm text-center py-10">Nenhuma conta encontrada neste contexto.</p> :
-                accounts.map(acc => (
-                    <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors border ${acc.id===accountId?'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800':'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 hover:bg-gray-50'}`}>
-                    <BankLogo color={acc.color} name={acc.name} size="md" />
-                    <div className="text-left flex-1"><p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{acc.name}</p><p className="text-xs text-gray-400 mt-0.5">R$ {Number(acc.balance||0).toFixed(2)}</p></div>
-                    {acc.id===accountId && <Check size={20} className="text-teal-600" />}
+            <div className="space-y-3">
+                {accounts.length === 0 ? <p className="text-gray-400 text-sm font-medium text-center py-10">Nenhuma conta encontrada neste contexto.</p> :
+                accounts.map((acc: any) => (
+                    <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false); vibrate([10]); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors border active:scale-[0.98] ${acc.id===accountId?'bg-teal-50 dark:bg-teal-900/30 border-teal-200 dark:border-teal-800':'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 hover:bg-gray-50'}`}>
+                      <BankLogo color={acc.color} name={acc.name} size="md" />
+                      <div className="text-left flex-1">
+                        <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{acc.name}</p>
+                        <p className="text-xs font-medium text-gray-500 mt-0.5">R$ {Number(acc.balance||0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      {acc.id===accountId && <Check size={20} className="text-teal-600" />}
                     </button>
                 ))
                 }
@@ -258,7 +326,7 @@ export default function FAB({ onSave }: { onSave?: () => void }) {
         </div>
       )}
 
-      <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={category} onSelect={(icon) => { setCategory(icon); setShowIconPicker(false) }} />
+      <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={category} onSelect={(icon) => { setCategory(icon); setShowIconPicker(false); vibrate([10]); }} />
     </>
   )
 }
