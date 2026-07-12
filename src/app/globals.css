@@ -1,45 +1,41 @@
-* {
-  -webkit-tap-highlight-color: transparent;
-}
-
-.page-transition {
-  animation: fadeIn 0.15s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 * {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+  -webkit-tap-highlight-color: transparent; /* Remove a caixa azul feia ao tocar em links no celular */
 }
 
 html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  height: 100%;
+  min-height: 100%;
 }
 
-body {
-  @apply bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100;
+/* Transição de tela super elegante do iOS */
+.page-transition {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Scrollbar oculta mas funcional */
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Scrollbar oculta mas mantendo a rolagem */
 ::-webkit-scrollbar {
   display: none;
 }
+html {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
 
-/* Safe area para PWA */
-.safe-bottom {
+/* Safe area para telas com entalhe/Notch (iPhones novos) */
+.pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }
