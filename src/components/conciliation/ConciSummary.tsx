@@ -4,6 +4,7 @@
 import { Check, X, RotateCcw, Home } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface ConciSummaryProps {
   total: number
@@ -21,51 +22,59 @@ export function ConciSummary({
   onFinish,
 }: ConciSummaryProps) {
   const router = useRouter()
+  const { vibrate, success } = useHapticFeedback()
 
   const handleFinish = () => {
+    success()
     if (onFinish) onFinish()
     router.push('/home')
   }
 
+  const handleReset = () => {
+    vibrate([10])
+    onReset()
+  }
+
   return (
-    <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-[32px] shadow-lg border border-gray-100 dark:border-slate-700/50 p-8 text-center space-y-6">
+    <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-[32px] shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-gray-50 dark:border-slate-700/50 p-8 text-center space-y-6 animate-in zoom-in-95 duration-300">
       <div className="flex items-center justify-center gap-3">
-        <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-          <Check size={32} className="text-emerald-500" />
+        <div className="w-20 h-20 rounded-[24px] bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shadow-sm">
+          <Check size={40} className="text-emerald-500" />
         </div>
       </div>
 
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-        Conciliação concluída! 🎉
-      </h2>
+      <div>
+        <h2 className="text-[22px] font-black text-gray-900 dark:text-white tracking-tight mb-1">
+          Conciliação concluída! 🎉
+        </h2>
+        <p className="text-gray-500 dark:text-gray-400 text-[14px] font-medium">
+          Você analisou todas as transações da fila.
+        </p>
+      </div>
 
-      <p className="text-gray-500 dark:text-gray-400 text-sm">
-        Você analisou todas as transações da fila.
-      </p>
-
-      <div className="grid grid-cols-3 gap-4 py-4">
-        <div className="bg-gray-50 dark:bg-slate-700/30 rounded-2xl p-4">
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{total}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
+      <div className="grid grid-cols-3 gap-3 py-2">
+        <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4 flex flex-col items-center justify-center transition-transform hover:scale-105">
+          <p className="text-[24px] font-black text-gray-900 dark:text-white">{total}</p>
+          <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">Total</p>
         </div>
-        <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl p-4">
-          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{approved}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Aprovados ✅</p>
+        <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-[20px] p-4 flex flex-col items-center justify-center transition-transform hover:scale-105">
+          <p className="text-[24px] font-black text-emerald-600 dark:text-emerald-400">{approved}</p>
+          <p className="text-[11px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-1">Aprovados</p>
         </div>
-        <div className="bg-red-50 dark:bg-red-500/10 rounded-2xl p-4">
-          <p className="text-2xl font-bold text-red-500">{rejected}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Descartados ❌</p>
+        <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-[20px] p-4 flex flex-col items-center justify-center transition-transform hover:scale-105">
+          <p className="text-[24px] font-black text-red-500">{rejected}</p>
+          <p className="text-[11px] font-bold text-red-500/70 dark:text-red-400/70 uppercase tracking-widest mt-1">Descartados</p>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-4 pt-2">
         <button
-          onClick={onReset}
+          onClick={handleReset}
           className={cn(
-            'flex-1 py-3 rounded-2xl font-bold',
-            'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300',
-            'hover:bg-gray-200 dark:hover:bg-slate-600 active:scale-95',
-            'transition-all duration-200',
+            'flex-1 py-4 rounded-[24px] font-bold text-[15px]',
+            'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-300',
+            'hover:bg-gray-100 dark:hover:bg-slate-600 active:scale-[0.98]',
+            'transition-all duration-200 border border-gray-100 dark:border-slate-600',
             'flex items-center justify-center gap-2'
           )}
         >
@@ -75,9 +84,9 @@ export function ConciSummary({
         <button
           onClick={handleFinish}
           className={cn(
-            'flex-1 py-3 rounded-2xl font-bold',
+            'flex-1 py-4 rounded-[24px] font-bold text-[15px] shadow-lg shadow-teal-600/20',
             'bg-teal-600 text-white',
-            'hover:bg-teal-700 active:scale-95',
+            'hover:bg-teal-700 active:scale-[0.98]',
             'transition-all duration-200',
             'flex items-center justify-center gap-2'
           )}
