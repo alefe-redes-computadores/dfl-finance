@@ -74,18 +74,18 @@ export default function ContextToggle() {
   }
 
   if (!mounted) {
-    return <div className="w-[120px] h-[36px] bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+    return <div className="w-[120px] h-[32px] bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
   }
 
   if (appMode === 'personal_only') return null
 
   return (
-    <div className="inline-flex bg-[#f0f2f5] dark:bg-slate-800/80 backdrop-blur-md rounded-full p-1 gap-1 border border-gray-100 dark:border-slate-700/50 shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)] transition-colors duration-300">
+    <div className="inline-flex bg-[#f0f2f5] dark:bg-slate-800/80 backdrop-blur-md rounded-full p-0.5 gap-0.5 border border-gray-100 dark:border-slate-700/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] shrink-0 transition-colors duration-300">
       <button
         onClick={() => handleToggle('dfl')}
-        className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 active:scale-[0.95] ${
+        className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-all duration-300 active:scale-[0.95] ${
           context === 'dfl'
-            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none'
+            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-sm'
             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
         }`}
       >
@@ -93,9 +93,9 @@ export default function ContextToggle() {
       </button>
       <button
         onClick={() => handleToggle('personal')}
-        className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 active:scale-[0.95] ${
+        className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-all duration-300 active:scale-[0.95] ${
           context === 'personal'
-            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none'
+            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-sm'
             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
         }`}
       >
