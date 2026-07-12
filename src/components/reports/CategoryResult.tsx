@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ReportFilterValues } from './ReportFilters'
-import { Download } from 'lucide-react'
+import { Download, PieChart } from 'lucide-react'
 import { BlobProvider } from '@react-pdf/renderer'
 import ReportPDF from '@/components/reports/ReportPDF'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Alimentação: '#FF6B6B', Transporte: '#4ECDC4', Moradia: '#45B7D1', Lazer: '#96CEB4',
@@ -21,6 +22,7 @@ interface CategoryResultProps {
 
 export default function CategoryResult({ filters }: CategoryResultProps) {
   const { user } = useAuth()
+  const { vibrate, success } = useHapticFeedback()
   const [loading, setLoading] = useState(true)
   const [transactions, setTransactions] = useState<any[]>([])
 
@@ -63,7 +65,7 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
     .reduce((acc: any, t: any) => {
       const cat = t.category || 'Outros'
       if (!acc[cat]) acc[cat] = { total: 0, count: 0, transactions: [] }
-      acc[cat].total += t.amount
+      acc[cat].total += parseFloat(t.amount) || 0
       acc[cat].count += 1
       acc[cat].transactions.push(t)
       return acc
@@ -76,54 +78,75 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
   const totalExpenses = categoryArray.reduce((sum, c) => sum + c.total, 0)
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 animate-in fade-in duration-300">
       {loading ? (
         <div className="flex justify-center p-8"><div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>
       ) : categoryArray.length === 0 ? (
-        <div className="text-center p-8 text-slate-500">Nenhuma despesa no período.</div>
+        <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center py-10 flex flex-col items-center">
+          <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
+            <PieChart size={24} className="text-gray-400" />
+          </div>
+          <p className="text-gray-500 text-sm font-medium">Nenhuma despesa no período selecionado.</p>
+        </div>
       ) : (
         <div className="space-y-4">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold text-slate-500 mb-3">Distribuição de Gastos</h3>
-            <div className="space-y-2">
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-5">Distribuição de Gastos</h3>
+            <div className="space-y-3">
               {categoryArray.map(cat => {
                 const percent = totalExpenses > 0 ? (cat.total / totalExpenses) * 100 : 0
+                const color = CATEGORY_COLORS[cat.name] || '#94a3b8'
                 return (
-                  <div key={cat.name} className="flex items-center">
-                    <div className="w-24 text-xs text-slate-600 truncate mr-2">{cat.name}</div>
-                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-4 overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percent}%`, backgroundColor: CATEGORY_COLORS[cat.name] || '#95A5A6' }} />
+                  <div key={cat.name} className="flex items-center gap-3">
+                    <div className="w-[100px] text-[12px] font-bold text-gray-600 dark:text-gray-400 truncate">{cat.name}</div>
+                    <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden shadow-inner">
+                      <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${percent}%`, backgroundColor: color }} />
                     </div>
-                    <div className="w-20 text-xs text-right ml-2">
-                      <span className="font-medium">R$ {cat.total.toFixed(2)}</span>
-                      <span className="text-slate-500 ml-1">({percent.toFixed(1)}%)</span>
+                    <div className="w-[80px] text-right">
+                      <p className="text-[12px] font-bold text-gray-800 dark:text-gray-200">R$ {cat.total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                      <p className="text-[10px] font-bold text-gray-400">{percent.toFixed(1)}%</p>
                     </div>
                   </div>
                 )
               })}
             </div>
           </div>
-          {categoryArray.map(cat => (
-            <div key={cat.name} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: CATEGORY_COLORS[cat.name] || '#95A5A6' }} />
-                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">{cat.name}</h4>
-                </div>
-                <p className="text-sm font-bold text-red-600">R$ {cat.total.toFixed(2)}</p>
-              </div>
-              <p className="text-xs text-slate-500 mb-2">{cat.count} transação(es) {totalExpenses > 0 && `• ${((cat.total/totalExpenses)*100).toFixed(1)}% do total`}</p>
-              <div className="space-y-1">
-                {cat.transactions.slice(0,3).map((t: any) => (
-                  <div key={t.id} className="flex justify-between text-xs text-slate-600">
-                    <span className="truncate mr-2">{t.description}</span>
-                    <span>R$ {t.amount.toFixed(2)}</span>
+          
+          <div className="grid gap-3">
+            {categoryArray.map(cat => {
+              const color = CATEGORY_COLORS[cat.name] || '#94a3b8'
+              return (
+                <div key={cat.name} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{cat.name}</h4>
+                        <p className="text-[11px] font-medium text-gray-400">{cat.count} transação(ões) • {((cat.total/totalExpenses)*100).toFixed(1)}%</p>
+                      </div>
+                    </div>
+                    <p className="text-[15px] font-black text-red-500">R$ {cat.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
-                ))}
-                {cat.transactions.length > 3 && <p className="text-xs text-teal-600 mt-1">+ {cat.transactions.length - 3} outras</p>}
-              </div>
-            </div>
-          ))}
+                  
+                  <div className="space-y-1.5 mt-2 bg-gray-50 dark:bg-slate-700/30 p-3 rounded-[16px]">
+                    {cat.transactions.slice(0,3).map((t: any) => (
+                      <div key={t.id} className="flex justify-between items-center text-[12px]">
+                        <span className="font-medium text-gray-600 dark:text-gray-400 truncate max-w-[70%]">{t.description}</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-300">R$ {(parseFloat(t.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    ))}
+                    {cat.transactions.length > 3 && (
+                      <p className="text-[11px] font-bold text-teal-600 text-center mt-2 pt-1 border-t border-gray-200 dark:border-slate-600">
+                        + {cat.transactions.length - 3} outras transações
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
           {/* Botão Exportar PDF */}
           {transactions.length > 0 && (
@@ -141,12 +164,15 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
             >
               {({ url, loading: pdfLoading }: any) => (
                 <button
-                  onClick={() => url && window.open(url, '_blank')}
+                  onClick={() => {
+                    vibrate([10]);
+                    if(url) { success(); window.open(url, '_blank'); }
+                  }}
                   disabled={pdfLoading}
-                  className="w-full mt-4 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[14px] transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 disabled:opacity-50 active:scale-[0.98]"
                 >
-                  <Download size={16} />
-                  {pdfLoading ? 'Gerando PDF...' : 'Exportar PDF'}
+                  <Download size={18} />
+                  {pdfLoading ? 'Gerando PDF...' : 'Exportar Relatório Completo'}
                 </button>
               )}
             </BlobProvider>
