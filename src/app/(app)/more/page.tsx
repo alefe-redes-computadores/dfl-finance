@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -12,7 +13,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
@@ -449,10 +450,6 @@ export default function MorePage() {
         appMode={appMode}
         toggleAppMode={toggleAppMode}
       />
-
-      <div className="px-4 pt-4 pb-2">
-        <ContextToggle />
-      </div>
 
       {/* HEADER & PERFIL UNIFICADO */}
       <div className="px-4 pt-4 mb-6">
