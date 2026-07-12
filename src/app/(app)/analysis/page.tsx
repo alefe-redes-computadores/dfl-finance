@@ -24,7 +24,7 @@ import {
   Flame,
   Clock,
   Percent,
-  CheckCircle // 🔥 Adicionado para a animação
+  CheckCircle 
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -53,11 +53,9 @@ import ProjectionChart from '@/components/dashboard/ProjectionChart'
 import CategoryPie from '@/components/dashboard/CategoryPie'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
-// 🔥 AQUI ESTÁ A IMPORTAÇÃO QUE FALTAVA!
 import { useToast } from '@/contexts/ToastContext'
 
-// 🔥 IMPORTANDO OS SERVIÇOS CLIENT-SIDE
-import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
+import { exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService' // 🔥 Alterado para chamar a análise
 
 const AnalysisSkeleton = () => (
   <div className="space-y-6 animate-pulse">
@@ -95,7 +93,6 @@ const AnalysisSkeleton = () => (
   </div>
 )
 
-// 🔥 MODAL OVERLAY DE SUCESSO/CARREGAMENTO
 function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exporting' | 'success', onClose: () => void }) {
   if (status === 'idle') return null;
 
@@ -147,7 +144,6 @@ function AnalysisContent() {
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   
-  // 🔥 NOVO: Estado de Exportação
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
 
   const [newGastos, setNewGastos] = useState<any[]>([])
@@ -341,7 +337,7 @@ function AnalysisContent() {
   const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
   const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
 
-  // 🔥 O NOVO HANDLE EXPORT (Client-Side e Animado)
+  // 🔥 MUDANÇA OBRIGATÓRIA: Usando { csv, filename }
   const handleExport = async (range: string, format: 'csv' | 'pdf') => {
     setShowExportMenu(false)
     if (!user?.id) return
@@ -354,15 +350,13 @@ function AnalysisContent() {
     setExportStatus('exporting')
     
     try {
-      // Gera o Blob a partir do banco local (usando o range escolhido no dropdown)
-      const blob = await exportTransactionsToCSV(user.id, effectiveContext, range)
-      const filename = `Analise_DFL_${effectiveContext}_${range}dias_${new Date().toISOString().split('T')[0]}.csv`
+      // Usando exportAnalysisToCSV já que estamos na página de análise
+      const { csv, filename } = await exportAnalysisToCSV(user.id, effectiveContext, currentDate)
       
-      await downloadCSV(blob, filename)
+      downloadCSV(csv, filename)
       
       setExportStatus('success')
       
-      // Auto fechar após 5 segundos
       setTimeout(() => {
         setExportStatus('idle')
       }, 5000)
