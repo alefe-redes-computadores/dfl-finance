@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Download } from 'lucide-react'
+import { TrendingUp, TrendingDown, Download, BarChart2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ReportFilterValues } from './ReportFilters'
 import { BlobProvider } from '@react-pdf/renderer'
 import ReportPDF from '@/components/reports/ReportPDF'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface ComparePeriodsProps {
   filters: ReportFilterValues
@@ -14,6 +15,7 @@ interface ComparePeriodsProps {
 
 export default function ComparePeriods({ filters }: ComparePeriodsProps) {
   const { user } = useAuth()
+  const { vibrate, success } = useHapticFeedback()
   const [loading, setLoading] = useState(true)
   const [currentPeriod, setCurrentPeriod] = useState<any[]>([])
   const [previousPeriod, setPreviousPeriod] = useState<any[]>([])
@@ -78,7 +80,7 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
     load()
   }, [user?.id, filters])
 
-  const calc = (arr: any[], type: string) => arr.filter(t => t.type === type).reduce((s, t) => s + t.amount, 0)
+  const calc = (arr: any[], type: string) => arr.filter(t => t.type === type).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
   const curInc = calc(currentPeriod, 'income')
   const curExp = calc(currentPeriod, 'expense')
   const prevInc = calc(previousPeriod, 'income')
@@ -92,37 +94,62 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
   const allTransactions = [...currentPeriod, ...previousPeriod]
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 animate-in fade-in duration-300">
       {loading ? (
         <div className="flex justify-center p-8"><div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>
+      ) : allTransactions.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center py-10 flex flex-col items-center">
+          <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-[18px] flex items-center justify-center mb-3">
+            <BarChart2 size={24} className="text-gray-400" />
+          </div>
+          <p className="text-gray-500 text-sm font-medium">Nenhum dado para os períodos comparados.</p>
+        </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
-              <p className="text-xs text-slate-500 mb-2">Receitas (período atual)</p>
-              <p className="text-lg font-bold text-emerald-600">R$ {curInc.toFixed(2)}</p>
-              <div className="flex items-center mt-2 text-xs">
-                {incDiff >= 0 ? <TrendingUp size={14} className="text-emerald-500 mr-1"/> : <TrendingDown size={14} className="text-red-500 mr-1"/>}
-                <span className={incDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}>{incPerc.toFixed(1)}% vs anterior</span>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Receitas Atuais</p>
+              <p className="text-[18px] font-black text-emerald-600">R$ {curInc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              
+              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${incDiff >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
+                {incDiff >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}
+                {incDiff >= 0 ? '+' : ''}{incPerc.toFixed(1)}% vs anterior
               </div>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
-              <p className="text-xs text-slate-500 mb-2">Despesas (período atual)</p>
-              <p className="text-lg font-bold text-red-600">R$ {curExp.toFixed(2)}</p>
-              <div className="flex items-center mt-2 text-xs">
-                {expDiff <= 0 ? <TrendingDown size={14} className="text-emerald-500 mr-1"/> : <TrendingUp size={14} className="text-red-500 mr-1"/>}
-                <span className={expDiff <= 0 ? 'text-emerald-600' : 'text-red-600'}>{expPerc.toFixed(1)}% vs anterior</span>
+            
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Despesas Atuais</p>
+              <p className="text-[18px] font-black text-red-500">R$ {curExp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              
+              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${expDiff <= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
+                {expDiff <= 0 ? <TrendingDown size={12}/> : <TrendingUp size={12}/>}
+                {expDiff > 0 ? '+' : ''}{expPerc.toFixed(1)}% vs anterior
               </div>
             </div>
           </div>
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3">Resumo comparativo</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Receita anterior</span><span>R$ {prevInc.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Despesa anterior</span><span>R$ {prevExp.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Saldo anterior</span><span>R$ {(prevInc - prevExp).toFixed(2)}</span></div>
-              <hr className="dark:border-slate-700" />
-              <div className="flex justify-between"><span className="text-slate-500">Saldo atual</span><span className={`font-bold ${curInc-curExp >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>R$ {(curInc-curExp).toFixed(2)}</span></div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <h3 className="font-bold text-[14px] text-gray-800 dark:text-gray-200 mb-4">Resumo Comparativo</h3>
+            <div className="space-y-3 bg-gray-50 dark:bg-slate-700/30 p-4 rounded-[16px]">
+              <div className="flex justify-between items-center">
+                <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Receita anterior</span>
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">R$ {prevInc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Despesa anterior</span>
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">R$ {prevExp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Saldo anterior</span>
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">R$ {(prevInc - prevExp).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="h-px bg-gray-200 dark:bg-slate-600 my-2" />
+              <div className="flex justify-between items-center">
+                <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Saldo atual</span>
+                <span className={`text-[15px] font-black ${curInc-curExp >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  R$ {(curInc-curExp).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -142,12 +169,15 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
             >
               {({ url, loading: pdfLoading }: any) => (
                 <button
-                  onClick={() => url && window.open(url, '_blank')}
+                  onClick={() => {
+                    vibrate([10]);
+                    if(url) { success(); window.open(url, '_blank'); }
+                  }}
                   disabled={pdfLoading}
-                  className="w-full mt-4 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[14px] transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 disabled:opacity-50 active:scale-[0.98]"
                 >
-                  <Download size={16} />
-                  {pdfLoading ? 'Gerando PDF...' : 'Exportar PDF'}
+                  <Download size={18} />
+                  {pdfLoading ? 'Gerando PDF...' : 'Exportar Relatório Completo'}
                 </button>
               )}
             </BlobProvider>
