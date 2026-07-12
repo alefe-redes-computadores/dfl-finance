@@ -12,7 +12,6 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-// 🔥 NOVO: Hook de blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Installment = { id: string, financing_id: string, amount: number, due_date: string, paid: boolean, number: number }
@@ -24,7 +23,6 @@ export default function FinancingsPage() {
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
   
-  // 🔥 CORRIGIDO: effectiveContext blindando o vazamento
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   
@@ -59,29 +57,27 @@ export default function FinancingsPage() {
     return acc
   }, {})
 
-  // 🔥 EXCLUSÃO ATÔMICA E SEGURA (Removido db.transaction manual)
+  // 🔥 EXCLUSÃO ATÔMICA E SEGURA
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
       const installments = installmentsByFinancing[deleteModal] || []
       
-      // Apaga todas as parcelas primeiro
       for (const inst of installments) {
         const res1 = await safeDelete('transactions', inst.id)
         if (!res1.success) throw new Error(res1.error)
       }
       
-      // Apaga o financiamento pai
       const res2 = await safeDelete('financings', deleteModal)
       if (!res2.success) throw new Error(res2.error)
 
-      showToast("Financiamento excluído com sucesso!", "success")
       success()
+      showToast("✅ Financiamento excluído com sucesso!", "success")
       setDeleteModal(null)
       reload()
     } catch (err: any) {
-      showToast(`Erro ao excluir financiamento: ${err.message}`, "error")
       errorHaptic()
+      showToast(`❌ Erro ao excluir financiamento: ${err.message}`, "error")
     }
   }
 
