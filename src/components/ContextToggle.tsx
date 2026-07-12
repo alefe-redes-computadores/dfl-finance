@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 type Context = 'dfl' | 'personal'
 
@@ -59,38 +60,46 @@ export function ContextProvider({ children }: { children: React.ReactNode }) {
 export default function ContextToggle() {
   const { context, setContext, appMode } = useContext_()
   const [mounted, setMounted] = useState(false)
+  const { vibrate } = useHapticFeedback()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  const handleToggle = (newContext: Context) => {
+    if (context !== newContext) {
+      vibrate([10])
+      setContext(newContext)
+    }
+  }
+
   if (!mounted) {
-    return <div className="w-[100px] h-[32px] bg-gray-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+    return <div className="w-[120px] h-[36px] bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
   }
 
   if (appMode === 'personal_only') return null
 
   return (
-    <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 gap-1">
+    <div className="inline-flex bg-[#f0f2f5] dark:bg-slate-800/80 backdrop-blur-md rounded-full p-1 gap-1 border border-gray-100 dark:border-slate-700/50 shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)] transition-colors duration-300">
       <button
-        onClick={() => setContext('dfl')}
-        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+        onClick={() => handleToggle('dfl')}
+        className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 active:scale-[0.95] ${
           context === 'dfl'
-            ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
-            : 'text-gray-500 dark:text-gray-400'
+            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
         }`}
       >
-        PJ
+        Empresa
       </button>
       <button
-        onClick={() => setContext('personal')}
-        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+        onClick={() => handleToggle('personal')}
+        className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-all duration-300 active:scale-[0.95] ${
           context === 'personal'
-            ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
-            : 'text-gray-500 dark:text-gray-400'
+            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
         }`}
       >
-        PF
+        Pessoal
       </button>
     </div>
   )
