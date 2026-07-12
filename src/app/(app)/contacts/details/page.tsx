@@ -12,44 +12,24 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
-// 🔥 NOVO: Arquitetura Local-First blindada
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import Skeleton from '@/components/Skeleton'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const ContactDetailSkeleton = () => (
-  <div className="animate-pulse px-4 pt-4 space-y-4">
-    <div className="rounded-2xl p-5 bg-gray-200 dark:bg-slate-700 shadow-lg">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 bg-white/20 rounded-xl" />
+  <div className="animate-pulse px-4 pt-6 space-y-4">
+    <div className="rounded-[28px] p-6 bg-gray-200 dark:bg-slate-700 shadow-sm border border-gray-50 dark:border-slate-700">
+      <div className="flex items-center gap-4 mb-5">
+        <div className="w-14 h-14 bg-white/50 dark:bg-slate-600 rounded-[18px]" />
         <div className="space-y-2">
-          <div className="h-5 w-32 bg-white/20 rounded" />
-          <div className="h-3 w-20 bg-white/10 rounded" />
+          <div className="h-5 w-40 bg-white/50 dark:bg-slate-600 rounded" />
+          <div className="h-3 w-24 bg-white/30 dark:bg-slate-600/50 rounded" />
         </div>
       </div>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-white/20 rounded" />
-          <div className="h-3 w-40 bg-white/10 rounded" />
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-white/20 rounded" />
-          <div className="h-3 w-28 bg-white/10 rounded" />
-        </div>
-      </div>
-    </div>
-    <div className="grid grid-cols-2 gap-3">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 text-center">
-        <div className="w-5 h-5 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
-        <div className="h-3 w-12 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-6 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 text-center">
-        <div className="w-5 h-5 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
-        <div className="h-3 w-12 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-6 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+      <div className="space-y-3">
+        <div className="h-3 w-48 bg-white/30 dark:bg-slate-600/50 rounded" />
+        <div className="h-3 w-32 bg-white/30 dark:bg-slate-600/50 rounded" />
       </div>
     </div>
   </div>
@@ -61,19 +41,18 @@ function ContactDetailContent() {
   const id = searchParams.get('id')
   const { user } = useAuth()
   
-  // 🔥 CORRIGIDO: effectiveContext
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   
   const { showToast } = useToast()
   const { safeDelete } = useSafeDb()
+  const { vibrate, success, error: errorHaptic } = useHapticFeedback()
 
   const [refreshing, setRefreshing] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  // 🔥 LENDO DADOS 100% LOCAL-FIRST OFFLINE
   const { data: contacts, loading: contactsLoading, reload: reloadContacts } = useLocalData({
     table: 'contacts' as any,
     filters: { context: effectiveContext }
@@ -89,12 +68,10 @@ function ContactDetailContent() {
     filters: { context: effectiveContext }
   })
 
-  // Encontra o contato específico
   const contact = useMemo(() => {
     return contacts?.find((c: any) => c.id === id)
   }, [contacts, id])
 
-  // Filtra as transações desse contato e mescla com a categoria para exibir o ícone (Offline-First)
   const transactions = useMemo(() => {
     if (!allTransactions || !contact) return []
     
@@ -102,25 +79,18 @@ function ContactDetailContent() {
       .filter((tx: any) => tx.contact_id === contact.id)
       .map((tx: any) => {
         const category = categories?.find((c: any) => c.id === tx.category_id)
-        return {
-          ...tx,
-          categories: category || null
-        }
+        return { ...tx, categories: category || null }
       })
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 20) // Limita as últimas 20 para performance
+      .slice(0, 20)
   }, [allTransactions, contact, categories])
 
   const totalToPay = useMemo(() => {
-    return transactions
-      .filter((t: any) => t.type === 'expense' && t.status === 'pending')
-      .reduce((acc, t: any) => acc + Number(t.amount), 0)
+    return transactions.filter((t: any) => t.type === 'expense' && t.status === 'pending').reduce((acc, t: any) => acc + Number(t.amount), 0)
   }, [transactions])
 
   const totalToReceive = useMemo(() => {
-    return transactions
-      .filter((t: any) => t.type === 'income' && t.status === 'pending')
-      .reduce((acc, t: any) => acc + Number(t.amount), 0)
+    return transactions.filter((t: any) => t.type === 'income' && t.status === 'pending').reduce((acc, t: any) => acc + Number(t.amount), 0)
   }, [transactions])
 
 
@@ -136,13 +106,12 @@ function ContactDetailContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
+      vibrate([10])
       Promise.all([reloadContacts(), reloadTxs()]).finally(() => setRefreshing(false))
     }
   }
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  const handleTouchEnd = () => { isPulling.current = false }
 
   useEffect(() => {
     const container = containerRef.current
@@ -164,24 +133,25 @@ function ContactDetailContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  // 🔥 DELETE ATÔMICO 100% BLINDADO
   const handleDelete = async () => {
     if (!contact) return
+    vibrate([10, 50])
     if (!confirm('Excluir este contato? As transações vinculadas continuarão existindo sem contato vinculado.')) return
     
     try {
       const result = await safeDelete('contacts', contact.id)
       if (!result.success) throw new Error(result.error)
 
-      showToast('Contato excluído com sucesso.', 'success')
+      success()
+      showToast('🗑️ Contato excluído com sucesso.', 'success')
       router.push('/contacts')
     } catch(err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+      errorHaptic()
+      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
     }
   }
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const getTypeLabel = (type: string) => {
     switch (type) {
@@ -194,27 +164,17 @@ function ContactDetailContent() {
     }
   }
 
-  // Se tá carregando pela primeira vez, mostra Skeleton
   if (contactsLoading && !contact) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-        <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-4 animate-pulse">
-            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
-              <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
-            </div>
-          </div>
-          <div className="h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans pb-24 transition-colors duration-300">
+        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl px-4 pt-6 pb-4 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0">
+          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
         </div>
         <ContactDetailSkeleton />
       </div>
     )
   }
 
-  // Se carregou e não achou, volta pra lista
   if (!contactsLoading && !contact) {
     router.push('/contacts')
     return null
@@ -223,28 +183,28 @@ function ContactDetailContent() {
   const IconComp = getDynamicIcon(contact.icon || (contact.type === 'company' ? 'Building2' : 'User'))
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
+      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl px-4 pt-6 pb-4 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push('/contacts')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+          <button onClick={() => { vibrate([5]); router.push('/contacts'); }} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors active:scale-95">
             <ChevronLeft size={24} />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 truncate flex-1 text-center">{contact.name}</h1>
-          <div className="flex items-center gap-2">
-            <button onClick={() => router.push(`/contacts/new?edit=${contact.id}`)} className="p-2 text-gray-400 hover:text-teal-600 transition-colors">
+          <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100 truncate flex-1 text-center">{contact.name}</h1>
+          <div className="flex items-center gap-1">
+            <button onClick={() => { vibrate([5]); router.push(`/contacts/new?edit=${contact.id}`); }} className="p-2.5 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 active:scale-95 transition-transform">
               <Edit3 size={18} />
             </button>
-            <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+            <button onClick={handleDelete} className="p-2.5 rounded-full bg-red-50 dark:bg-red-500/10 text-red-500 active:scale-95 transition-transform">
               <Trash2 size={18} />
             </button>
           </div>
@@ -252,32 +212,36 @@ function ContactDetailContent() {
         <ContextToggle />
       </div>
 
-      <div className="px-4 pt-4 space-y-4">
+      <div className="px-4 pt-5 space-y-4 animate-in fade-in duration-300">
         {/* Card principal */}
-        <div className="rounded-2xl p-5 text-white shadow-lg animate-in fade-in duration-300" style={{ backgroundColor: contact.color || '#14b8a6' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <IconComp size={24} />
+        <div className="rounded-[28px] p-6 text-white shadow-lg relative overflow-hidden" style={{ backgroundColor: contact.color || '#0f766e' }}>
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <IconComp size={100} />
+          </div>
+          
+          <div className="flex items-center gap-4 mb-5 relative z-10">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[18px] flex items-center justify-center border border-white/20">
+              <IconComp size={24} className="text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="font-bold text-lg truncate">{contact.name}</h2>
-              <p className="text-white/70 text-xs">{getTypeLabel(contact.type)}</p>
+              <h2 className="font-black text-[20px] truncate leading-tight">{contact.name}</h2>
+              <p className="text-white/80 font-medium text-[12px] uppercase tracking-widest mt-0.5">{getTypeLabel(contact.type)}</p>
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5 bg-black/10 backdrop-blur-md p-4 rounded-[20px] relative z-10 border border-white/10">
             {contact.email && (
-              <div className="flex items-center gap-2 text-white/80 text-sm">
-                <Mail size={14} /> <span className="truncate">{contact.email}</span>
+              <div className="flex items-center gap-3 text-white/90 text-[13px] font-medium">
+                <Mail size={16} className="text-white/70" /> <span className="truncate">{contact.email}</span>
               </div>
             )}
             {contact.phone && (
-              <div className="flex items-center gap-2 text-white/80 text-sm">
-                <Phone size={14} /> {contact.phone}
+              <div className="flex items-center gap-3 text-white/90 text-[13px] font-medium">
+                <Phone size={16} className="text-white/70" /> {contact.phone}
               </div>
             )}
             {contact.company && contact.type !== 'company' && (
-              <div className="flex items-center gap-2 text-white/80 text-sm">
-                <Building size={14} /> <span className="truncate">{contact.company}</span>
+              <div className="flex items-center gap-3 text-white/90 text-[13px] font-medium">
+                <Building size={16} className="text-white/70" /> <span className="truncate">{contact.company}</span>
               </div>
             )}
           </div>
@@ -285,37 +249,48 @@ function ContactDetailContent() {
 
         {/* Resumo financeiro */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 text-center">
-            <ArrowDown size={18} className="text-red-500 mx-auto mb-1" />
-            <p className="text-[10px] text-gray-400 font-bold">A Pagar</p>
-            <p className="text-lg font-bold text-red-600">{formatCurrency(totalToPay)}</p>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center">
+            <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mx-auto mb-2">
+              <ArrowDown size={18} className="text-red-500" />
+            </div>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">A Pagar</p>
+            <p className="text-[18px] font-black text-red-500">{formatCurrency(totalToPay)}</p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 text-center">
-            <ArrowUp size={18} className="text-emerald-500 mx-auto mb-1" />
-            <p className="text-[10px] text-gray-400 font-bold">A Receber</p>
-            <p className="text-lg font-bold text-emerald-600">{formatCurrency(totalToReceive)}</p>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
+              <ArrowUp size={18} className="text-emerald-500" />
+            </div>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">A Receber</p>
+            <p className="text-[18px] font-black text-emerald-600">{formatCurrency(totalToReceive)}</p>
           </div>
         </div>
 
+        {contact.notes && (
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <h3 className="font-bold text-[14px] text-gray-800 dark:text-gray-200 mb-2">Observações Internas</h3>
+            <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-slate-700/30 p-3 rounded-[16px]">{contact.notes}</p>
+          </div>
+        )}
+
         {/* Transações vinculadas */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden animate-in fade-in duration-300">
-          <div className="flex justify-between items-center px-5 py-4 border-b border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200">Transações</h3>
+        <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+          <div className="flex justify-between items-center px-6 py-5 border-b border-gray-50 dark:border-slate-700/50">
+            <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-200">Últimas Transações</h3>
             <button
-              onClick={() => router.push(`/transactions/new?contact_id=${contact.id}`)}
-              className="text-teal-700 dark:text-teal-400 p-1 hover:text-teal-800 transition-colors active:scale-90"
+              onClick={() => { vibrate([5]); router.push(`/transactions/new?contact_id=${contact.id}`); }}
+              className="text-teal-700 dark:text-teal-400 p-2 bg-teal-50 dark:bg-teal-900/30 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors active:scale-90"
             >
-              <Plus size={20} />
+              <Plus size={18} />
             </button>
           </div>
           {txLoading ? (
-            <div className="p-6 flex justify-center"><Loader2 size={24} className="animate-spin text-teal-500"/></div>
+            <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-teal-500"/></div>
           ) : transactions.length === 0 ? (
-            <div className="p-6 text-center text-gray-400 text-sm">
-              Nenhuma transação vinculada.
+            <div className="p-8 text-center">
+              <p className="text-gray-400 dark:text-gray-500 text-[13px] font-medium">Nenhuma transação vinculada a este contato.</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50 dark:divide-slate-700">
+            <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
               {transactions.map((tx: any) => {
                 const isIncome = tx.type === 'income'
                 const isPending = tx.status === 'pending'
@@ -324,35 +299,39 @@ function ContactDetailContent() {
                 return (
                   <div
                     key={tx.id}
-                    onClick={() => router.push(`/transactions/details?id=${tx.id}`)}
-                    className={`flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer active:scale-[0.98] ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
+                    onClick={() => { vibrate([5]); router.push(`/transactions/details?id=${tx.id}`); }}
+                    className={`flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer active:scale-[0.98] ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
                       {isPending ? (
-                        <Clock size={14} className="text-orange-500 shrink-0" />
+                        <div className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
+                          <Clock size={12} className="text-orange-500" />
+                        </div>
                       ) : (
-                        <Check size={14} className="text-emerald-500 shrink-0" />
+                        <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                          <Check size={12} className="text-emerald-500" />
+                        </div>
                       )}
                       <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 shadow-sm"
                         style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}20`, color: tx.categories?.color || '#64748b' }}
                       >
-                        <TxIconComp size={14} />
+                        <TxIconComp size={18} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">
                             {tx.description || 'Sem descrição'}
                           </p>
                           {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
                         </div>
-                        <p className="text-[10px] text-gray-400">
+                        <p className="text-[11px] font-medium text-gray-400 mt-0.5">
                           {format(new Date(tx.date), "dd/MM/yy")} • {tx.categories?.name || 'Geral'}
                         </p>
                       </div>
                     </div>
-                    <p className={`text-[14px] font-bold flex-shrink-0 ${isIncome ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {isIncome ? '+' : '-'}{formatCurrency(Number(tx.amount))}
+                    <p className={`text-[15px] font-black flex-shrink-0 ${isIncome ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isIncome ? '+' : '-'}{formatCurrency(Math.abs(Number(tx.amount)))}
                     </p>
                   </div>
                 )
@@ -361,12 +340,6 @@ function ContactDetailContent() {
           )}
         </div>
 
-        {contact.notes && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 animate-in fade-in duration-300">
-            <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 mb-2">Observações</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{contact.notes}</p>
-          </div>
-        )}
       </div>
     </div>
   )
