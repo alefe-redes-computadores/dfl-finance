@@ -16,6 +16,8 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
+// 🔥 Importando useHapticFeedback para feedback tátil
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const BudgetsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
@@ -47,6 +49,8 @@ function BudgetsContent() {
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  // 🔥 Haptic feedback
+  const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
   
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -145,7 +149,7 @@ function BudgetsContent() {
     }
   })
 
-  // 🔥 HANDLERS ATOMICOS COM TRANSACTION
+  // 🔥 HANDLERS ATOMICOS COM TRANSACTION E HAPTIC FEEDBACK
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir este orçamento?')) return
@@ -154,10 +158,12 @@ function BudgetsContent() {
         const result = await safeDelete('budgets', id)
         if (!result.success) throw new Error(result.error)
       })
-      showToast('Orçamento excluído.', 'info')
+      hapticSuccess()
+      showToast('✅ Orçamento excluído!', 'success')
       loadData()
     } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+      hapticError()
+      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
     }
   }
 
@@ -173,10 +179,12 @@ function BudgetsContent() {
         const result = await safeUpdate('budgets', budget.id, payload)
         if (!result.success) throw new Error(result.error)
       })
-      showToast(`Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
+      vibrate([20])
+      showToast(`✅ Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
       loadData()
     } catch (err: any) {
-      showToast(`Erro: ${err.message}`, 'error')
+      hapticError()
+      showToast(`❌ Erro: ${err.message}`, 'error')
     }
   }
 
