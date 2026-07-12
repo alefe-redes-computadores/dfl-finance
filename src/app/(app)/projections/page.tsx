@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Wallet,
-  Calendar, BarChart3, LineChart, AlertCircle, Info
+  Calendar, BarChart3, LineChart, AlertCircle, Info, Loader2
 } from 'lucide-react'
 import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -14,6 +13,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 import {
   AreaChart,
@@ -30,24 +30,16 @@ import {
 const ProjectionsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     <div className="grid grid-cols-3 gap-3">
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+          <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
+          <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
+          <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
+        </div>
+      ))}
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="flex items-center justify-between mb-4">
         <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
         <div className="flex gap-2">
@@ -59,7 +51,7 @@ const ProjectionsSkeleton = () => (
       <div className="h-[220px] bg-gray-100 dark:bg-slate-700/50 rounded-xl" />
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
       <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       {[1, 2, 3, 4, 5].map((i) => (
         <div key={i} className="flex items-center justify-between p-2 border-b border-gray-50 dark:border-slate-700 last:border-0">
@@ -77,15 +69,17 @@ export default function ProjectionsPage() {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
   
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [projections, setProjections] = useState<any[]>([])
+  const [isChangingScenario, setIsChangingScenario] = useState(false)
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m')
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
-  const { data: localTransactions, loading: txLoading, syncing: txSyncing, reload: reloadTransactions } = useLocalData({
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
@@ -106,7 +100,9 @@ export default function ProjectionsPage() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
+      loadData().finally(() => {
+        setTimeout(() => setRefreshing(false), 400)
+      })
     }
   }
 
@@ -136,34 +132,31 @@ export default function ProjectionsPage() {
       await reloadTransactions()
     } catch (err) {
       console.error('Erro ao carregar transações:', err)
+      hapticError()
     } finally {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [user?.id, reloadTransactions])
+  }, [user?.id, reloadTransactions, hapticError])
 
-  useEffect(() => {
-    if (!localTransactions || localTransactions.length === 0) {
-      setProjections([])
-      setLoading(false)
-      setLoadingPulse(false)
-      return
+  // 🔥 CÁLCULO DE PROJEÇÃO COM BLINDAGEM
+  const processedProjections = useMemo(() => {
+    const txs = localTransactions || []
+    
+    if (txs.length === 0) {
+      return []
     }
 
     const endDate = new Date()
     const startDate = subMonths(endDate, 6)
 
-    // 🔥 FILTRA TRANSAÇÕES E IGNORA COMPLETAMENTE AS TRANSFERÊNCIAS
-    const filtered = localTransactions.filter((tx: any) => {
+    const filtered = txs.filter((tx: any) => {
       const txDate = new Date(tx.date)
       return txDate >= startDate && txDate <= endDate && tx.type !== 'transfer'
     })
 
     if (filtered.length === 0) {
-      setProjections([])
-      setLoading(false)
-      setLoadingPulse(false)
-      return
+      return []
     }
 
     const months = new Map()
@@ -174,9 +167,9 @@ export default function ProjectionsPage() {
       }
       const data = months.get(month)
       if (tx.type === 'income') {
-        data.income += Number(tx.amount)
+        data.income += Number(tx.amount) || 0
       } else if (tx.type === 'expense') {
-        data.expense += Number(tx.amount)
+        data.expense += Number(tx.amount) || 0
       }
     })
 
@@ -187,16 +180,15 @@ export default function ProjectionsPage() {
       totalExpense += data.expense
     })
 
-    const avgIncome = totalIncome / months.size
-    const avgExpense = totalExpense / months.size
+    const avgIncome = months.size > 0 ? totalIncome / months.size : 0
+    const avgExpense = months.size > 0 ? totalExpense / months.size : 0
 
-    // 🔥 SALDO ATUAL DO PERÍODO
     let currentBalance = 0
     filtered.forEach((tx: any) => {
       if (tx.type === 'income') {
-        currentBalance += Number(tx.amount)
+        currentBalance += Number(tx.amount) || 0
       } else if (tx.type === 'expense') {
-        currentBalance -= Number(tx.amount)
+        currentBalance -= Number(tx.amount) || 0
       }
     })
 
@@ -206,7 +198,6 @@ export default function ProjectionsPage() {
 
     for (let i = 0; i <= monthsToProject; i++) {
       const date = addMonths(new Date(), i)
-      const monthKey = format(date, 'yyyy-MM')
       const monthLabel = format(date, "MMM 'yy", { locale: ptBR })
 
       let income = avgIncome
@@ -223,7 +214,7 @@ export default function ProjectionsPage() {
       balance += income - expense
 
       projectionData.push({
-        month: monthKey,
+        month: format(date, 'yyyy-MM'),
         label: monthLabel,
         income: income,
         expense: expense,
@@ -232,16 +223,36 @@ export default function ProjectionsPage() {
       })
     }
 
-    setProjections(projectionData)
+    return projectionData
+  }, [localTransactions, period, scenario])
+
+  // Atualiza projeções quando os dados mudam
+  useEffect(() => {
+    setProjections(processedProjections)
     setLoading(false)
     setLoadingPulse(false)
-  }, [localTransactions, period, scenario])
+    setIsChangingScenario(false)
+  }, [processedProjections])
 
   useEffect(() => {
     if (user?.id && context) {
       loadData()
     }
   }, [user?.id, context, loadData])
+
+  const handleScenarioChange = (newScenario: typeof scenario) => {
+    if (newScenario === scenario) return
+    setIsChangingScenario(true)
+    vibrate([10])
+    setScenario(newScenario)
+  }
+
+  const handlePeriodChange = (newPeriod: typeof period) => {
+    if (newPeriod === period) return
+    setIsChangingScenario(true)
+    vibrate([10])
+    setPeriod(newPeriod)
+  }
 
   const periods = [
     { key: '3m', label: '3 meses' },
@@ -280,17 +291,18 @@ export default function ProjectionsPage() {
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors active:scale-[0.95]">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
             <LineChart size={20} className="text-teal-500" />
             Projeções
           </h1>
-          <button            onClick={loadData}
-            className="p-2 text-gray-400 hover:text-teal-600 transition-colors"
+          <button
+            onClick={loadData}
+            className="p-2 text-gray-400 hover:text-teal-600 transition-colors active:scale-[0.95]"
           >
-            <RefreshCw size={20} className={loadingPulse ? 'animate-spin' : ''} />
+            <RefreshCw size={20} className={loadingPulse || isChangingScenario ? 'animate-spin' : ''} />
           </button>
         </div>
         <ContextToggle />
@@ -302,8 +314,8 @@ export default function ProjectionsPage() {
             {periods.map(p => (
               <button
                 key={p.key}
-                onClick={() => setPeriod(p.key as any)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                onClick={() => handlePeriodChange(p.key as any)}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-[0.95] ${
                   period === p.key
                     ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
                     : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -321,8 +333,8 @@ export default function ProjectionsPage() {
               return (
                 <button
                   key={s.key}
-                  onClick={() => setScenario(s.key as any)}
-                  className={`px-2 py-1.5 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 ${
+                  onClick={() => handleScenarioChange(s.key as any)}
+                  className={`px-2 py-1.5 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 active:scale-[0.95] ${
                     isActive
                       ? s.color
                       : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -336,7 +348,7 @@ export default function ProjectionsPage() {
           </div>
         </div>
 
-        {loading ? (
+        {loading || isChangingScenario ? (
           <ProjectionsSkeleton />
         ) : projections.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
@@ -349,7 +361,7 @@ export default function ProjectionsPage() {
             </p>
             <button
               onClick={() => router.push('/transactions/new')}
-              className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors"
+              className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors active:scale-[0.95] shadow-md shadow-teal-700/20"
             >
               Adicionar transação
             </button>
@@ -357,7 +369,7 @@ export default function ProjectionsPage() {
         ) : (
           <div className="space-y-4 animate-in fade-in duration-300">
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+              <div className="bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
                 <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
                   <Wallet size={16} className="text-teal-600 dark:text-teal-400" />
                 </div>
@@ -366,7 +378,7 @@ export default function ProjectionsPage() {
                   {formatCurrency(currentData.balance)}
                 </p>
               </div>
-              <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+              <div className="bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
                 <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
                   <TrendingUp size={16} className="text-emerald-600 dark:text-emerald-400" />
                 </div>
@@ -375,7 +387,7 @@ export default function ProjectionsPage() {
                   {formatCurrency(futureData.balance)}
                 </p>
               </div>
-              <div className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border text-center ${
+              <div className={`bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border text-center ${
                 variation >= 0 
                   ? 'border-emerald-200 dark:border-emerald-800' 
                   : 'border-red-200 dark:border-red-800'
@@ -390,7 +402,7 @@ export default function ProjectionsPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2">
                   <LineChart size={16} className="text-gray-400" />
@@ -443,7 +455,7 @@ export default function ProjectionsPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2">
                   <Calendar size={16} className="text-gray-400" />
@@ -483,3 +495,4 @@ export default function ProjectionsPage() {
     </div>
   )
 }
+// ✅ Refatoração Premium Finalizada — Projeções
