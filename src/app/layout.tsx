@@ -1,29 +1,36 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import './globals.css'
-import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/contexts/ToastContext'
-import { DeepLinkListener } from '@/components/DeepLinkListener'
 
+// Configuração oficial da Fonte Poppins
 const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700', '800'],
   variable: '--font-poppins',
   display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'DFL Finance',
-  description: 'Gestão financeira completa',
-  manifest: '/manifest.json',
+  title: 'Meu App Financeiro',
+  description: 'Controle de Finanças Premium',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'DFL Finance',
+    title: 'Meu App',
   },
-  icons: {
-    apple: '/icon-192x192.png',
-  },
+}
+
+// 🔥 ISSO IMPEDE O ZOOM NO IPHONE AO CLICAR EM INPUTS
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8f9fa' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+  ],
 }
 
 export default function RootLayout({
@@ -32,23 +39,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" className={poppins.variable}>
-      <head>
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="DFL Finance" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#0f172a" />
-      </head>
-      <body className="antialiased bg-gray-50 dark:bg-slate-900">
-        <ThemeProvider>
-          <ToastProvider>
-            <DeepLinkListener />
-            {children}
-          </ToastProvider>
-        </ThemeProvider>
+    <html lang="pt-BR" className={`${poppins.variable} font-sans antialiased`} suppressHydrationWarning>
+      <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen selection:bg-teal-500/30">
+        <ToastProvider>
+          {children}
+        </ToastProvider>
       </body>
     </html>
   )
