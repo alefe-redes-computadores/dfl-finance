@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, Wallet, Clock, Flame, Gauge, Percent, DollarSign } from 'lucide-react'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface KPICardProps {
   title: string
@@ -45,6 +46,7 @@ function KPICardComponent({
   formatter 
 }: KPICardProps) {
   const [displayValue, setDisplayValue] = useState(0)
+  const { vibrate } = useHapticFeedback()
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,18 +65,19 @@ function KPICardComponent({
     return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  const formattedValue = formatValue(displayValue)
-
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 transition-all hover:shadow-md">
+    <div 
+      className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-all hover:shadow-md active:scale-[0.98]"
+      onClick={() => vibrate([5])}
+    >
       <div className="flex items-center justify-between mb-3">
         <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{title}</p>
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${colorClass}`}>
+        <div className={`w-8 h-8 rounded-[12px] flex items-center justify-center ${colorClass}`}>
           <Icon size={16} />
         </div>
       </div>
-      <p className="text-2xl font-black text-gray-800 dark:text-gray-100 tracking-tight">
-        {prefix}{formattedValue}{suffix}
+      <p className="text-[22px] font-black text-gray-800 dark:text-gray-100 tracking-tight">
+        {prefix}{formatValue(displayValue)}{suffix}
       </p>
       {subtitle && (
         <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-1">{subtitle}</p>
@@ -83,5 +86,4 @@ function KPICardComponent({
   )
 }
 
-// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
 export default React.memo(KPICardComponent)
