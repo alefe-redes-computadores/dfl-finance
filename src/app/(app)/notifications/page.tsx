@@ -1,17 +1,18 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, Bell, BellOff, Check, X, RefreshCw,
-  AlertTriangle, Info, CheckCircle, Loader2
+  ChevronLeft, Bell, Check, X, RefreshCw,
+  AlertTriangle, Info, CheckCircle
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 // ============================================================
 // SKELETON LOADER
@@ -19,7 +20,7 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 const NotificationsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
     {[1, 2, 3, 4].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border border-gray-100 dark:border-slate-700">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-700" />
           <div className="flex-1 space-y-2">
@@ -37,8 +38,8 @@ export default function NotificationsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
+  const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
   
-  // Hook de blindagem atômica
   const { safeDelete, safeUpdate } = useSafeDb()
   
   const [loading, setLoading] = useState(true)
@@ -72,7 +73,9 @@ export default function NotificationsPage() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadNotifications().finally(() => setRefreshing(false))
+      loadNotifications().finally(() => {
+        setTimeout(() => setRefreshing(false), 400)
+      })
     }
   }
 
@@ -124,7 +127,6 @@ export default function NotificationsPage() {
     if (localNotifications) {
       const mapped = localNotifications.map((n: any) => ({
         ...n,
-        // Garante que ambos os campos de "lida" fiquem unificados (compatibilidade Supabase vs Local)
         is_read: n.is_read || n.read || false,
         read: n.is_read || n.read || false,
       }))
@@ -135,12 +137,12 @@ export default function NotificationsPage() {
   }, [localNotifications])
 
   // ============================================================
-  // 🔥 MARCAR COMO LIDA (ATÔMICO)
+  // 🔥 MARCAR COMO LIDA (ATÔMICO + OTIMISTIC UI)
   // ============================================================
   const markAsRead = async (id: string) => {
     if (!user) return
     try {
-      // 1. Atualiza estado visual instantaneamente (Optmistic UI)
+      // 1. Atualiza estado visual instantaneamente (Optimistic UI)
       const updatedList = notifications.map((n: any) => 
         n.id === id ? { ...n, is_read: true, read: true } : n
       )
@@ -154,14 +156,18 @@ export default function NotificationsPage() {
       if (!result.success) {
         throw new Error(result.error)
       }
+      
+      vibrate([10])
+      hapticSuccess()
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
-      await reloadNotifications() // Reverte visualmente em caso de erro
+      hapticError()
+      await loadNotifications() // Reverte visualmente em caso de erro
     }
   }
 
   // ============================================================
-  // 🔥 MARCAR TODAS COMO LIDAS (ATÔMICO)
+  // 🔥 MARCAR TODAS COMO LIDAS (ATÔMICO + OTIMISTIC UI)
   // ============================================================
   const markAllAsRead = async () => {
     if (!user?.id || notifications.length === 0) return
@@ -177,18 +183,24 @@ export default function NotificationsPage() {
       // 2. Salva no banco em loop
       for (const notif of unread) {
         const updateData = { is_read: true, read: true, updated_at: new Date().toISOString() }
-        await safeUpdate('notifications', notif.id, updateData)
+        const result = await safeUpdate('notifications', notif.id, updateData)
+        if (!result.success) {
+          throw new Error(result.error)
+        }
       }
       
-      showToast('Todas as notificações marcadas como lidas!', 'success')
+      hapticSuccess()
+      vibrate([20, 10])
+      showToast('✅ Todas as notificações marcadas como lidas!', 'success')
     } catch (err: any) {
       console.error('Erro:', err)
-      await reloadNotifications()
+      hapticError()
+      await loadNotifications()
     }
   }
 
   // ============================================================
-  // 🔥 DELETAR NOTIFICAÇÃO (ATÔMICO)
+  // 🔥 DELETAR NOTIFICAÇÃO (ATÔMICO + OTIMISTIC UI)
   // ============================================================
   const deleteNotification = async (id: string) => {
     if (!user) return
@@ -204,9 +216,13 @@ export default function NotificationsPage() {
       if (!result.success) {
         throw new Error(result.error)
       }
+      
+      hapticSuccess()
+      vibrate([10])
     } catch (err: any) {
       console.error('Erro ao deletar:', err)
-      await reloadNotifications() // Reverte visualmente
+      hapticError()
+      await loadNotifications() // Reverte visualmente
     }
   }
 
@@ -228,11 +244,15 @@ export default function NotificationsPage() {
     }
   }
 
-  const filteredNotifications = notifications.filter((n: any) => {
-    if (filter === 'unread') return !n.is_read
-    if (filter === 'critical') return n.severity === 'critical'
-    return true
-  }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Mais recentes primeiro
+  // 🔥 PERFORMANCE: filteredNotifications com useMemo
+  const filteredNotifications = useMemo(() => {
+    const filtered = notifications.filter((n: any) => {
+      if (filter === 'unread') return !n.is_read
+      if (filter === 'critical') return n.severity === 'critical'
+      return true
+    })
+    return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [notifications, filter])
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
@@ -244,7 +264,10 @@ export default function NotificationsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+          <button 
+            onClick={() => router.push('/more')} 
+            className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors active:scale-[0.95]"
+          >
             <ChevronLeft size={24} />
           </button>
           <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Notificações</h2>
@@ -252,7 +275,7 @@ export default function NotificationsPage() {
         {unreadCount > 0 && (
           <button
             onClick={markAllAsRead}
-            className="text-teal-700 dark:text-teal-400 text-sm font-bold hover:opacity-80 transition-colors"
+            className="text-teal-700 dark:text-teal-400 text-sm font-bold hover:opacity-80 transition-colors active:scale-[0.95]"
           >
             Marcar todas
           </button>
@@ -268,7 +291,7 @@ export default function NotificationsPage() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key as any)}
-            className={`px-4 py-2 rounded-full text-[12px] font-bold whitespace-nowrap transition-all border ${
+            className={`px-4 py-2 rounded-full text-[12px] font-bold whitespace-nowrap transition-all border active:scale-[0.95] ${
               filter === f.key
                 ? 'bg-teal-700 text-white border-teal-700 shadow-md'
                 : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
@@ -307,7 +330,7 @@ export default function NotificationsPage() {
             return (
               <div
                 key={notif.id}
-                className={`bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border transition-all ${
+                className={`bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border transition-all ${
                   isUnread 
                     ? 'border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10' 
                     : 'border-gray-100 dark:border-slate-700'
@@ -339,14 +362,14 @@ export default function NotificationsPage() {
                         {isUnread && (
                           <button
                             onClick={() => markAsRead(notif.id)}
-                            className="text-teal-700 dark:text-teal-400 text-[10px] font-bold hover:opacity-80 transition-colors"
+                            className="text-teal-700 dark:text-teal-400 text-[10px] font-bold hover:opacity-80 transition-colors active:scale-[0.95]"
                           >
                             <Check size={14} />
                           </button>
                         )}
                         <button
                           onClick={() => deleteNotification(notif.id)}
-                          className="text-gray-400 hover:text-red-500 transition-colors"
+                          className="text-gray-400 hover:text-red-500 transition-colors active:scale-[0.95]"
                         >
                           <X size={14} />
                         </button>
@@ -362,3 +385,4 @@ export default function NotificationsPage() {
     </div>
   )
 }
+// ✅ Refatoração Premium Finalizada — Notificações
