@@ -14,12 +14,14 @@ import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
-// 🔥 NOVO: Importando o useSafeDb para blindagem (preparatório)
 import { useSafeDb } from '@/hooks/useSafeDb'
+
+// 🔥 IMPORTANDO OS SERVIÇOS DE EXPORTAÇÃO CORRIGIDOS
+import { exportTransactionsToCSV, exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h4 className="text-[13px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 ml-4 mt-6 tracking-widest">
+    <h4 className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 ml-2 mt-8 tracking-widest flex items-center gap-2">
       {children}
     </h4>
   )
@@ -31,7 +33,8 @@ function MenuItem({
   href,
   disabled = false,
   onClick,
-  badge
+  badge,
+  colorClass = 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30'
 }: {
   iconName: string
   label: string
@@ -39,6 +42,7 @@ function MenuItem({
   disabled?: boolean
   onClick?: () => void
   badge?: string
+  colorClass?: string
 }) {
   const router = useRouter()
   const IconComp = getDynamicIcon(iconName)
@@ -53,35 +57,33 @@ function MenuItem({
   }
 
   const content = (
-    <div className={`flex items-center group w-full transition-all active:scale-[0.98] ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30'}`}>
+    <div className={`flex items-center group w-full transition-all active:scale-[0.98] ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50/80 dark:hover:bg-slate-700/30'}`}>
       <div className="pl-4 py-3">
-        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors ${
-          disabled ? 'bg-gray-100 dark:bg-slate-700 text-gray-400' : 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 group-hover:scale-110'
-        }`}>
-          <IconComp size={20} />
+        <div className={`w-[38px] h-[38px] rounded-2xl flex items-center justify-center transition-transform ${disabled ? 'bg-gray-100 dark:bg-slate-700 text-gray-400' : `${colorClass} group-hover:scale-110`}`}>
+          <IconComp size={18} strokeWidth={2.5} />
         </div>
       </div>
-      <div className="flex-1 flex items-center justify-between pr-4 py-4 ml-4 border-b border-gray-50 dark:border-slate-700/50 group-last:border-0">
+      <div className="flex-1 flex items-center justify-between pr-4 py-4 ml-4 border-b border-gray-100 dark:border-slate-700/50 group-last:border-0">
         <div className="flex-1 min-w-0">
-          <span className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 truncate block">
+          <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200 truncate block">
             {label}
           </span>
           {disabled && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 block">
-              Requer dois contextos (PF e PJ)
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 block font-medium">
+              Requer contexto PJ ativo
             </span>
           )}
         </div>
         <div className="flex items-center gap-3">
           {badge && (
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 flex-shrink-0 animate-pulse">
+            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 flex-shrink-0 animate-pulse">
               {badge}
             </span>
           )}
           {disabled ? (
             <Lock size={16} className="text-gray-300 dark:text-gray-600 flex-shrink-0" />
           ) : (
-            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+            <ChevronRight size={16} className="text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform flex-shrink-0" />
           )}
         </div>
       </div>
@@ -99,34 +101,19 @@ function MenuItem({
   return <button type="button" className="w-full text-left" onClick={handleClick}>{content}</button>
 }
 
+// ... (QuickSettingsModal permanece igual)
 function QuickSettingsModal({
-  isOpen,
-  onClose,
-  theme,
-  toggleTheme,
-  notificationsEnabled,
-  toggleNotifications,
-  appMode,
-  toggleAppMode,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  theme: string
-  toggleTheme: () => void
-  notificationsEnabled: boolean
-  toggleNotifications: () => void
-  appMode: 'personal_only' | 'full' | null
-  toggleAppMode: () => void
-}) {
+  isOpen, onClose, theme, toggleTheme, notificationsEnabled, toggleNotifications, appMode, toggleAppMode,
+}: any) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-[20px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-              <Settings size={24} className="text-teal-700 dark:text-teal-400" />
+            <div className="w-12 h-12 rounded-[20px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+              <Settings size={24} className="text-gray-700 dark:text-gray-300" />
             </div>
             <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Configurações</h3>
           </div>
@@ -136,57 +123,56 @@ function QuickSettingsModal({
         </div>
 
         <div className="space-y-3">
+          {/* Theme Toggle */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                 {theme === 'dark' ? <Moon size={20} className="text-indigo-500" /> : <Sun size={20} className="text-amber-500" />}
               </div>
               <div>
-                <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Modo escuro</p>
-                <p className="text-[12px] text-gray-500 dark:text-gray-400 font-medium">{theme === 'dark' ? 'Ativado' : 'Desativado'}</p>
+                <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Tema Escuro</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{theme === 'dark' ? 'Ativado' : 'Desativado'}</p>
               </div>
             </div>
-            <button onClick={toggleTheme} className={`w-14 h-8 rounded-full relative transition-colors shadow-inner ${theme === 'dark' ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
+            <button onClick={toggleTheme} className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${theme === 'dark' ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
 
+          {/* Notifications Toggle */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                 {notificationsEnabled ? <Bell size={20} className="text-rose-500" /> : <BellOff size={20} className="text-gray-400" />}
               </div>
               <div>
-                <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Notificações</p>
-                <p className="text-[12px] text-gray-500 dark:text-gray-400 font-medium">{notificationsEnabled ? 'Ativadas' : 'Desativadas'}</p>
+                <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Notificações</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{notificationsEnabled ? 'Ativadas' : 'Desativadas'}</p>
               </div>
             </div>
-            <button onClick={toggleNotifications} className={`w-14 h-8 rounded-full relative transition-colors shadow-inner ${notificationsEnabled ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
+            <button onClick={toggleNotifications} className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${notificationsEnabled ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
 
+          {/* App Mode Toggle */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
-                <Building size={20} className="text-teal-500" />
+                <Building size={20} className="text-blue-500" />
               </div>
               <div>
-                <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Modo PF e PJ</p>
-                <p className="text-[12px] text-gray-500 dark:text-gray-400 font-medium">
-                  {appMode === 'full' ? 'Gerenciar PF e PJ' : 'Apenas Pessoa Física'}
+                <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Gestão de Empresas</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                  {appMode === 'full' ? 'Modo PF e PJ' : 'Apenas PF'}
                 </p>
               </div>
             </div>
             <button
               onClick={toggleAppMode}
-              className={`w-14 h-8 rounded-full relative transition-colors shadow-inner ${
-                appMode === 'full' ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
+              className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${appMode === 'full' ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}
             >
-              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${
-                appMode === 'full' ? 'right-1' : 'left-1'
-              }`} />
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${appMode === 'full' ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
         </div>
@@ -200,14 +186,13 @@ export default function MorePage() {
   const { user } = useAuth()
   const { theme, toggleTheme: toggleThemeOriginal } = useTheme()
   const { showToast } = useToast()
-  const { appMode, setAppMode } = useContext_()
-  // 🔥 NOVO: Hook de blindagem (preparatório - mantém consistência)
+  const { appMode, setAppMode, effectiveContext } = useContext_()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [exportRange, setExportRange] = useState('30')
-  const [exportContext, setExportContext] = useState<'dfl' | 'personal'>('dfl')
+  const [exportContext, setExportContext] = useState<'dfl' | 'personal'>('personal')
   const [name, setName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -219,11 +204,13 @@ export default function MorePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('dfl_notifications_enabled')
     setNotificationsEnabled(saved !== 'false')
-  }, [])
+    setExportContext(effectiveContext)
+  }, [effectiveContext])
 
   useEffect(() => {
     if (user?.id) {
@@ -252,30 +239,19 @@ export default function MorePage() {
 
   const toggleAppMode = async () => {
     if (!user?.id) return
-    
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
-    
     setAppMode(newMode)
     localStorage.setItem('dfl_app_mode', newMode)
 
     try {
       const { error } = await supabase
         .from('user_settings')
-        .upsert({
-          user_id: user.id,
-          app_mode: newMode,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
-
+        .upsert({ user_id: user.id, app_mode: newMode, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
       if (error) throw error
-
-      showToast(
-        newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 
-        'success'
-      )
+      showToast(newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 'success')
     } catch (err: any) {
       console.error('Erro de Supabase:', err.message)
-      showToast('Erro ao salvar na nuvem, mas salvo no celular!', 'error')
+      showToast('Alterado apenas localmente.', 'info')
     }
   }
 
@@ -302,7 +278,6 @@ export default function MorePage() {
   const handleCropAndUpload = async () => {
     if (!canvasRef.current) return
     setUploading(true)
-
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     const img = document.createElement('img')
@@ -311,75 +286,85 @@ export default function MorePage() {
       const size = Math.min(img.width, img.height)
       canvas.width = 400
       canvas.height = 400
-      ctx?.drawImage(
-        img,
-        (img.width - size) / 2,
-        (img.height - size) / 2,
-        size,
-        size,
-        0,
-        0,
-        400,
-        400
-      )
+      ctx?.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, 400, 400)
 
       canvas.toBlob(async (blob) => {
         if (!blob) return
         const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
         const filePath = `${user?.id}-${Date.now()}.jpg`
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, file)
+        const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
         
         if (uploadError) {
-          alert('Erro no upload')
+          showToast('Erro no upload da foto', 'error')
           setUploading(false)
           return
         }
         
         const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-        await supabase.auth.updateUser({
-          data: { custom_avatar_url: data.publicUrl }
-        })
+        await supabase.auth.updateUser({ data: { custom_avatar_url: data.publicUrl } })
         
         setUploading(false)
         setShowCropModal(false)
         window.location.reload()
       }, 'image/jpeg')
     }
-
     img.src = selectedImage!
   }
 
-  const handleExport = (type: string) => {
-    if (!user) return
-    const endpoint = type === 'transactions' ? 'export-transactions' : 'export-analysis'
-    const finalContext = appMode === 'personal_only' ? 'personal' : exportContext
-    window.open(`/api/${endpoint}?userId=${user.id}&context=${finalContext}&range=${exportRange}`, '_blank')
-    setShowExportModal(false)
+  // 🔥 EXPORTAÇÃO BLINDADA COM O NOVO MOTOR LOCAL
+  const handleExport = async (type: 'transactions' | 'analysis') => {
+    if (!user?.id) return
+    setExporting(true)
+    
+    try {
+      const finalContext = appMode === 'personal_only' ? 'personal' : exportContext
+      
+      let csvData = ''
+      let fileNameData = ''
+
+      if (type === 'transactions') {
+        const { csv, filename } = await exportTransactionsToCSV(user.id, finalContext, exportRange)
+        csvData = csv
+        fileNameData = filename
+      } else {
+        const { csv, filename } = await exportAnalysisToCSV(user.id, finalContext, new Date())
+        csvData = csv
+        fileNameData = filename
+      }
+
+      downloadCSV(csvData, fileNameData)
+      
+      showToast('Exportação concluída com sucesso!', 'success')
+      setShowExportModal(false)
+    } catch (error: any) {
+      showToast(error.message || 'Erro ao exportar dados.', 'error')
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 px-4 pt-8 font-sans transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
       
-      {/* Indicador de carregamento sutil no canto */}
+      {/* Indicador de carregamento fluido */}
       {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        <div className="fixed top-12 right-6 z-50">
+          <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
         </div>
       )}
 
+      {/* Crop Modal Omitido/Preservado */}
       {showCropModal && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white dark:bg-slate-800 p-6 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
             <h3 className="font-bold text-xl mb-6 text-center text-gray-800 dark:text-gray-100">Ajuste a foto</h3>
             <div className="relative w-full aspect-square bg-gray-100 dark:bg-slate-700 overflow-hidden rounded-[24px] shadow-inner border border-gray-200 dark:border-slate-600">
               {selectedImage && <img src={selectedImage} alt="Crop" className="w-full h-full object-cover" />}
             </div>
             <div className="flex gap-4 mt-6">
-              <button onClick={() => setShowCropModal(false)} className="flex-1 py-4 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-[20px] font-bold transition-colors hover:bg-gray-200 dark:hover:bg-slate-600 active:scale-95">Cancelar</button>
-              <button onClick={handleCropAndUpload} className="flex-1 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 hover:bg-teal-800 transition-colors active:scale-95 flex items-center justify-center gap-2">
-                {uploading ? <RefreshCw size={18} className="animate-spin" /> : null}
+              <button type="button" onClick={() => setShowCropModal(false)} className="flex-1 py-4 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-[20px] font-bold transition-colors hover:bg-gray-200 dark:hover:bg-slate-600 active:scale-95">Cancelar</button>
+              <button type="button" onClick={handleCropAndUpload} className="flex-1 py-4 bg-teal-600 text-white rounded-[20px] font-bold shadow-lg shadow-teal-600/20 hover:bg-teal-700 transition-colors active:scale-95 flex items-center justify-center gap-2">
+                {uploading ? <RefreshCw size={18} className="animate-spin" /> : <Check size={18} />}
                 Salvar Foto
               </button>
             </div>
@@ -388,38 +373,41 @@ export default function MorePage() {
         </div>
       )}
 
+      {/* NOVO MODAL DE EXPORTAÇÃO */}
       {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => !exporting && setShowExportModal(false)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 duration-300" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
                <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Exportar Dados</h3>
-               <button onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20}/></button>
+               <button type="button" onClick={() => setShowExportModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20}/></button>
             </div>
 
             {appMode === 'full' && (
               <>
-                <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Contexto</p>
+                <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 tracking-widest ml-1">Contexto</p>
                 <div className="flex gap-2 mb-6">
                   {(['dfl', 'personal'] as const).map((c) => (
                     <button
                       key={c}
+                      type="button"
                       onClick={() => setExportContext(c)}
-                      className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all active:scale-95 ${exportContext === c ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
+                      className={`flex-1 py-3 rounded-2xl text-[13px] font-bold transition-all active:scale-95 ${exportContext === c ? 'bg-teal-600 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
                     >
-                      {c === 'dfl' ? 'PJ' : 'PF'}
+                      {c === 'dfl' ? 'Empresa (PJ)' : 'Pessoal (PF)'}
                     </button>
                   ))}
                 </div>
               </>
             )}
 
-            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3 tracking-widest">Período</p>
-            <div className="flex gap-2 mb-8">
-              {[{ key: '7', label: '7' }, { key: '14', label: '14' }, { key: '30', label: '30' }, { key: 'total', label: 'Tudo' }].map((opt) => (
+            <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 tracking-widest ml-1">Período</p>
+            <div className="flex gap-2 mb-6">
+              {[{ key: '7', label: '7d' }, { key: '14', label: '14d' }, { key: '30', label: '30d' }, { key: 'total', label: 'Tudo' }].map((opt) => (
                 <button
                   key={opt.key}
+                  type="button"
                   onClick={() => setExportRange(opt.key)}
-                  className={`flex-1 py-3 rounded-2xl text-[14px] font-bold transition-all active:scale-95 ${exportRange === opt.key ? 'bg-teal-700 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
+                  className={`flex-1 py-3 rounded-2xl text-[13px] font-bold transition-all active:scale-95 ${exportRange === opt.key ? 'bg-teal-600 text-white shadow-md' : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'}`}
                 >
                   {opt.label}
                 </button>
@@ -427,13 +415,23 @@ export default function MorePage() {
             </div>
 
             <div className="space-y-3">
-              <button onClick={() => handleExport('transactions')} className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors active:scale-[0.98]">
+              <button type="button" disabled={exporting} onClick={() => handleExport('transactions')} className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-[0.98] disabled:opacity-50">
                 <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
-                   <ReceiptText size={20} className="text-teal-700 dark:text-teal-400" />
+                   {exporting ? <RefreshCw size={20} className="text-emerald-600 animate-spin" /> : <ReceiptText size={20} className="text-emerald-600 dark:text-emerald-400" />}
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Extrato CSV</p>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Lista completa de transações</p>
+                  <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Extrato (Transações)</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Lista completa em CSV</p>
+                </div>
+              </button>
+
+              <button type="button" disabled={exporting} onClick={() => handleExport('analysis')} className="w-full flex items-center gap-4 p-4 rounded-[20px] bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors active:scale-[0.98] disabled:opacity-50">
+                <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
+                   {exporting ? <RefreshCw size={20} className="text-indigo-600 animate-spin" /> : <PieChart size={20} className="text-indigo-600 dark:text-indigo-400" />}
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Análise Consolidada</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Resumo por categorias</p>
                 </div>
               </button>
             </div>
@@ -452,133 +450,144 @@ export default function MorePage() {
         toggleAppMode={toggleAppMode}
       />
 
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[28px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">Mais</h1>
-        <button onClick={() => setShowSettingsModal(true)} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:text-teal-700 dark:hover:text-teal-400 transition-colors active:scale-90">
-          <Settings size={20} />
-        </button>
+      <div className="px-4 pt-4 pb-2">
+        <ContextToggle />
       </div>
 
-      <div className="bg-slate-900 dark:bg-slate-800 rounded-[24px] p-6 mb-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute -right-6 -top-6 w-32 h-32 bg-gradient-to-br from-teal-400 to-emerald-600 rounded-full blur-3xl opacity-20" />
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-[18px] flex items-center justify-center border border-white/10">
-            <Sparkles size={24} className="text-teal-400" />
+      {/* HEADER & PERFIL UNIFICADO */}
+      <div className="px-4 pt-4 mb-6">
+        {profileLoading ? (
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-[28px] flex items-center gap-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-gray-50 dark:border-slate-700/50 animate-pulse">
+            <Skeleton variant="circle" width="56px" height="56px" />
+            <div className="flex-1 space-y-2">
+              <Skeleton variant="text" width="120px" />
+              <Skeleton variant="text" width="180px" />
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-[17px] tracking-wide">DFL Finance <span className="text-teal-400 ml-1">PRO</span></h3>
-            <p className="text-[12px] text-gray-400 font-medium mt-0.5">Gestão de alto nível, 100% gratuita.</p>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-[28px] flex items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-50 dark:border-slate-700/50 animate-in fade-in duration-300">
+            <div className="relative w-[56px] h-[56px] shrink-0 group">
+              <img
+                src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'}
+                className={`w-full h-full rounded-[20px] object-cover shadow-sm transition-all ${uploading ? 'opacity-50' : 'opacity-100 group-hover:scale-105'}`}
+                alt="Perfil"
+              />
+              <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[20px] cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+                <Camera size={18} className="text-white" />
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
+              </label>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {isEditing ? (
+                <div className="flex items-center gap-2 mb-1">
+                  <input value={name} onChange={(e) => setName(e.target.value)} className="bg-gray-100 dark:bg-slate-700 dark:text-gray-200 px-3 py-1.5 rounded-xl text-[14px] w-full outline-none font-bold focus:ring-2 focus:ring-teal-500/20" autoFocus />
+                  <button type="button" onClick={saveName} className="bg-teal-600 text-white p-2 rounded-xl shadow-md active:scale-90 transition-transform"><Check size={16} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h2 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 truncate tracking-tight">{name || 'Usuário'}</h2>
+                  {!isGoogleLogin && (
+                    <button type="button" onClick={() => setIsEditing(true)} className="text-gray-400 dark:text-gray-500 hover:text-teal-600 transition-colors flex-shrink-0"><Edit2 size={12} /></button>
+                  )}
+                </div>
+              )}
+              <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+            </div>
+            
+            {/* Botão de Configurações incorporado no Card de Perfil */}
+            <button type="button" onClick={() => setShowSettingsModal(true)} className="w-10 h-10 bg-gray-50 dark:bg-slate-700 rounded-[14px] flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 hover:text-teal-600 transition-colors flex-shrink-0 active:scale-95">
+              <Settings size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* COMPACT PREMIUM STRIP */}
+        <div className="mt-4 bg-gradient-to-r from-teal-500 to-emerald-600 rounded-[20px] p-0.5 shadow-lg shadow-teal-500/20 relative overflow-hidden group cursor-default">
+          <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="bg-slate-900/10 dark:bg-slate-900/40 backdrop-blur-md rounded-[18px] px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Sparkles size={16} className="text-teal-100" />
+              <div>
+                <h3 className="font-bold text-[13px] text-white tracking-wide">DFL Finance <span className="text-teal-200">PRO</span></h3>
+                <p className="text-[10px] text-teal-50 font-medium opacity-90">Gestão premium, 100% gratuita.</p>
+              </div>
+            </div>
+            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+              <Building size={14} className="text-white" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Perfil com Skeleton Loader */}
-      {profileLoading ? (
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-pulse">
-          <Skeleton variant="circle" width="64px" height="64px" />
-          <div className="flex-1 space-y-2">
-            <Skeleton variant="text" width="140px" />
-            <Skeleton variant="text" width="200px" />
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] flex items-center gap-5 mb-8 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-in fade-in duration-300">
-          <div className="relative w-16 h-16 shrink-0 group">
-            <img
-              src={user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '/avatar.png'}
-              className={`w-full h-full rounded-[20px] object-cover shadow-sm transition-all ${uploading ? 'opacity-50' : 'opacity-100 group-hover:scale-105'}`}
-              alt="Perfil"
-            />
-            <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[20px] cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
-              <Camera size={20} className="text-white" />
-              <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
-            </label>
-          </div>
-
-          <div className="flex-1 min-w-0">
-            {isEditing ? (
-              <div className="flex items-center gap-2 mb-1">
-                <input value={name} onChange={(e) => setName(e.target.value)} className="bg-gray-100 dark:bg-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl text-[15px] w-full outline-none font-bold focus:ring-2 focus:ring-teal-500/20" autoFocus />
-                <button onClick={saveName} className="bg-teal-700 text-white p-2.5 rounded-xl shadow-md active:scale-90 transition-transform"><Check size={18} /></button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 mb-0.5">
-                <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 truncate tracking-tight">{name || 'Usuário'}</h2>
-                {!isGoogleLogin && (
-                  <button onClick={() => setIsEditing(true)} className="text-gray-400 dark:text-gray-500 hover:text-teal-700 transition-colors flex-shrink-0 p-1"><Edit2 size={14} /></button>
-                )}
-              </div>
-            )}
-            <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="px-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
+        {/* Soft UI Sections */}
         <div>
           <SectionTitle>Organizar</SectionTitle>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
-            <MenuItem iconName="wallet" label="Contas" href="/accounts" />
-            <MenuItem iconName="credit-card" label="Cartões de Crédito" href="/cards" />
-            <MenuItem iconName="tags" label="Categorias" href="/categories" />
-            <MenuItem iconName="hash" label="Tags" href="/tags" />
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <MenuItem iconName="wallet" label="Contas" href="/accounts" colorClass="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
+            <MenuItem iconName="credit-card" label="Cartões de Crédito" href="/cards" colorClass="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30" />
+            <MenuItem iconName="tags" label="Categorias" href="/categories" colorClass="text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30" />
+            <MenuItem iconName="hash" label="Tags" href="/tags" colorClass="text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700" />
           </div>
         </div>
 
         <div>
           <SectionTitle>Planejar</SectionTitle>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
-            <MenuItem iconName="pie-chart" label="Orçamento" href="/budgets" />
-            <MenuItem iconName="target" label="Metas" href="/goals" />
-            <MenuItem iconName="trending-up" label="Projeções" href="/projections" />
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <MenuItem iconName="pie-chart" label="Orçamento" href="/budgets" colorClass="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />
+            <MenuItem iconName="target" label="Metas e Caixinhas" href="/goals" colorClass="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30" />
+            <MenuItem iconName="trending-up" label="Projeções" href="/projections" colorClass="text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30" />
           </div>
         </div>
 
         <div>
           <SectionTitle>Acompanhar</SectionTitle>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
-            <MenuItem iconName="repeat" label="Assinaturas" href="/subscriptions" />
-            <MenuItem iconName="file-text" label="Financiamentos" href="/financings" />
-            <MenuItem iconName="users" label="Quem me deve" href="/debts" />
-            <MenuItem iconName="users" label="Contatos" href="/contacts" />
-            <MenuItem 
-              iconName="arrow-right-left" 
-              label={appMode === 'personal_only' ? 'Empréstimos entre Contextos' : 'Empréstimos entre Contextos'} 
-              href={appMode === 'personal_only' ? undefined : '/loans'}
-              disabled={appMode === 'personal_only'}
-            />
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <MenuItem iconName="repeat" label="Recorrências" href="/subscriptions" colorClass="text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30" />
+            <MenuItem iconName="file-text" label="Financiamentos" href="/financings" colorClass="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30" />
+            <MenuItem iconName="users" label="Quem me deve" href="/debts" colorClass="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30" />
+            <MenuItem iconName="arrow-right-left" label="Empréstimos PF/PJ" href={appMode === 'full' ? '/loans' : undefined} disabled={appMode === 'personal_only'} colorClass="text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30" />
           </div>
         </div>
 
         <div>
           <SectionTitle>Analisar</SectionTitle>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
-            <MenuItem iconName="bar-chart" label="Relatório Personalizado" href="/analysis" />
-            <MenuItem iconName="pie-chart" label="Relatórios Avançados" href="/reports" />
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <MenuItem iconName="bar-chart" label="Relatório Personalizado" href="/analysis" colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30" />
+            <MenuItem iconName="pie-chart" label="Relatórios Avançados" href="/reports" colorClass="text-fuchsia-600 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-900/30" badge="Pro" />
           </div>
         </div>
 
         <div>
           <SectionTitle>Ferramentas</SectionTitle>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
-            <MenuItem iconName="bot" label="Assistente IA" href="/assistant" badge="Novo" />
-            <MenuItem iconName="check-square" label="Conciliação Inteligente" href="/conciliation" badge="Novo" />
-            <MenuItem iconName="image" label="Importar Comprovante" href="/import" />
-            <MenuItem iconName="image" label="Galeria de Comprovantes" href="/receipts" />
-            <MenuItem iconName="file-spreadsheet" label="Importar Extrato CSV" href="/import-csv" />
-            <MenuItem iconName="download" label="Exportar Dados" onClick={() => setShowExportModal(true)} />
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <MenuItem iconName="bot" label="Assistente IA" href="/assistant" badge="Novo" colorClass="text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30" />
+            <MenuItem iconName="check-square" label="Conciliação Inteligente" href="/conciliation" colorClass="text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30" />
+            <MenuItem iconName="image" label="Importar Comprovante" href="/import" colorClass="text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
+            <MenuItem iconName="file-spreadsheet" label="Importar Extrato (CSV)" href="/import-csv" colorClass="text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />
+            <MenuItem iconName="download" label="Exportar Dados" onClick={() => setShowExportModal(true)} colorClass="text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700" />
           </div>
         </div>
+
       </div>
-      <button
-        onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
-        className="w-full mt-10 mb-6 flex items-center justify-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[20px] transition-colors font-bold text-[15px] active:scale-[0.98]"
-      >
-        <LogOut size={20} /> Encerrar Sessão
-      </button>
+
+      <div className="px-4 mt-10 mb-8">
+        <button
+          type="button"
+          onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
+          className="w-full flex items-center justify-center gap-2 p-4 bg-white dark:bg-slate-800 border border-red-100 dark:border-red-900/50 text-red-500 dark:text-red-400 rounded-[24px] transition-colors font-bold text-[14px] shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-[0.98]"
+        >
+          <LogOut size={18} strokeWidth={2.5} /> Sair do Aplicativo
+        </button>
+      </div>
       
-      <p className="text-center text-[11px] text-gray-400 font-medium pb-8">Versão 4.0.0 • DFL Finance</p>
+      {/* Assinatura Álefe */}
+      <div className="text-center pb-8 opacity-70">
+        <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1">DFL Finance • v4.0.0</p>
+        <p className="text-[10px] text-gray-500 font-medium">Desenvolvido com ♥ por <span className="font-bold text-teal-600 dark:text-teal-400">Álefe Jôhsefe</span></p>
+      </div>
     </div>
   )
 }
