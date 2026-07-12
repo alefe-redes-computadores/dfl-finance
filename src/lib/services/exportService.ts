@@ -14,7 +14,7 @@ export async function exportTransactionsToCSV(
   userId: string,
   context: 'dfl' | 'personal',
   range: string = '30'
-): Promise<Blob> {
+): Promise<{ csv: string; filename: string }> {
   const startDate = new Date()
   
   if (range === 'total') {
@@ -40,7 +40,8 @@ export async function exportTransactionsToCSV(
   const header = 'Data,Descrição,Categoria,Conta,Tipo,Valor,Status\n'
 
   if (!transactions || transactions.length === 0) {
-    return new Blob([header], { type: 'text/csv;charset=utf-8;' })
+    const filename = `extrato-${context}-${new Date().toISOString().split('T')[0]}.csv`
+    return { csv: header, filename }
   }
 
   const rows = (transactions as Transaction[]).map(t => {
@@ -65,43 +66,21 @@ export async function exportTransactionsToCSV(
   
   const balance = income - expense
 
-  const totals = `\n\n"TOTAL RECEITAS",,,,,"${income.toFixed(2).replace('.', ',')}"`
-    + `\n"TOTAL DESPESAS",,,,,"${expense.toFixed(2).replace('.', ',')}"`
-    + `\n"SALDO",,,,,"${balance.toFixed(2).replace('.', ',')}"`
+  const totals = `\n\n"TOTAL RECEITAS",,,,,"${income.toFixed(2).replace('.', ',')}"` +
+    `\n"TOTAL DESPESAS",,,,,"${expense.toFixed(2).replace('.', ',')}"` +
+    `\n"SALDO",,,,,"${balance.toFixed(2).replace('.', ',')}"`
 
   const csv = header + rows + totals
+  const filename = `extrato-${context}-${new Date().toISOString().split('T')[0]}.csv`
 
-  return new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  return { csv, filename }
 }
 
-export async function downloadCSV(blob: Blob, filename: string) {
-  try {
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', filename)
-    // Essencial para funcionar no Capacitor
-    document.body.appendChild(link)
-    
-    // Dispara o download
-    link.click()
-
-    // Atraso de 1 segundo (1000ms) para dar tempo ao Android de processar o download
-    setTimeout(() => {
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    }, 1000)
-    
-  } catch (error) {
-    console.error('Erro ao baixar arquivo:', error)
-    throw new Error('Falha ao tentar salvar o arquivo no dispositivo.')
-  }
-}
 export async function exportAnalysisToCSV(
   userId: string,
   context: 'dfl' | 'personal',
   month: Date
-): Promise<Blob> {
+): Promise<{ csv: string; filename: string }> {
   const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
   const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
 
@@ -130,15 +109,46 @@ export async function exportAnalysisToCSV(
     catMap[key] += Number(t.amount)
   })
 
-  const header = 'ANÁLISE - ' + startDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase() + '\n\n'
+  const monthName = startDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()
+  const header = `ANÁLISE - ${monthName}\n\n`
   const summary = `RECEITAS,${income.toFixed(2).replace('.', ',')}\nDESPESAS,${expense.toFixed(2).replace('.', ',')}\nBALANÇO,${balance.toFixed(2).replace('.', ',')}\n\n`
   const categoryHeader = 'DESPESAS POR CATEGORIA\n'
   const categoryRows = Object.entries(catMap)
     .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .map(([cat, amount]) => `${cat},${(amount as number).toFixed(2).replace('.', ',')}`)
-    .join('\n')
+    .map(([cat, amount]) => `${cat},${(amount as number).toFixed(2).replace('.', ',')}\n`)
+    .join('')
 
   const csv = header + summary + categoryHeader + categoryRows
+  const filename = `analise-${context}-${start}.csv`
 
-  return new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  return { csv, filename }
+}
+
+export function downloadCSV(csv: string, filename: string) {
+  // Blindagem para SSR no Next.js
+  if (typeof window === 'undefined') return
+
+  try {
+    // Cria o blob a partir da string no lado do cliente
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = window.URL.createObjectURL(blob)
+    
+    link.setAttribute('href', url)
+    link.setAttribute('download', filename)
+    link.style.visibility = 'hidden'
+    
+    // Essencial para o Capacitor do Android interceptar o clique
+    document.body.appendChild(link)
+    
+    // Delay de 300ms para garantir que o elemento está renderizado no DOM do Android
+    setTimeout(() => {
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    }, 300)
+  } catch (error) {
+    console.error('Erro ao fazer download:', error)
+    throw new Error('Erro ao fazer download do arquivo')
+  }
 }
