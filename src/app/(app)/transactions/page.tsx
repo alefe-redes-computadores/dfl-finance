@@ -419,7 +419,7 @@ export default function TransactionsPage() {
     { key: 'transfer', label: 'Transferências', icon: <ArrowLeftRight size={14} /> },
   ]
 
-  // 🔥 A MÁGICA DA EXPORTAÇÃO (Agorta Funcional e sem Refresh)
+  // 🔥 MUDANÇA OBRIGATÓRIA: Usando { csv, filename }
   const handleExport = async (range: string) => {
     setShowExportMenu(false)
     if (!user?.id) return
@@ -427,10 +427,9 @@ export default function TransactionsPage() {
     setExportStatus('exporting')
     
     try {
-      const blob = await exportTransactionsToCSV(user.id, effectiveContext, range)
-      const filename = `Extrato_DFL_${effectiveContext}_${range}dias_${new Date().toISOString().split('T')[0]}.csv`
+      const { csv, filename } = await exportTransactionsToCSV(user.id, effectiveContext, range)
       
-      await downloadCSV(blob, filename)
+      downloadCSV(csv, filename)
       
       setExportStatus('success')
       
