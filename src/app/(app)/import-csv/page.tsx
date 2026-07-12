@@ -16,6 +16,7 @@ import { ptBR } from 'date-fns/locale'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { downloadCSV } from '@/lib/services/exportService'
 
 const PreviewSkeleton = () => (
   <div className="animate-pulse space-y-4">
@@ -549,13 +550,9 @@ export default function ImportCSVPage() {
               const headers = ['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria']
               const sample = '2024-01-15,Supermercado,250.50,Despesa,Alimentação'
               const csv = headers.join(',') + '\n' + sample
-              const blob = new Blob([csv], { type: 'text/csv' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = 'modelo_importacao.csv'
-              a.click()
-              URL.revokeObjectURL(url)
+              
+              // 🔥 MUDANÇA OBRIGATÓRIA: Usando a função de download unificada
+              downloadCSV(csv, 'modelo_importacao.csv')
             }}
             className="mt-3 text-xs text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1"
           >
@@ -567,4 +564,3 @@ export default function ImportCSVPage() {
     </div>
   )
 }
-// Blindagem Atômica Finalizada
