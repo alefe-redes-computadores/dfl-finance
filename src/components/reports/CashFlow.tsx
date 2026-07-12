@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ReportFilterValues } from './ReportFilters'
-import { Loader2, Download } from 'lucide-react'
+import { Download, ListCollapse } from 'lucide-react'
 import { BlobProvider } from '@react-pdf/renderer'
 import ReportPDF from '@/components/reports/ReportPDF'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface CashFlowProps {
   filters: ReportFilterValues
@@ -14,6 +15,7 @@ interface CashFlowProps {
 
 export default function CashFlow({ filters }: CashFlowProps) {
   const { user } = useAuth()
+  const { vibrate, success } = useHapticFeedback()
   const [loading, setLoading] = useState(true)
   const [transactions, setTransactions] = useState<any[]>([])
 
@@ -57,62 +59,74 @@ export default function CashFlow({ filters }: CashFlowProps) {
     const date = new Date(t.date).toLocaleDateString('pt-BR')
     if (!acc[date]) acc[date] = { date, transactions: [], totalIncome: 0, totalExpense: 0 }
     acc[date].transactions.push(t)
-    if (t.type === 'income') acc[date].totalIncome += t.amount
-    else if (t.type === 'expense') acc[date].totalExpense += t.amount
+    const amount = parseFloat(t.amount) || 0
+    if (t.type === 'income') acc[date].totalIncome += amount
+    else if (t.type === 'expense') acc[date].totalExpense += amount
     return acc
   }, {})
 
   const groupedArray = Object.values(groupedByDate)
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 animate-in fade-in duration-300">
       {loading ? (
         <div className="flex justify-center p-8">
           <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : groupedArray.length === 0 ? (
-        <div className="text-center p-8 text-slate-500">Nenhuma transação encontrada.</div>
+        <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center py-10 flex flex-col items-center">
+          <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
+            <ListCollapse size={24} className="text-gray-400" />
+          </div>
+          <p className="text-gray-500 text-sm font-medium">Nenhuma movimentação neste período.</p>
+        </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="bg-emerald-50 dark:bg-emerald-950 p-4 rounded-xl">
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">Receitas</p>
-              <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">+ R$ {totalIncome.toFixed(2)}</p>
+          <div className="grid grid-cols-2 gap-3 mb-2">
+            <div className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700/50 p-4 rounded-[24px] shadow-sm text-center">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Receitas</p>
+              <p className="text-[18px] font-black text-emerald-600">+ R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
-            <div className="bg-red-50 dark:bg-red-950 p-4 rounded-xl">
-              <p className="text-sm text-red-600 dark:text-red-400">Despesas</p>
-              <p className="text-xl font-bold text-red-700 dark:text-red-300">- R$ {totalExpense.toFixed(2)}</p>
+            <div className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700/50 p-4 rounded-[24px] shadow-sm text-center">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Despesas</p>
+              <p className="text-[18px] font-black text-red-500">- R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
-          {groupedArray.map((group: any) => (
-            <div key={group.date} className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-sm font-semibold text-slate-500">{group.date}</h3>
-                <div className="flex space-x-3 text-xs">
-                  <span className="text-emerald-600">+ R$ {group.totalIncome.toFixed(2)}</span>
-                  <span className="text-red-600">- R$ {group.totalExpense.toFixed(2)}</span>
+
+          <div className="space-y-4">
+            {groupedArray.map((group: any) => (
+              <div key={group.date} className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+                <div className="flex justify-between items-center p-4 bg-gray-50/50 dark:bg-slate-700/20 border-b border-gray-100 dark:border-slate-700/50">
+                  <h3 className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{group.date}</h3>
+                  <div className="flex space-x-3 text-[11px] font-bold">
+                    <span className="text-emerald-600">+ R$ {group.totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-red-500">- R$ {group.totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
+                  {group.transactions.map((t: any) => {
+                    const amount = parseFloat(t.amount) || 0
+                    return (
+                      <div key={t.id} className="flex justify-between items-center p-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full ${t.type === 'income' ? 'bg-emerald-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`} />
+                          <div>
+                            <p className="font-bold text-gray-800 dark:text-gray-200 text-[13px]">{t.description}</p>
+                            <p className="text-[11px] font-medium text-gray-400 mt-0.5">{t.category}</p>
+                          </div>
+                        </div>
+                        <span className={`font-bold text-[14px] ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {t.type === 'income' ? '+' : '-'} R$ {amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
-              <div className="bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden">
-                {group.transactions.map((t: any) => (
-                  <div key={t.id} className="flex justify-between items-center p-3 border-b border-slate-200 dark:border-slate-700 last:border-0">
-                    <div className="flex items-center">
-                      <div className={`w-2 h-2 rounded-full mr-3 ${t.type === 'income' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                      <div>
-                        <p className="font-medium text-slate-800 dark:text-slate-200 text-sm">{t.description}</p>
-                        <p className="text-xs text-slate-500">{t.category}</p>
-                      </div>
-                    </div>
-                    <span className={`font-semibold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {t.type === 'income' ? '+' : '-'} R$ {t.amount.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
 
           {/* Botão Exportar PDF */}
           {transactions.length > 0 && (
@@ -130,12 +144,15 @@ export default function CashFlow({ filters }: CashFlowProps) {
             >
               {({ url, loading: pdfLoading }: any) => (
                 <button
-                  onClick={() => url && window.open(url, '_blank')}
+                  onClick={() => {
+                    vibrate([10])
+                    if(url) { success(); window.open(url, '_blank') }
+                  }}
                   disabled={pdfLoading}
-                  className="w-full mt-4 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[14px] transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 disabled:opacity-50 active:scale-[0.98]"
                 >
-                  <Download size={16} />
-                  {pdfLoading ? 'Gerando PDF...' : 'Exportar PDF'}
+                  <Download size={18} />
+                  {pdfLoading ? 'Gerando PDF...' : 'Exportar Relatório Completo'}
                 </button>
               )}
             </BlobProvider>
