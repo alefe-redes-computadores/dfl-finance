@@ -4,27 +4,16 @@ import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, ChevronRight, Edit2, Loader2, Check, Clock, Trash2,
-  Home, Utensils, Car, HeartPulse, GraduationCap, Gamepad2, Shirt,
-  Smile, Repeat, Wrench, Dog, FileText, Shield, Gift, MoreHorizontal,
-  Briefcase, Laptop, TrendingUp, ShoppingCart, ReceiptIcon, Zap, Music,
-  ArrowLeftRight, TrendingUp as TrendingUpIcon, RefreshCw, Image, Paperclip, AlertTriangle, CheckCircle
+  ChevronLeft, ChevronRight, Edit2, Loader2, Check, Clock,
+  AlertTriangle, CheckCircle, RefreshCw, Image, Paperclip
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  home: Home, utensils: Utensils, car: Car, heart: HeartPulse,
-  graduation: GraduationCap, gamepad: Gamepad2, shirt: Shirt,
-  smile: Smile, repeat: Repeat, wrench: Wrench, dog: Dog,
-  file: FileText, shield: Shield, gift: Gift, briefcase: Briefcase,
-  laptop: Laptop, trending: TrendingUpIcon, shopping: ShoppingCart,
-  receipt: ReceiptIcon, zap: Zap, music: Music, other: MoreHorizontal
-}
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import Skeleton from '@/components/Skeleton'
 
 const BudgetDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6">
@@ -38,22 +27,18 @@ const BudgetDetailSkeleton = () => (
       <div className="h-10 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" />
     </div>
 
-    <div className="flex justify-center mb-4">
-      <div className="h-6 w-24 bg-gray-200 dark:bg-slate-700 rounded-full" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-slate-700" />
+    <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 mb-4">
+      <div className="flex items-center gap-4 mb-5">
+        <div className="w-14 h-14 rounded-[18px] bg-gray-200 dark:bg-slate-700" />
         <div className="space-y-2">
-          <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-5 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
           <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-3 gap-3 mb-5">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl p-3 bg-gray-100 dark:bg-slate-700">
+          <div key={i} className="rounded-[16px] p-3 bg-gray-100 dark:bg-slate-700">
             <div className="h-3 w-12 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
             <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
           </div>
@@ -63,21 +48,6 @@ const BudgetDetailSkeleton = () => (
       <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
         <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
       </div>
-      <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
-    </div>
-
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 dark:border-slate-700 last:border-b-0">
-          <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-slate-700" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          </div>
-          <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-        </div>
-      ))}
     </div>
   </div>
 )
@@ -88,7 +58,7 @@ function BudgetDetailContent() {
   const id = searchParams.get('id') as string
   const { user } = useAuth()
   const { context } = useContext_()
-  const { showToast } = useToast()
+  const { vibrate } = useHapticFeedback()
 
   const [budget, setBudget] = useState<any>(null)
   const [transactions, setTransactions] = useState<any[]>([])
@@ -126,13 +96,12 @@ function BudgetDetailContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
+      vibrate([10])
       loadData().finally(() => setRefreshing(false))
     }
   }
 
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  const handleTouchEnd = () => { isPulling.current = false }
 
   useEffect(() => {
     const container = containerRef.current
@@ -165,7 +134,6 @@ function BudgetDetailContent() {
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
       const today = format(new Date(), 'yyyy-MM-dd')
-      const daysInMonth = differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
       const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
 
       let filteredTxs = (localTransactions || [])
@@ -191,9 +159,9 @@ function BudgetDetailContent() {
         if (projectedDays <= 3) {
           setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`)
         } else if (projectedDays <= 7) {
-          setProjection(`⚠️ Neste ritmo, o orçamento dura mais ${projectedDays} dias.`)
+          setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`)
         } else {
-          setProjection(`✅ Ritmo tranquilo! O orçamento dura mais ${projectedDays} dias.`)
+          setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`)
         }
       } else if (remaining <= 0) {
         setDaysLeft(0)
@@ -212,6 +180,7 @@ function BudgetDetailContent() {
   useEffect(() => { loadData() }, [loadData])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -222,12 +191,10 @@ function BudgetDetailContent() {
   const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
   if (loading) return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-        </div>
-      )}
+    <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
+      <div className="flex items-center justify-between px-4 pt-6 mb-6">
+        <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+      </div>
       <BudgetDetailSkeleton />
     </div>
   )
@@ -241,145 +208,141 @@ function BudgetDetailContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-20 font-sans px-4 pt-6 transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-24 font-sans px-4 pt-6 transition-colors duration-300">
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
         </div>
       )}
 
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.push('/budgets')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
+      <div className="flex items-center justify-between mb-6 sticky top-0 z-10 bg-gray-50/90 dark:bg-slate-900/90 backdrop-blur-xl py-2">
+        <button onClick={() => { vibrate([5]); router.push('/budgets'); }} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:bg-white dark:hover:bg-slate-800 rounded-full transition-colors active:scale-95">
           <ChevronLeft size={24} />
         </button>
         <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{budget.name}</h2>
-        <button onClick={() => router.push(`/budgets/new?edit=${budget.id}`)} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:text-teal-800 transition-colors">
+        <button onClick={() => { vibrate([5]); router.push(`/budgets/new?edit=${budget.id}`); }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 active:scale-95 rounded-full hover:bg-teal-50 dark:hover:bg-teal-900/30">
           <Edit2 size={20} />
         </button>
       </div>
 
-      <div className="flex items-center justify-center mb-4">
-        <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronLeft size={18} /></button>
-          <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide">{monthLabel}</span>
-          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"><ChevronRight size={18} /></button>
+      <div className="flex items-center justify-center mb-6">
+        <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 px-2 py-1.5 rounded-full">
+          <button onClick={() => { vibrate([5]); setCurrentDate(subMonths(currentDate, 1)); }} className="p-1.5 text-gray-400 bg-gray-50 dark:bg-slate-700/50 rounded-full hover:text-gray-800 transition-colors active:scale-95"><ChevronLeft size={16} /></button>
+          <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide w-[100px] text-center">{monthLabel}</span>
+          <button onClick={() => { vibrate([5]); setCurrentDate(addMonths(currentDate, 1)); }} className="p-1.5 text-gray-400 bg-gray-50 dark:bg-slate-700/50 rounded-full hover:text-gray-800 transition-colors active:scale-95"><ChevronRight size={16} /></button>
         </div>
       </div>
 
-      <div className="flex justify-center mb-4">
-        <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
+      <div className="flex justify-center mb-5">
+        <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border ${
           isOverBudget 
-            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' 
+            ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:border-red-500/20' 
             : isWarning 
-              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' 
-              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+              ? 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:border-orange-500/20' 
+              : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20'
         }`}>
-          {isOverBudget && <AlertTriangle size={10} />}
-          {!isOverBudget && !isWarning && <CheckCircle size={10} />}
-          {isOverBudget ? 'Estourado' : isWarning ? 'Atenção' : 'Dentro do limite'}
+          {isOverBudget && <AlertTriangle size={12} />}
+          {!isOverBudget && !isWarning && <CheckCircle size={12} />}
+          {isOverBudget ? 'Orçamento Estourado' : isWarning ? 'Atenção ao Limite' : 'Dentro do limite'}
         </span>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-4 animate-in fade-in duration-300">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${budget.color}20`, color: budget.color }}>
+      <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-gray-50 dark:border-slate-700/50 mb-4 animate-in fade-in duration-300">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${budget.color}15`, color: budget.color }}>
             <IconComp size={24} />
           </div>
           <div>
-            <p className="font-bold text-[16px] text-gray-800 dark:text-gray-100">{budget.name}</p>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500">{budget.categories?.name || 'Todas as categorias'} • {budget.period === 'monthly' ? 'Mensal' : budget.period === 'biweekly' ? 'Quinzenal' : 'Semanal'}</p>
+            <p className="font-black text-[18px] text-gray-800 dark:text-gray-100 leading-tight">{budget.name}</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-1">{budget.categories?.name || 'Geral'} • {budget.period === 'monthly' ? 'Mensal' : budget.period === 'biweekly' ? 'Quinzenal' : 'Semanal'}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Orçado</p>
-            <p className="text-[15px] font-bold text-gray-800 dark:text-gray-200">{formatCurrency(Number(budget.amount))}</p>
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="text-center bg-gray-50 dark:bg-slate-700/40 rounded-[20px] p-3.5 border border-gray-100 dark:border-slate-700/50">
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">Orçado</p>
+            <p className="text-[15px] font-black text-gray-800 dark:text-gray-200">{formatCurrency(Number(budget.amount))}</p>
           </div>
-          <div className="text-center bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Gasto</p>
-            <p className="text-[15px] font-bold text-red-500">{formatCurrency(spent)}</p>
+          <div className="text-center bg-red-50 dark:bg-red-500/10 rounded-[20px] p-3.5 border border-red-100 dark:border-red-500/20">
+            <p className="text-[10px] text-red-600/70 font-bold uppercase tracking-widest mb-1">Gasto</p>
+            <p className="text-[15px] font-black text-red-500">{formatCurrency(spent)}</p>
           </div>
-          <div className={`text-center rounded-xl p-3 ${remaining >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Restante</p>
-            <p className={`text-[15px] font-bold ${remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(Math.abs(remaining))}</p>
+          <div className={`text-center rounded-[20px] p-3.5 border ${remaining >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20'}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${remaining >= 0 ? 'text-emerald-600/70' : 'text-red-600/70'}`}>Restante</p>
+            <p className={`text-[15px] font-black ${remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(Math.abs(remaining))}</p>
           </div>
         </div>
 
-        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
+        <div className="w-full bg-gray-100 dark:bg-slate-700/50 rounded-full h-3 overflow-hidden mb-2 shadow-inner">
           <div
             className={`h-full rounded-full transition-all duration-1000 ease-out ${isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'}`}
             style={{ width: `${Math.min(percent, 100)}%` }}
           />
         </div>
-        <p className={`text-[11px] font-medium text-right ${isOverBudget ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
+        <p className={`text-[12px] font-bold text-right ${isOverBudget ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
           {percent.toFixed(1)}% utilizado
-          {isOverBudget && ' • Estourado!'}
         </p>
       </div>
 
       {projection && (
-        <div className={`rounded-[20px] p-4 mb-4 shadow-sm border flex items-start gap-3 ${
+        <div className={`rounded-[24px] p-4.5 mb-5 shadow-sm border flex items-start gap-3 animate-in zoom-in-95 duration-300 ${
           isOverBudget 
-            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400' 
+            ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400' 
             : isWarning || (daysLeft !== null && daysLeft <= 7) 
-              ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400' 
-              : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
+              ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400' 
+              : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
         }`}>
-          <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-          <p className="text-[13px] font-bold">{projection}</p>
+          <div className="mt-0.5 shrink-0">
+            {isOverBudget ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
+          </div>
+          <p className="text-[13px] font-bold leading-snug">{projection}</p>
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 animate-in fade-in duration-300">
-        <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">Transações do mês</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-in fade-in duration-300">
+        <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 mb-5">Transações deste orçamento</h3>
         {transactions.length === 0 ? (
-          <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-6">Nenhuma transação neste mês.</p>
+          <div className="text-center py-6">
+            <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Clock size={20} className="text-gray-400" />
+            </div>
+            <p className="text-gray-400 dark:text-gray-500 text-[13px] font-medium">Nenhum gasto registrado neste mês.</p>
+          </div>
         ) : (
           <div className="space-y-2">
             {transactions.map((tx: any, index: number) => {
               const TxIconComp = getDynamicIcon(tx.categories?.icon || 'tag')
-              const isIncomeVisual = tx.type === 'income'
               const isPending = tx.status === 'pending'
               const attachmentIcon = getAttachmentIcon(tx.receipt_url)
               return (
                 <div
                   key={tx.id}
-                  onClick={() => router.push(`/transactions/details?id=${tx.id}`)}
-                  className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 rounded-xl transition-colors active:scale-[0.98] ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== transactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}
+                  onClick={() => { vibrate([5]); router.push(`/transactions/details?id=${tx.id}`); }}
+                  className={`flex items-center justify-between p-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-all active:scale-[0.98] ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {isPending ? (
-                      <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                        <Clock size={12} className="text-red-400" />
-                      </div>
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                        <Check size={12} className="text-emerald-500" />
-                      </div>
-                    )}
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#64748b'}20`, color: tx.categories?.color || '#64748b' }}>
-                      <TxIconComp size={16} />
+                    <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center flex-shrink-0 ${isPending ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500' : 'bg-red-50 dark:bg-red-900/30 text-red-500'}`}>
+                      <TxIconComp size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">{tx.description || tx.categories?.name}</p>
+                        <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">{tx.description || tx.categories?.name}</p>
                         {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
                       </div>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} • {tx.accounts?.name || 'Geral'}</p>
+                      <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
                     </div>
                   </div>
-                  <p className={`text-[14px] font-bold flex-shrink-0 ${isIncomeVisual ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {isIncomeVisual ? '+' : '-'} {formatCurrency(Number(tx.amount) || 0)}
+                  <p className="text-[15px] font-black text-red-500 flex-shrink-0">
+                    - {formatCurrency(Number(tx.amount) || 0)}
                   </p>
                 </div>
               )
