@@ -12,7 +12,6 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
-// 🔥 NOVO: Hook de blindagem
 import { useSafeDb } from '@/hooks/useSafeDb'
 
 type Payment = { id: string, loan_id: string, amount: number, date: string }
@@ -24,7 +23,6 @@ export default function LoansPage() {
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
   
-  // 🔥 CORRIGIDO: effectiveContext garantindo a separação PF/PJ
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
@@ -59,29 +57,26 @@ export default function LoansPage() {
     return acc
   }, {})
 
-  // 🔥 EXCLUIR EMPRÉSTIMO ATÔMICO PELA LISTAGEM E BLINDADO
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
-      const payments = paymentsByLoan[deleteModal] || []
+      const payments = (paymentsByLoan[deleteModal] || [])
       
-      // Apaga todos os pagamentos vinculados
       for (const p of payments) {
         const res1 = await safeDelete('transactions', p.id)
         if (!res1.success) throw new Error(res1.error)
       }
       
-      // Apaga o empréstimo
       const res2 = await safeDelete('loans', deleteModal)
       if (!res2.success) throw new Error(res2.error)
 
-      showToast("Empréstimo excluído com sucesso!", "success")
       success()
+      showToast("✅ Empréstimo excluído com sucesso!", "success")
       setDeleteModal(null)
       reload()
     } catch (err: any) {
-      showToast(`Erro ao excluir empréstimo: ${err.message}`, "error")
       errorHaptic()
+      showToast(`❌ Erro ao excluir empréstimo: ${err.message}`, "error")
     }
   }
 
@@ -150,13 +145,13 @@ export default function LoansPage() {
         ) : (
           <div className="space-y-3">
             {sortedLoans.map((loan: any) => {
-              const payments = paymentsByLoan[loan.id] || []
+              const payments = (paymentsByLoan[loan.id] || [])
               const totalPaid = payments.reduce((sum: number, p: Payment) => sum + (p.amount || 0), 0)
               const remaining = (loan.amount || 0) - totalPaid
               const isExpanded = expandedId === loan.id
 
               return (
-                <div key={loan.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+                <div key={loan.id} className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all active:scale-[0.98] hover:shadow-md">
                   <button onClick={() => router.push(`/loans/details?id=${loan.id}`)} className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -195,7 +190,7 @@ export default function LoansPage() {
 
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Excluir Empréstimo</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">Tem certeza que deseja excluir este empréstimo? Esta ação não pode ser desfeita.</p>
             <div className="flex gap-3">
@@ -208,3 +203,4 @@ export default function LoansPage() {
     </div>
   )
 }
+// ✅ Refatoração Premium Finalizada — Soft UI + Toasts + Blindagem
