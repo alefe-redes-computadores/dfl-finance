@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Home, ArrowLeftRight, BarChart2, MoreHorizontal, ArrowUp, ArrowDown, CreditCard, Plus } from 'lucide-react'
 import React from 'react'
 import TransferModal from './TransferModal'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const tabs = [
   { href: '/home', icon: Home, label: 'Início' },
@@ -21,6 +22,8 @@ export default function BottomNav() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
+  
+  const { vibrate } = useHapticFeedback()
 
   // Se a rota atual NÃO for uma das 4 abas principais, esconde o BottomNav
   if (!VISIBLE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '?'))) {
@@ -28,26 +31,34 @@ export default function BottomNav() {
   }
 
   const handleNavigate = (path: string) => {
+    vibrate([10])
     setIsOpen(false)
     router.push(path)
   }
 
   const handleOpenTransfer = () => {
+    vibrate([10])
     setIsOpen(false)
     setIsTransferModalOpen(true)
   }
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.preventDefault()
+    vibrate([10])
     setIsOpen(false)
     router.push('/transactions/card-expense')
+  }
+
+  const toggleMenu = () => {
+    vibrate([15])
+    setIsOpen(!isOpen)
   }
 
   return (
     <>
       {/* Overlay de fundo quando o menu está aberto */}
       <div
-        className={`fixed inset-0 z-[50] bg-[#121414]/80 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 z-[50] bg-black/60 dark:bg-[#121414]/80 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsOpen(false)}
       />
 
@@ -55,41 +66,41 @@ export default function BottomNav() {
       <div className={`fixed bottom-[95px] left-1/2 -translate-x-1/2 z-[60] flex justify-center w-full max-w-md pointer-events-none transition-all duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 scale-50'}`}>
          <div className="relative w-full h-full flex justify-center items-end">
             {/* Receita */}
-            <button onClick={() => handleNavigate('/transactions/new?type=income')} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 ${isOpen ? '-translate-x-[75px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'}`}>
-              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl"><ArrowUp size={22} className="text-emerald-500" /></div>
+            <button onClick={() => handleNavigate('/transactions/new?type=income')} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 active:scale-[0.95] ${isOpen ? '-translate-x-[75px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'}`}>
+              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg"><ArrowUp size={24} className="text-emerald-500" /></div>
               <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Receita</span>
             </button>
 
             {/* Cartão */}
-            <button onClick={handleCardClick} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-75 ${isOpen ? 'translate-x-[75px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'}`}>
-              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl"><CreditCard size={22} className="text-orange-400" /></div>
+            <button onClick={handleCardClick} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-75 active:scale-[0.95] ${isOpen ? 'translate-x-[75px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'}`}>
+              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg"><CreditCard size={24} className="text-orange-400" /></div>
               <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Cartão</span>
             </button>
 
             {/* Transferir */}
-            <button onClick={handleOpenTransfer} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-100 ${isOpen ? '-translate-x-[130px] -translate-y-[15px]' : 'translate-x-0 translate-y-0'}`}>
-              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl"><ArrowLeftRight size={22} className="text-teal-600" /></div>
+            <button onClick={handleOpenTransfer} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-100 active:scale-[0.95] ${isOpen ? '-translate-x-[130px] -translate-y-[15px]' : 'translate-x-0 translate-y-0'}`}>
+              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg"><ArrowLeftRight size={24} className="text-teal-600" /></div>
               <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Transferir</span>
             </button>
 
             {/* Despesa */}
-            <button onClick={() => handleNavigate('/transactions/new?type=expense')} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-150 ${isOpen ? 'translate-x-[130px] -translate-y-[15px]' : 'translate-x-0 translate-y-0'}`}>
-              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl"><ArrowDown size={22} className="text-red-500" /></div>
+            <button onClick={() => handleNavigate('/transactions/new?type=expense')} className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-150 active:scale-[0.95] ${isOpen ? 'translate-x-[130px] -translate-y-[15px]' : 'translate-x-0 translate-y-0'}`}>
+              <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg"><ArrowDown size={24} className="text-red-500" /></div>
               <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Despesa</span>
             </button>
          </div>
       </div>
 
       {/* Barra de navegação inferior */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.2)] z-[40] pb-safe h-[68px] transition-colors duration-300">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-[0_-8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.2)] z-[40] pb-safe h-[68px] transition-colors duration-300">
         <div className="flex items-center justify-around h-full max-w-md mx-auto relative px-2">
           
           {/* Botão central (abre/fecha menu radial) */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[45]">
-            <div className="bg-[#f8f9fa] dark:bg-slate-700 p-1.5 rounded-full">
+            <div className="bg-[#f8f9fa] dark:bg-slate-900 p-1.5 rounded-full">
                <button
-                onClick={() => setIsOpen(!isOpen)}
-                className={`relative w-[56px] h-[56px] rounded-full flex items-center justify-center shadow-lg transition-transform duration-300 ${isOpen ? 'bg-gray-800 dark:bg-slate-600 rotate-45' : 'bg-[#ea8773] rotate-0 hover:scale-105'}`}
+                onClick={toggleMenu}
+                className={`relative w-[56px] h-[56px] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.15)] transition-all duration-300 active:scale-[0.90] ${isOpen ? 'bg-gray-800 dark:bg-slate-600 rotate-45' : 'bg-teal-700 rotate-0'}`}
               >
                 <Plus className="text-white" size={28} />
               </button>
@@ -98,7 +109,7 @@ export default function BottomNav() {
 
           {/* Abas de navegação */}
           {tabs.map((tab, i) => {
-            const active = pathname === tab.href
+            const active = pathname === tab.href || pathname.startsWith(tab.href + '?')
             const Icon = tab.icon
 
             // A segunda aba (Transações) tem um espaço extra para o botão central
@@ -106,15 +117,12 @@ export default function BottomNav() {
               return (
                 <React.Fragment key="fab-group">
                   <button
-                    onClick={() => router.push(tab.href)}
+                    onClick={() => handleNavigate(tab.href)}
                     title={tab.label}
-                    className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative"
+                    className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative active:scale-[0.95] transition-transform"
                   >
-                    <Icon size={22} className={`transition-colors ${active ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`} />
-                    <span className={`text-[10px] ${active ? 'text-gray-800 dark:text-gray-200 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>{tab.label}</span>
-                    <span className="absolute -top-8 bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900 text-xs rounded-lg px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                      {tab.label}
-                    </span>
+                    <Icon size={22} className={`transition-colors ${active ? 'text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <span className={`text-[10px] ${active ? 'text-teal-700 dark:text-teal-400 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>{tab.label}</span>
                   </button>
                   {/* Espaço reservado para o botão central */}
                   <div className="w-[72px]" />
@@ -125,15 +133,12 @@ export default function BottomNav() {
             return (
               <button
                 key={tab.href}
-                onClick={() => router.push(tab.href)}
+                onClick={() => handleNavigate(tab.href)}
                 title={tab.label}
-                className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative"
+                className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative active:scale-[0.95] transition-transform"
               >
-                <Icon size={22} className={`transition-colors ${active ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`} />
-                <span className={`text-[10px] ${active ? 'text-gray-800 dark:text-gray-200 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>{tab.label}</span>
-                <span className="absolute -top-8 bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900 text-xs rounded-lg px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                  {tab.label}
-                </span>
+                <Icon size={22} className={`transition-colors ${active ? 'text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                <span className={`text-[10px] ${active ? 'text-teal-700 dark:text-teal-400 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>{tab.label}</span>
               </button>
             )
           })}
