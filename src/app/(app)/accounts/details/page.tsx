@@ -3,18 +3,8 @@
 import { useState, useCallback, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
-  ArrowLeft,
-  Trash2,
-  RefreshCw,
-  Pencil,
-  Wallet,
-  Building2,
-  CreditCard,
-  PiggyBank,
-  ChevronDown,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  Calendar,
+  ArrowLeft, Trash2, RefreshCw, Pencil, Wallet, Building2, CreditCard,
+  PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Check, X
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -26,21 +16,13 @@ import Skeleton from '@/components/Skeleton'
 import { db, addToSyncQueue } from '@/lib/db'
 
 const ACCOUNT_ICONS: Record<string, any> = {
-  checking: Wallet,
-  savings: PiggyBank,
-  investment: Building2,
-  credit_card: CreditCard,
-  wallet: Wallet,
-  other: Wallet,
+  checking: Wallet, savings: PiggyBank, investment: Building2,
+  credit_card: CreditCard, wallet: Wallet, other: Wallet,
 }
 
 const ACCOUNT_LABELS: Record<string, string> = {
-  checking: "Conta Corrente",
-  savings: "Poupança",
-  investment: "Investimento",
-  credit_card: "Cartão de Crédito",
-  wallet: "Carteira",
-  other: "Outro",
+  checking: "Conta Corrente", savings: "Poupança", investment: "Investimento",
+  credit_card: "Cartão de Crédito", wallet: "Carteira", other: "Outro",
 }
 
 const safeNum = (val: any): number => {
@@ -55,7 +37,7 @@ function AccountDetailContent() {
   const searchParams = useSearchParams()
   const accountId = searchParams.get('id') as string
   const { showToast } = useToast()
-  const { success, error: errorHaptic } = useHapticFeedback()
+  const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
   const { user } = useAuth()
@@ -86,20 +68,15 @@ function AccountDetailContent() {
   const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
   const transactions = allTransactions || []
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
-
-  const formatDate = (date: string | null) => {
-    if (!date) return ""
-    return new Date(date).toLocaleDateString("pt-BR")
-  }
+  const formatCurrency = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+  const formatDate = (date: string | null) => { if (!date) return ""; return new Date(date).toLocaleDateString("pt-BR") }
 
   const handleAdjustBalance = async () => {
     if (!user) return
     const amount = parseFloat(adjustAmount.replace(',', '.'))
     if (!adjustAmount || isNaN(amount) || amount === 0) {
-      showToast("Informe um valor para ajuste", "warning")
       errorHaptic()
+      showToast("⚠️ Informe um valor para ajuste", "warning")
       return
     }
     setSaving(true)
@@ -112,8 +89,7 @@ function AccountDetailContent() {
         if (!acc) throw new Error('Conta não encontrada')
 
         newBalance = safeNum(acc.balance) + amount
-        const accUpdated = await db.table('accounts').update(accountId, { balance: newBalance })
-        if (!accUpdated) throw new Error('Falha ao atualizar saldo')
+        await db.table('accounts').update(accountId, { balance: newBalance })
         await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newBalance })
 
         const newTx = {
@@ -135,15 +111,15 @@ function AccountDetailContent() {
         await addToSyncQueue(user.id, 'transactions', 'create', txId, newTx)
       })
 
-      showToast("Saldo ajustado com sucesso!", "success")
       success()
+      showToast("✅ Saldo ajustado com sucesso!", "success")
       setShowAdjustModal(false)
       setAdjustAmount("")
       setAdjustNotes("")
       reload()
     } catch (err: any) {
-      showToast(err?.message || "Erro ao ajustar saldo", "error")
       errorHaptic()
+      showToast(`❌ ${err?.message || "Erro ao ajustar saldo"}`, "error")
     } finally {
       setSaving(false)
     }
@@ -153,13 +129,13 @@ function AccountDetailContent() {
     if (!user) return
     const amount = parseFloat(transferAmount.replace(',', '.'))
     if (!transferAmount || isNaN(amount) || amount <= 0) {
-      showToast("Informe um valor válido", "warning")
       errorHaptic()
+      showToast("⚠️ Informe um valor válido", "warning")
       return
     }
     if (!transferToAccount) {
-      showToast("Selecione a conta de destino", "warning")
       errorHaptic()
+      showToast("⚠️ Selecione a conta de destino", "warning")
       return
     }
     setSaving(true)
@@ -171,68 +147,46 @@ function AccountDetailContent() {
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
         const fromAcc = await db.table('accounts').get(accountId)
         const toAcc = await db.table('accounts').get(transferToAccount)
-        if (!fromAcc) throw new Error('Conta de origem não encontrada')
-        if (!toAcc) throw new Error('Conta de destino não encontrada')
+        if (!fromAcc) throw new Error('Conta origem não encontrada')
+        if (!toAcc) throw new Error('Conta destino não encontrada')
 
         const fromTx = {
-          id: fromTxId,
-          user_id: fromAcc.user_id,
-          description: transferNotes || `Transferência para ${toAcc.name}`,
-          amount,
-          type: 'transfer',
-          account_id: accountId,
-          transfer_to: transferToAccount,
-          date: today,
-          status: 'done',
-          context,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
+          id: fromTxId, user_id: fromAcc.user_id, description: transferNotes || `Transferência para ${toAcc.name}`,
+          amount, type: 'transfer', account_id: accountId, transfer_to: transferToAccount, date: today,
+          status: 'done', context, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          sync_status: 'pending', sync_attempts: 0,
         }
         await db.table('transactions').add(fromTx)
         await addToSyncQueue(user.id, 'transactions', 'create', fromTxId, fromTx)
 
         const toTx = {
-          id: toTxId,
-          user_id: toAcc.user_id,
-          description: transferNotes || `Transferência de ${fromAcc.name}`,
-          amount,
-          type: 'transfer',
-          account_id: transferToAccount,
-          transfer_from: accountId,
-          date: today,
-          status: 'done',
-          context,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
+          id: toTxId, user_id: toAcc.user_id, description: transferNotes || `Transferência de ${fromAcc.name}`,
+          amount, type: 'transfer', account_id: transferToAccount, transfer_from: accountId, date: today,
+          status: 'done', context, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          sync_status: 'pending', sync_attempts: 0,
         }
         await db.table('transactions').add(toTx)
         await addToSyncQueue(user.id, 'transactions', 'create', toTxId, toTx)
 
         const newFromBalance = safeNum(fromAcc.balance) - amount
-        const fromUpdated = await db.table('accounts').update(accountId, { balance: newFromBalance })
-        if (!fromUpdated) throw new Error('Falha ao debitar conta de origem')
+        await db.table('accounts').update(accountId, { balance: newFromBalance })
         await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newFromBalance })
 
         const newToBalance = safeNum(toAcc.balance) + amount
-        const toUpdated = await db.table('accounts').update(transferToAccount, { balance: newToBalance })
-        if (!toUpdated) throw new Error('Falha ao creditar conta de destino')
+        await db.table('accounts').update(transferToAccount, { balance: newToBalance })
         await addToSyncQueue(user.id, 'accounts', 'update', transferToAccount, { balance: newToBalance })
       })
 
-      showToast("Transferência realizada com sucesso!", "success")
       success()
+      showToast("✅ Transferência realizada com sucesso!", "success")
       setShowTransferModal(false)
       setTransferAmount("")
       setTransferToAccount("")
       setTransferNotes("")
       reload()
     } catch (err: any) {
-      showToast(err?.message || "Erro ao transferir", "error")
       errorHaptic()
+      showToast(`❌ ${err?.message || "Erro ao transferir"}`, "error")
     } finally {
       setSaving(false)
     }
@@ -240,150 +194,148 @@ function AccountDetailContent() {
 
   const handleDelete = async () => {
     if (!user) return
+    vibrate([10, 50])
     if (!confirm("Tem certeza que deseja excluir esta conta?")) return
     try {
       await db.table('accounts').delete(accountId)
       await addToSyncQueue(user.id, 'accounts', 'delete', accountId, { id: accountId })
-      showToast("Conta excluída com sucesso!", "success")
       success()
+      showToast("🗑️ Conta excluída com sucesso!", "success")
       router.back()
     } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
+      showToast(`Erro ao excluir: ${err.message}`, "error")
     }
   }
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-  }, [])
-
+  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
+        vibrate([10])
         reload()
         setTimeout(() => setRefreshing(false), 600)
       }
     }
-  }, [refreshing, reload])
+  }, [refreshing, reload, vibrate])
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <ArrowLeft size={20} />
-            </div>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">Carregando...</h1>
-          </div>
+      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors">
+        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
+          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
         </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={4} />
-        </div>
+        <div className="flex-1 px-4 pt-6"><Skeleton count={4} /></div>
       </div>
     )
   }
 
   if (!accountData) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="text-lg font-black">Conta não encontrada</h1>
-          </div>
+      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900">
+        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
+          <button onClick={() => router.back()} className="p-2 rounded-full bg-gray-100 dark:bg-slate-800"><ArrowLeft size={20} /></button>
+          <h1 className="text-lg font-black mt-4">Conta não encontrada</h1>
         </div>
       </div>
     )
   }
 
   const Icon = ACCOUNT_ICONS[accountData.type] || Wallet
-
-  const sortedTransactions = [...transactions].sort((a: any, b: any) =>
-    new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-  )
+  const sortedTransactions = [...transactions].sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950">
+    <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors">
       {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
         </div>
       )}
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+      <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 shadow-sm px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              <ArrowLeft size={20} />
+            <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform">
+              <ArrowLeft size={24} />
             </button>
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100 truncate max-w-[180px]">
+            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100 truncate max-w-[180px]">
               {accountData.name}
             </h1>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => router.push(`/accounts/new?edit=${accountId}`)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <div className="flex gap-1">
+            <button onClick={() => { vibrate([5]); router.push(`/accounts/new?edit=${accountId}`); }} className="p-2.5 rounded-full bg-gray-50 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/30 text-teal-700 dark:text-teal-400 active:scale-95 transition-all">
               <Pencil size={18} />
             </button>
-            <button onClick={handleDelete} className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors">
+            <button onClick={handleDelete} className="p-2.5 rounded-full bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-500 active:scale-95 transition-all">
               <Trash2 size={18} />
             </button>
           </div>
         </div>
       </div>
 
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-center">
-          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 ${(accountData.balance || 0) >= 0 ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"}`}>
-            <Icon size={28} />
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="flex-1 overflow-y-auto px-4 pt-6 pb-24 space-y-5">
+        <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 text-center shadow-sm border border-gray-50 dark:border-slate-700/50 animate-in fade-in duration-300">
+          <div className={`w-16 h-16 rounded-[20px] flex items-center justify-center mx-auto mb-4 ${(accountData.balance || 0) >= 0 ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400"}`}>
+            <Icon size={32} />
           </div>
-          <p className="text-3xl font-black text-slate-800 dark:text-slate-200">{formatCurrency(accountData.balance || 0)}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{ACCOUNT_LABELS[accountData.type] || accountData.type}{accountData.bank ? ` — ${accountData.bank}` : ""}</p>
+          <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Saldo Atual</p>
+          <p className="text-[36px] font-light text-gray-800 dark:text-gray-100 tracking-tight leading-none mb-2">{formatCurrency(accountData.balance || 0)}</p>
+          <div className="inline-flex items-center gap-2 bg-gray-50 dark:bg-slate-700/50 px-3 py-1.5 rounded-full">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">{ACCOUNT_LABELS[accountData.type] || accountData.type}</span>
+            {accountData.bank && <><span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" /><span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">{accountData.bank}</span></>}
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <button onClick={() => setShowAdjustModal(true)} className="flex-1 py-3 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm shadow-teal-500/20 transition-colors">
+        <div className="flex gap-3 animate-in slide-in-from-bottom-4 duration-300 delay-100">
+          <button onClick={() => { vibrate([5]); setShowAdjustModal(true); }} className="flex-1 py-4 rounded-[20px] bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-[14px] font-bold active:scale-[0.98] transition-transform border border-teal-100 dark:border-teal-800/50">
             Ajustar Saldo
           </button>
-          <button onClick={() => setShowTransferModal(true)} className="flex-1 py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-colors">
+          <button onClick={() => { vibrate([5]); setShowTransferModal(true); }} className="flex-1 py-4 rounded-[20px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[14px] font-bold active:scale-[0.98] transition-transform border border-blue-100 dark:border-blue-800/50">
             Transferir
           </button>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <h3 className="font-black text-slate-800 dark:text-slate-200 mb-3">Transações</h3>
+        <div className="bg-white dark:bg-slate-800 rounded-[28px] border border-gray-50 dark:border-slate-700/50 p-5 shadow-sm animate-in fade-in duration-300 delay-200">
+          <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 mb-4">Transações Recentes</h3>
           {sortedTransactions.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-4">Nenhuma transação nesta conta</p>
+            <div className="text-center py-6">
+              <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <RefreshCw size={20} className="text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-gray-400 dark:text-gray-500">Nenhuma movimentação nesta conta.</p>
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {sortedTransactions.slice(0, expandedTransactions ? undefined : 5).map((tx: any) => (
-                <div key={tx.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {tx.type === 'income' || (tx.type === 'transfer' && tx.description?.includes('de ')) ? <ArrowUpCircle size={16} className="text-teal-500 flex-shrink-0" /> : <ArrowDownCircle size={16} className="text-red-500 flex-shrink-0" />}
+                <div key={tx.id} className="flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/40 rounded-[20px] px-3 py-3.5 transition-colors cursor-pointer active:scale-[0.98]">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center flex-shrink-0 ${tx.type === 'income' || (tx.type === 'transfer' && tx.description?.includes('de ')) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
+                      {tx.type === 'income' || (tx.type === 'transfer' && tx.description?.includes('de ')) ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
+                    </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{tx.description || "Sem descrição"}</p>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(tx.date)}</span>
+                      <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate">{tx.description || "Sem descrição"}</p>
+                      <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{formatDate(tx.date)}</span>
                     </div>
                   </div>
-                  <span className={`font-bold text-sm flex-shrink-0 ${tx.type === 'income' || (tx.type === 'transfer' && tx.description?.includes('de ')) ? "text-teal-600 dark:text-teal-400" : "text-red-500"}`}>{formatCurrency(safeNum(tx.amount))}</span>
+                  <span className={`font-bold text-[14px] flex-shrink-0 ${tx.type === 'income' || (tx.type === 'transfer' && tx.description?.includes('de ')) ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+                    {tx.type === 'income' || (tx.type === 'transfer' && tx.description?.includes('de ')) ? '+' : '-'} {formatCurrency(Math.abs(safeNum(tx.amount)))}
+                  </span>
                 </div>
               ))}
               {sortedTransactions.length > 5 && (
-                <button onClick={() => setExpandedTransactions(!expandedTransactions)} className="w-full text-center text-xs text-teal-500 hover:text-teal-600 font-semibold py-2">
-                  {expandedTransactions ? "Ver menos" : `Ver todas (${sortedTransactions.length})`}
-                  <ChevronDown size={12} className={`inline ml-1 transition-transform ${expandedTransactions ? "rotate-180" : ""}`} />
+                <button onClick={() => { vibrate([5]); setExpandedTransactions(!expandedTransactions); }} className="w-full text-center text-[12px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/40 py-3 rounded-xl transition-colors mt-2 active:scale-95">
+                  {expandedTransactions ? "Recolher transações" : `Ver todas (${sortedTransactions.length})`}
+                  <ChevronDown size={14} className={`inline ml-1 transition-transform ${expandedTransactions ? "rotate-180" : ""}`} />
                 </button>
               )}
             </div>
@@ -391,55 +343,80 @@ function AccountDetailContent() {
         </div>
       </div>
 
+      {/* Modal Ajustar Saldo - Bottom Sheet Premium */}
       {showAdjustModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAdjustModal(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4">Ajustar Saldo</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Valor (+ ou -)</label>
-                <input type="number" step="0.01" placeholder="0,00" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
+        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowAdjustModal(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+            
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Ajustar Saldo</h3>
+              <button onClick={() => { vibrate([5]); setShowAdjustModal(false); }} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Valor a ser Ajustado (+ ou -)</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[18px] text-gray-400 font-medium">R$</span>
+                  <input type="number" step="0.01" placeholder="0.00" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} className="w-full bg-transparent text-[24px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" autoFocus />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Observação</label>
-                <input type="text" placeholder="Motivo do ajuste" value={adjustNotes} onChange={(e) => setAdjustNotes(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button onClick={() => setShowAdjustModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm">Cancelar</button>
-                <button onClick={handleAdjustBalance} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-sm disabled:opacity-50">{saving ? "Salvando..." : "Ajustar"}</button>
+              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Observação (Opcional)</label>
+                <input type="text" placeholder="Ex: Ajuste de final de mês" value={adjustNotes} onChange={(e) => setAdjustNotes(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
               </div>
             </div>
+
+            <button onClick={() => { vibrate([10, 50]); handleAdjustBalance(); }} disabled={saving} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] disabled:opacity-50 shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform">
+              {saving ? <Loader2 className="animate-spin mx-auto" size={22} /> : "Confirmar Ajuste"}
+            </button>
           </div>
         </div>
       )}
 
+      {/* Modal Transferir - Bottom Sheet Premium */}
       {showTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowTransferModal(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4">Transferir</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Valor</label>
-                <input type="number" step="0.01" placeholder="0,00" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
+        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowTransferModal(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+            
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Transferir</h3>
+              <button onClick={() => { vibrate([5]); setShowTransferModal(false); }} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Valor a transferir</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[18px] text-gray-400 font-medium">R$</span>
+                  <input type="number" step="0.01" placeholder="0.00" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} className="w-full bg-transparent text-[24px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" autoFocus />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Conta Destino</label>
-                <select value={transferToAccount} onChange={(e) => setTransferToAccount(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50">
-                  <option value="">Selecione...</option>
+
+              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4 relative">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Conta Destino</label>
+                <select value={transferToAccount} onChange={(e) => setTransferToAccount(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-100 outline-none appearance-none pr-8 cursor-pointer">
+                  <option value="" disabled className="text-gray-400">Selecione uma conta...</option>
                   {(localAccounts || []).filter((a: any) => a.id !== accountId).map((a: any) => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
+                <ChevronDown size={18} className="absolute right-4 top-1/2 mt-1 text-gray-400 pointer-events-none" />
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1 block">Observação</label>
-                <input type="text" placeholder="Descrição" value={transferNotes} onChange={(e) => setTransferNotes(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500/50" />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button onClick={() => setShowTransferModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm">Cancelar</button>
-                <button onClick={handleTransfer} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm disabled:opacity-50">{saving ? "Transferindo..." : "Transferir"}</button>
+
+              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Observação (Opcional)</label>
+                <input type="text" placeholder="Ex: Pagamento de empréstimo" value={transferNotes} onChange={(e) => setTransferNotes(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
               </div>
             </div>
+
+            <button onClick={() => { vibrate([10, 50]); handleTransfer(); }} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-[24px] font-bold text-[16px] disabled:opacity-50 shadow-lg shadow-blue-600/30 active:scale-[0.98] transition-transform">
+              {saving ? <Loader2 className="animate-spin mx-auto" size={22} /> : "Confirmar Transferência"}
+            </button>
           </div>
         </div>
       )}
