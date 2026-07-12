@@ -22,7 +22,6 @@ import {
 } from 'recharts'
 
 const ReportsSkeleton = () => (
-  // ... (Skeleton permanece igual, reduzido aqui por brevidade visual, mas o código copiado terá ele completo)
   <div className="space-y-4 animate-pulse">
     <div className="grid grid-cols-3 gap-3">
       {[1, 2, 3].map(i => (
@@ -212,7 +211,7 @@ export default function ReportsPage() {
     })
   })()
 
-  // 🔥 A MÁGICA DA EXPORTAÇÃO (Agorta Funcional e sem Refresh)
+  // 🔥 MUDANÇA OBRIGATÓRIA: Usando { csv, filename }
   const handleExport = async (format: 'pdf' | 'csv') => {
     if (!user?.id) return
     
@@ -224,10 +223,9 @@ export default function ReportsPage() {
     setExportStatus('exporting')
     try {
       const daysRange = (parseInt(period) * 30).toString()
-      const blob = await exportTransactionsToCSV(user.id, effectiveContext, daysRange)
-      const filename = `Relatorio_DFL_${effectiveContext}_${new Date().toISOString().split('T')[0]}.csv`
+      const { csv, filename } = await exportTransactionsToCSV(user.id, effectiveContext, daysRange)
       
-      await downloadCSV(blob, filename)
+      downloadCSV(csv, filename)
       
       setExportStatus('success')
 
