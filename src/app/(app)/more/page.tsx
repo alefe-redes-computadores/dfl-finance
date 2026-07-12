@@ -12,7 +12,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
