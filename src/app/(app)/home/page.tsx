@@ -946,23 +946,25 @@ function HomeContent() {
           />
         ))}
 
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex-1 min-w-0 mr-3">
+      <div className="flex justify-between items-start mb-6 gap-2">
+        <div className="flex flex-col gap-3 min-w-0">
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             {greeting.icon}
-            <span className="text-sm font-medium truncate">{greeting.text}, {firstName}</span>
+            <span className="text-[14px] font-bold truncate">{greeting.text}, <span className="text-gray-800 dark:text-gray-100">{firstName}</span></span>
           </div>
           <ContextToggle />
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <SyncButton pendingCount={pendingCount} isSyncing={isSyncing} onSync={syncQueue} />
-          {notificationsEnabled && (
-            <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
-          )}
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 px-2 py-1.5 rounded-full">
-            <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate([10]) }} className="p-1 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors active:scale-[0.95]"><ChevronLeft size={16} /></button>
-            <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-[80px] text-center">{monthLabel}</span>
-            <button onClick={() => { setCurrentDate(addMonths(currentDate, 1)); vibrate([10]) }} className="p-1 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors active:scale-[0.95]"><ChevronRight size={16} /></button>
+        <div className="flex flex-col items-end gap-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <SyncButton pendingCount={pendingCount} isSyncing={isSyncing} onSync={syncQueue} />
+            {notificationsEnabled && (
+              <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-50 dark:border-slate-700/50 p-1 rounded-full">
+            <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate([10]) }} className="p-1.5 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors active:scale-[0.95] bg-gray-50 dark:bg-slate-700/50 rounded-full"><ChevronLeft size={14} /></button>
+            <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200 uppercase tracking-widest w-[75px] text-center">{monthLabel}</span>
+            <button onClick={() => { setCurrentDate(addMonths(currentDate, 1)); vibrate([10]) }} className="p-1.5 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors active:scale-[0.95] bg-gray-50 dark:bg-slate-700/50 rounded-full"><ChevronRight size={14} /></button>
           </div>
         </div>
       </div>
@@ -990,16 +992,16 @@ function HomeContent() {
       />
 
     {notificationsEnabled && (
-  <NotificationCenter
-    isOpen={showNotifications}
-    onClose={() => {
-      setShowNotifications(false)
-      reloadNotifs()
-    }}
-    notifications={notificationsMap}
-    onReadChange={() => reloadNotifs()}
-  />
-)}
+      <NotificationCenter
+        isOpen={showNotifications}
+        onClose={() => {
+          setShowNotifications(false)
+          reloadNotifs()
+        }}
+        notifications={notificationsMap}
+        onReadChange={() => reloadNotifs()}
+      />
+    )}
     </div>
   )
 }
