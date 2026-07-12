@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -16,15 +16,12 @@ const safeNum = (val: any) => {
   return isNaN(parsed) ? 0 : parsed;
 }
 
-// 🔥 CORREÇÃO 2: Ícone do Anexo (Foto vs Arquivo)
 const getAttachmentIcon = (url: string | null) => {
   if (!url) return null;
-  // Se for um documento conhecido, exibe o Clipe de Papel
   const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase());
   if (isDocument) {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />;
   }
-  // Caso contrário (jpeg, png, heic, ou sem extensão clara), assume como Foto
   return <Image size={12} className="text-blue-500 shrink-0" />;
 }
 
@@ -36,34 +33,60 @@ interface TransactionItemProps {
 
 export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDelete }: TransactionItemProps) => {
   const router = useRouter()
-  const { vibrate } = useHapticFeedback()
+  const { vibrate, success, error: hapticError } = useHapticFeedback()
   
   const x = useMotionValue(0)
   const controls = useAnimation()
   const [swipeAction, setSwipeAction] = useState<'none' | 'edit' | 'done' | 'delete'>('none')
+  
+  // Controle para não disparar a vibração repetidas vezes no mesmo limite
+  const [lastVibratedAction, setLastVibratedAction] = useState<'none' | 'edit' | 'done' | 'delete'>('none')
 
   useMotionValueEvent(x, "change", (latest) => {
+    let currentAction: 'none' | 'edit' | 'done' | 'delete' = 'none'
+
     if (latest > 60) {
-      if (swipeAction !== 'edit') { setSwipeAction('edit'); vibrate([10]); }
+      currentAction = 'edit'
     } else if (latest < -100) {
-      if (swipeAction !== 'delete') { setSwipeAction('delete'); vibrate([30]); }
+      currentAction = 'delete'
     } else if (latest < -40) {
-      if (swipeAction !== 'done') { setSwipeAction('done'); vibrate([10]); }
-    } else {
-      if (swipeAction !== 'none') setSwipeAction('none')
+      currentAction = 'done'
+    }
+
+    if (swipeAction !== currentAction) {
+      setSwipeAction(currentAction)
+    }
+
+    // Vibra apenas se a ação mudou e não for 'none'
+    if (currentAction !== lastVibratedAction) {
+      setLastVibratedAction(currentAction)
+      if (currentAction === 'edit') vibrate([10])
+      else if (currentAction === 'done') success() // Vibração de confirmação (pago)
+      else if (currentAction === 'delete') hapticError() // Vibração mais pesada para exclusão
+      else if (currentAction === 'none') vibrate([5]) // Leve toque ao voltar ao meio
     }
   })
+
+  // Reseta o track de vibração quando soltar
+  useEffect(() => {
+    if (swipeAction === 'none') {
+      setLastVibratedAction('none')
+    }
+  }, [swipeAction])
 
   const handleDragEnd = (event: any, info: any) => {
     const offset = info.offset.x
     if (offset > 60) {
-      router.push(`/transactions/details?id=${transaction.id}`)
+      vibrate([10])
+      router.push(`/transactions/edit?id=${transaction.id}`)
     } else if (offset < -100) {
       onDelete(transaction)
     } else if (offset < -40) {
       onToggleStatus(transaction)
     }
     controls.start({ x: 0, transition: { type: 'spring', stiffness: 400, damping: 25 } })
+    setSwipeAction('none')
+    setLastVibratedAction('none')
   }
 
   const isPending = transaction.status === 'pending'
@@ -72,7 +95,6 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
   const IconComp = transaction.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(transaction.categories?.icon)
   const attachmentIcon = getAttachmentIcon(transaction.receipt_url)
 
-  // 🔥 CORREÇÃO 1: Cores por Tipo de Transação (Verde, Vermelho, Azul)
   const isIncome = transaction.type === 'income';
   const isExpense = transaction.type === 'expense' || transaction.type === 'sangria';
   const isTransfer = transaction.type === 'transfer';
@@ -91,33 +113,32 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
     defaultName = 'Despesa';
   } else if (isTransfer) {
     amountColorClass = 'text-blue-500 dark:text-blue-400';
-    // Se for transferência de entrada (+) senão (-)
     amountPrefix = transaction.description?.toLowerCase().includes('de ') ? '+' : '-';
     defaultName = 'Transferência';
   }
 
   const transactionName = transaction.description || transaction.categories?.name || defaultName;
 
-  let bgClass = 'bg-gray-100 dark:bg-slate-800'
+  let bgClass = 'bg-gray-50 dark:bg-slate-800'
   let iconLeft = null
   let iconRight = null
 
   if (swipeAction === 'edit') {
     bgClass = 'bg-blue-500'
-    iconLeft = <Edit3 className="text-white ml-4" size={24} />
+    iconLeft = <Edit3 className="text-white ml-5" size={24} />
   } else if (swipeAction === 'done') {
     bgClass = isPending ? 'bg-emerald-500' : 'bg-amber-500'
-    iconRight = isPending ? <Check className="text-white mr-4" size={24} /> : <Clock className="text-white mr-4" size={24} />
+    iconRight = isPending ? <Check className="text-white mr-5" size={24} /> : <Clock className="text-white mr-5" size={24} />
   } else if (swipeAction === 'delete') {
     bgClass = 'bg-red-500'
-    iconRight = <Trash2 className="text-white mr-4" size={24} />
+    iconRight = <Trash2 className="text-white mr-5" size={24} />
   }
 
   return (
-    <div className="relative w-full mb-3 rounded-[20px] overflow-hidden">
+    <div className="relative w-full mb-3 rounded-[24px] overflow-hidden group">
       <div className={`absolute inset-0 flex items-center justify-between transition-colors duration-200 ${bgClass}`}>
-        <div className="flex-1 flex items-center justify-start">{iconLeft}</div>
-        <div className="flex-1 flex items-center justify-end">{iconRight}</div>
+        <div className="flex-1 flex items-center justify-start h-full">{iconLeft}</div>
+        <div className="flex-1 flex items-center justify-end h-full">{iconRight}</div>
       </div>
 
       <motion.div
@@ -127,22 +148,25 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
         onDragEnd={handleDragEnd}
         animate={controls}
         style={{ x }}
-        onClick={() => router.push(`/transactions/details?id=${transaction.id}`)}
-        className="relative bg-white dark:bg-slate-800 px-4 py-4 flex items-center gap-3 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.03)] dark:shadow-none rounded-[20px] border border-gray-100/50 dark:border-slate-700/50"
+        onClick={() => {
+          vibrate([10])
+          router.push(`/transactions/details?id=${transaction.id}`)
+        }}
+        className="relative bg-white dark:bg-slate-800 px-4 py-4 flex items-center gap-3 cursor-pointer shadow-sm border border-gray-50 dark:border-slate-700/50 rounded-[24px] active:scale-[0.98] transition-transform"
       >
         {isPending ? (
-          <div className="w-6 h-6 rounded-full bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
             <Clock size={14} className="text-amber-500" />
           </div>
         ) : (
-          <div className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
             <Check size={14} className="text-emerald-500" />
           </div>
         )}
 
-        <div className="w-11 h-11 rounded-[14px] flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: transaction.categories?.color ? `${transaction.categories.color}20` : '#f3f4f6', color: transaction.categories?.color || '#64748b' }}>
-          <IconComp size={20} />
+        <div className="w-12 h-12 rounded-[16px] flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: transaction.categories?.color ? `${transaction.categories.color}15` : '#f8f9fa', color: transaction.categories?.color || '#64748b' }}>
+          <IconComp size={22} />
         </div>
 
         <div className="flex-1 min-w-0 pr-2">
@@ -154,15 +178,15 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
             {transaction.categories?.name && (
-              <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+              <span className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
                 {transaction.categories.name}
               </span>
             )}
             {transaction.categories?.name && transaction.accounts?.name && (
-              <span className="text-[12px] text-gray-300 dark:text-gray-600">•</span>
+              <span className="text-[10px] text-gray-300 dark:text-gray-600">•</span>
             )}
             {transaction.accounts?.name && (
-              <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+              <span className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
                 {transaction.accounts.name}
               </span>
             )}
@@ -170,9 +194,9 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
         </div>
 
         <div className="text-right flex-shrink-0">
-          <div className="flex items-center gap-1 justify-end mb-1">
+          <div className="flex items-center gap-1.5 justify-end mb-1">
             {installmentBadge && (
-              <span className="text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-300 px-1.5 py-0.5 rounded-md">
+              <span className="text-[10px] font-bold bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full border border-gray-100 dark:border-slate-600">
                 {installmentBadge}
               </span>
             )}
@@ -181,7 +205,7 @@ export const TransactionItem = React.memo(({ transaction, onToggleStatus, onDele
             </p>
           </div>
           <p className={`text-[15px] font-bold whitespace-nowrap ${amountColorClass}`}>
-            {amountPrefix} R$ {safeNum(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {amountPrefix} {safeNum(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
         </div>
       </motion.div>
