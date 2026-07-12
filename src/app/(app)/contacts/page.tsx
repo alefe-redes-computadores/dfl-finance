@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   Search,
@@ -58,20 +58,47 @@ export default function ContactsPage() {
     return acc
   }, {})
 
-  // 🔥 CORRIGIDO: Remoção do db.transaction redundante
+  // 🔥 PERFORMANCE: groupedContacts com useMemo
+  const { groupedContacts, sortedLetters } = useMemo(() => {
+    const filteredContacts = (contacts || []).filter((c: any) => {
+      if (typeFilter !== "all" && c.type !== typeFilter) return false
+      if (!search) return true
+      const s = search.toLowerCase()
+      return (
+        (c.name && c.name.toLowerCase().includes(s)) ||
+        (c.email && c.email.toLowerCase().includes(s)) ||
+        (c.phone && c.phone.toLowerCase().includes(s)) ||
+        (c.company && c.company.toLowerCase().includes(s)) ||
+        (c.notes && c.notes.toLowerCase().includes(s))
+      )
+    })
+
+    const grouped = filteredContacts.reduce((acc: Record<string, any[]>, c: any) => {
+      const letter = (c.name || "?").charAt(0).toUpperCase()
+      if (!acc[letter]) acc[letter] = []
+      acc[letter].push(c)
+      return acc
+    }, {})
+
+    const sorted = Object.keys(grouped).sort()
+
+    return { groupedContacts: grouped, sortedLetters: sorted }
+  }, [contacts, typeFilter, search])
+
+  // 🔥 DELETE ATOMICO COM FEEDBACK
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
       const result = await safeDelete('contacts', deleteModal)
       if (!result.success) throw new Error(result.error)
       
-      showToast("Contato excluído com sucesso!", "success")
       success()
+      showToast("✅ Contato excluído com sucesso!", "success")
       setDeleteModal(null)
       reload()
     } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, "error")
       errorHaptic()
+      showToast(`❌ Erro ao excluir: ${err.message}`, "error")
     }
   }
 
@@ -90,28 +117,6 @@ export default function ContactsPage() {
       }
     }
   }, [refreshing, reload])
-
-  const filteredContacts = (contacts || []).filter((c: any) => {
-    if (typeFilter !== "all" && c.type !== typeFilter) return false
-    if (!search) return true
-    const s = search.toLowerCase()
-    return (
-      (c.name && c.name.toLowerCase().includes(s)) ||
-      (c.email && c.email.toLowerCase().includes(s)) ||
-      (c.phone && c.phone.toLowerCase().includes(s)) ||
-      (c.company && c.company.toLowerCase().includes(s)) ||
-      (c.notes && c.notes.toLowerCase().includes(s))
-    )
-  })
-
-  const groupedContacts = filteredContacts.reduce((acc: Record<string, any[]>, c: any) => {
-    const letter = (c.name || "?").charAt(0).toUpperCase()
-    if (!acc[letter]) acc[letter] = []
-    acc[letter].push(c)
-    return acc
-  }, {})
-
-  const sortedLetters = Object.keys(groupedContacts).sort()
 
   const formatInitials = (name: string) => {
     if (!name) return "?"
@@ -152,14 +157,14 @@ export default function ContactsPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors active:scale-[0.95]"
               aria-label="Buscar"
             >
               {showSearch ? <X size={18} /> : <Search size={18} />}
             </button>
             <button
               onClick={() => router.push("/contacts/new")}
-              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95"
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-[0.95]"
               aria-label="Novo contato"
             >
               <Plus size={18} />
@@ -227,7 +232,7 @@ export default function ContactsPage() {
       >
         {loading ? (
           <Skeleton count={8} />
-        ) : filteredContacts.length === 0 ? (
+        ) : Object.keys(groupedContacts).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <User size={48} className="text-slate-300 dark:text-slate-700 mb-3" />
             <p className="text-slate-500 dark:text-slate-400 font-semibold">
@@ -248,15 +253,15 @@ export default function ContactsPage() {
                 </div>
                 <div className="space-y-1 mt-2">
                   {groupedContacts[letter].map((c: any) => {
-                    const txCount = transactionCountByContact[c.id] || 0
+                    const txCount = (transactionCountByContact[c.id] || 0)
                     return (
                       <div
                         key={c.id}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+                        className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden hover:shadow-md transition-all"
                       >
                         <button
                           onClick={() => router.push(`/contacts/details?id=${c.id}`)}
-                          className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                          className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors active:scale-[0.98]"
                         >
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                             c.type === "company"
@@ -308,7 +313,7 @@ export default function ContactsPage() {
                         <div className="px-3 pb-2 flex justify-end">
                           <button
                             onClick={() => setDeleteModal(c.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors active:scale-[0.95]"
                             aria-label="Excluir contato"
                           >
                             <Trash2 size={14} />
@@ -326,7 +331,7 @@ export default function ContactsPage() {
 
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteModal(null)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
               Excluir Contato
             </h3>
@@ -353,3 +358,4 @@ export default function ContactsPage() {
     </div>
   )
 }
+// ✅ Refatoração Premium Finalizada — Performance + Design Limpo
