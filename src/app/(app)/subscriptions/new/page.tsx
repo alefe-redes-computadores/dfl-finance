@@ -1,21 +1,17 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import {
-  ArrowLeft, Save, Trash2, RefreshCw,
-} from "lucide-react"
+import { ArrowLeft, Save, RefreshCw } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-// 🔥 CORREÇÃO: Importando o addToSyncQueue
 import { db, addToSyncQueue } from '@/lib/db' 
+import MoneyInput from '@/components/MoneyInput'
 
-const CATEGORIES = [
-  "Streaming", "Software", "Academia", "Clube", "Seguro", "Internet", "Telefone", "TV", "Educação", "Saúde", "Outros",
-]
+const CATEGORIES = ["Streaming", "Software", "Academia", "Clube", "Seguro", "Internet", "Telefone", "TV", "Educação", "Saúde", "Outros"]
 
 const BILLING_CYCLES = [
   { value: "monthly", label: "Mensal" },
@@ -30,20 +26,17 @@ export default function NewSubscriptionPage() {
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
-  const { success, error: errorHaptic } = useHapticFeedback()
-  // 🔥 CORREÇÃO: Pegando o appMode para calcular o effectiveContext
+  const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { context, appMode } = useContext_()
   const { user } = useAuth()
 
-  // 🔥 CORREÇÃO: Aplicando o effectiveContext
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [saving, setSaving] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const touchStartY = useRef(0)
 
   const [name, setName] = useState("")
-  const [amount, setAmount] = useState("")
+  const [amountNum, setAmountNum] = useState(0)
+  const [amountFormatted, setAmountFormatted] = useState("0,00")
   const [billingCycle, setBillingCycle] = useState("monthly")
   const [category, setCategory] = useState("")
   const [nextDueDate, setNextDueDate] = useState("")
@@ -53,7 +46,7 @@ export default function NewSubscriptionPage() {
 
   const { data: localSubscriptions } = useLocalData({
     table: 'subscriptions' as any,
-    filters: { context: effectiveContext }, // 🔥 Usando effectiveContext
+    filters: { context: effectiveContext },
   })
 
   const subscriptionData = localSubscriptions?.find((s: any) => s.id === editId) as any
@@ -61,7 +54,9 @@ export default function NewSubscriptionPage() {
   useEffect(() => {
     if (subscriptionData) {
       setName(subscriptionData.name || "")
-      setAmount(subscriptionData.amount ? String(subscriptionData.amount) : "")
+      const val = Number(subscriptionData.amount) || 0
+      setAmountNum(val)
+      setAmountFormatted(val.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setBillingCycle(subscriptionData.billing_cycle || "monthly")
       setCategory(subscriptionData.category || "")
       setNextDueDate(subscriptionData.next_due_date ? subscriptionData.next_due_date.split("T")[0] : "")
@@ -71,27 +66,15 @@ export default function NewSubscriptionPage() {
     }
   }, [subscriptionData])
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (window.scrollY <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        setTimeout(() => setRefreshing(false), 600)
-      }
-    }
-  }, [refreshing])
-
-  // 🔥 SALVAR ATÔMICO (COM addToSyncQueue)
   const handleSave = async () => {
     if (!name.trim()) {
-      showToast("Preencha o nome da assinatura", "warning")
       errorHaptic()
+      showToast("⚠️ Preencha o nome da assinatura", "warning")
       return
     }
-    if (!amount || parseFloat(amount) <= 0) {
-      showToast("Informe um valor válido", "warning")
+    if (amountNum <= 0) {
       errorHaptic()
+      showToast("⚠️ Informe um valor válido", "warning")
       return
     }
 
@@ -99,18 +82,17 @@ export default function NewSubscriptionPage() {
     try {
       const payload = {
         name: name.trim(),
-        amount: parseFloat(amount),
+        amount: amountNum,
         billing_cycle: billingCycle,
         category: category || null,
         next_due_date: nextDueDate || null,
         payment_method: paymentMethod.trim() || null,
         notes: notes.trim() || null,
         status,
-        context: effectiveContext, // 🔥 Usando effectiveContext
+        context: effectiveContext,
         updated_at: new Date().toISOString(),
       }
 
-      // 🔥 CORREÇÃO: Array de tabelas e uso do addToSyncQueue
       await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
         if (editId) {
           await db.table('subscriptions').update(editId, payload)
@@ -130,121 +112,100 @@ export default function NewSubscriptionPage() {
         }
       })
 
-      showToast(editId ? "Assinatura atualizada com sucesso!" : "Assinatura criada com sucesso!", "success")
       success()
+      showToast(editId ? "✅ Assinatura atualizada!" : "✅ Assinatura criada!", "success")
       router.back()
     } catch (err: any) {
-      showToast(err?.message || "Erro ao salvar assinatura", "error")
       errorHaptic()
+      showToast(`❌ Erro: ${err.message}`, "error")
     } finally {
       setSaving(false)
-    }
-  }
-
-  // 🔥 EXCLUIR ATÔMICO (COM addToSyncQueue)
-  const handleDelete = async () => {
-    if (!editId) return
-    if (!confirm("Tem certeza que deseja excluir esta assinatura?")) return
-    try {
-      // 🔥 CORREÇÃO: Array de tabelas e uso do addToSyncQueue
-      await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
-        await db.table('subscriptions').delete(editId)
-        await addToSyncQueue(user!.id, 'subscriptions', 'delete', editId, null)
-      })
-      showToast("Assinatura excluída com sucesso!", "success")
-      success()
-      router.back()
-    } catch {
-      showToast("Erro ao excluir assinatura", "error")
-      errorHaptic()
     }
   }
 
   const contextTitle = effectiveContext === "dfl" ? "da Empresa" : "Pessoal"
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+    <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+      <div className="sticky top-0 z-30 bg-gray-50/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Voltar"><ArrowLeft size={20} /></button>
+          <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"><ArrowLeft size={24} /></button>
           <div className="text-center">
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">{editId ? "Editar" : "Nova"} Assinatura</h1>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{contextTitle}</p>
+            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? "Editar" : "Nova"} Assinatura</h1>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{contextTitle}</p>
           </div>
-          <div className="flex gap-2">
-            {editId && <button onClick={handleDelete} className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" aria-label="Excluir"><Trash2 size={20} /></button>}
-            <button onClick={handleSave} disabled={saving} className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95 disabled:opacity-50" aria-label="Salvar">
-              {saving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
-            </button>
-          </div>
+          <div className="w-10" />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Nome da Assinatura</label>
-          <input type="text" placeholder="Ex: Netflix, Spotify, Academia..." value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
+      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Nome da Assinatura</label>
+          <input type="text" placeholder="Ex: Netflix, Spotify..." value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-transparent text-[16px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" autoFocus />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Valor (R$)</label><input type="number" step="0.01" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" /></div>
-          <div>
-            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Ciclo</label>
-            <select value={billingCycle} onChange={(e) => setBillingCycle(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Valor</label>
+            <div className="flex items-center gap-2">
+              <span className="text-[16px] text-gray-400 font-medium">R$</span>
+              <MoneyInput
+                value={amountNum}
+                onChange={(num, formatted) => { setAmountNum(num); setAmountFormatted(formatted) }}
+                placeholder="0,00"
+                className="text-[20px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+              />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Ciclo</label>
+            <select value={billingCycle} onChange={(e) => { vibrate([5]); setBillingCycle(e.target.value); }} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none appearance-none cursor-pointer">
               {BILLING_CYCLES.map((cycle) => (<option key={cycle.value} value={cycle.value}>{cycle.label}</option>))}
             </select>
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Categoria (opcional)</label>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block">Categoria</label>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((cat) => (
-              <button key={cat} onClick={() => setCategory(category === cat ? "" : cat)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${category === cat ? "bg-teal-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}>
+              <button key={cat} onClick={() => { vibrate([5]); setCategory(category === cat ? "" : cat); }} className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all active:scale-95 ${category === cat ? "bg-teal-600 text-white shadow-sm" : "bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100"}`}>
                 {cat}
               </button>
             ))}
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Próximo Vencimento (opcional)</label>
-          <input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50" />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Próximo Vencimento (Opcional)</label>
+          <input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Forma de Pagamento (opcional)</label>
-          <input type="text" placeholder="Ex: Cartão de Crédito, Débito Automático, PIX..." value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Forma de Pagamento (Opcional)</label>
+          <input type="text" placeholder="Ex: Cartão Final 1234, PIX..." value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Status</label>
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block">Status da Assinatura</label>
           <div className="flex gap-2">
             {["active", "paused", "cancelled"].map((s) => (
-              <button key={s} onClick={() => setStatus(s)} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors ${status === s ? s === "active" ? "bg-blue-500 text-white" : s === "paused" ? "bg-orange-500 text-white" : "bg-red-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}>
+              <button key={s} onClick={() => { vibrate([5]); setStatus(s); }} className={`flex-1 py-3 rounded-[16px] text-[13px] font-bold transition-all active:scale-95 ${status === s ? s === "active" ? "bg-emerald-500 text-white shadow-sm" : s === "paused" ? "bg-orange-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm" : "bg-gray-50 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400"}`}>
                 {s === "active" ? "Ativa" : s === "paused" ? "Pausada" : "Cancelada"}
               </button>
             ))}
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Observações (opcional)</label>
-          <textarea placeholder="Detalhes adicionais..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400 resize-none" />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Observações (Opcional)</label>
+          <input type="text" placeholder="Detalhes adicionais..." value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
         </div>
 
-        <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
-          <button onClick={handleSave} disabled={saving} className="w-full py-4 rounded-2xl bg-teal-500 hover:bg-teal-600 text-white font-black text-base shadow-xl shadow-teal-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}{editId ? "Atualizar Assinatura" : "Criar Assinatura"}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 dark:from-slate-900 via-gray-50/80 dark:via-slate-900/80 to-transparent z-20">
+          <button onClick={() => { vibrate([10, 50]); handleSave(); }} disabled={saving} className="w-full max-w-md mx-auto bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}{editId ? "Atualizar Assinatura" : "Criar Assinatura"}
           </button>
         </div>
       </div>
