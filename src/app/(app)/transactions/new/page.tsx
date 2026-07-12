@@ -26,7 +26,6 @@ import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-// 🔥 NOVO: Arquitetura Local-First e Blindada
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
@@ -56,10 +55,9 @@ function NewTransactionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useToast()
-  const { vibrate, success } = useHapticFeedback()
+  const { vibrate, success, error: hapticError } = useHapticFeedback()
   const { safeAdd, safeUpdate } = useSafeDb()
 
-  // 🔥 CORRIGIDO: effectiveContext garantindo a trava PF/PJ
   const { context: globalContext, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : globalContext
   const [context, setContext] = useState<Context>(effectiveContext as Context)
@@ -140,39 +138,23 @@ function NewTransactionContent() {
 
   const { isOnline } = useOfflineQueue()
 
-  // 🔥 LEITURA 100% OFFLINE
-  const { data: accounts } = useLocalData({
-    table: 'accounts' as any,
-    filters: { context: effectiveContext },
-  })
+  const { data: accounts } = useLocalData({ table: 'accounts' as any, filters: { context: effectiveContext } })
+  const { data: localCategories } = useLocalData({ table: 'categories' as any, filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' } })
+  const { data: tags } = useLocalData({ table: 'tags' as any, filters: { context: effectiveContext } })
+  const { data: creditCards } = useLocalData({ table: 'credit_cards' as any, filters: { context: effectiveContext, is_archived: false } })
+  const { data: contacts } = useLocalData({ table: 'contacts' as any, filters: { context: effectiveContext } })
+  const { data: budgets } = useLocalData({ table: 'budgets' as any, filters: { context: effectiveContext } })
 
-  // 🔥 ADEUS SUBCATEGORIAS! Agora é uma lista plana/flat simples.
-  const { data: categories } = useLocalData({
-    table: 'categories' as any,
-    filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' },
-  })
+  // 🔥 ORDENAÇÃO DAS CATEGORIAS PELO ORDER_INDEX
+  const categories = useMemo(() => {
+    return (localCategories || []).sort((a: any, b: any) => {
+      const orderA = a.order_index ?? 9999
+      const orderB = b.order_index ?? 9999
+      if (orderA !== orderB) return orderA - orderB
+      return (a.name || '').localeCompare(b.name || '')
+    })
+  }, [localCategories])
 
-  const { data: tags } = useLocalData({
-    table: 'tags' as any,
-    filters: { context: effectiveContext },
-  })
-
-  const { data: creditCards } = useLocalData({
-    table: 'credit_cards' as any,
-    filters: { context: effectiveContext, is_archived: false },
-  })
-
-  const { data: contacts } = useLocalData({
-    table: 'contacts' as any,
-    filters: { context: effectiveContext },
-  })
-
-  const { data: budgets } = useLocalData({
-    table: 'budgets' as any,
-    filters: { context: effectiveContext },
-  })
-
-  // Zera campos se trocar de modo Pessoal <-> Empresa
   useEffect(() => {
     setContext(effectiveContext as Context)
     setAccountId('')
@@ -183,10 +165,7 @@ function NewTransactionContent() {
   }, [effectiveContext])
 
   const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`
+    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const handleDateChange = (newDateStr: string) => {
     setDate(newDateStr)
@@ -201,7 +180,7 @@ function NewTransactionContent() {
   const themeColor = isIncome ? 'text-emerald-700' : 'text-red-600'
   const bgColor = isIncome ? 'bg-emerald-700' : 'bg-red-600'
 
-  const selectedCat = (categories || []).find((c: any) => c.id === categoryId)
+  const selectedCat = categories.find((c: any) => c.id === categoryId)
   const selectedAcc = (accounts || []).find((a: any) => a.id === accountId)
   const selectedCard = (creditCards || []).find((c: any) => c.id === creditCardId)
   const selectedContact = (contacts || []).find((c: any) => c.id === contactId)
@@ -212,13 +191,12 @@ function NewTransactionContent() {
       if (prev.length >= 5) return prev
       return [...prev, id]
     })
-  }, [])
+    vibrate([10])
+  }, [vibrate])
 
   // Alerta de Orçamento
   const budgetAlertMemo = useMemo(() => {
-    if (!categoryId || amountNum <= 0 || type !== 'expense') {
-      return null
-    }
+    if (!categoryId || amountNum <= 0 || type !== 'expense') return null
     const budget = (budgets || []).find((b: any) => b.category_id === categoryId)
     if (!budget) return null
     return budget
@@ -234,7 +212,6 @@ function NewTransactionContent() {
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
-    // Lê histórico local
     supabase
       .from('transactions')
       .select('amount')
@@ -243,9 +220,7 @@ function NewTransactionContent() {
       .gte('date', start)
       .lte('date', end)
       .then(({ data }) => {
-        const spent = (data || []).reduce(
-          (a: number, t: any) => a + (Number(t.amount) || 0), 0
-        )
+        const spent = (data || []).reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
         const total = spent + amountNum
         const limit = Number(budget.amount)
         const percent = (total / limit) * 100
@@ -266,7 +241,6 @@ function NewTransactionContent() {
       })
   }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
 
-  // Arquivos
   const uploadFile = async (file: File) => {
     if (!user) return
     setUploading(true)
@@ -288,15 +262,10 @@ function NewTransactionContent() {
       const uniqueName = `${crypto.randomUUID()}.${ext}`
       const path = `${user.id}/${uniqueName}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('receipts')
-        .upload(path, file, { upsert: false })
-
+      const { error: uploadError } = await supabase.storage.from('receipts').upload(path, file, { upsert: false })
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(path)
+      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
 
       if (receiptUrl) {
         const oldPath = receiptUrl.split('/').slice(-2).join('/')
@@ -304,7 +273,8 @@ function NewTransactionContent() {
       }
 
       setReceiptUrl(urlData.publicUrl)
-      showToast('Comprovante anexado!', 'success')
+      showToast('✅ Comprovante anexado!', 'success')
+      success()
 
       if (isImage) {
         try {
@@ -322,14 +292,15 @@ function NewTransactionContent() {
             if (ocrData.data.date) setDate(ocrData.data.date)
             if (ocrData.data.description) setDesc(ocrData.data.description)
             vibrate([50, 100, 50])
-            showToast('Dados do comprovante extraídos! Revise antes de salvar.', 'success')
+            showToast('✅ Dados extraídos! Revise antes de salvar.', 'success')
           }
         } catch (ocrError) {
           console.error('Erro OCR:', ocrError)
         }
       }
     } catch (err: any) {
-      showToast(`Erro ao anexar: ${err.message}`, 'error')
+      showToast(`❌ Erro ao anexar: ${err.message}`, 'error')
+      hapticError()
       setReceiptPreview(null)
       setReceiptName('')
       setReceiptType(null)
@@ -347,7 +318,8 @@ function NewTransactionContent() {
     setReceiptPreview(null)
     setReceiptName('')
     setReceiptType(null)
-    showToast('Comprovante removido.', 'success')
+    showToast('🗑️ Comprovante removido.', 'success')
+    vibrate([10])
   }
 
   const handleReceiptOption = (option: string) => {
@@ -396,15 +368,15 @@ function NewTransactionContent() {
       setAmountNum(parseFloat(extractedAmount.replace(',', '.')))
     }
     if (extractedDesc) setDesc(extractedDesc)
+    vibrate([10, 50])
   }
 
-  // 🔥 SALVAR NOVA CATEGORIA ATÔMICO
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
-
     setSavingCategory(true)
     try {
       const id = crypto.randomUUID()
+      const newOrderIndex = categories.length > 0 ? Math.max(...categories.map((c: any) => c.order_index || 0)) + 1 : 0
       const payload = {
         id,
         user_id: user.id,
@@ -413,6 +385,7 @@ function NewTransactionContent() {
         color: newCatColor,
         context: effectiveContext,
         type: type === 'income' ? 'income' : 'expense',
+        order_index: newOrderIndex,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         sync_status: 'pending',
@@ -425,18 +398,18 @@ function NewTransactionContent() {
       setCategoryId(id)
       setShowCreateCatModal(false)
       setNewCatName('')
-      showToast('Categoria criada!', 'success')
+      showToast('✅ Categoria criada!', 'success')
+      success()
     } catch (err: any) {
-      showToast(`Erro ao criar categoria: ${err.message}`, 'error')
+      showToast(`❌ Erro ao criar categoria: ${err.message}`, 'error')
+      hapticError()
     } finally {
       setSavingCategory(false)
     }
   }
 
-  // 🔥 SALVAR NOVA CONTA ATÔMICO
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
-
     setSavingAccount(true)
     try {
       const id = crypto.randomUUID()
@@ -460,18 +433,18 @@ function NewTransactionContent() {
       setAccountId(id)
       setShowCreateAccModal(false)
       setNewAccName('')
-      showToast('Conta criada!', 'success')
+      showToast('✅ Conta criada!', 'success')
+      success()
     } catch (err: any) {
-      showToast(`Erro ao criar conta: ${err.message}`, 'error')
+      showToast(`❌ Erro ao criar conta: ${err.message}`, 'error')
+      hapticError()
     } finally {
       setSavingAccount(false)
     }
   }
 
-  // 🔥 SALVAR NOVA TAG ATÔMICO
   const handleSaveTag = async () => {
     if (!user?.id || !newTagName.trim()) return
-
     setSavingTag(true)
     try {
       const id = crypto.randomUUID()
@@ -493,19 +466,20 @@ function NewTransactionContent() {
       setSelectedTags((prev) => (prev.length < 5 ? [...prev, id] : prev))
       setShowCreateTagModal(false)
       setNewTagName('')
-      showToast('Tag criada!', 'success')
+      showToast('✅ Tag criada!', 'success')
+      success()
     } catch (err: any) {
-      showToast(`Erro ao criar tag: ${err.message}`, 'error')
+      showToast(`❌ Erro ao criar tag: ${err.message}`, 'error')
+      hapticError()
     } finally {
       setSavingTag(false)
     }
   }
 
-  // 🔥 SALVAR TRANSAÇÃO ATÔMICO
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
-    if (!user?.id) { showToast('Sessão expirada.', 'error'); return }
-    if (amountNum <= 0) { showToast('Valor deve ser maior que zero.', 'warning'); return }
+    if (!user?.id) { showToast('❌ Sessão expirada.', 'error'); return }
+    if (amountNum <= 0) { showToast('⚠️ Valor deve ser maior que zero.', 'warning'); return }
 
     setIsSubmitting(true)
     const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
@@ -528,15 +502,11 @@ function NewTransactionContent() {
       }
     }
 
-    const installmentAmount =
-      totalParcels > 1 && repetition === 'installments'
-        ? amountNum / totalParcels
-        : amountNum
+    const installmentAmount = totalParcels > 1 && repetition === 'installments' ? amountNum / totalParcels : amountNum
 
     try {
       const baseDate = createLocalDate(date)
       
-      // Checagem de saldo (Opcional, mas seguro)
       if (isPaid && accountId && type !== 'transfer' && !creditCardId) {
         const acc = (accounts || []).find((a: any) => a.id === accountId)
         if (acc) {
@@ -594,7 +564,6 @@ function NewTransactionContent() {
         const res = await safeAdd('transactions', payload)
         if (!res.success) throw new Error(res.error)
 
-        // Se a conta de depósito estiver selecionada e não for cartão, atualiza o saldo
         if (accountId && !creditCardId && isPaid) {
           const acc = (accounts || []).find((a: any) => a.id === accountId)
           if (acc) {
@@ -604,17 +573,18 @@ function NewTransactionContent() {
         }
       }
 
-      showToast(isOnline ? 'Transação salva!' : 'Salvo localmente.', 'success')
+      showToast(isOnline ? '✅ Transação salva com sucesso!' : '☁️ Salvo localmente para sincronizar depois.', 'success')
       success()
       router.push('/transactions')
     } catch (e: any) {
       if (e?.message !== '__CANCELLED_BY_USER__') {
-        showToast(`Erro ao salvar: ${e.message}`, 'error')
+        showToast(`❌ Erro ao salvar: ${e.message}`, 'error')
+        hapticError()
       }
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, accounts, safeAdd, safeUpdate])
+  }, [isSubmitting, user, amountNum, type, categoryId, date, desc, selectedCat, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, hapticError, accounts, safeAdd, safeUpdate])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -633,41 +603,21 @@ function NewTransactionContent() {
         </div>
       )}
 
-      <input
-        ref={galeriaInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) uploadFile(file)
-          e.target.value = ''
-        }}
-      />
-      <input
-        ref={pdfInputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) uploadFile(file)
-          e.target.value = ''
-        }}
-      />
+      <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadFile(file); e.target.value = '' }} />
+      <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadFile(file); e.target.value = '' }} />
 
       <div className="flex items-center justify-between px-4 pt-5 pb-2 sticky top-0 bg-slate-50 dark:bg-slate-900 z-40">
-        <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
+        <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm active:scale-[0.95] transition-transform">
           <ChevronLeft size={22} className="text-gray-700 dark:text-gray-300" />
         </button>
         <h1 className="font-bold text-base text-gray-800 dark:text-gray-100">
           {isIncome ? 'Nova Receita' : creditCardId ? 'Nova Compra no Cartão' : 'Nova Despesa'}
         </h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowQRScanner(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
+          <button onClick={() => { setShowQRScanner(true); vibrate([10]) }} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm active:scale-[0.95] transition-transform">
             <QrCode size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
-          <button onClick={() => !receiptUrl && setShowReceiptModal(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm">
+          <button onClick={() => { !receiptUrl && setShowReceiptModal(true); vibrate([10]) }} className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm active:scale-[0.95] transition-transform">
             {AttachmentIcon}
           </button>
         </div>
@@ -676,41 +626,38 @@ function NewTransactionContent() {
       <ContextToggle />
 
       <div className="py-6 text-center px-6">
-        <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">
+        <p className="text-gray-400 dark:text-gray-500 text-xs mb-2 uppercase font-bold tracking-wider">
           Valor {isIncome ? 'da Receita' : creditCardId ? 'da Compra' : 'da Despesa'}
         </p>
         <div className="flex justify-center items-center gap-1">
           <span className={`text-3xl font-medium ${themeColor} opacity-60`}>R$</span>
           <MoneyInput
             value={amountNum}
-            onChange={(num, formatted) => {
-              setAmountNum(num)
-              setAmountFormatted(formatted)
-            }}
+            onChange={(num, formatted) => { setAmountNum(num); setAmountFormatted(formatted) }}
             className={`text-5xl font-bold outline-none bg-transparent ${themeColor} w-48 text-center`}
           />
         </div>
         {type === 'expense' && budgetAlert && (
-          <div className={`mt-3 mx-6 p-3 rounded-xl text-xs font-bold ${budgetAlert.type === 'danger' ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800'}`}>
+          <div className={`mt-3 mx-6 p-3 rounded-[16px] text-xs font-bold shadow-sm ${budgetAlert.type === 'danger' ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800'}`}>
             {budgetAlert.message}
           </div>
         )}
       </div>
 
       {uploading ? (
-        <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-3">
           <Loader2 size={20} className="animate-spin text-teal-700" />
-          <span className="text-sm text-gray-600 dark:text-gray-300">Enviando comprovante...</span>
+          <span className="text-sm font-bold text-gray-600 dark:text-gray-300">Enviando comprovante...</span>
         </div>
       ) : receiptUrl ? (
-        <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+        <div className="mx-4 mb-4 bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
           <div className="flex items-center gap-3">
             {receiptPreview ? (
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
+              <div className="w-12 h-12 rounded-[16px] overflow-hidden bg-gray-200 dark:bg-slate-600 flex-shrink-0">
                 <img src={receiptPreview} alt="Preview" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-[16px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
                 {receiptType === 'pdf' ? <Paperclip size={22} className="text-teal-600 dark:text-teal-400" /> : <ImageIcon size={22} className="text-teal-600 dark:text-teal-400" />}
               </div>
             )}
@@ -718,53 +665,53 @@ function NewTransactionContent() {
               <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{receiptName}</p>
               <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Comprovante anexado</p>
             </div>
-            <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+            <button onClick={handleRemoveReceipt} className="p-2 text-gray-400 hover:text-red-500 transition-colors active:scale-[0.95]"><Trash2 size={18} /></button>
           </div>
         </div>
       ) : null}
 
-      <div className="bg-white dark:bg-slate-800 rounded-3xl mx-4 shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-[28px] mx-4 shadow-sm border border-gray-50 dark:border-slate-700 overflow-hidden">
         
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700/50">
           <Edit3 size={20} className="text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
             placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
-            className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+            className="flex-1 text-sm font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
           />
         </div>
 
-        <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+        <div className="flex items-center justify-between px-5 py-5 border-b border-gray-50 dark:border-slate-700/50">
           <span className="font-bold text-sm text-gray-700 dark:text-gray-300">
             {isIncome ? 'Recebido' : creditCardId ? 'Compra no cartão' : 'Pago'}
           </span>
           {!creditCardId && (
-            <button onClick={() => setIsPaid(!isPaid)} className={`w-12 h-6 rounded-full transition-colors ${isPaid ? bgColor : 'bg-gray-200 dark:bg-gray-600'}`}>
-              <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
+            <button onClick={() => { setIsPaid(!isPaid); vibrate([10]) }} className={`w-12 h-6 rounded-full transition-colors shadow-inner ${isPaid ? bgColor : 'bg-gray-200 dark:bg-gray-600'}`}>
+              <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${isPaid ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           )}
         </div>
 
         {!isIncome && (creditCards || []).length > 0 && (
-          <button onClick={() => setShowCardModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={() => { setShowCardModal(true); vibrate([10]) }} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:bg-gray-100 dark:active:bg-slate-600">
             <div className="flex items-center gap-4">
               <CreditCard size={20} className="text-gray-400 dark:text-gray-500" />
-              <span className={`text-sm font-medium ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+              <span className={`text-sm font-bold ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
                 {selectedCard ? selectedCard.name : 'Cartão de crédito (opcional)'}
               </span>
             </div>
             {selectedCard && (
-              <div onClick={(e) => { e.stopPropagation(); setCreditCardId('') }} className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"><X size={16} /></div>
+              <div onClick={(e) => { e.stopPropagation(); setCreditCardId(''); vibrate([10]) }} className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"><X size={16} /></div>
             )}
           </button>
         )}
 
-        <button onClick={() => setShowCatModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+        <button onClick={() => { setShowCatModal(true); vibrate([10]) }} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:bg-gray-100 dark:active:bg-slate-600">
           <div className="flex items-center gap-4">
             <Tag size={20} className="text-gray-400 dark:text-gray-500" />
-            <span className={`text-sm font-medium ${selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+            <span className={`text-sm font-bold ${selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
               {selectedCat ? selectedCat.name : 'Categoria'}
             </span>
           </div>
@@ -772,84 +719,84 @@ function NewTransactionContent() {
             {selectedCat && (() => {
               const IconComp = getDynamicIcon(selectedCat.icon)
               return (
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}>
+                <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}>
                   <IconComp size={20} />
                 </div>
               )
             })()}
-            <div onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true) }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors"><Plus size={20} /></div>
+            <div onClick={(e) => { e.stopPropagation(); setShowCreateCatModal(true); vibrate([10]) }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors active:scale-[0.95]"><Plus size={20} /></div>
           </div>
         </button>
 
         {!creditCardId && (
-          <button onClick={() => setShowAccModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={() => { setShowAccModal(true); vibrate([10]) }} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:bg-gray-100 dark:active:bg-slate-600">
             <div className="flex items-center gap-4">
               <Wallet size={20} className="text-gray-400 dark:text-gray-500" />
-              <span className={`text-sm font-medium ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+              <span className={`text-sm font-bold ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
                 {selectedAcc ? selectedAcc.name : 'Conta'}
               </span>
             </div>
             <div className="flex items-center gap-2">
               {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
-              <div onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true) }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors"><Plus size={20} /></div>
+              <div onClick={(e) => { e.stopPropagation(); setShowCreateAccModal(true); vibrate([10]) }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-colors active:scale-[0.95]"><Plus size={20} /></div>
             </div>
           </button>
         )}
 
         {(contacts || []).length > 0 && (
-          <button onClick={() => setShowContactModal(true)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
+          <button onClick={() => { setShowContactModal(true); vibrate([10]) }} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:bg-gray-100 dark:active:bg-slate-600">
             <div className="flex items-center gap-4">
               <Users size={20} className="text-gray-400 dark:text-gray-500" />
-              <span className={`text-sm font-medium ${selectedContact ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+              <span className={`text-sm font-bold ${selectedContact ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
                 {selectedContact ? selectedContact.name : 'Fornecedor / Cliente (opcional)'}
               </span>
             </div>
             {selectedContact && (
-              <div onClick={(e) => { e.stopPropagation(); setContactId('') }} className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"><X size={16} /></div>
+              <div onClick={(e) => { e.stopPropagation(); setContactId(''); vibrate([10]) }} className="p-2 -mr-2 text-gray-400 hover:text-red-500 transition-colors"><X size={16} /></div>
             )}
           </button>
         )}
       </div>
 
-      <div className="mx-4 mt-4">
-        <button onClick={() => setShowDetails(!showDetails)} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2">
+      <div className="mx-4 mt-6">
+        <button onClick={() => { setShowDetails(!showDetails); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 text-sm font-bold flex items-center gap-1 mx-auto py-2 px-4 rounded-full hover:bg-teal-50 dark:hover:bg-teal-900/10 transition-colors active:scale-[0.95]">
           {showDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
           {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
 
         {showDetails && (
-          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mt-2">
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] border border-gray-50 dark:border-slate-700 shadow-sm overflow-hidden mt-3 animate-in fade-in slide-in-from-top-4">
             <input
               type="date"
               value={date}
               onChange={(e) => handleDateChange(e.target.value)}
-              className="w-full px-5 py-5 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700 outline-none bg-transparent"
+              className="w-full px-5 py-5 text-sm font-bold text-gray-700 dark:text-gray-300 border-b border-gray-50 dark:border-slate-700/50 outline-none bg-transparent"
             />
 
-            <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+            <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-50 dark:border-slate-700/50">
               <FileText size={20} className="text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Observações (opcional)"
-                className="flex-1 text-sm font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="flex-1 text-sm font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
             </div>
 
-            <div className="px-5 py-5 border-b border-gray-50 dark:border-slate-700">
+            <div className="px-5 py-5 border-b border-gray-50 dark:border-slate-700/50">
               <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-4">Repetição</p>
               <div className="flex gap-2 mb-4">
                 {[{ key: 'once', label: 'Única' }, { key: 'installments', label: 'Parcelar' }, { key: 'recurring', label: 'Recorrente' }].map((opt) => (
-                  <button key={opt.key} onClick={() => setRepetition(opt.key as Repetition)} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${repetition === opt.key ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 dark:border-teal-500 text-teal-800 dark:text-teal-300' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'}`}>
+                  <button key={opt.key} onClick={() => { setRepetition(opt.key as Repetition); vibrate([10]) }} className={`px-4 py-2 rounded-full text-xs font-bold transition-all active:scale-[0.95] ${repetition === opt.key ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 dark:border-teal-500 text-teal-800 dark:text-teal-300 shadow-sm' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400 border border-transparent'}`}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {repetition === 'installments' && (
-                <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 p-4 rounded-xl">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Parcelas</span>
-                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))} className="bg-transparent text-sm font-bold outline-none text-gray-800 dark:text-gray-200">
+                <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 p-4 rounded-[16px]">
+                  <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Parcelas</span>
+                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))} className="bg-transparent text-sm font-bold outline-none text-gray-800 dark:text-gray-200 cursor-pointer">
                     {[2,3,4,5,6,7,8,9,10,11,12].map((n) => (<option key={n} value={n}>{n}x</option>))}
                   </select>
                 </div>
@@ -858,13 +805,13 @@ function NewTransactionContent() {
                 <div className="flex flex-col gap-2 mt-2">
                   <div className="flex flex-wrap gap-2">
                     {[{ key: 'weekly', label: 'Semanal' }, { key: 'biweekly', label: 'Quinzenal' }, { key: 'monthly', label: 'Mensal' }, { key: 'bimonthly', label: 'Bimestral' }, { key: 'custom', label: 'Personalizar' }].map((f) => (
-                      <button key={f.key} onClick={() => { setFrequency(f.key as Frequency); if (f.key === 'custom') setShowCustomRecurrenceModal(true) }} className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${frequency === f.key ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 dark:border-teal-500 text-teal-800 dark:text-teal-300' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400'}`}>
+                      <button key={f.key} onClick={() => { setFrequency(f.key as Frequency); vibrate([10]); if (f.key === 'custom') setShowCustomRecurrenceModal(true) }} className={`px-4 py-2 rounded-full text-xs font-bold transition-all active:scale-[0.95] ${frequency === f.key ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-700 dark:border-teal-500 text-teal-800 dark:text-teal-300 shadow-sm' : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-gray-400 border border-transparent'}`}>
                         {f.label}
                       </button>
                     ))}
                   </div>
                   {frequency === 'custom' && (
-                    <p className="text-xs text-teal-700 dark:text-teal-400 font-medium ml-1 mt-1">
+                    <p className="text-xs text-teal-700 dark:text-teal-400 font-bold ml-1 mt-2 bg-teal-50 dark:bg-teal-900/10 p-2 rounded-lg inline-block">
                       Serão geradas {customParcels} parcelas, a cada {customInterval} mês(es).
                     </p>
                   )}
@@ -872,10 +819,10 @@ function NewTransactionContent() {
               )}
             </div>
 
-            <button onClick={() => setShowTagModal(true)} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+            <button onClick={() => { setShowTagModal(true); vibrate([10]) }} className="w-full flex items-center justify-between p-5 border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:bg-gray-100 dark:active:bg-slate-600">
               <div className="flex items-center gap-3">
                 <Tag size={20} className="text-gray-400 dark:text-gray-500" />
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
                   {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
                 </span>
               </div>
@@ -889,11 +836,11 @@ function NewTransactionContent() {
                     <RefreshCw size={20} className="text-gray-400 dark:text-gray-500" />
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É um reembolso</span>
-                      <span className="text-[11px] text-gray-400">Pago com recurso do outro contexto (PF/PJ)</span>
+                      <span className="text-[11px] font-medium text-gray-400">Pago com recurso do outro contexto</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsReimbursable(!isReimbursable)} className={`w-12 h-6 rounded-full transition-colors ${isReimbursable ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isReimbursable ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <button onClick={() => { setIsReimbursable(!isReimbursable); vibrate([10]) }} className={`w-12 h-6 rounded-full transition-colors shadow-inner ${isReimbursable ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${isReimbursable ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
@@ -902,22 +849,22 @@ function NewTransactionContent() {
                     <ArrowRightLeft size={20} className="text-gray-400 dark:text-gray-500" />
                     <span className="text-sm font-bold text-gray-800 dark:text-gray-200">É uma devolução / estorno</span>
                   </div>
-                  <button onClick={() => setIsRefund(!isRefund)} className={`w-12 h-6 rounded-full transition-colors ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <button onClick={() => { setIsRefund(!isRefund); vibrate([10]) }} className={`w-12 h-6 rounded-full transition-colors shadow-inner ${isRefund ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${isRefund ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowFinancingModal(true)}>
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => { setShowFinancingModal(true); vibrate([10]) }}>
                   <div className="flex items-center gap-3"><Building size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Financiamento</span></div>
-                  <button className={`w-12 h-6 rounded-full transition-colors ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${financingId ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <button className={`w-12 h-6 rounded-full transition-colors shadow-inner ${financingId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${financingId ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowLoanModal(true)}>
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => { setShowLoanModal(true); vibrate([10]) }}>
                   <div className="flex items-center gap-3"><HandCoins size={20} className="text-gray-400 dark:text-gray-500" /><span className="text-sm font-bold text-gray-800 dark:text-gray-200">Empréstimo a alguém</span></div>
-                  <button className={`w-12 h-6 rounded-full transition-colors ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
-                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 ${debtId ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <button className={`w-12 h-6 rounded-full transition-colors shadow-inner ${debtId ? 'bg-teal-700' : 'bg-gray-200 dark:bg-gray-600'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform mt-0.5 shadow-sm ${debtId ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
               </div>
@@ -930,7 +877,7 @@ function NewTransactionContent() {
         <button
           onClick={handleSave}
           disabled={isSubmitting}
-          className={`pointer-events-auto w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform disabled:opacity-50`}
+          className={`pointer-events-auto w-16 h-16 ${bgColor} rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.15)] hover:scale-105 transition-transform disabled:opacity-50 active:scale-[0.90]`}
         >
           {isSubmitting ? (
             <Loader2 size={30} className="text-white animate-spin" />
@@ -948,28 +895,28 @@ function NewTransactionContent() {
       {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
       <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={newCatIcon} onSelect={setNewCatIcon} />
 
-      {/* Modal de Categoria Plano */}
+      {/* Modal de Categoria */}
       {showCatModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Categorias</h3>
+              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
-              {(categories || []).map((cat: any) => {
+              {categories.map((cat: any) => {
                 const IconComp = getDynamicIcon(cat.icon)
                 const isActive = cat.id === categoryId
                 return (
-                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={20} /></div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  <button key={cat.id} onClick={() => { setCategoryId(cat.id); setShowCatModal(false); vibrate([10]) }}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}>
+                    <div className="w-12 h-12 rounded-[16px] flex items-center justify-center" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}><IconComp size={22} /></div>
+                    <span className={`flex-1 text-left font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{cat.name}</span>
+                    {isActive && <Check size={22} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
-              {(categories || []).length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma categoria encontrada.</p>}
+              {categories.length === 0 && <p className="text-center text-gray-400 mt-10 font-medium">Nenhuma categoria encontrada.</p>}
             </div>
           </div>
         </div>
@@ -978,46 +925,46 @@ function NewTransactionContent() {
       {/* Modal Contas */}
       {showAccModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contas</h3>
-              <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => { setShowAccModal(false); setShowCreateAccModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {(accounts || []).map((acc: any) => {
                 const isActive = acc.id === accountId
                 return (
-                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
+                  <button key={acc.id} onClick={() => { setAccountId(acc.id); setShowAccModal(false); vibrate([10]) }}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}>
                     <BankLogo color={acc.color} name={acc.name} size="md" />
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    <span className={`flex-1 text-left font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={22} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
-              {(accounts || []).length === 0 && <p className="text-center text-gray-400 mt-10">Nenhuma conta encontrada.</p>}
+              {(accounts || []).length === 0 && <p className="text-center text-gray-400 mt-10 font-medium">Nenhuma conta encontrada.</p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* Outros modais */}
+      {/* Modal Cartões */}
       {showCardModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowCardModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
-              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 p-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-2">
               {(creditCards || []).map((card: any) => {
                 const isActive = card.id === creditCardId
                 return (
-                  <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  <button key={card.id} onClick={() => { setCreditCardId(card.id); setShowCardModal(false); vibrate([10]) }}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}>
+                    <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={22} /></div>
+                    <span className={`flex-1 text-left font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
+                    {isActive && <Check size={22} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
@@ -1026,25 +973,26 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* Modal Contatos */}
       {showContactModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowContactModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Contatos</h3>
-              <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Contatos</h3>
+              <button onClick={() => setShowContactModal(false)} className="text-gray-400 p-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-2">
               {(contacts || []).map((contact: any) => {
                 const isActive = contact.id === contactId
                 const IconComp = getDynamicIcon(contact.icon || 'user')
                 return (
-                  <button key={contact.id} onClick={() => { setContactId(contact.id); setShowContactModal(false) }}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}>
-                      <IconComp size={20} />
+                  <button key={contact.id} onClick={() => { setContactId(contact.id); setShowContactModal(false); vibrate([10]) }}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}>
+                    <div className="w-12 h-12 rounded-[16px] flex items-center justify-center" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}>
+                      <IconComp size={22} />
                     </div>
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    <span className={`flex-1 text-left font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</span>
+                    {isActive && <Check size={22} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
@@ -1053,22 +1001,23 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* Modal Tags */}
       {showTagModal && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50" onClick={() => setShowTagModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-5 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Tags</h3>
-              <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2 rounded-full"><Plus size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => { setShowTagModal(false); setShowCreateTagModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
             </div>
             <div className="space-y-2">
               {(tags || []).map((tag: any) => {
                 const isActive = selectedTags.includes(tag.id)
                 return (
                   <button key={tag.id} onClick={() => toggleTag(tag.id)}
-                    className={`w-full p-3 flex items-center gap-4 rounded-2xl transition-colors ${isActive ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                    <span className={`flex-1 text-left font-medium ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
-                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}>
+                    <div className="w-5 h-5 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <span className={`flex-1 text-left font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={22} className="text-teal-700 dark:text-teal-400" />}
                   </button>
                 )
               })}
@@ -1077,18 +1026,19 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* Modal Criar Categoria */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateCatModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova categoria</h3>
-              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova categoria</h3>
+              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 p-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-6">
-              <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Nome da categoria" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" />
-              <div><p className="text-sm text-gray-500 font-medium mb-3">Ícone</p><button onClick={() => setShowIconPicker(true)} className="flex items-center gap-3 bg-gray-100 dark:bg-slate-700 rounded-xl px-4 py-3 w-full text-left"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>{(() => { const I = getDynamicIcon(newCatIcon); return <I size={18} /> })()}</div><span className="text-sm font-medium text-gray-800 dark:text-white flex-1">{newCatIcon}</span><ChevronDown size={16} className="text-gray-400" /></button></div>
-              <div><p className="text-sm text-gray-500 font-medium mb-3">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => setNewCatColor(c)} className={`w-10 h-10 rounded-full transition-transform ${newCatColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
-              <button onClick={handleSaveCategory} disabled={savingCategory || !newCatName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 disabled:opacity-50 flex justify-center items-center">
+              <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Nome da categoria" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-[20px] outline-none font-bold text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors" />
+              <div><p className="text-xs uppercase font-bold text-gray-400 dark:text-gray-500 mb-3 tracking-wider">Ícone</p><button onClick={() => setShowIconPicker(true)} className="flex items-center gap-3 bg-gray-50 dark:bg-slate-700 rounded-[20px] px-4 py-3 w-full text-left active:scale-[0.98] transition-transform"><div className="w-10 h-10 rounded-[14px] flex items-center justify-center" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>{(() => { const I = getDynamicIcon(newCatIcon); return <I size={20} /> })()}</div><span className="text-sm font-bold text-gray-800 dark:text-white flex-1">{newCatIcon}</span><ChevronDown size={18} className="text-gray-400" /></button></div>
+              <div><p className="text-xs uppercase font-bold text-gray-400 dark:text-gray-500 mb-3 tracking-wider">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => { setNewCatColor(c); vibrate([10]) }} className={`w-10 h-10 rounded-full transition-transform active:scale-90 ${newCatColor === c ? 'scale-125 border-4 border-white dark:border-slate-800 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button onClick={handleSaveCategory} disabled={savingCategory || !newCatName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-[20px] font-bold mt-4 disabled:opacity-50 flex justify-center items-center active:scale-[0.98] transition-transform shadow-md shadow-teal-700/20">
                 {savingCategory ? <Loader2 size={24} className="animate-spin" /> : 'Salvar categoria'}
               </button>
             </div>
@@ -1096,17 +1046,18 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* Modal Criar Conta */}
       {showCreateAccModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateAccModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova conta</h3>
-              <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova conta</h3>
+              <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 p-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-6">
-              <input type="text" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} placeholder="Nome da conta" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" />
-              <div><p className="text-sm text-gray-500 font-medium mb-3">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => setNewAccColor(c)} className={`w-10 h-10 rounded-full transition-transform ${newAccColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
-              <button onClick={handleSaveAccount} disabled={savingAccount || !newAccName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 disabled:opacity-50 flex justify-center items-center">
+              <input type="text" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} placeholder="Nome da conta" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-[20px] outline-none font-bold text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors" />
+              <div><p className="text-xs uppercase font-bold text-gray-400 dark:text-gray-500 mb-3 tracking-wider">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => { setNewAccColor(c); vibrate([10]) }} className={`w-10 h-10 rounded-full transition-transform active:scale-90 ${newAccColor === c ? 'scale-125 border-4 border-white dark:border-slate-800 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button onClick={handleSaveAccount} disabled={savingAccount || !newAccName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-[20px] font-bold mt-4 disabled:opacity-50 flex justify-center items-center active:scale-[0.98] transition-transform shadow-md shadow-teal-700/20">
                 {savingAccount ? <Loader2 size={24} className="animate-spin" /> : 'Salvar conta'}
               </button>
             </div>
@@ -1114,17 +1065,18 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* Modal Criar Tag */}
       {showCreateTagModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCreateTagModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Nova tag</h3>
-              <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova tag</h3>
+              <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 p-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-6">
-              <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Nome da tag" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" />
-              <div><p className="text-sm text-gray-500 font-medium mb-3">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => setNewTagColor(c)} className={`w-10 h-10 rounded-full transition-transform ${newTagColor === c ? 'scale-125 border-4 border-white dark:border-slate-900 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
-              <button onClick={handleSaveTag} disabled={savingTag || !newTagName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4 disabled:opacity-50 flex justify-center items-center">
+              <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Nome da tag" className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-[20px] outline-none font-bold text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors" />
+              <div><p className="text-xs uppercase font-bold text-gray-400 dark:text-gray-500 mb-3 tracking-wider">Cor</p><div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => { setNewTagColor(c); vibrate([10]) }} className={`w-10 h-10 rounded-full transition-transform active:scale-90 ${newTagColor === c ? 'scale-125 border-4 border-white dark:border-slate-800 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button onClick={handleSaveTag} disabled={savingTag || !newTagName.trim()} className="w-full bg-teal-700 text-white py-4 rounded-[20px] font-bold mt-4 disabled:opacity-50 flex justify-center items-center active:scale-[0.98] transition-transform shadow-md shadow-teal-700/20">
                 {savingTag ? <Loader2 size={24} className="animate-spin" /> : 'Salvar tag'}
               </button>
             </div>
@@ -1132,17 +1084,18 @@ function NewTransactionContent() {
         </div>
       )}
 
+      {/* Modal Recorrência Customizada */}
       {showCustomRecurrenceModal && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowCustomRecurrenceModal(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Recorrência Personalizada</h3>
-              <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
+              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Recorrência Personalizada</h3>
+              <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 p-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-4">
-              <div><label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Número de parcelas</label><input type="number" value={customParcels} onChange={(e) => setCustomParcels(Number(e.target.value))} className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" min={1} max={120} /></div>
-              <div><label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Intervalo (em meses)</label><input type="number" value={customInterval} onChange={(e) => setCustomInterval(Number(e.target.value))} className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-2xl outline-none font-medium text-gray-800 dark:text-gray-200" min={1} max={24} /></div>
-              <button onClick={() => setShowCustomRecurrenceModal(false)} className="w-full bg-teal-700 text-white py-4 rounded-2xl font-bold mt-4">Confirmar</button>
+              <div><label className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-2 block">Número de parcelas</label><input type="number" value={customParcels} onChange={(e) => setCustomParcels(Number(e.target.value))} className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-[20px] outline-none font-bold text-gray-800 dark:text-gray-200" min={1} max={120} /></div>
+              <div><label className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-2 block">Intervalo (em meses)</label><input type="number" value={customInterval} onChange={(e) => setCustomInterval(Number(e.target.value))} className="w-full p-4 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-[20px] outline-none font-bold text-gray-800 dark:text-gray-200" min={1} max={24} /></div>
+              <button onClick={() => { setShowCustomRecurrenceModal(false); vibrate([10]) }} className="w-full bg-teal-700 text-white py-4 rounded-[20px] font-bold mt-4 active:scale-[0.98] transition-transform shadow-md shadow-teal-700/20">Confirmar</button>
             </div>
           </div>
         </div>
@@ -1153,7 +1106,7 @@ function NewTransactionContent() {
 
 export default function NewTransactionPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-teal-700" size={40} /></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900"><Loader2 className="animate-spin text-teal-700" size={40} /></div>}>
       <NewTransactionContent />
     </Suspense>
   )
