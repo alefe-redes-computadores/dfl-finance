@@ -24,13 +24,15 @@ export default function InvoiceAlert({ dueDay, closingDay, cardName }: InvoiceAl
 
   if (diffDays === 0) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-3">
-        <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
-        <div>
-          <p className="font-bold text-red-700 dark:text-red-300 text-sm">
+      <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-[24px] p-4 flex items-center gap-4 shadow-sm">
+        <div className="w-10 h-10 rounded-[14px] bg-red-100 dark:bg-red-500/20 flex items-center justify-center shrink-0">
+          <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-red-700 dark:text-red-300 text-[14px] truncate">
             {cardName ? `${cardName}: ` : ''}Sua fatura vence hoje!
           </p>
-          <p className="text-xs text-red-600 dark:text-red-400">Dia {dueDay} • Fecha dia {closingDay}</p>
+          <p className="text-[12px] font-medium text-red-600/80 dark:text-red-400/80 mt-0.5">Dia {dueDay} • Fecha dia {closingDay}</p>
         </div>
       </div>
     )
@@ -38,13 +40,15 @@ export default function InvoiceAlert({ dueDay, closingDay, cardName }: InvoiceAl
 
   if (diffDays < 0) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-3">
-        <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
-        <div>
-          <p className="font-bold text-red-700 dark:text-red-300 text-sm">
-            {cardName ? `${cardName}: ` : ''}Fatura vencida há {Math.abs(diffDays)} dias!
+      <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-[24px] p-4 flex items-center gap-4 shadow-sm">
+        <div className="w-10 h-10 rounded-[14px] bg-red-100 dark:bg-red-500/20 flex items-center justify-center shrink-0">
+          <AlertCircle size={20} className="text-red-600 dark:text-red-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-red-700 dark:text-red-300 text-[14px] truncate">
+            {cardName ? `${cardName}: ` : ''}Fatura vencida há {Math.abs(diffDays)} dia(s)!
           </p>
-          <p className="text-xs text-red-600 dark:text-red-400">Venceu dia {dueDay} • Fecha dia {closingDay}</p>
+          <p className="text-[12px] font-medium text-red-600/80 dark:text-red-400/80 mt-0.5">Venceu dia {dueDay} • Fecha dia {closingDay}</p>
         </div>
       </div>
     )
@@ -52,26 +56,30 @@ export default function InvoiceAlert({ dueDay, closingDay, cardName }: InvoiceAl
 
   if (diffDays <= 5) {
     return (
-      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-3 flex items-center gap-3">
-        <Clock size={20} className="text-orange-600 dark:text-orange-400" />
-        <div>
-          <p className="font-bold text-orange-700 dark:text-orange-300 text-sm">
+      <div className="bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 rounded-[24px] p-4 flex items-center gap-4 shadow-sm">
+        <div className="w-10 h-10 rounded-[14px] bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center shrink-0">
+          <Clock size={20} className="text-orange-600 dark:text-orange-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-orange-700 dark:text-orange-300 text-[14px] truncate">
             {cardName ? `${cardName}: ` : ''}Fatura vence em {diffDays} dias
           </p>
-          <p className="text-xs text-orange-600 dark:text-orange-400">Dia {dueDay} • Fecha dia {closingDay}</p>
+          <p className="text-[12px] font-medium text-orange-600/80 dark:text-orange-400/80 mt-0.5">Dia {dueDay} • Fecha dia {closingDay}</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 flex items-center gap-3">
-      <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
-      <div>
-        <p className="font-bold text-emerald-700 dark:text-emerald-300 text-sm">
+    <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-[24px] p-4 flex items-center gap-4 shadow-sm">
+      <div className="w-10 h-10 rounded-[14px] bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+        <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-emerald-700 dark:text-emerald-300 text-[14px] truncate">
           {cardName ? `${cardName}: ` : ''}Fatura vence em {diffDays} dias
         </p>
-        <p className="text-xs text-emerald-600 dark:text-emerald-400">Dia {dueDay} • Fecha dia {closingDay}</p>
+        <p className="text-[12px] font-medium text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">Dia {dueDay} • Fecha dia {closingDay}</p>
       </div>
     </div>
   )
