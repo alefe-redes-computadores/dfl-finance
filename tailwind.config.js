@@ -10,20 +10,17 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          teal: '#1a6b5c',
-          light: '#e8f5f2',
+          teal: '#0f766e', // Teal-700
+          light: '#f0fdfa', // Teal-50
         },
-        income: '#16a34a',
-        expense: '#dc2626',
-        surface: {
-          light: '#EFF2F3',
-          dark: '#1a1a1a',
-        }
+        income: '#10b981', // Emerald-500
+        expense: '#ef4444', // Red-500
       },
       fontFamily: {
+        // Isso conecta com a variável css exportada no RootLayout
         sans: ['var(--font-poppins)', 'system-ui', 'sans-serif'],
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")], // Útil se você for usar aquele "animate-in" nos modais
 }
