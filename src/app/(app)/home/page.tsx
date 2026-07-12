@@ -30,6 +30,7 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -67,6 +68,7 @@ function HomeContent() {
   const router = useRouter()
   const { context, appMode, effectiveContext } = useContext_()
   const { showToast } = useToast()
+  const { success: hapticSuccess, vibrate } = useHapticFeedback()
   
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -88,7 +90,7 @@ function HomeContent() {
 
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
-  const firstName = (user?.user_metadata?.name || 'Álefe').split(' ')[0]
+  const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
   const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
@@ -155,20 +157,20 @@ function HomeContent() {
   }, [localTransactions, localCategories, localAccountsData])
 
   const monthTransactions = useMemo(() => 
-    transactionsWithJoin
+    (transactionsWithJoin || [])
       .filter((t: any) => t.date >= start && t.date <= end)
       .sort((a: any, b: any) => {
-        const timeA = new Date(a.created_at || a.date || 0).getTime();
-        const timeB = new Date(b.created_at || b.date || 0).getTime();
-        return timeB - timeA;
+        const timeA = new Date(a.created_at || a.date || 0).getTime()
+        const timeB = new Date(b.created_at || b.date || 0).getTime()
+        return timeB - timeA
       }),
   [transactionsWithJoin, start, end])
 
   const summary = useMemo(() => {
-    const income = monthTransactions
+    const income = (monthTransactions || [])
       .filter((t: any) => t.type === 'income' && t.status === 'done')
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-    const expense = monthTransactions
+    const expense = (monthTransactions || [])
       .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
     return { income, expense, balance: income - expense }
@@ -178,7 +180,7 @@ function HomeContent() {
     const prevMonthDate = subMonths(currentDate, 1)
     const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
     const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
-    const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
+    const prevMonthTxs = (transactionsWithJoin || []).filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
     
     const prevInc = prevMonthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
     const prevExp = prevMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
@@ -188,11 +190,11 @@ function HomeContent() {
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
 
-  const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
+  const recentTransactions = useMemo(() => (monthTransactions || []).slice(0, 5), [monthTransactions])
 
   const accounts = useMemo(() => {
     return (localAccountsData || []).map((acc: any) => {
-      const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
+      const accTxs = (monthTransactions || []).filter((t: any) => t.account_id === acc.id && t.status === 'pending')
       const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense
@@ -202,7 +204,7 @@ function HomeContent() {
 
   const cards = useMemo(() => {
     return (localCards || []).map((card: any) => {
-      const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
+      const cardTxs = (monthTransactions || []).filter((t: any) => t.credit_card_id === card.id)
       const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (parseFloat(t.amount) || 0), 0)
       return { ...card, faturaAtual }
     })
@@ -219,7 +221,7 @@ function HomeContent() {
       .filter((t: any) => t.type === 'income')
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       
-    const faturas = cards.reduce((acc: number, c: any) => acc + c.faturaAtual, 0)
+    const faturas = (cards || []).reduce((acc: number, c: any) => acc + (c.faturaAtual || 0), 0)
     
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
@@ -247,7 +249,7 @@ function HomeContent() {
   const budgets = useMemo(() => {
     const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
       const cat = (localCategories || []).find((c: any) => c.id === budget.category_id) as any
-      const spent = monthTransactions
+      const spent = (monthTransactions || [])
         .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
         .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       const remaining = Number(budget.amount) - spent
@@ -347,14 +349,6 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
-  const goBack = useCallback(() => {
-    if (window.history.length > 2) {
-      router.back()
-    } else {
-      router.push('/home')
-    }
-  }, [router])
-
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -371,6 +365,7 @@ function HomeContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
+      vibrate([10])
       await reloadTxs()
       setRefreshing(false)
     }
@@ -393,11 +388,11 @@ function HomeContent() {
 
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
-  const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('Tela inicial personalizada!', 'success') }
+  const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('✅ Tela inicial personalizada!', 'success'); hapticSuccess() }
   const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  const totalAccountsBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
+  const totalAccountsBalance = (accounts || []).reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
   
   const today = new Date()
   const todayDay = today.getDate()
@@ -416,7 +411,8 @@ function HomeContent() {
     const removedSection = sectionId
     const removedLabel = sectionLabel
     setEnabledSections(prev => prev.filter(id => id !== removedSection))
-    setUndoToast({ message: `"${removedLabel}" ocultado`, onUndo: () => { setEnabledSections(prev => { const restored = [...prev, removedSection]; return restored.sort((a, b) => { const idxA = ALL_SECTIONS.findIndex(s => s.id === a); const idxB = ALL_SECTIONS.findIndex(s => s.id === b); return idxA - idxB }) }); showToast(`"${removedLabel}" restaurado`, 'success'); setUndoToast(null) } })
+    vibrate([10])
+    setUndoToast({ message: `"${removedLabel}" ocultado`, onUndo: () => { setEnabledSections(prev => { const restored = [...prev, removedSection]; return restored.sort((a, b) => { const idxA = ALL_SECTIONS.findIndex(s => s.id === a); const idxB = ALL_SECTIONS.findIndex(s => s.id === b); return idxA - idxB }) }); showToast(`✅ "${removedLabel}" restaurado`, 'success'); setUndoToast(null) } })
     setTimeout(() => { setEnabledSections(current => { if (!current.includes(removedSection)) saveLayout(current); return current }); setUndoToast(null) }, 3500)
   }
 
@@ -432,18 +428,21 @@ function HomeContent() {
       case 'balance':
         return (
           <div key="balance" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-gray-100 dark:border-slate-700/50 text-center transition-all">
-              <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] p-8 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center transition-all relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <Wallet size={120} />
+              </div>
+              <div className="flex items-center justify-center gap-2 mb-3 relative z-10">
                 <span className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">Saldo total</span>
-                <button onClick={() => setHideBalance(!hideBalance)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <button onClick={() => { setHideBalance(!hideBalance); vibrate([10]) }} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors active:scale-[0.95]">
                   {hideBalance ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              <h1 className={`text-[36px] font-light text-gray-800 dark:text-gray-100 tracking-tight ${hideBalance ? 'tracking-widest' : ''}`}>
+              <h1 className={`text-[36px] font-light text-gray-800 dark:text-gray-100 tracking-tight relative z-10 ${hideBalance ? 'tracking-widest' : ''}`}>
                 {hideBalance ? '••••••' : formatCurrency(totalAccountsBalance)}
               </h1>
               {!hideBalance && previousBalance !== 0 && (
-                <div className={`inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold ${
+                <div className={`inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold relative z-10 ${
                   balanceVariation >= 0
                     ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
                     : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
@@ -459,16 +458,16 @@ function HomeContent() {
         return (
           <div key="income-expense" className="mb-6">
             <div className="grid grid-cols-2 gap-4">
-              <div onClick={() => router.push('/transactions?filter=income')} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/50 shadow-sm rounded-[24px] p-5 flex flex-col items-center justify-center cursor-pointer hover:shadow-md transition-all">
-                <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-3">
-                  <ArrowUp size={20} className="text-emerald-500" />
+              <div onClick={() => router.push('/transactions?filter=income')} className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700/50 shadow-sm rounded-[28px] p-5 flex flex-col items-center justify-center cursor-pointer hover:shadow-md transition-all active:scale-[0.98]">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-3 text-emerald-500">
+                  <ArrowUp size={20} />
                 </div>
                 <span className="text-[12px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Receitas</span>
                 <p className="text-[16px] font-bold text-emerald-600">{hideBalance ? '••••' : formatCurrency(summary.income)}</p>
               </div>
-              <div onClick={() => router.push('/transactions?filter=expense')} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/50 shadow-sm rounded-[24px] p-5 flex flex-col items-center justify-center cursor-pointer hover:shadow-md transition-all">
-                <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-3">
-                  <ArrowDown size={20} className="text-red-500" />
+              <div onClick={() => router.push('/transactions?filter=expense')} className="bg-white dark:bg-slate-800 border border-gray-50 dark:border-slate-700/50 shadow-sm rounded-[28px] p-5 flex flex-col items-center justify-center cursor-pointer hover:shadow-md transition-all active:scale-[0.98]">
+                <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-3 text-red-500">
+                  <ArrowDown size={20} />
                 </div>
                 <span className="text-[12px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Despesas</span>
                 <p className="text-[16px] font-bold text-red-500">{hideBalance ? '••••' : formatCurrency(summary.expense)}</p>
@@ -482,13 +481,13 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-[0.95]"
                 title="Ocultar card"
               >
                 <EyeOff size={14} />
               </button>
             )}
-            <Suspense fallback={<Skeleton count={1} className="h-24 w-full rounded-[24px]" />}>
+            <Suspense fallback={<Skeleton count={1} className="h-24 w-full rounded-[28px]" />}>
               <ProjectionSparklineCard />
             </Suspense>
           </div>
@@ -501,14 +500,14 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-[0.95]"
                 title="Ocultar card"
               >
                 <EyeOff size={14} />
               </button>
             )}
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/loans')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/loans')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Empréstimos entre Contextos</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
@@ -517,7 +516,7 @@ function HomeContent() {
                   const progress = Number(loan.total_amount) > 0 ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100 : 0
                   const isOverdue = loan.due_date && differenceInDays(new Date(loan.due_date), today) < 0
                   return (
-                    <div key={loan.id} onClick={() => router.push(`/loans/details?id=${loan.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={loan.id} onClick={() => router.push(`/loans/details?id=${loan.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors active:scale-[0.98]">
                       <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
                         <ArrowRightLeft size={18} className="text-teal-600 dark:text-teal-400" />
                       </div>
@@ -525,10 +524,10 @@ function HomeContent() {
                         <div className="flex justify-between items-start mb-1">
                           <div className="flex items-center gap-1.5">
                             {getContextIcon(loan.source_context)}
-                            <span className="text-[11px] text-gray-500">{getContextLabel(loan.source_context)}</span>
+                            <span className="text-[11px] font-medium text-gray-500">{getContextLabel(loan.source_context)}</span>
                             <ArrowRightLeft size={10} className="text-gray-400" />
                             {getContextIcon(loan.dest_context)}
-                            <span className="text-[11px] text-gray-500">{getContextLabel(loan.dest_context)}</span>
+                            <span className="text-[11px] font-medium text-gray-500">{getContextLabel(loan.dest_context)}</span>
                           </div>
                           <p className="text-[14px] font-bold text-teal-600 ml-2 shrink-0">{formatCurrency(Number(loan.remaining_amount) || 0)}</p>
                         </div>
@@ -536,7 +535,7 @@ function HomeContent() {
                           <div className={`h-full rounded-full transition-all duration-700 ${isOverdue ? 'bg-red-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-[11px] text-gray-400">{loan.paid_installments}/{loan.total_installments} parcelas</span>
+                          <span className="text-[11px] font-medium text-gray-400">{loan.paid_installments}/{loan.total_installments} parcelas</span>
                           <span className="text-[11px] font-bold text-gray-500">{progress.toFixed(0)}% pago</span>
                         </div>
                       </div>
@@ -554,14 +553,14 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('next-card', 'Próxima Fatura')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-[0.95]"
                 title="Ocultar card"
               >
                 <EyeOff size={14} />
               </button>
             )}
             {nextCard ? (
-              <div onClick={() => router.push(`/cards/details?id=${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between">
+              <div onClick={() => router.push(`/cards/details?id=${nextCard.id}`)} className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 cursor-pointer hover:shadow-md transition-all flex items-center justify-between active:scale-[0.98]">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-[18px] bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500">
                     <CreditCard size={24} />
@@ -579,7 +578,7 @@ function HomeContent() {
                 </div>
               </div>
             ) : allCardsPaid ? (
-              <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-emerald-100 dark:border-emerald-900 text-center">
+              <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-emerald-100 dark:border-emerald-900 text-center">
                 <div className="flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400">
                   <Check size={20} />
                   <span className="font-bold text-sm">Tudo em dia!</span>
@@ -592,24 +591,24 @@ function HomeContent() {
       case 'pendings':
         return (
           <div key="pendings" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-100 dark:border-slate-700/50">
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50">
               <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Pendências</h3>
               <div className="grid grid-cols-3 gap-3">
-                <div onClick={() => router.push('/transactions?filter=expense')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
+                <div onClick={() => router.push('/transactions?filter=expense')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors active:scale-[0.95]">
                   <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mx-auto mb-2 text-red-500">
                     <ArrowDown size={18} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">A Pagar</p>
                   <p className="text-[14px] font-bold text-red-500">{hideBalance ? '•••' : formatCurrency(pendings.toPay)}</p>
                 </div>
-                <div onClick={() => router.push('/transactions?filter=income')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
+                <div onClick={() => router.push('/transactions?filter=income')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors active:scale-[0.95]">
                   <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-2 text-emerald-500">
                     <ArrowUp size={18} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 font-bold mb-1 uppercase tracking-wider">Receber</p>
                   <p className="text-[14px] font-bold text-emerald-600">{hideBalance ? '•••' : formatCurrency(pendings.toReceive)}</p>
                 </div>
-                <div onClick={() => router.push('/cards')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors">
+                <div onClick={() => router.push('/cards')} className="text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-2xl py-3 transition-colors active:scale-[0.95]">
                   <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center mx-auto mb-2 text-orange-500">
                     <CreditCard size={18} />
                   </div>
@@ -627,14 +626,14 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('receivables', 'A Receber')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-[0.95]"
                 title="Ocultar card"
               >
                 <EyeOff size={14} />
               </button>
             )}
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/debts')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/debts')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">A Receber</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
@@ -646,8 +645,8 @@ function HomeContent() {
                   const isOverdue = daysUntilDue !== null && daysUntilDue < 0
                   const percent = Math.min(debt.percent, 100)
                   return (
-                    <div key={debt.id} onClick={() => router.push(`/debts/details?id=${debt.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
-                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}>
+                    <div key={debt.id} onClick={() => router.push(`/debts/details?id=${debt.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors active:scale-[0.98]">
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}>
                         <IconComp size={20} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -679,14 +678,14 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('financings', 'Financiamentos')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-[0.95]"
                 title="Ocultar card"
               >
                 <EyeOff size={14} />
               </button>
             )}
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/financings')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/financings')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Financiamentos</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
@@ -696,9 +695,9 @@ function HomeContent() {
                   const remaining = fin.total_installments - fin.current_installment + 1
                   const isOverdue = fin.next_due_date && differenceInDays(new Date(fin.next_due_date), today) < 0
                   return (
-                    <div key={fin.id} onClick={() => router.push(`/financings/details?id=${fin.id}`)} className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={fin.id} onClick={() => router.push(`/financings/details?id=${fin.id}`)} className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors active:scale-[0.98]">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${fin.color}15`, color: fin.color }}><IconComp size={20} /></div>
+                        <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${fin.color}15`, color: fin.color }}><IconComp size={20} /></div>
                         <div>
                           <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100">{fin.name}</p>
                           <p className={`text-[12px] font-medium mt-0.5 ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>{remaining} px de {formatCurrency(Number(fin.installment_value))}</p>
@@ -719,14 +718,14 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('budgets', 'Orçamentos')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10"
+                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-[0.95]"
                 title="Ocultar card"
               >
                 <EyeOff size={14} />
               </button>
             )}
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/budgets')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/budgets')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Orçamentos Ativos</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
@@ -736,8 +735,8 @@ function HomeContent() {
                   const isWarning = budget.percent >= 80 && budget.remaining >= 0
                   const isDanger = budget.remaining < 0
                   return (
-                    <div key={budget.id} onClick={() => router.push(`/budgets/details?id=${budget.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors border-b border-gray-50 dark:border-slate-700/50 last:border-0">
-                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${budget.color}15`, color: budget.color }}><IconComp size={20} /></div>
+                    <div key={budget.id} onClick={() => router.push(`/budgets/details?id=${budget.id}`)} className="flex items-center gap-4 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors border-b border-gray-50 dark:border-slate-700/50 last:border-0 active:scale-[0.98]">
+                      <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${budget.color}15`, color: budget.color }}><IconComp size={20} /></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1.5">
                           <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 truncate">{budget.name}</p>
@@ -763,8 +762,8 @@ function HomeContent() {
       case 'accounts':
         return (
           <div key="accounts" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/accounts')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/accounts')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Contas</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
@@ -774,7 +773,7 @@ function HomeContent() {
                 ) : (
                   <>
                     {accounts.map((acc: any) => (
-                      <div key={acc.id} onClick={() => router.push(`/accounts/details?id=${acc.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                      <div key={acc.id} onClick={() => router.push(`/accounts/details?id=${acc.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors active:scale-[0.98]">
                         <div className="flex items-center gap-4">
                           <BankLogo color={acc.color} name={acc.name} size="md" />
                           <div>
@@ -797,21 +796,21 @@ function HomeContent() {
       case 'cards':
         return (
           <div key="cards" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/cards')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/cards')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Cartões de Crédito</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
               <div className="px-2 pb-2">
                 {cards.length === 0 ? (
-                  <button onClick={() => router.push('/cards/new')} className="w-full p-4 flex items-center justify-center gap-2 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/10 rounded-[16px] transition-colors text-sm font-bold">
+                  <button onClick={() => router.push('/cards/new')} className="w-full p-4 flex items-center justify-center gap-2 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/10 rounded-[20px] transition-colors text-sm font-bold active:scale-[0.98]">
                     <Plus size={18} /> Adicionar cartão
                   </button>
                 ) : (
                   cards.map((card: any) => (
-                    <div key={card.id} onClick={() => router.push(`/cards/details?id=${card.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors">
+                    <div key={card.id} onClick={() => router.push(`/cards/details?id=${card.id}`)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors active:scale-[0.98]">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
+                        <div className="w-12 h-12 rounded-[18px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={20} /></div>
                         <div>
                           <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100">{card.name}</p>
                           <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">Fatura atual</p>
@@ -831,8 +830,8 @@ function HomeContent() {
       case 'recent':
         return (
           <div key="recent" className="mb-6">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => router.push('/transactions')}>
+            <div className="bg-white dark:bg-slate-800 rounded-[28px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700" onClick={() => router.push('/transactions')}>
                 <h3 className="text-[15px] font-bold text-gray-800 dark:text-gray-100">Transações Recentes</h3>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
@@ -868,7 +867,7 @@ function HomeContent() {
                     }
 
                     return (
-                      <div key={tx.id} onClick={() => router.push(`/transactions/details?id=${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[16px] transition-colors gap-3 ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
+                      <div key={tx.id} onClick={() => router.push(`/transactions/details?id=${tx.id}`)} className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-colors gap-3 active:scale-[0.98] ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${index !== recentTransactions.length - 1 ? 'border-b border-gray-50 dark:border-slate-700' : ''}`}>
                         {isPending ? <div className="w-5 h-5 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><Clock size={12} className="text-orange-500" /></div> : <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0"><Check size={12} className="text-emerald-500" /></div>}
                         <div className="flex items-center gap-4 flex-1 min-w-0">
                           <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${tx.categories?.color || '#94a3b8'}15`, color: tx.categories?.color || '#64748b' }}><IconComp size={18} /></div>
@@ -897,12 +896,13 @@ function HomeContent() {
   if (isInitialLoad || (isDataLoading && !localTransactions?.length && !localAccountsData?.length)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 pt-6">
-        <Skeleton count={1} className="h-10 w-full mb-6" />
+        <Skeleton count={1} className="h-10 w-full mb-6 rounded-2xl" />
         <Skeleton count={1} className="h-32 w-full rounded-[32px] mb-6" />
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <Skeleton count={1} className="h-24 w-full rounded-[24px]" />
-          <Skeleton count={1} className="h-24 w-full rounded-[24px]" />
+          <Skeleton count={1} className="h-24 w-full rounded-[28px]" />
+          <Skeleton count={1} className="h-24 w-full rounded-[28px]" />
         </div>
+        <Skeleton count={1} className="h-48 w-full rounded-[28px]" />
       </div>
     )
   }
@@ -959,10 +959,10 @@ function HomeContent() {
           {notificationsEnabled && (
             <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
           )}
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 px-2 py-1.5 rounded-[16px]">
-            <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors"><ChevronLeft size={16} /></button>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 px-2 py-1.5 rounded-full">
+            <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate([10]) }} className="p-1 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors active:scale-[0.95]"><ChevronLeft size={16} /></button>
             <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize w-[80px] text-center">{monthLabel}</span>
-            <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors"><ChevronRight size={16} /></button>
+            <button onClick={() => { setCurrentDate(addMonths(currentDate, 1)); vibrate([10]) }} className="p-1 text-gray-400 hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200 transition-colors active:scale-[0.95]"><ChevronRight size={16} /></button>
           </div>
         </div>
       </div>
@@ -971,7 +971,7 @@ function HomeContent() {
 
       <button
         onClick={openPersonalize}
-        className="w-full mt-2 flex items-center justify-center gap-2 py-4 rounded-[24px] bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-100 dark:border-slate-700 shadow-sm transition-all"
+        className="w-full mt-2 flex items-center justify-center gap-2 py-4 rounded-[28px] bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-100 dark:border-slate-700 shadow-sm transition-all active:scale-[0.98]"
       >
         <Settings2 size={20} />
         <span className="font-bold text-[15px]">Personalizar Dashboard</span>
