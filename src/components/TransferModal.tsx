@@ -1,14 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import {
-  X, ArrowRightLeft, Wallet, Loader2, Check, ChevronRight, ArrowDown, Building2, RefreshCw
+  X, ArrowRightLeft, Wallet, Loader2, Check, ChevronRight, ArrowDown
 } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
+
+// 🔥 NOVO: Arquitetura Local-First, Haptic e Blindagem
+import { useLocalData } from '@/hooks/useLocalData'
+import { useSafeDb } from '@/hooks/useSafeDb'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface TransferModalProps {
   isOpen: boolean
@@ -22,11 +26,12 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
+  
+  const { safeAdd, safeUpdate } = useSafeDb()
+  const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
 
   const [fromContext, setFromContext] = useState<'dfl' | 'personal'>(forcedContext || 'dfl')
   const [toContext, setToContext] = useState<'dfl' | 'personal'>(forcedContext === 'dfl' ? 'personal' : 'dfl')
-  const [fromAccounts, setFromAccounts] = useState<any[]>([])
-  const [toAccounts, setToAccounts] = useState<any[]>([])
   const [fromAccountId, setFromAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [amount, setAmount] = useState('')
@@ -35,6 +40,24 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
   const [loading, setLoading] = useState(false)
   const [showFromAccs, setShowFromAccs] = useState(false)
   const [showToAccs, setShowToAccs] = useState(false)
+
+  // Lê todas as contas localmente e sem delay de rede
+  const { data: allAccounts } = useLocalData({
+    table: 'accounts' as any,
+  })
+
+  // Filtra as contas baseado no contexto selecionado
+  const fromAccounts = useMemo(() => {
+    return (allAccounts || [])
+      .filter((a: any) => a.context === fromContext)
+      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+  }, [allAccounts, fromContext])
+
+  const toAccounts = useMemo(() => {
+    return (allAccounts || [])
+      .filter((a: any) => a.context === toContext)
+      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+  }, [allAccounts, toContext])
 
   // Reset ao abrir
   useEffect(() => {
@@ -48,28 +71,6 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
       setDescription('')
     }
   }, [isOpen, forcedContext])
-
-  // Carregar contas do contexto de origem
-  useEffect(() => {
-    if (!user) return
-    supabase
-      .from('accounts')
-      .select('id, name, color, balance')
-      .match({ user_id: user.id, context: fromContext })
-      .order('name')
-      .then(({ data }) => setFromAccounts(data || []))
-  }, [fromContext, user])
-
-  // Carregar contas do contexto de destino
-  useEffect(() => {
-    if (!user) return
-    supabase
-      .from('accounts')
-      .select('id, name, color, balance')
-      .match({ user_id: user.id, context: toContext })
-      .order('name')
-      .then(({ data }) => setToAccounts(data || []))
-  }, [toContext, user])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '')
@@ -85,34 +86,31 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
   const handleTransfer = async () => {
     if (!user || !fromAccountId || !toAccountId || amountNum <= 0) {
-      showToast('Preencha todos os campos', 'warning')
+      showToast('⚠️ Preencha todos os campos corretamente.', 'warning')
+      hapticError()
       return
     }
     if (fromAccountId === toAccountId && fromContext === toContext) {
-      showToast('Escolha contas diferentes', 'warning')
+      showToast('⚠️ As contas de origem e destino devem ser diferentes.', 'warning')
+      hapticError()
       return
     }
+    
     setLoading(true)
 
-    const fromAcc = fromAccounts.find(a => a.id === fromAccountId)
-    const toAcc = toAccounts.find(a => a.id === toAccountId)
+    const fromAcc = fromAccounts.find((a: any) => a.id === fromAccountId)
+    const toAcc = toAccounts.find((a: any) => a.id === toAccountId)
     const transferGroup = crypto.randomUUID()
 
     try {
-      // Atualiza saldos
-      const { error: err1 } = await supabase
-        .from('accounts')
-        .update({ balance: Number(fromAcc.balance) - amountNum })
-        .eq('id', fromAccountId)
-      if (err1) throw err1
+      // 1. Atualiza saldos atômicamente
+      const res1 = await safeUpdate('accounts', fromAccountId, { balance: Number(fromAcc.balance) - amountNum })
+      if (!res1.success) throw new Error(res1.error)
 
-      const { error: err2 } = await supabase
-        .from('accounts')
-        .update({ balance: Number(toAcc.balance) + amountNum })
-        .eq('id', toAccountId)
-      if (err2) throw err2
+      const res2 = await safeUpdate('accounts', toAccountId, { balance: Number(toAcc.balance) + amountNum })
+      if (!res2.success) throw new Error(res2.error)
 
-      // Cria transações
+      // 2. Cria transações atômicamente
       const basePayload = {
         user_id: user.id,
         type: 'transfer',
@@ -120,29 +118,38 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
         status: 'done',
         transfer_group_id: transferGroup,
         date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0
       }
 
-      await supabase.from('transactions').insert([
-        {
-          ...basePayload,
-          account_id: fromAccountId,
-          context: fromContext,
-          description: description || `Transferência para ${toAcc.name} (${toContext === 'dfl' ? 'DFL' : 'Pessoal'})`,
-        },
-        {
-          ...basePayload,
-          account_id: toAccountId,
-          context: toContext,
-          description: description || `Transferência de ${fromAcc.name} (${fromContext === 'dfl' ? 'DFL' : 'Pessoal'})`,
-        },
-      ])
+      const resTx1 = await safeAdd('transactions', {
+        id: crypto.randomUUID(),
+        ...basePayload,
+        account_id: fromAccountId,
+        context: fromContext,
+        description: description || `Transferência para ${toAcc.name} (${toContext === 'dfl' ? 'DFL' : 'Pessoal'})`,
+      })
+      if (!resTx1.success) throw new Error(resTx1.error)
 
-      showToast('Transferência realizada!', 'success')
+      const resTx2 = await safeAdd('transactions', {
+        id: crypto.randomUUID(),
+        ...basePayload,
+        account_id: toAccountId,
+        context: toContext,
+        description: description || `Transferência de ${fromAcc.name} (${fromContext === 'dfl' ? 'DFL' : 'Pessoal'})`,
+      })
+      if (!resTx2.success) throw new Error(resTx2.error)
+
+      hapticSuccess()
+      showToast('✅ Transferência realizada com sucesso!', 'success')
       onComplete?.()
       onClose()
       router.refresh()
     } catch (e: any) {
-      showToast('Erro: ' + e.message, 'error')
+      hapticError()
+      showToast('❌ Erro: ' + e.message, 'error')
     } finally {
       setLoading(false)
     }
@@ -150,152 +157,166 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
   if (!isOpen) return null
 
-  const fromAcc = fromAccounts.find(a => a.id === fromAccountId)
-  const toAcc = toAccounts.find(a => a.id === toAccountId)
+  const fromAcc = fromAccounts.find((a: any) => a.id === fromAccountId)
+  const toAcc = toAccounts.find((a: any) => a.id === toAccountId)
 
   return (
     <div className="fixed inset-0 z-[150] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
       <div
-        className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-slide-up z-10 max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 z-10 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
-        <div className="w-10 h-1 bg-gray-300 dark:bg-slate-600 rounded-full mx-auto mb-6" />
+        <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100">Transferência entre Contextos</h2>
-          <button onClick={onClose} className="p-2 text-gray-400 dark:text-gray-500"><X size={20} /></button>
+          <h2 className="font-bold text-[18px] text-gray-800 dark:text-gray-100">Transferência Rápida</h2>
+          <button onClick={() => { vibrate([10]); onClose(); }} className="p-2 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-700 rounded-full active:scale-[0.90] transition-transform"><X size={20} /></button>
         </div>
 
         {/* Origem */}
         <div className="mb-6">
-          <label className="text-[11px] font-bold text-gray-400 uppercase mb-2 block">De</label>
-          <div className="flex gap-2 mb-3">
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">Conta de Origem</label>
+          <div className="flex gap-2 mb-3 bg-gray-50 dark:bg-slate-700 p-1 rounded-full border border-gray-100 dark:border-slate-600">
             {(['dfl', 'personal'] as const).map(c => (
               <button
                 key={c}
-                onClick={() => setFromContext(c)}
-                className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${fromContext === c ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500'}`}
-              >{c === 'dfl' ? 'DFL' : 'Pessoal'}</button>
+                onClick={() => { setFromContext(c); setFromAccountId(''); vibrate([10]); }}
+                className={`flex-1 py-2.5 rounded-full text-[13px] font-bold transition-all active:scale-[0.98] ${fromContext === c ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+              >{c === 'dfl' ? 'Empresa (DFL)' : 'Pessoal (PF)'}</button>
             ))}
           </div>
-          <button onClick={() => setShowFromAccs(true)} className="w-full bg-gray-50 dark:bg-slate-700 p-4 rounded-xl flex items-center justify-between">
+          <button onClick={() => { setShowFromAccs(true); vibrate([10]); }} className="w-full bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[20px] flex items-center justify-between active:scale-[0.98] transition-transform shadow-sm">
             <div className="flex items-center gap-3">
-              {fromAcc ? <BankLogo color={fromAcc.color} name={fromAcc.name} size="sm" /> : <Wallet size={20} className="text-gray-400" />}
-              <span className={fromAcc ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-400'}>
-                {fromAcc ? fromAcc.name : 'Selecionar conta'}
+              {fromAcc ? <BankLogo color={fromAcc.color} name={fromAcc.name} size="md" /> : <div className="w-10 h-10 bg-gray-100 dark:bg-slate-600 rounded-full flex items-center justify-center"><Wallet size={20} className="text-gray-400" /></div>}
+              <span className={`font-bold ${fromAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
+                {fromAcc ? fromAcc.name : 'Selecionar conta de saída'}
               </span>
             </div>
-            <ChevronRight size={18} className="text-gray-400" />
+            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500" />
           </button>
         </div>
 
         {/* Seta animada */}
-        <div className="flex justify-center -my-2">
-          <div className="bg-teal-100 dark:bg-teal-900/30 p-2 rounded-full"><ArrowDown size={24} className="text-teal-600 dark:text-teal-400" /></div>
+        <div className="flex justify-center -my-3 relative z-10 pointer-events-none">
+          <div className="bg-teal-50 dark:bg-teal-900/40 p-2.5 rounded-full shadow-sm border border-white dark:border-slate-800">
+            <ArrowDown size={20} className="text-teal-600 dark:text-teal-400" />
+          </div>
         </div>
 
         {/* Destino */}
         <div className="mb-6 mt-2">
-          <label className="text-[11px] font-bold text-gray-400 uppercase mb-2 block">Para</label>
-          <div className="flex gap-2 mb-3">
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">Conta de Destino</label>
+          <div className="flex gap-2 mb-3 bg-gray-50 dark:bg-slate-700 p-1 rounded-full border border-gray-100 dark:border-slate-600">
             {(['dfl', 'personal'] as const).map(c => (
               <button
                 key={c}
-                onClick={() => setToContext(c)}
-                className={`flex-1 py-2 rounded-full text-xs font-bold transition-colors ${toContext === c ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500'}`}
-              >{c === 'dfl' ? 'DFL' : 'Pessoal'}</button>
+                onClick={() => { setToContext(c); setToAccountId(''); vibrate([10]); }}
+                className={`flex-1 py-2.5 rounded-full text-[13px] font-bold transition-all active:scale-[0.98] ${toContext === c ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+              >{c === 'dfl' ? 'Empresa (DFL)' : 'Pessoal (PF)'}</button>
             ))}
           </div>
-          <button onClick={() => setShowToAccs(true)} className="w-full bg-gray-50 dark:bg-slate-700 p-4 rounded-xl flex items-center justify-between">
+          <button onClick={() => { setShowToAccs(true); vibrate([10]); }} className="w-full bg-white dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[20px] flex items-center justify-between active:scale-[0.98] transition-transform shadow-sm">
             <div className="flex items-center gap-3">
-              {toAcc ? <BankLogo color={toAcc.color} name={toAcc.name} size="sm" /> : <Wallet size={20} className="text-gray-400" />}
-              <span className={toAcc ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-400'}>
-                {toAcc ? toAcc.name : 'Selecionar conta'}
+              {toAcc ? <BankLogo color={toAcc.color} name={toAcc.name} size="md" /> : <div className="w-10 h-10 bg-gray-100 dark:bg-slate-600 rounded-full flex items-center justify-center"><Wallet size={20} className="text-gray-400" /></div>}
+              <span className={`font-bold ${toAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
+                {toAcc ? toAcc.name : 'Selecionar conta de entrada'}
               </span>
             </div>
-            <ChevronRight size={18} className="text-gray-400" />
+            <ChevronRight size={18} className="text-gray-300 dark:text-gray-500" />
           </button>
         </div>
 
         {/* Valor */}
         <div className="mb-4">
-          <label className="text-[11px] font-bold text-gray-400 uppercase mb-2 block">Valor</label>
-          <div className="bg-gray-50 dark:bg-slate-700 rounded-2xl p-4 flex items-center gap-2">
-            <span className="text-xl text-gray-400 font-light">R$</span>
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">Valor a transferir</label>
+          <div className="bg-gray-50 dark:bg-slate-700 rounded-[20px] p-4 flex items-center gap-2 border border-gray-100 dark:border-slate-600">
+            <span className="text-2xl text-gray-400 font-light">R$</span>
             <input
               type="text"
               inputMode="numeric"
               value={amount}
               onChange={handleAmountChange}
               placeholder="0,00"
-              className="text-2xl font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200"
+              className="text-3xl font-bold bg-transparent outline-none w-full text-teal-700 dark:text-teal-400"
             />
           </div>
         </div>
 
         {/* Descrição */}
-        <div className="mb-6">
-          <label className="text-[11px] font-bold text-gray-400 uppercase mb-2 block">Descrição (opcional)</label>
+        <div className="mb-8">
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">Descrição (opcional)</label>
           <input
             type="text"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            placeholder="Ex: Reembolso"
-            className="w-full bg-gray-50 dark:bg-slate-700 p-4 rounded-xl text-sm outline-none text-gray-800 dark:text-gray-200"
+            placeholder="Ex: Reembolso de jantar"
+            className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 p-4 rounded-[20px] text-[15px] font-medium outline-none text-gray-800 dark:text-gray-200 focus:border-teal-500 transition-colors"
           />
         </div>
 
         <button
-          onClick={handleTransfer}
+          onClick={() => { vibrate([10, 50]); handleTransfer(); }}
           disabled={loading || !fromAccountId || !toAccountId || amountNum <= 0}
-          className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-2xl font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full bg-teal-700 hover:bg-teal-800 text-white py-4 rounded-[24px] font-bold disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-teal-700/20"
         >
-          {loading ? <Loader2 size={22} className="animate-spin" /> : <><ArrowRightLeft size={20} /> Transferir</>}
+          {loading ? <Loader2 size={24} className="animate-spin" /> : <><ArrowRightLeft size={20} /> Transferir Agora</>}
         </button>
 
         {/* Modais de seleção de conta */}
         {showFromAccs && (
           <div className="fixed inset-0 z-[160] flex items-end justify-center" onClick={() => setShowFromAccs(false)}>
-            <div className="absolute inset-0 bg-black/50" />
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-5 max-h-[60vh] overflow-y-auto z-10" onClick={e => e.stopPropagation()}>
-              <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-100">Conta de Origem</h3>
-              {fromAccounts.map(acc => (
-                <button
-                  key={acc.id}
-                  onClick={() => { setFromAccountId(acc.id); setShowFromAccs(false) }}
-                  className={`w-full p-3 flex items-center gap-3 rounded-xl ${acc.id === fromAccountId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                >
-                  <BankLogo color={acc.color} name={acc.name} size="md" />
-                  <div className="text-left flex-1">
-                    <p className="font-medium text-gray-800 dark:text-gray-200">{acc.name}</p>
-                    <p className="text-xs text-gray-400">R$ {Number(acc.balance || 0).toFixed(2)}</p>
-                  </div>
-                  {acc.id === fromAccountId && <Check size={20} className="text-teal-600" />}
-                </button>
-              ))}
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[60vh] overflow-y-auto z-10 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2">
+                <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Conta de Origem</h3>
+                <button onClick={() => setShowFromAccs(false)} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95"><X size={20} className="text-gray-500" /></button>
+              </div>
+              <div className="space-y-3">
+                {fromAccounts.map((acc: any) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setFromAccountId(acc.id); setShowFromAccs(false); vibrate([10]); }}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${acc.id === fromAccountId ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}
+                  >
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <div className="text-left flex-1">
+                      <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{acc.name}</p>
+                      <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">R$ {Number(acc.balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    {acc.id === fromAccountId && <Check size={22} className="text-teal-600 dark:text-teal-400" />}
+                  </button>
+                ))}
+                {fromAccounts.length === 0 && <p className="text-center py-6 text-gray-400 font-medium">Nenhuma conta cadastrada neste contexto.</p>}
+              </div>
             </div>
           </div>
         )}
 
         {showToAccs && (
           <div className="fixed inset-0 z-[160] flex items-end justify-center" onClick={() => setShowToAccs(false)}>
-            <div className="absolute inset-0 bg-black/50" />
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-5 max-h-[60vh] overflow-y-auto z-10" onClick={e => e.stopPropagation()}>
-              <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-100">Conta de Destino</h3>
-              {toAccounts.map(acc => (
-                <button
-                  key={acc.id}
-                  onClick={() => { setToAccountId(acc.id); setShowToAccs(false) }}
-                  className={`w-full p-3 flex items-center gap-3 rounded-xl ${acc.id === toAccountId ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                >
-                  <BankLogo color={acc.color} name={acc.name} size="md" />
-                  <div className="text-left flex-1">
-                    <p className="font-medium text-gray-800 dark:text-gray-200">{acc.name}</p>
-                    <p className="text-xs text-gray-400">R$ {Number(acc.balance || 0).toFixed(2)}</p>
-                  </div>
-                  {acc.id === toAccountId && <Check size={20} className="text-teal-600" />}
-                </button>
-              ))}
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[60vh] overflow-y-auto z-10 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2">
+                <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Conta de Destino</h3>
+                <button onClick={() => setShowToAccs(false)} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95"><X size={20} className="text-gray-500" /></button>
+              </div>
+              <div className="space-y-3">
+                {toAccounts.map((acc: any) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => { setToAccountId(acc.id); setShowToAccs(false); vibrate([10]); }}
+                    className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] ${acc.id === toAccountId ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700 border border-transparent'}`}
+                  >
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <div className="text-left flex-1">
+                      <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">{acc.name}</p>
+                      <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">R$ {Number(acc.balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    {acc.id === toAccountId && <Check size={22} className="text-teal-600 dark:text-teal-400" />}
+                  </button>
+                ))}
+                {toAccounts.length === 0 && <p className="text-center py-6 text-gray-400 font-medium">Nenhuma conta cadastrada neste contexto.</p>}
+              </div>
             </div>
           </div>
         )}
