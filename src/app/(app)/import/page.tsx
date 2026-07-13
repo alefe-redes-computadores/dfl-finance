@@ -22,9 +22,9 @@ import MoneyInput from '@/components/MoneyInput'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 
-// Importamos o seu novo serviço Client-Side
 import { extractReceiptFromFile } from '@/lib/services/ocrService'
 
+// 🔥 SKELETON ATUALIZADO
 const SavingSkeleton = () => (
   <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-300">
     <div className="relative w-20 h-20 mb-6">
@@ -67,7 +67,6 @@ function ImportContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Carrega a chave da API ao abrir a tela
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key')
     if (savedKey) setApiKey(savedKey)
@@ -92,7 +91,6 @@ function ImportContent() {
     setStep('review')
 
     try {
-      // Chama o novo serviço do Gemini diretamente do celular
       const result = await extractReceiptFromFile(selectedFile, currentKey)
       setOcrResult(result)
       
@@ -115,7 +113,6 @@ function ImportContent() {
     }
   }
 
-  // 🔥 HANDLE SAVE ATÔMICO MANTIDO INTACTO
   const handleSave = async () => {
     if (isSubmitting) return
     if (!user?.id) return
@@ -184,29 +181,52 @@ function ImportContent() {
   }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
-          <ChevronLeft size={24} />
-        </button>
-        <ContextToggle />
-        <div className="w-8" />
-      </div>
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
+    >
+      <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm px-4 py-4 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => router.back()}
+              className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+            >
+              <ChevronLeft size={20} />
+            </button>
 
-      <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-6">Importar Comprovante</h1>
+            <div className="min-w-0">
+              <h1 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                Importar comprovante
+              </h1>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Extração local com revisão antes de salvar
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            <ContextToggle />
+          </div>
+        </div>
+      </div>
 
       {step === 'upload' && (
         <div className="space-y-4 animate-in fade-in duration-300">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-8 shadow-sm border border-gray-50 dark:border-slate-700 flex flex-col items-center justify-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]"
+            className="w-full bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-6 flex flex-col items-center justify-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
           >
-            <div className="w-16 h-16 bg-teal-50 dark:bg-teal-900/30 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Camera size={32} className="text-teal-700 dark:text-teal-400" />
+            <div className="w-16 h-16 rounded-[20px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center">
+              <Camera size={30} className="text-teal-700 dark:text-teal-400" />
             </div>
             <div className="text-center">
-              <p className="font-bold text-gray-800 dark:text-gray-200">Escanear Cupom Fiscal</p>
-              <p className="text-[12px] text-gray-400 dark:text-gray-500">Tire uma foto ou selecione um arquivo</p>
+              <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                Escanear cupom fiscal
+              </p>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Tire uma foto ou selecione um arquivo
+              </p>
             </div>
             <input
               ref={fileInputRef}
@@ -218,31 +238,36 @@ function ImportContent() {
             />
           </button>
 
-          {/* Adicionado o input da chave da API mantendo o seu visual limpo */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-50 dark:border-slate-700">
-             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-2">Chave API Gemini</label>
-             <input
-               type="password"
-               value={apiKey}
-               onChange={(e) => {
-                 setApiKey(e.target.value)
-                 localStorage.setItem('gemini_api_key', e.target.value)
-               }}
-               placeholder="Sua chave (opcional se já salva)"
-               className="w-full bg-gray-50 dark:bg-slate-700 p-3 rounded-xl outline-none text-sm text-gray-800 dark:text-gray-200 transition-colors"
-             />
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+              Chave API Gemini
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => {
+                setApiKey(e.target.value)
+                localStorage.setItem('gemini_api_key', e.target.value)
+              }}
+              placeholder="Sua chave (opcional se já salva)"
+              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[14px] text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-teal-500/20 outline-none"
+            />
           </div>
 
           <button
             onClick={() => router.push('/transactions/new?type=expense')}
-            className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm border border-gray-50 dark:border-slate-700 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]"
+            className="w-full bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
           >
-            <div className="w-10 h-10 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-              <Edit3 size={20} className="text-gray-500 dark:text-gray-400" />
+            <div className="w-10 h-10 rounded-[16px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+              <Edit3 size={18} className="text-gray-500 dark:text-gray-400" />
             </div>
             <div className="text-left">
-              <p className="font-bold text-gray-800 dark:text-gray-200">Lançamento Manual Rápido</p>
-              <p className="text-[12px] text-gray-400 dark:text-gray-500">Prefiro digitar os dados</p>
+              <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                Lançamento manual rápido
+              </p>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Prefiro digitar os dados
+              </p>
             </div>
           </button>
         </div>
@@ -251,103 +276,140 @@ function ImportContent() {
       {step === 'review' && (
         <div className="space-y-4 animate-in fade-in duration-300">
           {previewUrl && (
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ImageIcon size={16} className="text-teal-600 dark:text-teal-400" />
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Comprovante</span>
+                <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+                  Comprovante
+                </span>
               </div>
-              <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700">
+              <div className="rounded-[18px] overflow-hidden bg-gray-100 dark:bg-slate-700">
                 <img src={previewUrl} alt="Comprovante" className="w-full h-48 object-cover" />
               </div>
             </div>
           )}
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Revisar comprovante</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <div>
+                <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                  Revisar comprovante
+                </h3>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Confirme os dados antes de salvar
+                </p>
+              </div>
+
               {loading && (
-                <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400">
+                <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400 shrink-0">
                   <Loader2 size={16} className="animate-spin" />
-                  <span className="text-xs font-medium">Extraindo dados...</span>
+                  <span className="text-[12px] font-medium">Extraindo...</span>
                 </div>
               )}
+
               {ocrResult && !loading && (
-                <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">
+                <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full shrink-0">
                   <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Dados extraídos</span>
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Dados extraídos
+                  </span>
                 </div>
               )}
             </div>
 
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Valor</label>
-              <div className={`flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 transition-colors ${errors.amount ? 'border border-red-400' : 'focus-within:border-teal-500'}`}>
-                <DollarSign size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
-                <MoneyInput
-                  value={amountNum}
-                  onChange={(num, formatted) => {
-                    setAmountNum(num)
-                    setAmountFormatted(formatted)
-                  }}
-                  className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200 font-bold"
-                />
+            <div className="space-y-4">
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Valor
+                </label>
+                <div className={`flex items-center rounded-[16px] bg-gray-50 dark:bg-slate-900 border px-4 py-3 transition-colors ${
+                  errors.amount ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-teal-500/20'
+                }`}>
+                  <DollarSign size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
+                  <MoneyInput
+                    value={amountNum}
+                    onChange={(num, formatted) => {
+                      setAmountNum(num)
+                      setAmountFormatted(formatted)
+                    }}
+                    className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200 font-semibold"
+                  />
+                </div>
+                {errors.amount && (
+                  <p className="text-red-500 text-[10px] mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {errors.amount}
+                  </p>
+                )}
               </div>
-              {errors.amount && <p className="text-red-500 text-[10px] mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.amount}</p>}
+
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Data
+                </label>
+                <div className={`flex items-center rounded-[16px] bg-gray-50 dark:bg-slate-900 border px-4 py-3 transition-colors ${
+                  errors.date ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-teal-500/20'
+                }`}>
+                  <Calendar size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200"
+                  />
+                </div>
+                {errors.date && (
+                  <p className="text-red-500 text-[10px] mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {errors.date}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Descrição
+                </label>
+                <div className="flex items-center rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20 transition-colors">
+                  <Edit3 size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
+                  <input
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200"
+                    placeholder="Descrição da compra"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Observações
+                </label>
+                <div className="flex items-center rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20 transition-colors">
+                  <Tag size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
+                  <input
+                    type="text"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200"
+                    placeholder="Notas adicionais"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Data</label>
-              <div className={`flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 transition-colors ${errors.date ? 'border border-red-400' : 'focus-within:border-teal-500'}`}>
-                <Calendar size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200"
-                />
-              </div>
-              {errors.date && <p className="text-red-500 text-[10px] mt-1 flex items-center gap-1"><AlertCircle size={12} />{errors.date}</p>}
-            </div>
-
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Descrição</label>
-              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 focus-within:border-teal-500 transition-colors">
-                <Edit3 size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200"
-                  placeholder="Descrição da compra"
-                />
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Observações</label>
-              <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-xl p-3 focus-within:border-teal-500 transition-colors">
-                <Tag size={18} className="text-gray-400 dark:text-gray-500 mr-2" />
-                <input
-                  type="text"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="bg-transparent w-full outline-none text-gray-800 dark:text-gray-200"
-                  placeholder="Notas adicionais"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-5">
               <button
                 onClick={handleReset}
-                className="flex-1 py-3 rounded-xl font-bold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors active:scale-95"
+                className="flex-1 py-3.5 rounded-[16px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSubmitting}
-                className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 active:scale-95 shadow-lg shadow-teal-700/20 flex items-center justify-center gap-2"
+                className="flex-1 bg-teal-700 text-white py-3.5 rounded-[20px] font-bold hover:bg-teal-800 transition-colors disabled:opacity-50 active:scale-[0.98] shadow-lg shadow-teal-700/20 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>
@@ -372,6 +434,10 @@ function ImportContent() {
 }
 
 export default function ImportPage() {
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
+  if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
+
   return (
     <ContextProvider>
       <ImportContent />
