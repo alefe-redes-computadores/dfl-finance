@@ -141,7 +141,10 @@ function DebtsContent() {
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300"
+    >
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
@@ -150,73 +153,131 @@ function DebtsContent() {
 
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
+            <span className="text-[12px] font-semibold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl pt-6 pb-2 px-4 shadow-sm border-b border-gray-100 dark:border-slate-800/50">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <button onClick={() => { vibrate([5]); router.push('/more'); }} className="p-1 -ml-1 text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors active:scale-95">
-              <ChevronLeft size={24} />
-            </button>
-            <h1 className="text-[26px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">Quem me deve</h1>
-          </div>
-          <button onClick={() => { vibrate([10]); router.push('/debts/new'); }} className="w-10 h-10 bg-teal-600 hover:bg-teal-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-95">
-            <Plus size={20} />
-          </button>
-        </div>
+      {/* 🔥 HEADER UNIFICADO */}
+      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => { vibrate([5]); router.push('/more'); }}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
 
-        <div className="mb-4">
-          <ContextToggle />
+              <div className="min-w-0">
+                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Quem me deve
+                </h1>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Controle de valores a receber
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { vibrate([10]); router.push('/debts/new'); }}
+              className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <ContextToggle />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="px-4 pt-4">
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center">
-            <div className="w-12 h-12 rounded-[16px] bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-3">
-              <Wallet size={20} className="text-orange-600 dark:text-orange-400" />
+      <div className="px-4 pt-3">
+        {/* 🔥 CARDS DE RESUMO - NEUTROS */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <div className="w-10 h-10 rounded-[16px] bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mb-3">
+              <Wallet size={18} className="text-orange-600 dark:text-orange-400" />
             </div>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">A receber</p>
-            <p className="text-[18px] font-black tracking-tight text-orange-600 dark:text-orange-400">{formatCurrency(totalToReceiveState)}</p>
+            <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+              A receber
+            </p>
+            <p className="text-[20px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
+              {formatCurrency(totalToReceiveState)}
+            </p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center">
-            <div className="w-12 h-12 rounded-[16px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-3">
-              <Users size={20} className="text-teal-600 dark:text-teal-400" />
+
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <div className="w-10 h-10 rounded-[16px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center mb-3">
+              <Users size={18} className="text-teal-600 dark:text-teal-400" />
             </div>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">Pessoas</p>
-            <p className="text-[18px] font-black tracking-tight text-teal-700 dark:text-teal-400">{debts.length}</p>
+            <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+              Pessoas
+            </p>
+            <p className="text-[20px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
+              {debts.length}
+            </p>
           </div>
         </div>
 
-        <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 p-1.5 rounded-full mb-6">
-          <button onClick={() => { vibrate([5]); setFilter('active'); }} className={`flex-1 py-2.5 rounded-full text-[13px] font-bold transition-all ${filter === 'active' ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Pendentes</button>
-          <button onClick={() => { vibrate([5]); setFilter('paid'); }} className={`flex-1 py-2.5 rounded-full text-[13px] font-bold transition-all ${filter === 'paid' ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Pagos</button>
+        {/* 🔥 FILTRO COMPACTO */}
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-1.5 mb-4">
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => { vibrate([5]); setFilter('active'); }}
+              className={`flex-1 h-10 rounded-[18px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
+                filter === 'active'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              Pendentes
+            </button>
+            <button
+              onClick={() => { vibrate([5]); setFilter('paid'); }}
+              className={`flex-1 h-10 rounded-[18px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
+                filter === 'paid'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              Pagos
+            </button>
+          </div>
         </div>
 
         {loading ? (
-          <div className="space-y-4">
-             <Skeleton count={3} height="130px" borderRadius="28px" />
+          <div className="space-y-3">
+            <Skeleton count={3} height="112px" borderRadius="24px" />
           </div>
         ) : debts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-300">
-            <div className="w-20 h-20 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <Users size={40} className="opacity-30 text-gray-500" />
+            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+              <Users size={28} className="opacity-30 text-gray-500" />
             </div>
-            <h3 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 mb-2 tracking-tight">Nenhum registro</h3>
-            <p className="text-gray-400 dark:text-gray-500 text-[13px] font-medium mb-6 max-w-[250px]">
-              {filter === 'paid' ? 'Nenhuma dívida foi paga ainda.' : 'Registre empréstimos para acompanhar quem te deve.'}
+            <h3 className="font-semibold text-[16px] text-gray-800 dark:text-gray-100 mb-1">
+              Nenhum registro
+            </h3>
+            <p className="text-gray-400 dark:text-gray-500 text-[12px] mb-5 max-w-[250px]">
+              {filter === 'paid'
+                ? 'Nenhuma dívida foi paga ainda.'
+                : 'Registre empréstimos para acompanhar quem te deve.'}
             </p>
-            <button onClick={() => { vibrate([10]); router.push('/debts/new'); }} className="bg-teal-600 text-white px-8 py-3.5 rounded-full font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/30 active:scale-95">
+            <button
+              onClick={() => { vibrate([10]); router.push('/debts/new'); }}
+              className="bg-teal-600 text-white px-8 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
+            >
               Novo empréstimo
             </button>
           </div>
         ) : (
-          <div className="space-y-4 animate-in fade-in duration-500">
+          <div className="space-y-2.5 animate-in fade-in duration-500">
             {debts.map((debt: any) => {
               const IconComp = getDynamicIcon(debt.icon || 'user')
               const isPaid = debt.status === 'paid'
@@ -224,37 +285,82 @@ function DebtsContent() {
               const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
               const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
               const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
-              
+
               return (
                 <div
                   key={debt.id}
                   onClick={() => { vibrate([5]); router.push(`/debts/details?id=${debt.id}`); }}
-                  className={`bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group ${isPaid ? 'border-emerald-200 dark:border-emerald-800/50' : isOverdue ? 'border-red-200 dark:border-red-800/50' : 'border-gray-50 dark:border-slate-700/50'}`}
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer"
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3 min-w-0 pr-2">
-                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}><IconComp size={22} /></div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-[16px] text-gray-800 dark:text-gray-100 truncate tracking-tight mb-0.5">{debt.person_name}</p>
-                        {debt.description && <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 truncate">{debt.description}</p>}
+                  <div className="rounded-[18px] p-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div
+                          className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 shadow-sm"
+                          style={{ backgroundColor: `${debt.color}15`, color: debt.color }}
+                        >
+                          <IconComp size={18} />
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {debt.person_name}
+                          </p>
+                          {debt.description && (
+                            <p className="text-[12px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                              {debt.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {isPaid && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                            <Check size={10} /> Pago
+                          </span>
+                        )}
+                        {isOverdue && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-900/30 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400">
+                            <AlertTriangle size={10} /> Atrasado {Math.abs(daysUntilDue)}d
+                          </span>
+                        )}
+                        {isNearDue && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-900/30 px-2 py-0.5 text-[11px] font-medium text-orange-600 dark:text-orange-400">
+                            <Clock size={10} /> Vence em {daysUntilDue}d
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      {isPaid && <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-[10px] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Check size={10} /> Pago</span>}
-                      {isOverdue && <span className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2.5 py-1 rounded-[10px] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Atrasado {Math.abs(daysUntilDue)}d</span>}
-                      {isNearDue && <span className="bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2.5 py-1 rounded-[10px] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Clock size={10} /> Vence em {daysUntilDue}d</span>}
+
+                    <div className="w-full bg-gray-100 dark:bg-slate-700/60 rounded-full h-2.5 overflow-hidden mb-2">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                          isPaid
+                            ? 'bg-emerald-500'
+                            : isOverdue
+                            ? 'bg-red-500'
+                            : isNearDue
+                            ? 'bg-orange-500'
+                            : 'bg-teal-500'
+                        }`}
+                        style={{ width: `${Math.min(debt.percent, 100)}%` }}
+                      />
                     </div>
-                  </div>
-                  
-                  <div className="w-full bg-gray-100 dark:bg-slate-700/50 rounded-full h-3 overflow-hidden mb-2 shadow-inner">
-                    <div className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : isNearDue ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(debt.percent, 100)}%` }} />
-                  </div>
-                  
-                  <div className="flex justify-between text-[11px] font-bold text-gray-400 dark:text-gray-500 mt-1">
-                    <span className={isOverdue ? 'text-red-500' : ''}>
-                      {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
-                    </span>
-                    <span>{debt.percent.toFixed(0)}% • {formatCurrency(Number(debt.total_amount))}</span>
+
+                    <div className="flex items-center justify-between gap-3 text-[12px]">
+                      <span className={`truncate ${
+                        isOverdue
+                          ? 'text-red-500 dark:text-red-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
+                        {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
+                      </span>
+
+                      <span className="shrink-0 text-gray-400 dark:text-gray-500">
+                        {debt.percent.toFixed(0)}% • {formatCurrency(Number(debt.total_amount))}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )
@@ -267,6 +373,10 @@ function DebtsContent() {
 }
 
 export default function DebtsPage() {
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
+  if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
+  
   return (
     <ContextToggle.ContextProvider>
       <DebtsContent />
