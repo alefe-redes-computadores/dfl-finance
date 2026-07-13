@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db, addToSyncQueue, getPendingSyncItems, removeFromSyncQueue, markSyncFailed } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
-// 🔥 IMPORTANDO O HOOK DE ADMIN
 import { useIsAdmin } from '@/hooks/useAdmin'
 
 type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline'
@@ -19,46 +18,23 @@ type AllTables =
 export function useLocalSync() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  // 🔥 BUSCA O STATUS DE ADMIN DO USUÁRIO
   const { isAdmin } = useIsAdmin()
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [pendingCount, setPendingCount] = useState(0)
   const isSyncing = useRef(false)
 
-  // 🔥 GERADOR DE LOG DIRETO NA TELA DO CELULAR (APENAS PARA ADMIN)
   const renderLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
-    // 🔥 SEGURANÇA: SE NÃO FOR ADMIN, NÃO INJETA A CAIXINHA
     if (!isAdmin) return
     if (typeof window === 'undefined') return
     
-    let box = document.getElementById('screen-debug-console')
-    if (!box) {
-      box = document.createElement('div')
-      box.id = 'screen-debug-console'
-      box.style.position = 'fixed'
-      box.style.bottom = '85px'
-      box.style.left = '12px'
-      box.style.right = '12px'
-      box.style.maxHeight = '160px'
-      box.style.overflowY = 'auto'
-      box.style.backgroundColor = 'rgba(15, 23, 42, 0.95)'
-      box.style.color = '#fff'
-      box.style.fontFamily = 'monospace'
-      box.style.fontSize = '11px'
-      box.style.padding = '10px'
-      box.style.borderRadius = '14px'
-      box.style.zIndex = '999999'
-      box.style.border = '1px solid rgba(255,255,255,0.1)'
-      box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)'
-      document.body.appendChild(box)
+    try {
+      window.dispatchEvent(new CustomEvent('admin-log', { 
+        detail: { msg, type, timestamp: new Date().toISOString() }
+      }))
+    } catch (_) {
+      // Fallback silencioso se o evento falhar
     }
-    const line = document.createElement('div')
-    line.style.marginBottom = '4px'
-    line.style.color = type === 'error' ? '#f87171' : type === 'success' ? '#4ade80' : '#e2e8f0'
-    line.innerText = `> ${msg}`
-    box.appendChild(line)
-    box.scrollTop = box.scrollHeight
   }
 
   const updatePendingCount = useCallback(async () => {
@@ -93,7 +69,6 @@ export function useLocalSync() {
         renderLog(`Processando ${item.operation} na tabela [${item.table}]... (tentativa ${(item.attempts || 0) + 1})`, 'info')
         
         try {
-          // 🔥 CORRIGIDO: Verifica se o item já tentou mais de 3 vezes
           const attempts = item.attempts || 0
           if (attempts >= 3) {
             renderLog(`⚠️ Item ${item.id} atingiu limite de 3 tentativas. Removendo da fila para desbloquear.`, 'error')
@@ -118,7 +93,6 @@ export function useLocalSync() {
             error = res.error
           } else {
             renderLog(`Disparando UPSERT para ID: ${record_id} (payload contém ID: ${!!data?.id})`, 'info')
-            // 🔥 CORRIGIDO: Garante que o data tenha o ID para o upsert
             const payload = data?.id ? data : { ...data, id: record_id }
             const res = await supabaseClient.upsert(payload, { onConflict: 'id' })
             error = res.error
@@ -139,11 +113,9 @@ export function useLocalSync() {
           renderLog(`Falha no item: ${err.message}`, 'error')
           console.error(`❌ [SYNC] Falha no item ${item.id}:`, err)
           
-          // 🔥 CORRIGIDO: Incrementa attempts e marca como failed
           const newAttempts = (item.attempts || 0) + 1
           await markSyncFailed(item.id, err.message)
           
-          // 🔥 CORRIGIDO: Se atingiu 3 tentativas, remove da fila para não travar
           if (newAttempts >= 3) {
             renderLog(`⚠️ Item ${item.id} atingiu limite de 3 tentativas. Removendo da fila.`, 'error')
             console.error(`⚠️ [SYNC] Item removido após 3 falhas: ${item.table}/${item.record_id}`)
