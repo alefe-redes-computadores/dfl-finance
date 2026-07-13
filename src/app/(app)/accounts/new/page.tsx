@@ -2,7 +2,17 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronLeft, Save, Loader2, Wallet, Building2, PiggyBank, CreditCard, Briefcase } from "lucide-react"
+import {
+  ChevronLeft,
+  Save,
+  Loader2,
+  Wallet,
+  Building2,
+  PiggyBank,
+  CreditCard,
+  Briefcase,
+  Check
+} from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
@@ -24,6 +34,7 @@ function NewAccountContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
+
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { effectiveContext } = useContext_()
@@ -36,7 +47,10 @@ function NewAccountContent() {
   const [bank, setBank] = useState("")
   const [balance, setBalance] = useState("")
 
-  const { data: accounts } = useLocalData({ table: 'accounts' as any, filters: { context: effectiveContext } })
+  const { data: accounts } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context: effectiveContext }
+  })
 
   useEffect(() => {
     if (editId && accounts?.length > 0) {
@@ -58,6 +72,7 @@ function NewAccountContent() {
     }
 
     setSaving(true)
+
     try {
       const payload = {
         name: name.trim(),
@@ -71,6 +86,7 @@ function NewAccountContent() {
       if (editId) {
         const res = await safeUpdate('accounts', editId, payload)
         if (!res.success) throw new Error(res.error)
+
         success()
         showToast("✅ Conta atualizada!", "success")
       } else {
@@ -82,8 +98,10 @@ function NewAccountContent() {
           sync_status: 'pending',
           sync_attempts: 0
         }
+
         const res = await safeAdd('accounts', fullPayload)
         if (!res.success) throw new Error(res.error)
+
         success()
         showToast("✅ Conta criada!", "success")
       }
@@ -98,66 +116,168 @@ function NewAccountContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors">
-      <div className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl pt-6 pb-4 px-4 border-b border-gray-100 dark:border-slate-800/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 active:scale-95 transition-colors">
-              <ChevronLeft size={24} />
-            </button>
-            <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 tracking-tight">
+    <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
+      <div className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              vibrate([5])
+              router.back()
+            }}
+            className="rounded-full p-2 -ml-2 text-gray-500 transition-colors active:scale-95 dark:text-gray-300"
+          >
+            <ChevronLeft size={24} />
+          </button>
+
+          <div>
+            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
+              {editId ? "Editar cadastro" : "Nova conta"}
+            </p>
+            <h1 className="text-[20px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
               {editId ? "Editar Conta" : "Nova Conta"}
             </h1>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 px-4 pt-6 pb-24 space-y-6">
-        <div className="bg-white dark:bg-slate-800 rounded-[28px] border border-gray-100 dark:border-slate-700/50 p-5 shadow-sm space-y-5">
-          
-          <div>
-            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Nome da Conta</label>
-            <input type="text" placeholder="Ex: Nubank, Caixa Empresa..." value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700/50 border border-gray-100 dark:border-slate-600 rounded-[16px] p-4 text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/30 transition-all" />
-          </div>
-
-          <div>
-            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Instituição / Banco (Opcional)</label>
-            <input type="text" placeholder="Ex: Itaú, Bradesco..." value={bank} onChange={(e) => setBank(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700/50 border border-gray-100 dark:border-slate-600 rounded-[16px] p-4 text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/30 transition-all" />
-          </div>
-
-          {!editId && (
-            <div>
-              <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Saldo Inicial</label>
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700/50 border border-gray-100 dark:border-slate-600 rounded-[16px] p-4 focus-within:ring-2 focus-within:ring-teal-500/30 transition-all">
-                <span className="text-[16px] text-gray-400 font-medium">R$</span>
-                <input type="number" step="0.01" placeholder="0.00" value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full bg-transparent text-[18px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-              </div>
+      <div className="flex-1 px-4 pb-28 pt-5">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+          <section className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-5">
+              <h2 className="text-[16px] font-semibold text-gray-900 dark:text-gray-100">
+                Dados principais
+              </h2>
+              <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
+                Defina nome, instituição e saldo inicial da conta
+              </p>
             </div>
-          )}
-        </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[28px] border border-gray-100 dark:border-slate-700/50 p-5 shadow-sm">
-          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-4 block">Tipo de Conta</label>
-          <div className="grid grid-cols-2 gap-3">
-            {ACCOUNT_TYPES.map((t) => {
-              const Icon = t.icon
-              const isSelected = type === t.id
-              return (
-                <button key={t.id} onClick={() => { vibrate([5]); setType(t.id); }} className={`flex flex-col items-center gap-2 p-4 rounded-[20px] border-2 transition-all active:scale-95 ${isSelected ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/50 opacity-70 hover:opacity-100'}`}>
-                  <Icon size={24} className={isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-gray-400'} />
-                  <span className={`text-[12px] font-bold ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-gray-500 dark:text-gray-400'}`}>{t.label}</span>
-                </button>
-              )
-            })}
-          </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Nome da conta
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Nubank, Caixa Empresa..."
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-4 text-[15px] font-medium text-gray-900 outline-none transition-all placeholder:text-gray-300 focus:border-teal-300 focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-gray-100 dark:placeholder:text-gray-600"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Instituição / banco
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Itaú, Bradesco..."
+                  value={bank}
+                  onChange={(e) => setBank(e.target.value)}
+                  className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-4 text-[15px] font-medium text-gray-900 outline-none transition-all placeholder:text-gray-300 focus:border-teal-300 focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-gray-100 dark:placeholder:text-gray-600"
+                />
+              </div>
+
+              {!editId && (
+                <div>
+                  <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                    Saldo inicial
+                  </label>
+
+                  <div className="flex items-center gap-2 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-4 transition-all focus-within:border-teal-300 focus-within:ring-4 focus-within:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-800">
+                    <span className="text-[16px] font-medium text-gray-400">R$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={balance}
+                      onChange={(e) => setBalance(e.target.value)}
+                      className="w-full bg-transparent text-[20px] font-semibold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-5">
+              <h2 className="text-[16px] font-semibold text-gray-900 dark:text-gray-100">
+                Tipo de conta
+              </h2>
+              <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
+                Escolha a categoria que melhor representa esta conta
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {ACCOUNT_TYPES.map((t) => {
+                const Icon = t.icon
+                const isSelected = type === t.id
+
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      vibrate([5])
+                      setType(t.id)
+                    }}
+                    className={`relative flex min-h-[92px] flex-col items-start justify-between rounded-[20px] border p-4 text-left transition-all active:scale-95 ${
+                      isSelected
+                        ? 'border-teal-200 bg-teal-50 dark:border-teal-900/40 dark:bg-teal-950/30'
+                        : 'border-gray-200 bg-gray-50 dark:border-slate-800 dark:bg-slate-800/70'
+                    }`}
+                  >
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-[14px] ${
+                        isSelected
+                          ? 'bg-white text-teal-700 dark:bg-slate-900 dark:text-teal-300'
+                          : 'bg-white text-gray-500 dark:bg-slate-900 dark:text-gray-300'
+                      }`}
+                    >
+                      <Icon size={20} />
+                    </div>
+
+                    <div className="flex w-full items-end justify-between gap-2">
+                      <span
+                        className={`text-[13px] font-medium ${
+                          isSelected
+                            ? 'text-teal-800 dark:text-teal-200'
+                            : 'text-gray-700 dark:text-gray-200'
+                        }`}
+                      >
+                        {t.label}
+                      </span>
+
+                      {isSelected && (
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-600 text-white">
+                          <Check size={14} />
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-gray-100 dark:border-slate-800">
-        <button onClick={() => { vibrate([10, 50]); handleSave(); }} disabled={saving} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2">
-          {saving ? <Loader2 className="animate-spin" size={22} /> : <Save size={22} />}
-          {editId ? "Salvar Alterações" : "Criar Conta"}
-        </button>
+      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-100 bg-white/92 p-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+        <div className="mx-auto w-full max-w-2xl">
+          <button
+            onClick={() => {
+              vibrate([10, 50])
+              handleSave()
+            }}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-2 rounded-[22px] bg-teal-600 py-4 text-[16px] font-semibold text-white shadow-lg shadow-teal-600/20 transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="animate-spin" size={22} /> : <Save size={20} />}
+            {editId ? "Salvar alterações" : "Criar conta"}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -170,4 +290,3 @@ export default function NewAccountPage() {
     </Suspense>
   )
 }
-
