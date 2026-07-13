@@ -12,14 +12,16 @@ const poppins = Poppins({
 })
 
 export const metadata: Metadata = {
-  title: 'Meu App Financeiro',
-  description: 'Controle de Finanças Premium',
+  title: 'DFL Finance',
+  description: 'Controle financeiro pessoal e empresarial',
+  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Meu App',
+    title: 'DFL Finance',
   },
 }
+
 
 export const viewport: Viewport = {
   width: 'device-width',
