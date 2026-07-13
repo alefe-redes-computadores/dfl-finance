@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft, Trash2, RefreshCw, Pencil, Wallet, Building2, CreditCard,
-  PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Check, X, Loader2 // <-- Loader2 adicionado aqui!
+  PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Check, X, Loader2
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -204,7 +204,7 @@ function AccountDetailContent() {
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`Erro ao excluir: ${err.message}`, "error")
+      showToast(`❌ Erro ao excluir: ${err.message}`, "error")
     }
   }
 
@@ -273,6 +273,7 @@ function AccountDetailContent() {
             </h1>
           </div>
           <div className="flex gap-1">
+            {/* 🔥 CORRIGIDO: Navegação para edição com query param correto */}
             <button onClick={() => { vibrate([5]); router.push(`/accounts/new?edit=${accountId}`); }} className="p-2.5 rounded-full bg-gray-50 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/30 text-teal-700 dark:text-teal-400 active:scale-95 transition-all">
               <Pencil size={18} />
             </button>
@@ -343,7 +344,7 @@ function AccountDetailContent() {
         </div>
       </div>
 
-      {/* Modal Ajustar Saldo - Bottom Sheet Premium */}
+      {/* Modal Ajustar Saldo */}
       {showAdjustModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowAdjustModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
@@ -376,7 +377,7 @@ function AccountDetailContent() {
         </div>
       )}
 
-      {/* Modal Transferir - Bottom Sheet Premium */}
+      {/* Modal Transferir */}
       {showTransferModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowTransferModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
