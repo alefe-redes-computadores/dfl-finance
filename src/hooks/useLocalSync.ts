@@ -1,4 +1,3 @@
-
 // src/hooks/useLocalSync.ts
 'use client'
 
@@ -61,6 +60,9 @@ export function useLocalSync() {
     syncAttempts.current++
     setSyncStatus('syncing')
 
+    // 🔥 ARMADILHA PARA O DEBUG NO CELULAR
+    let errorAlerted = false 
+
     try {
       const items = await getPendingSyncItems(user.id)
 
@@ -83,19 +85,20 @@ export function useLocalSync() {
 
           let error = null
 
-          // 🔥 SOLUÇÃO APLICADA AQUI:
           if (operation === 'delete') {
-            // Se for exclusão, mantemos o delete
             const { error: e } = await supabaseClient.delete().eq('id', record_id)
             error = e
           } else {
-            // Para 'create' ou 'update', forçamos o UPSERT. 
-            // Se já existir, atualiza. Se não, cria. Resolve os conflitos de chave duplicada!
             const { error: e } = await supabaseClient.upsert(data, { onConflict: 'id' })
             error = e
           }
 
           if (error) {
+            // 🔥 POP-UP NA TELA DO CELULAR MOSTRANDO O ERRO EXATO
+            if (!errorAlerted) {
+              alert(`🚨 ERRO DO BANCO DE DADOS!\n\nTabela: ${table}\nOperação: ${operation}\nMotivo: ${error.message}\nDetalhes: ${error.details || 'Nenhum'}`)
+              errorAlerted = true
+            }
             throw new Error(`Erro ao sincronizar ${table} ${operation}: ${error.message}`)
           }
 
