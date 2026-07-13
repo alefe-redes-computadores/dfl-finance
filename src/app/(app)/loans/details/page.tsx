@@ -1,3 +1,6 @@
+'use client'
+
+
 function LoanDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
