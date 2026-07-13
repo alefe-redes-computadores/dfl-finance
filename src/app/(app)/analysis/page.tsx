@@ -55,13 +55,17 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 
 import { useToast } from '@/contexts/ToastContext'
 
-import { exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService' // 🔥 Alterado para chamar a análise
+import { exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService'
 
+// 🔥 SKELETON ATUALIZADO
 const AnalysisSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
+  <div className="space-y-5 animate-pulse">
     <div className="grid grid-cols-2 gap-3">
       {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
+        <div
+          key={i}
+          className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700"
+        >
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700" />
             <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded" />
@@ -71,7 +75,7 @@ const AnalysisSkeleton = () => (
       ))}
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
       <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       <div className="flex justify-center">
         <div className="w-44 h-44 rounded-full bg-gray-100 dark:bg-slate-700" />
@@ -86,13 +90,14 @@ const AnalysisSkeleton = () => (
       </div>
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
       <div className="h-5 w-36 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      <div className="h-48 bg-gray-100 dark:bg-slate-700/50 rounded-lg" />
+      <div className="h-48 bg-gray-100 dark:bg-slate-700/50 rounded-[18px]" />
     </div>
   </div>
 )
 
+// 🔥 EXPORT FEEDBACK OVERLAY
 function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exporting' | 'success', onClose: () => void }) {
   if (status === 'idle') return null;
 
@@ -337,7 +342,6 @@ function AnalysisContent() {
   const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
   const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
 
-  // 🔥 MUDANÇA OBRIGATÓRIA: Usando { csv, filename }
   const handleExport = async (range: string, format: 'csv' | 'pdf') => {
     setShowExportMenu(false)
     if (!user?.id) return
@@ -350,17 +354,12 @@ function AnalysisContent() {
     setExportStatus('exporting')
     
     try {
-      // Usando exportAnalysisToCSV já que estamos na página de análise
       const { csv, filename } = await exportAnalysisToCSV(user.id, effectiveContext, currentDate)
-      
       downloadCSV(csv, filename)
-      
       setExportStatus('success')
-      
       setTimeout(() => {
         setExportStatus('idle')
       }, 5000)
-      
     } catch (err: any) {
       console.error(err)
       showToast(err.message || 'Erro ao exportar análise.', 'error')
@@ -377,15 +376,19 @@ function AnalysisContent() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 animate-pulse">
+              <div
+                key={i}
+                className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse"
+              >
                 <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
                 <div className="h-6 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto" />
               </div>
             ))}
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 animate-pulse">
+
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse">
             <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-            <div className="h-[200px] bg-gray-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-[200px] bg-gray-100 dark:bg-slate-700 rounded-[18px]" />
           </div>
         </div>
       )
@@ -401,21 +404,39 @@ function AnalysisContent() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-2xl p-4 text-white shadow-lg">
-            <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Saldo Total</p>
-            <p className="text-2xl font-black">{formatCurrency(metrics.consolidated.totalBalance)}</p>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Saldo total</p>
+            <p className="text-[22px] font-semibold text-gray-900 dark:text-gray-100">
+              {formatCurrency(metrics.consolidated.totalBalance)}
+            </p>
           </div>
-          <div className={`rounded-2xl p-4 shadow-lg border ${metrics.consolidated.monthlyEvolutionPercent >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'}`}>
-            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Evolução</p>
-            <p className={`text-2xl font-black ${metrics.consolidated.monthlyEvolutionPercent >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-              {metrics.consolidated.monthlyEvolutionPercent >= 0 ? '+' : ''}{metrics.consolidated.monthlyEvolutionPercent.toFixed(1)}%
+
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Evolução</p>
+            <p
+              className={`text-[22px] font-semibold ${
+                metrics.consolidated.monthlyEvolutionPercent >= 0
+                  ? 'text-emerald-600'
+                  : 'text-red-500'
+              }`}
+            >
+              {metrics.consolidated.monthlyEvolutionPercent >= 0 ? '+' : ''}
+              {metrics.consolidated.monthlyEvolutionPercent.toFixed(1)}%
             </p>
           </div>
         </div>
 
-        <ComparisonChart data={metrics.comparisonChart} />
-        <ProjectionChart data={metrics.projections} />
-        <CategoryPie pfData={metrics.categoryPie.pf} pjData={metrics.categoryPie.pj} />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+          <ComparisonChart data={metrics.comparisonChart} />
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+          <ProjectionChart data={metrics.projections} />
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+          <CategoryPie pfData={metrics.categoryPie.pf} pjData={metrics.categoryPie.pj} />
+        </div>
       </div>
     )
   }, [metrics, metricsLoading])
@@ -423,329 +444,250 @@ function AnalysisContent() {
   if (loading) return <AnalysisSkeleton />
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
+    >
       {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+        <div className="fixed top-6 right-5 z-50">
+          <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
         </div>
       )}
-      
-      {/* OVERLAY DE ANIMAÇÃO */}
-      <ExportFeedbackOverlay 
-        status={exportStatus} 
-        onClose={() => setExportStatus('idle')} 
+
+      <ExportFeedbackOverlay
+        status={exportStatus}
+        onClose={() => setExportStatus('idle')}
       />
 
-      <div className="flex justify-between items-center mb-6">
-        <ContextToggle />
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 px-3 py-1.5 rounded-full">
-            <button
-              type="button"
-              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide">
-              {monthLabel}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="p-1 text-gray-800 dark:text-gray-300 hover:text-gray-500 transition-colors"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
+      {/* 🔥 HEADER UNIFICADO COM STICKY */}
+      <div className="sticky top-0 z-40 pb-3 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl">
+        <div className="bg-white/95 dark:bg-slate-800/95 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                Análises
+              </h1>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Visão consolidada do período
+              </p>
+            </div>
 
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className="w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 rounded-full flex items-center justify-center"
-            >
-              <Download size={18} className="text-gray-700 dark:text-gray-300" />
-            </button>
-            {showExportMenu && (
-              <div className="absolute right-0 top-[42px] w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">
-                  Exportar análise
-                </p>
-                {[
-                  { key: '7', label: '7 dias' },
-                  { key: '14', label: '14 dias' },
-                  { key: '30', label: '30 dias' },
-                  { key: 'total', label: 'Todo período' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => handleExport(opt.key, 'csv')}
-                    className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700"
-                  >
-                    CSV {opt.label}
-                  </button>
-                ))}
-                <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
-                {[
-                  { key: '7', label: '7 dias' },
-                  { key: '14', label: '14 dias' },
-                  { key: '30', label: '30 dias' },
-                  { key: 'total', label: 'Todo período' },
-                ].map((opt) => (
-                  <button
-                    key={`pdf-${opt.key}`}
-                    type="button"
-                    onClick={() => handleExport(opt.key, 'pdf')}
-                    className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
-                  >
-                    <FileText size={14} className="text-teal-600" />
-                    PDF {opt.label}
-                  </button>
-                ))}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="h-10 w-10 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
+                >
+                  <Download size={17} />
+                </button>
+
+                {showExportMenu && (
+                  <div className="absolute right-0 top-[46px] w-44 bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-200/70 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
+                    <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 px-3 py-2">
+                      Exportar análise
+                    </p>
+
+                    {[
+                      { key: '7', label: '7 dias' },
+                      { key: '14', label: '14 dias' },
+                      { key: '30', label: '30 dias' },
+                      { key: 'total', label: 'Todo período' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => handleExport(opt.key, 'csv')}
+                        className="w-full text-left px-3 py-2.5 rounded-[16px] text-[13px] font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                      >
+                        CSV {opt.label}
+                      </button>
+                    ))}
+
+                    <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
+
+                    {[
+                      { key: '7', label: '7 dias' },
+                      { key: '14', label: '14 dias' },
+                      { key: '30', label: '30 dias' },
+                      { key: 'total', label: 'Todo período' },
+                    ].map((opt) => (
+                      <button
+                        key={`pdf-${opt.key}`}
+                        type="button"
+                        onClick={() => handleExport(opt.key, 'pdf')}
+                        className="w-full text-left px-3 py-2.5 rounded-[16px] text-[13px] font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-2"
+                      >
+                        <FileText size={14} className="text-teal-600" />
+                        PDF {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={() => setShowFilterDrawer(true)}
+                className={`h-10 w-10 rounded-[18px] border shadow-sm flex items-center justify-center relative transition-colors hover:bg-gray-100 dark:hover:bg-slate-700/50 ${
+                  hasActiveFilters
+                    ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-300 dark:border-teal-700 text-teal-600 dark:text-teal-400'
+                    : 'bg-gray-50 dark:bg-slate-900/40 border-gray-200/70 dark:border-slate-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <SlidersHorizontal size={17} />
+                {hasActiveFilters && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-teal-500 rounded-full border-2 border-white dark:border-slate-800" />
+                )}
+              </button>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowFilterDrawer(true)}
-            className={`w-9 h-9 bg-white dark:bg-slate-800 shadow-sm border rounded-full flex items-center justify-center relative transition-colors ${
-              hasActiveFilters
-                ? 'border-teal-300 dark:border-teal-700 text-teal-600 dark:text-teal-400'
-                : 'border-gray-50 dark:border-slate-700 text-gray-700 dark:text-gray-300'
-            }`}
-          >
-            <SlidersHorizontal size={18} />
-            {hasActiveFilters && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-teal-500 rounded-full border-2 border-white dark:border-slate-800" />
-            )}
-          </button>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0 flex-1 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2">
+              <ContextToggle />
+            </div>
+
+            <div className="flex items-center gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 px-1.5 py-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronLeft size={17} />
+              </button>
+
+              <span className="min-w-[92px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">
+                {monthLabel}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
+
+          {/* 🔥 TABS DENTRO DO HEADER */}
+          <div className="flex bg-gray-50 dark:bg-slate-900/40 border border-gray-200/70 dark:border-slate-700 p-1 rounded-[20px]">
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex-1 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all ${
+                activeTab === 'dashboard'
+                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('month')}
+              className={`flex-1 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all ${
+                activeTab === 'month'
+                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              No mês
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('new')}
+              className={`flex-1 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all ${
+                activeTab === 'new'
+                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Novos gastos
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* 🔥 FAIXA DE FILTROS ATIVOS */}
       {hasActiveFilters && (
-        <div className="flex items-center gap-2 mb-4 px-1">
+        <div className="flex items-center gap-2 mb-4 mt-1 px-1">
           <Filter size={14} className="text-teal-600 dark:text-teal-400" />
-          <span className="text-xs font-medium text-teal-600 dark:text-teal-400">Filtros ativos</span>
+          <span className="text-[12px] font-medium text-teal-600 dark:text-teal-400">
+            Filtros ativos
+          </span>
           <button
             type="button"
             onClick={handleClearFilters}
-            className="text-xs font-bold text-red-500 hover:text-red-600 ml-auto"
+            className="ml-auto text-[12px] font-semibold text-red-500 hover:text-red-600 transition-colors"
           >
             Limpar filtros
           </button>
         </div>
       )}
 
-      <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100 mb-4 px-1">Análise</h2>
-
-      <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
-            activeTab === 'dashboard'
-              ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]'
-              : 'text-gray-400 dark:text-gray-500'
-          }`}
-        >
-          Dashboard
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('month')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
-            activeTab === 'month'
-              ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]'
-              : 'text-gray-400 dark:text-gray-500'
-          }`}
-        >
-          No mês
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('new')}
-          className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${
-            activeTab === 'new'
-              ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]'
-              : 'text-gray-400 dark:text-gray-500'
-          }`}
-        >
-          Novos gastos
-        </button>
-      </div>
-
+      {/* 🔥 CONTEÚDO DAS TABS */}
       {activeTab === 'dashboard' && dashboardContent}
 
-      {activeTab === 'new' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-50 dark:border-slate-700">
-              <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-                <Sparkles size={20} className="text-teal-700 dark:text-teal-400" />
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-0.5">
-                  Novos gastos do mês
-                </p>
-                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">
-                  {formatCurrency(newGastosSummary.total)}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-end">
-              <div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Categorias</p>
-                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">{newGastosSummary.count}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Média</p>
-                <p className="text-[14px] font-bold text-red-400">{formatCurrency(newGastosSummary.average)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mb-1">Maior peso</p>
-                <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200 truncate max-w-[100px]">
-                  {newGastosSummary.maiorPeso.name}
-                </p>
-                <span className="text-[11px] text-red-400 font-bold">{newGastosSummary.maiorPeso.percent}%</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            {newGastos.length === 0 ? (
-              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
-                Nenhum novo gasto neste mês.
-              </p>
-            ) : (
-              <>
-                <div className="h-48 relative flex items-center justify-center mb-6">
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">
-                      Total
-                    </p>
-                    <p className="text-[18px] font-bold text-gray-800 dark:text-gray-100">
-                      {formatCurrency(newGastosSummary.total)}
-                    </p>
-                  </div>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={newGastos}
-                        dataKey="total"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={75}
-                        paddingAngle={2}
-                        stroke="none"
-                      >
-                        {newGastos.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="space-y-4">
-                  {newGastos.map((c) => {
-                    const IconComp = getDynamicIcon(c.icon)
-                    return (
-                      <div key={c.name}>
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-9 h-9 rounded-xl flex items-center justify-center"
-                              style={{ backgroundColor: `${c.color}20`, color: c.color }}
-                            >
-                              <IconComp size={18} />
-                            </div>
-                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{c.name}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
-                              {formatCurrency(c.total)}
-                            </span>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">
-                              {c.percent.toFixed(1)}%
-                            </p>
-                          </div>
-                        </div>
-                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-1000 ease-out"
-                            style={{ width: `${c.percent}%`, backgroundColor: c.color }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
+      {/* 🔥 ABA "MÊS" ATUALIZADA */}
       {activeTab === 'month' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
+        <div className="space-y-4 animate-in fade-in duration-300">
+          {/* KPIs */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
+              <div className="w-9 h-9 rounded-[14px] bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
                 <ArrowUp size={16} className="text-emerald-600" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Receitas</p>
-              <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(summary.income)}</p>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 font-medium mb-1">Receitas</p>
+              <p className="text-[14px] font-semibold text-emerald-600 leading-tight">{formatCurrency(summary.income)}</p>
               {previousSummary.income > 0 && (
                 <div
-                  className={`inline-flex items-center gap-0.5 mt-1 text-[10px] font-bold ${
+                  className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold ${
                     incomeVariation >= 0 ? 'text-emerald-500' : 'text-red-500'
                   }`}
                 >
-                  {incomeVariation >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                  {incomeVariation >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                   {incomeVariation >= 0 ? '+' : ''}
                   {incomeVariation.toFixed(1)}%
                 </div>
               )}
             </div>
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-2">
+
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
+              <div className="w-9 h-9 rounded-[14px] bg-red-50 dark:bg-red-900/30 flex items-center justify-center mb-3">
                 <ArrowDown size={16} className="text-red-500" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Despesas</p>
-              <p className="text-[15px] font-bold text-red-500">{formatCurrency(summary.expense)}</p>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 font-medium mb-1">Despesas</p>
+              <p className="text-[14px] font-semibold text-red-500 leading-tight">{formatCurrency(summary.expense)}</p>
               {previousSummary.expense > 0 && (
                 <div
-                  className={`inline-flex items-center gap-0.5 mt-1 text-[10px] font-bold ${
+                  className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold ${
                     expenseVariation <= 0 ? 'text-emerald-500' : 'text-red-500'
                   }`}
                 >
-                  {expenseVariation <= 0 ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
+                  {expenseVariation <= 0 ? <TrendingDown size={11} /> : <TrendingUp size={11} />}
                   {expenseVariation > 0 ? '+' : ''}
                   {expenseVariation.toFixed(1)}%
                 </div>
               )}
             </div>
-            <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-              <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
+
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
+              <div className="w-9 h-9 rounded-[14px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mb-3">
                 <Wallet size={16} className="text-teal-700 dark:text-teal-400" />
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Saldo</p>
-              <p className={`text-[15px] font-bold ${summary.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 font-medium mb-1">Saldo</p>
+              <p className={`text-[14px] font-semibold leading-tight ${summary.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {formatCurrency(summary.balance)}
               </p>
               {previousSummary.balance !== 0 && (
                 <div
-                  className={`inline-flex items-center gap-0.5 mt-1 text-[10px] font-bold ${
+                  className={`inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold ${
                     balanceVariation >= 0 ? 'text-emerald-500' : 'text-red-500'
                   }`}
                 >
-                  {balanceVariation >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                  {balanceVariation >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                   {balanceVariation >= 0 ? '+' : ''}
                   {balanceVariation.toFixed(1)}%
                 </div>
@@ -753,10 +695,17 @@ function AnalysisContent() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
-              Distribuição de Gastos
-            </h3>
+          {/* Distribuição de Gastos (Pizza) */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            <div className="mb-3">
+              <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
+                Distribuição de Gastos
+              </h3>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Participação das categorias no mês
+              </p>
+            </div>
+
             {byCategory.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
                 Nenhuma despesa neste mês.
@@ -764,10 +713,10 @@ function AnalysisContent() {
             ) : (
               <div className="h-56 relative flex items-center justify-center">
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">
-                    Total Gasto
+                  <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mb-1">
+                    Total gasto
                   </p>
-                  <p className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
+                  <p className="text-[20px] font-semibold text-gray-900 dark:text-gray-100">
                     {formatCurrency(summary.expense)}
                   </p>
                 </div>
@@ -794,39 +743,55 @@ function AnalysisContent() {
             )}
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
-              Gastos por Categoria
-            </h3>
+          {/* Gastos por Categoria */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            <div className="mb-3">
+              <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
+                Gastos por Categoria
+              </h3>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Maiores gastos do período
+              </p>
+            </div>
+
             {byCategory.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">
                 Nenhuma despesa neste mês.
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {byCategory.map((c) => {
                   const IconComp = getDynamicIcon(c.icon)
                   return (
-                    <div key={c.name}>
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-3">
+                    <div
+                      key={c.name}
+                      className="rounded-[18px] p-3 bg-gray-50/70 dark:bg-slate-900/40"
+                    >
+                      <div className="flex justify-between items-start gap-3 mb-2">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center"
+                            className="w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0"
                             style={{ backgroundColor: `${c.color}20`, color: c.color }}
                           >
                             <IconComp size={18} />
                           </div>
-                          <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">{c.name}</span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[14px] text-gray-900 dark:text-gray-100 truncate">
+                              {c.name}
+                            </p>
+                            <p className="text-[12px] text-gray-400 dark:text-gray-500">
+                              {c.percent.toFixed(1)}%
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-bold text-[13px] text-gray-800 dark:text-gray-200">
+
+                        <div className="text-right shrink-0">
+                          <span className="font-semibold text-[14px] text-gray-900 dark:text-gray-100">
                             {formatCurrency(c.total)}
                           </span>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">
-                            {c.percent.toFixed(1)}%
-                          </p>
                         </div>
                       </div>
+
                       <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-1000 ease-out"
@@ -840,10 +805,17 @@ function AnalysisContent() {
             )}
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-            <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100 mb-4">
-              Fluxo Mensal
-            </h3>
+          {/* Fluxo Mensal */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            <div className="mb-3">
+              <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
+                Fluxo Mensal
+              </h3>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                Comparativo entre receitas e despesas
+              </p>
+            </div>
+
             {monthlyFlow.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
                 Sem dados para exibir.
@@ -862,11 +834,20 @@ function AnalysisContent() {
             )}
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700 mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-[15px] text-gray-800 dark:text-gray-100">Patrimônio</h3>
+          {/* Patrimônio */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 mb-6">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
+                  Patrimônio
+                </h3>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Evolução acumulada no período
+                </p>
+              </div>
+
               <span
-                className={`text-[14px] font-bold ${
+                className={`text-[13px] font-semibold ${
                   patrimonyGrowth >= 0 ? 'text-emerald-600' : 'text-red-500'
                 }`}
               >
@@ -874,6 +855,7 @@ function AnalysisContent() {
                 {patrimonyGrowth.toFixed(1)}%
               </span>
             </div>
+
             {patrimony.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
                 Sem dados para exibir.
@@ -901,34 +883,167 @@ function AnalysisContent() {
         </div>
       )}
 
+      {/* 🔥 ABA "NOVOS GASTOS" ATUALIZADA */}
+      {activeTab === 'new' && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            <div className="flex items-center gap-3 mb-5 pb-5 border-b border-gray-100 dark:border-slate-700">
+              <div className="w-10 h-10 rounded-[16px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                <Sparkles size={18} className="text-teal-700 dark:text-teal-400" />
+              </div>
+              <div>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500">
+                  Novos gastos do mês
+                </p>
+                <p className="text-[22px] font-semibold text-gray-900 dark:text-gray-100">
+                  {formatCurrency(newGastosSummary.total)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Categorias</p>
+                <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                  {newGastosSummary.count}
+                </p>
+              </div>
+              <div>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Média</p>
+                <p className="text-[14px] font-semibold text-red-500">
+                  {formatCurrency(newGastosSummary.average)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Maior peso</p>
+                <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                  {newGastosSummary.maiorPeso.name}
+                </p>
+                <span className="text-[12px] text-red-500 font-semibold">
+                  {newGastosSummary.maiorPeso.percent}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
+            {newGastos.length === 0 ? (
+              <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
+                Nenhum novo gasto neste mês.
+              </p>
+            ) : (
+              <>
+                <div className="h-48 relative flex items-center justify-center mb-5">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                    <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Total</p>
+                    <p className="text-[18px] font-semibold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(newGastosSummary.total)}
+                    </p>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={newGastos}
+                        dataKey="total"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        {newGastos.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="space-y-2">
+                  {newGastos.map((c) => {
+                    const IconComp = getDynamicIcon(c.icon)
+                    return (
+                      <div key={c.name} className="rounded-[18px] p-3 bg-gray-50/70 dark:bg-slate-900/40">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: `${c.color}20`, color: c.color }}
+                            >
+                              <IconComp size={18} />
+                            </div>
+                            <span className="font-semibold text-[13px] text-gray-900 dark:text-gray-100 truncate">
+                              {c.name}
+                            </span>
+                          </div>
+
+                          <div className="text-right shrink-0 pl-3">
+                            <span className="font-semibold text-[13px] text-gray-900 dark:text-gray-100">
+                              {formatCurrency(c.total)}
+                            </span>
+                            <p className="text-[12px] text-gray-400 dark:text-gray-500">
+                              {c.percent.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-1000 ease-out"
+                            style={{ width: `${c.percent}%`, backgroundColor: c.color }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 DRAWER DE FILTROS ATUALIZADO */}
       {showFilterDrawer && (
         <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setShowFilterDrawer(false)}
         >
           <div
-            className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 h-[70vh] overflow-y-auto"
+            className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[70vh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Filtros</h3>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
+
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100">Filtros</h3>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Refine a análise exibida
+                </p>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setShowFilterDrawer(false)}
-                className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full"
+                className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            <div className="space-y-6">
+
+            <div className="space-y-5">
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
+                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
                   Conta
                 </label>
                 <select
                   value={filterAccount}
                   onChange={(e) => setFilterAccount(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200/70 dark:border-slate-600 rounded-[18px] px-4 py-3 text-[14px] outline-none text-gray-800 dark:text-gray-200"
                 >
                   <option value="">Todas as contas</option>
                   {(localAccounts || []).map((acc: any) => (
@@ -938,14 +1053,15 @@ function AnalysisContent() {
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
+                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
                   Categoria
                 </label>
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl p-3 text-sm outline-none text-gray-800 dark:text-gray-200"
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200/70 dark:border-slate-600 rounded-[18px] px-4 py-3 text-[14px] outline-none text-gray-800 dark:text-gray-200"
                 >
                   <option value="">Todas as categorias</option>
                   {(localCategories || []).map((cat: any) => (
@@ -955,20 +1071,21 @@ function AnalysisContent() {
                   ))}
                 </select>
               </div>
-              <div className="flex gap-2">
+
+              <div className="flex gap-2.5 pt-2">
                 <button
                   type="button"
                   onClick={handleClearFilters}
-                  className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-3 rounded-xl font-bold text-sm"
+                  className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-3 rounded-[18px] font-semibold text-[14px] active:scale-[0.98] transition-transform"
                 >
                   Limpar
                 </button>
                 <button
                   type="button"
                   onClick={handleApplyFilters}
-                  className="flex-1 bg-teal-700 text-white py-3 rounded-xl font-bold text-sm"
+                  className="flex-1 bg-teal-700 text-white py-3 rounded-[18px] font-semibold text-[14px] active:scale-[0.98] transition-transform"
                 >
-                  Aplicar Filtros
+                  Aplicar filtros
                 </button>
               </div>
             </div>
@@ -983,7 +1100,7 @@ export default function AnalysisPage() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
 
-  if (!isClient) return <div className="min-h-screen bg-gray-50 dark:bg-slate-900" />
+  if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
 
   return (
     <ContextProvider>
