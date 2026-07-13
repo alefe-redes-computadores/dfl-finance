@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from '@/contexts/ToastContext'
-import dynamic from 'next/dynamic'
 
 // Configuração oficial da Fonte Poppins
 const poppins = Poppins({
@@ -33,13 +32,6 @@ export const viewport: Viewport = {
   ],
 }
 
-// 🔥 Carregamento dinâmico do ErudaButton (ssr: false)
-// O componente só será carregado no cliente e condicionalmente
-const ErudaButton = dynamic(() => import('@/components/ErudaButton'), {
-  ssr: false,
-  loading: () => null, // Não renderiza nada enquanto carrega
-})
-
 export default function RootLayout({
   children,
 }: {
@@ -50,9 +42,6 @@ export default function RootLayout({
       <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen selection:bg-teal-500/30">
         <ToastProvider>
           {children}
-          
-          {/* 🔥 O componente agora decide se renderiza baseado no isAdmin */}
-          <ErudaButton />
         </ToastProvider>
       </body>
     </html>
