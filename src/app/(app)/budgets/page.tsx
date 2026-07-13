@@ -16,27 +16,32 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
-// 🔥 Importando useHapticFeedback para feedback tátil
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
+// 🔥 SKELETON ATUALIZADO
 const BudgetsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
     {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-slate-700" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2">
+        <div className="rounded-[18px] p-3">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-10 h-10 rounded-[14px] bg-gray-200 dark:bg-slate-700 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
+              <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+            </div>
+            <div className="text-right">
+              <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
+              <div className="h-3 w-12 bg-gray-100 dark:bg-slate-700/50 rounded mt-1" />
+            </div>
           </div>
-          <div className="h-6 w-16 bg-gray-200 dark:bg-slate-700 rounded-full" />
-        </div>
-        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-          <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
-        </div>
-        <div className="flex justify-between">
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
+            <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
+          </div>
+          <div className="flex justify-between">
+            <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+            <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          </div>
         </div>
       </div>
     ))}
@@ -49,7 +54,6 @@ function BudgetsContent() {
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
-  // 🔥 Haptic feedback
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
   
   const [loading, setLoading] = useState(true)
@@ -149,7 +153,6 @@ function BudgetsContent() {
     }
   })
 
-  // 🔥 HANDLERS ATOMICOS COM TRANSACTION E HAPTIC FEEDBACK
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir este orçamento?')) return
@@ -191,106 +194,198 @@ function BudgetsContent() {
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
+    >
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/more')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200">
-            <ChevronLeft size={24} />
-          </button>
-          <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Orçamentos</h2>
-        </div>
-        <button onClick={() => router.push('/budgets/new')} className="w-9 h-9 bg-teal-700 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform">
-          <Plus size={20} className="text-white" />
-        </button>
-      </div>
+      {/* 🔥 HEADER UNIFICADO */}
+      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => router.push('/more')}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
 
-      <div className="mb-4">
-        <ContextToggle />
-      </div>
-
-      <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">‹</button>
-        <span className="font-bold text-sm text-gray-700 dark:text-gray-300 flex-1 text-center">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
-        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">›</button>
-      </div>
-
-      {loading ? (
-        <BudgetsSkeleton />
-      ) : budgetsWithSpent.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Tag size={40} className="text-gray-400 dark:text-gray-500" />
-          </div>
-          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhum orçamento</h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
-            Crie orçamentos para controlar seus gastos por categoria.
-          </p>
-          <button onClick={() => router.push('/budgets/new')} className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors">
-            Criar orçamento
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3 animate-in fade-in duration-300">
-          {budgetsWithSpent.map((budget: any) => {
-            const IconComp = getDynamicIcon(budget.icon || 'tag')
-            const isActive = budget.status !== 'inactive'
-            const isWarning = budget.percent >= 80 && budget.remaining >= 0
-            const isOver = budget.remaining < 0
-
-            return (
-              <div key={budget.id} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${budget.color}20`, color: budget.color }}>
-                      <IconComp size={20} />
-                    </div>
-                    <div>
-                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{budget.name}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{budget.categories?.name || 'Geral'}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{formatCurrency(budget.spent)}</p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500">de {formatCurrency(Number(budget.amount))}</p>
-                  </div>
-                </div>
-
-                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-1.5">
-                  <div className={`h-full rounded-full transition-all duration-700 ${isOver ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(budget.percent, 100)}%` }} />
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className={`text-[11px] font-bold ${isOver ? 'text-red-500' : isWarning ? 'text-orange-500' : 'text-teal-600'}`}>
-                    {isOver ? `Estourado ${formatCurrency(Math.abs(budget.remaining))}` : `Restam ${formatCurrency(budget.remaining)}`}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleToggleStatus(budget)} className="text-xs text-gray-400 hover:text-teal-600 transition-colors">
-                      {isActive ? 'Ativo' : 'Inativo'}
-                    </button>
-                    <button 
-                      onClick={() => router.push(`/budgets/details?id=${budget.id}`)} 
-                      className="text-gray-400 hover:text-teal-600 transition-colors"
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </div>
-                </div>
+              <div className="min-w-0">
+                <h2 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Orçamentos
+                </h2>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Controle por categoria
+                </p>
               </div>
-            )
-          })}
+            </div>
+
+            <button
+              onClick={() => router.push('/budgets/new')}
+              className="h-11 w-11 rounded-[18px] bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 hover:bg-teal-800 transition-all active:scale-[0.98] shrink-0"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0 flex-1">
+              <ContextToggle />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-2 py-1">
+            <button
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+              className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+            >
+              ‹
+            </button>
+
+            <span className="flex-1 text-center text-[13px] font-semibold text-gray-700 dark:text-gray-300 capitalize">
+              {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+            </span>
+
+            <button
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+              className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+            >
+              ›
+            </button>
+          </div>
         </div>
-      )}
+      </div>
+
+      <div className="pt-3">
+        {loading ? (
+          <BudgetsSkeleton />
+        ) : budgetsWithSpent.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+              <Tag size={28} className="text-gray-400 dark:text-gray-500" />
+            </div>
+            <h3 className="font-semibold text-[16px] text-gray-800 dark:text-gray-100 mb-1">
+              Nenhum orçamento
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 text-[12px] mb-5 max-w-[250px]">
+              Crie orçamentos para controlar seus gastos por categoria.
+            </p>
+            <button
+              onClick={() => router.push('/budgets/new')}
+              className="bg-teal-700 text-white px-6 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-800 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
+            >
+              Criar orçamento
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2.5 animate-in fade-in duration-300">
+            {budgetsWithSpent.map((budget: any) => {
+              const IconComp = getDynamicIcon(budget.icon || 'tag')
+              const isActive = budget.status !== 'inactive'
+              const isWarning = budget.percent >= 80 && budget.remaining >= 0
+              const isOver = budget.remaining < 0
+
+              return (
+                <div
+                  key={budget.id}
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
+                >
+                  <div className="rounded-[18px] p-3">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div
+                          className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: `${budget.color}20`, color: budget.color }}
+                        >
+                          <IconComp size={18} />
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {budget.name}
+                          </p>
+                          <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                            {budget.categories?.name || 'Geral'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(budget.spent)}
+                        </p>
+                        <p className="text-[12px] text-gray-400 dark:text-gray-500">
+                          de {formatCurrency(Number(budget.amount))}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          isOver ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
+                        }`}
+                        style={{ width: `${Math.min(budget.percent, 100)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className={`text-[12px] font-medium ${
+                          isOver
+                            ? 'text-red-500'
+                            : isWarning
+                            ? 'text-orange-500'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        {isOver
+                          ? `Estourado ${formatCurrency(Math.abs(budget.remaining))}`
+                          : `Restam ${formatCurrency(budget.remaining)}`}
+                      </span>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleToggleStatus(budget)}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors active:scale-[0.98] ${
+                            isActive
+                              ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400'
+                              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                          }`}
+                        >
+                          {isActive ? 'Ativo' : 'Inativo'}
+                        </button>
+
+                        <button
+                          onClick={() => router.push(`/budgets/details?id=${budget.id}`)}
+                          className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-teal-600 dark:hover:text-teal-400 transition-colors active:scale-[0.98]"
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 export default function BudgetsPage() {
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
+  if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
+  
   return (
     <ContextProvider>
       <BudgetsContent />
