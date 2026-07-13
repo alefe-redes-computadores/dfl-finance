@@ -47,10 +47,10 @@ const ACCOUNT_LABELS: Record<string, string> = {
 function AccountsContent() {
   const router = useRouter()
   const { showToast } = useToast()
-  const { success, error: errorHaptic } = useHapticFeedback()
+  const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  const { context, appMode, effectiveContext } = useContext_()
+  const { appMode, effectiveContext } = useContext_()
   const { safeDelete } = useSafeDb()
 
   const [search, setSearch] = useState("")
@@ -95,12 +95,13 @@ function AccountsContent() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
+        vibrate([10])
         reload().finally(() => {
           setTimeout(() => setRefreshing(false), 600)
         })
       }
     }
-  }, [refreshing, reload])
+  }, [refreshing, reload, vibrate])
 
   const filteredAccounts = (accounts || []).filter((acc: any) => {
     if (accountFilter !== 'all' && acc.type !== accountFilter) return false
@@ -151,14 +152,14 @@ function AccountsContent() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowSearch(!showSearch)}
+              onClick={() => { vibrate([5]); setShowSearch(!showSearch); }}
               className="w-10 h-10 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center transition-colors hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 active:scale-95"
             >
               {showSearch ? <X size={18} /> : <Search size={18} />}
             </button>
             <button
               type="button"
-              <button onClick={() => router.push("/accounts/details")}>
+              onClick={() => { vibrate([10]); router.push("/accounts/new"); }}
               className="w-10 h-10 bg-teal-600 hover:bg-teal-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-95"
             >
               <Plus size={20} />
@@ -197,7 +198,7 @@ function AccountsContent() {
 
       <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="flex-1 overflow-y-auto px-4 pt-4 pb-28 custom-scrollbar">
         
-        {/* CARD DE SALDO TOTAL (GLASSMORPHISM) */}
+        {/* CARD DE SALDO TOTAL */}
         {!loading && (
           <div className="relative overflow-hidden bg-gradient-to-br from-teal-500 to-emerald-600 rounded-[28px] p-6 mb-6 shadow-lg shadow-teal-500/20 group cursor-default">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
@@ -231,7 +232,7 @@ function AccountsContent() {
               <button 
                 type="button" 
                 key={f.key} 
-                onClick={() => setAccountFilter(f.key)}
+                onClick={() => { vibrate([5]); setAccountFilter(f.key); }}
                 className={`px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border snap-start shrink-0 ${accountFilter === f.key ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-md scale-105' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
               >
                 {f.label}
@@ -264,9 +265,9 @@ function AccountsContent() {
               return (
                 <div key={acc.id} className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-100 dark:border-slate-700/50 overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow relative group">
                   
-                  {/* Botão de Excluir Integrado de forma limpa */}
+                  {/* Botão de Excluir */}
                   <button 
-                    onClick={() => setDeleteModal(acc.id)} 
+                    onClick={() => { vibrate([10]); setDeleteModal(acc.id); }} 
                     className="absolute top-3 right-3 p-2 rounded-full text-gray-300 dark:text-gray-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors z-10"
                     title="Excluir conta"
                   >
@@ -274,7 +275,7 @@ function AccountsContent() {
                   </button>
 
                   <button 
-                    onClick={() => router.push(`/accounts/details?id=${acc.id}`)} 
+                    onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${acc.id}`); }} 
                     className="w-full p-5 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-slate-700/30 transition-colors active:bg-gray-100 dark:active:bg-slate-700"
                   >
                     <div className={`w-[48px] h-[48px] rounded-[18px] flex items-center justify-center flex-shrink-0 shadow-sm transition-transform group-hover:scale-105 ${isPositive ? "bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" : "bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400"}`}>
@@ -308,7 +309,7 @@ function AccountsContent() {
         )}
       </div>
 
-      {/* MODAL DE EXCLUSÃO SOFT UI */}
+      {/* MODAL DE EXCLUSÃO */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
