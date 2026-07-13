@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft, Trash2, RefreshCw, Pencil, Wallet, Building2, CreditCard,
-  PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Check, X
+  PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Check, X, Loader2 // <-- Loader2 adicionado aqui!
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
