@@ -18,42 +18,63 @@ export default function LoginPage() {
   async function handleEmail() {
     setLoading(true)
     setError('')
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
-    if (signInErr) {
-      const { error: signUpErr } = await supabase.auth.signUp({ email, password })
-      if (signUpErr) {
-        setError('E-mail ou senha inválidos.')
+    
+    try {
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+      
+      if (signInErr) {
+        // Se falhar o login, tenta criar a conta
+        const { error: signUpErr } = await supabase.auth.signUp({ email, password })
+        if (signUpErr) {
+          setError('E-mail ou senha inválidos.')
+          setLoading(false) // Destrava o loading em caso de erro
+        } else {
+          router.replace('/home')
+        }
       } else {
         router.replace('/home')
       }
-    } else {
-      router.replace('/home')
+    } catch (err) {
+      setError('Ocorreu um erro inesperado.')
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   async function handleGoogle() {
     setLoading(true)
     setError('')
     
-    // O pulo do gato do Capacitor
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { 
-        redirectTo: 'dfl://callback',
-        skipBrowserRedirect: Capacitor.isNativePlatform(), 
+    try {
+      // Verifica se está rodando no aplicativo nativo ou no navegador da web
+      const isNative = Capacitor.isNativePlatform()
+      
+      // O pulo do gato Híbrido: Se for nativo usa dfl://, se for web usa a URL do site
+      const redirectUrl = isNative 
+        ? 'dfl://callback' 
+        : `${window.location.origin}`
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { 
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: isNative, // Só pula o redirecionamento se for o App
+        }
+      })
+
+      if (error) {
+        throw error
       }
-    })
 
-    if (error) {
+      // Se estiver no celular, abre o Custom Tab. 
+      // Na web, o próprio Supabase já vai redirecionar a página automaticamente.
+      if (isNative && data?.url) {
+        await Browser.open({ url: data.url, presentationStyle: 'popover' })
+        setLoading(false)
+      }
+      
+    } catch (err) {
       setError('Erro ao entrar com Google.')
-      setLoading(false)
-      return
-    }
-
-    // Se estiver no celular, abre o Custom Tab que o Capacitor consegue monitorar
-    if (Capacitor.isNativePlatform() && data?.url) {
-      await Browser.open({ url: data.url, presentationStyle: 'popover' })
+      setLoading(false) // Destrava o loading se o Google falhar
     }
   }
 
