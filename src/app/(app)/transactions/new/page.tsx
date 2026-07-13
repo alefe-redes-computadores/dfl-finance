@@ -591,54 +591,55 @@ function NewTransactionContent() {
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
   }, [uploading, receiptUrl, receiptType])
 
-  // 🔥 CORREÇÃO DO LAYOUT – ESTRUTURA COM ALTURA GARANTIDA
+  // 🔥 CORREÇÃO DEFINITIVA - ESTRUTURA SIMPLIFICADA
   return (
-    <div className="fixed inset-0 z-50 bg-[#f8f9fa] dark:bg-slate-900 overflow-y-auto pb-40">
-      <div className="min-h-screen flex flex-col max-w-md mx-auto">
-        
-        {/* 🔥 HEADER */}
-        <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-          <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-            <div className="flex items-start justify-between gap-3">
+    <div className="fixed inset-0 z-50 bg-[#f8f9fa] dark:bg-slate-900 flex flex-col">
+      
+      {/* HEADER */}
+      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <button
+              onClick={() => { vibrate([5]); router.back(); }}
+              className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0"
+            >
+              <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
+            </button>
+
+            <div className="flex-1 min-w-0 text-center">
+              <h1 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100 capitalize">
+                {isIncome ? 'Nova receita' : 'Nova despesa'}
+              </h1>
+              <div className="mt-2 flex justify-center">
+                <ContextToggle />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => { vibrate([5]); router.back(); }}
-                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0"
+                onClick={() => { setShowQRScanner(true); vibrate([10]) }}
+                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
               >
-                <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
+                <QrCode size={18} className="text-gray-700 dark:text-gray-300" />
               </button>
 
-              <div className="flex-1 min-w-0 text-center">
-                <h1 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100 capitalize">
-                  {isIncome ? 'Nova receita' : 'Nova despesa'}
-                </h1>
-                <div className="mt-2 flex justify-center">
-                  <ContextToggle />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => { setShowQRScanner(true); vibrate([10]) }}
-                  className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
-                >
-                  <QrCode size={18} className="text-gray-700 dark:text-gray-300" />
-                </button>
-
-                <button
-                  onClick={() => { !receiptUrl && setShowReceiptModal(true); vibrate([10]) }}
-                  className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
-                >
-                  {AttachmentIcon}
-                </button>
-              </div>
+              <button
+                onClick={() => { !receiptUrl && setShowReceiptModal(true); vibrate([10]) }}
+                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
+              >
+                {AttachmentIcon}
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* 🔥 CORPO DO FORMULÁRIO */}
-        <div className="flex-1 px-4 pt-4 space-y-4">
-          {/* Valor */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center animate-in fade-in slide-in-from-top-4 duration-300">
+      {/* 🔥 CORPO DO FORMULÁRIO - COM VISIBILIDADE GARANTIDA */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-32">
+        <div className="space-y-4">
+          
+          {/* VALOR */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center">
             <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2">
               Valor {isIncome ? 'da receita' : 'da despesa'}
             </p>
@@ -667,7 +668,7 @@ function NewTransactionContent() {
             )}
           </div>
 
-          {/* Comprovante */}
+          {/* COMPROVANTE */}
           {uploading ? (
             <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
               <Loader2 size={20} className="animate-spin text-teal-700" />
@@ -707,7 +708,7 @@ function NewTransactionContent() {
             </div>
           ) : null}
 
-          {/* Formulário Principal */}
+          {/* FORMULÁRIO PRINCIPAL */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
             {/* Descrição */}
             <div>
@@ -895,7 +896,7 @@ function NewTransactionContent() {
             )}
           </div>
 
-          {/* 🔥 MAIS OPÇÕES */}
+          {/* MAIS OPÇÕES */}
           <div>
             <button
               onClick={() => { vibrate([5]); setShowDetails(!showDetails) }}
@@ -1103,31 +1104,31 @@ function NewTransactionContent() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* 🔥 CTA FIXO INFERIOR */}
-        <div className="sticky bottom-5 px-4 pt-6">
-          <button
-            onClick={() => { vibrate([10, 50]); handleSave() }}
-            disabled={isSubmitting}
-            className={`w-full h-14 rounded-[20px] flex items-center justify-center gap-2 text-white font-bold text-[15px] shadow-lg transition-all active:scale-[0.98] ${
-              isIncome
-                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
-                : 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
-            }`}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Check size={20} />
-                Salvar transação
-              </>
-            )}
-          </button>
-        </div>
+      {/* 🔥 CTA FIXO INFERIOR */}
+      <div className="sticky bottom-0 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 py-5">
+        <button
+          onClick={() => { vibrate([10, 50]); handleSave() }}
+          disabled={isSubmitting}
+          className={`w-full h-14 rounded-[20px] flex items-center justify-center gap-2 text-white font-bold text-[15px] shadow-lg transition-all active:scale-[0.98] ${
+            isIncome
+              ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+              : 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
+          }`}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" size={20} />
+              Salvando...
+            </>
+          ) : (
+            <>
+              <Check size={20} />
+              Salvar transação
+            </>
+          )}
+        </button>
       </div>
 
       {/* 🔥 MODAIS (mantidos com lógica intacta) */}
