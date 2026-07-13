@@ -275,127 +275,166 @@ export default function ReceiptsPage() {
   }, [loading, refreshing, vibrate])
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300"
+    >
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
         </div>
       )}
 
-      {/* Header Premium com Glassmorphism */}
-      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl px-4 pt-6 pb-4 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 transition-colors">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 active:scale-95 transition-transform">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">
-            Comprovantes {!loading && receipts.length > 0 && <span className="text-gray-400 font-medium">({filteredReceipts.length})</span>}
-          </h1>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => { vibrate([10]); fileInputRef.current?.click(); }}
-              className="p-2.5 text-teal-600 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-900/50 rounded-full transition-all active:scale-95"
-              title="Enviar comprovante"
-            >
-              <Upload size={18} />
-            </button>
-            <button
-              onClick={() => { vibrate([10]); loadReceipts(true); }}
-              className="p-2.5 text-gray-400 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-all active:scale-95"
-            >
-              <RefreshCw size={18} />
-            </button>
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-[12px] font-semibold text-teal-600">Atualizando...</span>
           </div>
         </div>
+      )}
 
-        <div className="relative">
-          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome..."
-            className="w-full pl-11 pr-10 py-3 bg-gray-100 dark:bg-slate-800/80 border border-transparent focus:border-teal-500 rounded-[20px] text-[14px] font-medium outline-none text-gray-800 dark:text-gray-200 transition-all"
-          />
-          {search && (
-            <button onClick={() => { vibrate([5]); setSearch(''); }} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 bg-gray-200 dark:bg-slate-700 rounded-full p-0.5">
-              <X size={14} />
-            </button>
-          )}
-        </div>
+      {/* 🔥 HEADER UNIFICADO */}
+      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => { vibrate([5]); router.back(); }}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
 
-        <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-hide">
-          {[
-            { id: 'all', label: 'Todos', count: receipts.length },
-            { id: 'image', label: 'Imagens', count: totalImages },
-            { id: 'pdf', label: 'PDFs', count: totalPdfs },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => { vibrate([5]); setFilter(f.id as any); }}
-              className={`px-4 py-2 rounded-full text-[12px] font-bold transition-all whitespace-nowrap active:scale-95 ${
-                filter === f.id
-                  ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
-                  : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {f.label} ({f.count})
-            </button>
-          ))}
+              <div className="min-w-0">
+                <h1 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Comprovantes
+                  {!loading && receipts.length > 0 && (
+                    <span className="text-gray-400 dark:text-gray-500 font-medium"> ({filteredReceipts.length})</span>
+                  )}
+                </h1>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Arquivos enviados e vinculados
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => { vibrate([10]); fileInputRef.current?.click(); }}
+                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+                title="Enviar comprovante"
+              >
+                <Upload size={18} />
+              </button>
+              <button
+                onClick={() => { vibrate([10]); loadReceipts(true); }}
+                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 text-gray-500 dark:text-gray-300 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+              >
+                <RefreshCw size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <div className="relative">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome..."
+                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 pl-11 pr-10 py-3 text-[14px] text-gray-800 dark:text-gray-200 placeholder-gray-400 outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
+              />
+              {search && (
+                <button
+                  onClick={() => { vibrate([5]); setSearch(''); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+            {[
+              { id: 'all', label: 'Todos', count: receipts.length },
+              { id: 'image', label: 'Imagens', count: totalImages },
+              { id: 'pdf', label: 'PDFs', count: totalPdfs },
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => { vibrate([5]); setFilter(f.id as any); }}
+                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                  filter === f.id
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {f.label} ({f.count})
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="px-4 pt-4 animate-in fade-in duration-300">
+      <div className="px-4 pt-3 animate-in fade-in duration-300">
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <Skeleton variant="card" height="88px" count={4} />
           </div>
         ) : error ? (
-          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-[32px] mt-2 border border-gray-100 dark:border-slate-700/50">
-            <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 rounded-[24px] flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm">
+            <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 rounded-[20px] flex items-center justify-center mx-auto mb-4">
               <AlertCircle size={32} className="text-red-500" />
             </div>
-            <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400 mb-6 px-6">{error}</p>
+            <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-6 px-6">{error}</p>
             <button
               onClick={() => { vibrate([10]); loadReceipts(true); }}
-              className="bg-teal-600 text-white px-8 py-4 rounded-[24px] font-bold hover:bg-teal-700 transition-transform active:scale-[0.98] shadow-lg shadow-teal-600/30"
+              className="bg-teal-600 text-white px-8 py-4 rounded-[20px] font-bold hover:bg-teal-700 transition-transform active:scale-[0.98] shadow-lg shadow-teal-600/20"
             >
               Tentar novamente
             </button>
           </div>
         ) : filteredReceipts.length === 0 ? (
-          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-[32px] mt-2 border border-gray-100 dark:border-slate-700/50">
-            <div className="w-16 h-16 bg-gray-50 dark:bg-slate-700/50 rounded-[24px] flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm">
+            <div className="w-16 h-16 bg-gray-50 dark:bg-slate-700/50 rounded-[20px] flex items-center justify-center mx-auto mb-4">
               <ImageIcon size={32} className="text-gray-400" />
             </div>
+
             {receipts.length === 0 ? (
               <>
-                <h2 className="text-[16px] font-bold text-gray-800 dark:text-gray-200 mb-2">Nenhum comprovante</h2>
-                <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400 mb-8 px-6">
+                <h2 className="text-[16px] font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                  Nenhum comprovante
+                </h2>
+                <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-6 px-6">
                   Os comprovantes que você anexar nas transações aparecerão aqui.
                 </p>
                 <button
                   onClick={() => { vibrate([10]); fileInputRef.current?.click(); }}
-                  className="bg-teal-600 text-white px-8 py-4 rounded-[24px] font-bold hover:bg-teal-700 transition-transform active:scale-[0.98] shadow-lg shadow-teal-600/30 inline-flex items-center gap-2"
+                  className="bg-teal-600 text-white px-8 py-4 rounded-[20px] font-bold hover:bg-teal-700 transition-transform active:scale-[0.98] shadow-lg shadow-teal-600/20 inline-flex items-center gap-2"
                 >
                   <Upload size={18} />
                   Enviar arquivo
                 </button>
               </>
             ) : search ? (
-              <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400">
-                Sem resultados para <span className="font-bold text-gray-800 dark:text-gray-200">"{search}"</span>
+              <p className="text-[14px] text-gray-500 dark:text-gray-400">
+                Sem resultados para <span className="font-semibold text-gray-800 dark:text-gray-200">"{search}"</span>
               </p>
             ) : filter !== 'all' ? (
-              <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400">
+              <p className="text-[14px] text-gray-500 dark:text-gray-400">
                 Nenhum{filter === 'image' ? 'a imagem' : ' PDF'} encontrado.
               </p>
             ) : (
-              <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400">Nenhum comprovante encontrado.</p>
+              <p className="text-[14px] text-gray-500 dark:text-gray-400">
+                Nenhum comprovante encontrado.
+              </p>
             )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {filteredReceipts.map(receipt => {
               const hasError = imgErrors[receipt.url] || false
               const isExpanded = expandedId === receipt.name
@@ -403,98 +442,98 @@ export default function ReceiptsPage() {
               return (
                 <div
                   key={receipt.name}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 hover:shadow-md transition-all"
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
                 >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="w-14 h-14 rounded-[16px] overflow-hidden bg-gray-50 dark:bg-slate-700/50 flex-shrink-0 cursor-pointer flex items-center justify-center border border-gray-100 dark:border-slate-600"
-                      onClick={() => {
-                        if (receipt.isImage && !hasError) {
-                          toggleExpand(receipt.name)
-                        } else {
-                          handleDownload(receipt)
-                        }
-                      }}
-                    >
-                      {receipt.isImage && !hasError ? (
+                  <div className="rounded-[18px] p-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="w-12 h-12 rounded-[14px] overflow-hidden bg-gray-50 dark:bg-slate-900 flex-shrink-0 cursor-pointer flex items-center justify-center border border-gray-200/70 dark:border-slate-700"
+                        onClick={() => {
+                          if (receipt.isImage && !hasError) {
+                            toggleExpand(receipt.name)
+                          } else {
+                            handleDownload(receipt)
+                          }
+                        }}
+                      >
+                        {receipt.isImage && !hasError ? (
+                          <img
+                            src={receipt.url}
+                            alt={receipt.name}
+                            className="w-full h-full object-cover"
+                            onError={() => {
+                              setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
+                            }}
+                          />
+                        ) : receipt.isImage ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                            <ImageIcon size={18} className="opacity-50" />
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-red-50 dark:bg-red-500/10 text-red-500">
+                            <FileText size={20} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          {receipt.name}
+                        </p>
+                        <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                          {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} • {formatFileSize(receipt.size)}
+                        </p>
+
+                        {receipt.transaction_desc && (
+                          <p className="text-[11px] font-medium text-teal-700 dark:text-teal-400 mt-1 truncate inline-flex items-center rounded-full bg-teal-50 dark:bg-teal-900/20 px-2 py-0.5">
+                            Vinculado: {receipt.transaction_desc}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {receipt.isImage && !hasError && (
+                          <button
+                            onClick={() => toggleExpand(receipt.name)}
+                            className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors active:scale-[0.95]"
+                            title={isExpanded ? 'Recolher' : 'Expandir'}
+                          >
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </button>
+                        )}
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleDownload(receipt)}
+                            className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors active:scale-[0.95]"
+                            title="Download"
+                          >
+                            <Download size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(receipt)}
+                            className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.95]"
+                            title="Excluir"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && receipt.isImage && !hasError && (
+                      <div className="mt-3 rounded-[16px] overflow-hidden border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 animate-in slide-in-from-top-2 duration-200">
                         <img
                           src={receipt.url}
                           alt={receipt.name}
-                          className="w-full h-full object-cover transition-transform hover:scale-110"
+                          className="w-full max-h-72 object-contain"
                           onError={() => {
                             setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
                           }}
                         />
-                      ) : receipt.isImage ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                          <ImageIcon size={20} className="opacity-50" />
-                          <span className="text-[8px] font-bold uppercase tracking-widest mt-1">Erro</span>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-red-50 dark:bg-red-500/10 text-red-500">
-                          <FileText size={22} />
-                          <span className="text-[8px] font-bold uppercase tracking-widest mt-1">PDF</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0 py-1">
-                      <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">
-                        {receipt.name}
-                      </p>
-                      <p className="text-[11px] font-medium text-gray-400 mt-0.5">
-                        {format(new Date(receipt.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                        {' • '}
-                        {formatFileSize(receipt.size)}
-                      </p>
-                      {receipt.transaction_desc && (
-                        <p className="text-[11px] font-bold text-teal-600 dark:text-teal-400 mt-1 truncate bg-teal-50 dark:bg-teal-900/20 inline-block px-2 py-0.5 rounded-md">
-                          Vinculado: {receipt.transaction_desc}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      {receipt.isImage && !hasError && (
-                        <button
-                          onClick={() => toggleExpand(receipt.name)}
-                          className="p-2 text-gray-400 hover:text-teal-600 bg-gray-50 dark:bg-slate-700/50 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-full transition-all active:scale-90"
-                          title={isExpanded ? 'Recolher' : 'Expandir'}
-                        >
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleDownload(receipt)}
-                          className="p-2 text-gray-400 hover:text-blue-500 bg-gray-50 dark:bg-slate-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-full transition-all active:scale-90"
-                          title="Download"
-                        >
-                          <Download size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(receipt)}
-                          className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-full transition-all active:scale-90"
-                          title="Excluir"
-                        >
-                          <Trash2 size={14} />
-                        </button>
                       </div>
-                    </div>
+                    )}
                   </div>
-
-                  {isExpanded && receipt.isImage && !hasError && (
-                    <div className="mt-4 rounded-[16px] overflow-hidden border border-gray-100 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-900 animate-in slide-in-from-top-2 duration-200">
-                      <img
-                        src={receipt.url}
-                        alt={receipt.name}
-                        className="w-full max-h-72 object-contain"
-                        onError={() => {
-                          setImgErrors(prev => ({ ...prev, [receipt.url]: true }))
-                        }}
-                      />
-                    </div>
-                  )}
                 </div>
               )
             })}
