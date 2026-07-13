@@ -1,34 +1,55 @@
 'use client'
 
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { RefreshCw, CloudOff } from 'lucide-react'
 
 interface SyncButtonProps {
   pendingCount: number
   isSyncing: boolean
+  isOnline: boolean
   onSync: () => void
+  onClick?: () => void
 }
 
-export default function SyncButton({ pendingCount, isSyncing, onSync }: SyncButtonProps) {
-  if (pendingCount === 0 && !isSyncing) return null
+export default function SyncButton({ pendingCount, isSyncing, isOnline, onSync, onClick }: SyncButtonProps) {
+  const handleClick = () => {
+    if (onClick) {
+      onClick()
+    }
+    if (!isSyncing) {
+      onSync()
+    }
+  }
+
+  const isOffline = !isOnline
 
   return (
     <button
-      onClick={onSync}
-      disabled={isSyncing}
-      className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-90"
-      title={`${pendingCount} item(ns) pendente(s)`}
+      onClick={handleClick}
+      className="relative p-2 rounded-full transition-all active:scale-[0.95] hover:bg-gray-50 dark:hover:bg-slate-700/50"
+      title={isOffline ? 'Sem conexão' : isSyncing ? 'Sincronizando...' : 'Sincronizado'}
     >
-      {isSyncing ? (
-        <Loader2 size={20} className="animate-spin text-teal-600" />
+      {isOffline ? (
+        <CloudOff 
+          size={20} 
+          className="text-amber-500 transition-colors" 
+        />
       ) : (
-        <>
-          <RefreshCw size={20} />
-          {pendingCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center text-white bg-orange-500 shadow-sm border-2 border-white dark:border-slate-900">
-              {pendingCount > 9 ? '9+' : pendingCount}
-            </span>
-          )}
-        </>
+        <RefreshCw 
+          size={20} 
+          className={`text-gray-600 dark:text-gray-300 transition-colors ${
+            isSyncing ? 'animate-spin' : ''
+          }`} 
+        />
+      )}
+
+      {pendingCount > 0 && (
+        <span
+          className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold flex items-center justify-center text-white shadow-sm px-1 ${
+            isOffline ? 'bg-amber-500' : 'bg-teal-500'
+          }`}
+        >
+          {pendingCount > 99 ? '99+' : pendingCount}
+        </span>
       )}
     </button>
   )
