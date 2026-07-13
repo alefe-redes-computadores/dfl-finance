@@ -217,9 +217,10 @@ function GoalDetailContent() {
     setContribAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
+  // 🔥 CORRIGIDO: regex com (\?|$) e ponto escapado
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
-    const isImage = /.(jpg|jpeg|png|gif|webp|bmp|svg)(?|$)/i.test(url)
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
     if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
