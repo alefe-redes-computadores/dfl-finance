@@ -29,62 +29,63 @@ export function useLocalSync() {
   }, [user?.id])
 
   const processSyncQueue = useCallback(async () => {
-    console.log('[DEBUG] 1. INICIANDO processSyncQueue...')
+    // 🔔 PASSO 1: O motor foi chamado?
+    alert('👉 PASSO 1: processSyncQueue foi acionado!')
     
-    if (!user?.id) { console.log('[DEBUG] Cancelado: Usuário não logado.'); return }
-    if (isSyncing.current) { console.log('[DEBUG] Cancelado: Já existe uma sincronização rodando.'); return }
-    if (!isOnline) { console.log('[DEBUG] Cancelado: Dispositivo offline.'); return }
+    if (!user?.id) { alert('❌ Parou: Usuário não identificado no useAuth'); return }
+    if (isSyncing.current) { alert('⚠️ Parou: Já existe um sincronismo em execução (bloqueado)'); return }
+    if (!isOnline) { alert('❌ Parou: O navegador acha que está offline'); return }
 
     isSyncing.current = true
     setSyncStatus('syncing')
 
     try {
+      // 🔔 PASSO 2: Vai tentar ler o Dexie
+      alert('👉 PASSO 2: Tentando buscar itens pendentes no Dexie...');
       const items = await getPendingSyncItems(user.id)
-      console.log(`[DEBUG] 2. Itens encontrados na fila:`, items)
+      
+      // 🔔 PASSO 3: Quantos itens leu?
+      alert(`👉 PASSO 3: Dexie respondeu! Itens encontrados na fila: ${items.length}`)
 
       if (items.length === 0) {
         setSyncStatus(isOnline ? 'online' : 'offline')
         isSyncing.current = false
-        console.log('[DEBUG] 3. Fila vazia, encerrando sincronização.')
         return
       }
 
       for (const item of items) {
-        console.log(`[DEBUG] 4. Processando item:`, item)
         try {
           const { table, operation, record_id, data } = item
           
-          // Correção de nomes de tabela caso necessário
           let supabaseTable: string = table
           if (table === 'credit_cards') supabaseTable = 'credit_cards'
           if (table === 'credit_invoices') supabaseTable = 'credit_invoices'
+
+          // 🔔 PASSO 4: Vai disparar para o Supabase
+          alert(`👉 PASSO 4: Enviando ${operation} da tabela ${table} para o Supabase...`)
 
           const supabaseClient = supabase.from(supabaseTable)
           let error = null
 
           if (operation === 'delete') {
-            console.log(`[DEBUG] 5. Enviando DELETE para a tabela ${supabaseTable}, ID: ${record_id}`)
             const res = await supabaseClient.delete().eq('id', record_id)
             error = res.error
-            console.log(`[DEBUG] Resposta do DELETE:`, res)
           } else {
-            console.log(`[DEBUG] 5. Enviando UPSERT para a tabela ${supabaseTable} com os dados:`, data)
             const res = await supabaseClient.upsert(data, { onConflict: 'id' })
             error = res.error
-            console.log(`[DEBUG] Resposta do UPSERT:`, res)
           }
 
           if (error) {
-            console.error(`[DEBUG ERROR] Erro retornado pelo Supabase no item ${item.id}:`, error)
-            alert(`🚨 ERRO SUPABASE:\nTabela: ${table}\nDetalhe: ${error.message}`)
+            // 🔔 ALERTA DE ERRO REAL DO SUPABASE
+            alert(`🚨 ERRO DO SUPABASE!\nTabela: ${table}\nMensagem: ${error.message}\nCódigo: ${error.code}`)
             throw new Error(error.message)
           }
 
-          console.log(`[DEBUG] 6. SUCESSO! Removendo item ${item.id} da fila local.`)
+          // 🔔 PASSO 5: Sucesso no item
+          alert(`✅ PASSO 5: Item ${record_id} enviado com sucesso! Removendo da fila local...`)
           await removeFromSyncQueue(item.id)
 
         } catch (err: any) {
-          console.error('[DEBUG ERROR] Falha ao processar o item específico:', err)
           await markSyncFailed(item.id, err.message)
         }
       }
@@ -92,11 +93,11 @@ export function useLocalSync() {
       await updatePendingCount()
       if (pendingCount === 0) setSyncStatus(isOnline ? 'online' : 'offline')
 
-    } catch (err) {
-      console.error('[DEBUG ERROR] Erro fatal no processSyncQueue:', err)
+    } catch (err: any) {
+      alert(`💥 ERRO CRÍTICO NO PROCESSO:\n${err?.message || err}`)
     } finally {
       isSyncing.current = false
-      console.log('[DEBUG] 7. Sincronização finalizada.')
+      alert('🏁 PASSO 7: Fim do ciclo de sincronização.')
     }
   }, [user?.id, isOnline, pendingCount, updatePendingCount])
 
@@ -104,13 +105,11 @@ export function useLocalSync() {
     const handleOnline = () => {
       setIsOnline(true)
       setSyncStatus('online')
-      showToast('🌐 Conexão restaurada. Sincronizando...', 'info')
       processSyncQueue()
     }
     const handleOffline = () => {
       setIsOnline(false)
       setSyncStatus('offline')
-      showToast('📡 Modo offline ativado.', 'warning')
     }
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -119,7 +118,7 @@ export function useLocalSync() {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [processSyncQueue, showToast])
+  }, [processSyncQueue])
 
   const queueOperation = useCallback(async (table: AllTables, operation: 'create' | 'update' | 'delete', recordId: string, data: any) => {
     if (!user?.id) return
@@ -129,15 +128,12 @@ export function useLocalSync() {
   }, [user?.id, isOnline, updatePendingCount, processSyncQueue])
 
   const forceSync = useCallback(async () => {
-    console.log('[DEBUG] BOTÃO forceSync ACIONADO PELO USUÁRIO!')
     if (!isOnline) {
       showToast('📡 Sem conexão.', 'warning')
       return
     }
-    showToast('🔄 Sincronizando...', 'info')
     await processSyncQueue()
-    showToast('✅ Sincronização concluída!', 'success')
-  }, [isOnline, processSyncQueue, showToast])
+  }, [isOnline, processSyncQueue])
 
   const refreshPendingCount = useCallback(async () => {
     await updatePendingCount()
