@@ -6,8 +6,12 @@ import { useIsAdmin } from '@/hooks/useAdmin'
 import { useLocalSync } from '@/hooks/useLocalSync'
 
 export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { pendingCount, isSyncing, forceSync } = useLocalSync()
-  const { isAdmin } = useIsAdmin()
+  // 🔥 FALLBACK: Garantia de que os hooks retornem objetos válidos
+  const syncData = useLocalSync() || {}
+  const { pendingCount = 0, isSyncing = false, forceSync = () => {} } = syncData
+
+  const adminData = useIsAdmin() || {}
+  const { isAdmin = false } = adminData
 
   if (!isOpen) return null
 
