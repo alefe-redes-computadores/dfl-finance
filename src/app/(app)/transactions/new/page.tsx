@@ -1170,7 +1170,7 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* 🔥 MODAIS (mantidos com lógica intacta, apenas estrutura visual ajustada onde necessário) */}
+      {/* 🔥 MODAIS (mantidos com lógica intacta) */}
       {showCatModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
@@ -1454,14 +1454,12 @@ function NewTransactionContent() {
   )
 }
 
-export default function EditTransactionPage() {
+// 🔥 CORREÇÃO: Exportação correta para a página de Nova Transação
+export default function NewTransactionPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900 transition-colors">
-        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
-          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-        </div>
-        <TransactionSkeleton />
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <NewTransactionContent />
