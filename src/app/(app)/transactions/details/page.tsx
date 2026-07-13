@@ -33,19 +33,18 @@ const safeNum = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed
 }
 
+// 🔥 SKELETON PARA SUSPENSE
 const TransactionSkeleton = () => (
-  <div className="animate-pulse px-4 pt-6 space-y-5">
-    <div className="bg-white dark:bg-slate-800 rounded-[32px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
-      <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      <div className="h-10 w-48 bg-gray-200 dark:bg-slate-700 rounded" />
+  <div className="animate-pulse px-4 pt-5 space-y-4">
+    <div className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-5">
+      <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+      <div className="h-12 w-48 bg-gray-200 dark:bg-slate-700 rounded mx-auto" />
     </div>
-    <div className="space-y-3">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] p-4 flex items-center gap-4 border border-gray-50 dark:border-slate-700/50">
-          <div className="w-10 h-10 rounded-[14px] bg-gray-200 dark:bg-slate-700" />
-          <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-        </div>
-      ))}
+    <div className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden space-y-4 p-5">
+      <div className="h-6 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
+      <div className="h-14 bg-gray-100 dark:bg-slate-700/50 rounded-2xl" />
+      <div className="h-14 bg-gray-100 dark:bg-slate-700/50 rounded-2xl" />
+      <div className="h-14 bg-gray-100 dark:bg-slate-700/50 rounded-2xl" />
     </div>
   </div>
 )
@@ -344,7 +343,6 @@ function EditTransactionContent() {
         }
       }
 
-      // Filtra as categorias com base no tipo final (entrada ou saída)
       const allCats = catData.filter((c: any) => c.context === effectiveContext && c.type === currentTxType)
       const mainCats = allCats.filter((c: any) => !c.parent_id)
       const subCats = allCats.filter((c: any) => c.parent_id)
@@ -537,11 +535,16 @@ function EditTransactionContent() {
     }
   }
 
+  // 🔥 LOADING STATE
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#f8f9fa] dark:bg-slate-900 transition-colors">
-        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
-          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+      <div className="min-h-screen flex flex-col bg-[#f6f7f8] dark:bg-slate-950 transition-colors">
+        <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          </div>
         </div>
         <TransactionSkeleton />
       </div>
@@ -549,10 +552,7 @@ function EditTransactionContent() {
   }
 
   const isIncome = txType === 'income'
-  const colorClass = isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-500'
-  const headerGradient = isIncome
-    ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
-    : 'bg-red-50/50 dark:bg-red-950/20'
+  const colorClass = isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-500' : 'bg-teal-600') : 'bg-gray-200 dark:bg-slate-700'
   const toggleTracks = isPaid ? 'translate-x-7' : 'translate-x-1'
 
@@ -564,332 +564,603 @@ function EditTransactionContent() {
   const isParcelado = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
   const parcelaLabel = isParcelado ? `${tx.installment_index || 1}/${tx.total_installments}` : null
 
+  // 🔥 RETURN PRINCIPAL REFATORADO (com a mesma estrutura premium da edição)
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 font-sans pb-32 relative transition-colors duration-300">
-      <input ref={galeriaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
-      <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
+    <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 font-sans pb-36 relative transition-colors duration-300">
+      <input
+        ref={galeriaInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) uploadFile(f)
+          e.target.value = ''
+        }}
+      />
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) uploadFile(f)
+          e.target.value = ''
+        }}
+      />
 
-      {/* Header Fixo e Transparente */}
-      <div className={`sticky top-0 z-30 ${headerGradient} bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-4 pt-6 pb-4 border-b border-gray-100 dark:border-slate-800 transition-colors`}>
+      {/* 🔥 HEADER */}
+      <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => { vibrate([5]); router.back() }} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 active:scale-95 transition-transform">
-            <ChevronLeft size={24} />
+          <button
+            onClick={() => {
+              vibrate([5])
+              router.back()
+            }}
+            className="h-10 w-10 rounded-full flex items-center justify-center text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"
+          >
+            <ChevronLeft size={22} />
           </button>
+
           <div className="text-center">
-            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100 capitalize">
-              {isNew ? `Nova ${isIncome ? 'Receita' : 'Despesa'}` : `Editar ${isIncome ? 'Receita' : 'Despesa'}`}
+            <h1 className="text-[18px] font-bold text-gray-900 dark:text-white">
+              {isNew ? `Nova ${isIncome ? 'receita' : 'despesa'}` : `Editar ${isIncome ? 'receita' : 'despesa'}`}
             </h1>
             {parcelaLabel && (
-              <span className="text-[10px] font-bold uppercase tracking-widest bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full mt-1 inline-block shadow-sm border border-gray-100 dark:border-slate-700">
+              <span className="mt-1 inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">
                 Parcela {parcelaLabel}
               </span>
             )}
           </div>
+
           <div className="w-10 flex justify-end">
-            {!isNew && <button onClick={() => { vibrate([10]); hasInstallments ? setShowDeleteModal(true) : confirmDelete('single') }} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors active:scale-95"><Trash2 size={20} /></button>}
+            {!isNew && (
+              <button
+                onClick={() => {
+                  vibrate([10])
+                  hasInstallments ? setShowDeleteModal(true) : confirmDelete('single')
+                }}
+                className="h-10 w-10 rounded-full flex items-center justify-center text-red-500 active:scale-95 transition-transform"
+              >
+                <Trash2 size={19} />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       <div className="px-4 pt-5 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        
-        {/* Input de Valor Gigante */}
-        <div className="bg-white dark:bg-slate-800 rounded-[32px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 flex flex-col items-center">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Valor da transação</label>
-          <div className="flex items-center gap-2 justify-center w-full mt-2">
-            <span className={`text-[20px] font-medium ${isIncome ? 'text-emerald-300' : 'text-red-300'}`}>R$</span>
+        {/* 🔥 HERO VALOR */}
+        <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 px-5 pt-5 pb-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)] dark:shadow-none">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[12px] font-semibold text-gray-400 dark:text-gray-500">
+              Valor
+            </span>
+
+            <div
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold ${
+                isIncome
+                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                  : 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
+              }`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {isIncome ? 'Entrada' : 'Saída'}
+            </div>
+          </div>
+
+          <div className="flex items-end justify-center gap-2">
+            <span className={`text-[20px] font-medium mb-2 ${isIncome ? 'text-emerald-400' : 'text-rose-300'}`}>
+              R$
+            </span>
             <input
               type="text"
               inputMode="numeric"
               value={amountInput}
               onChange={handleAmountChange}
-              className={`bg-transparent outline-none text-center text-[44px] font-black tracking-tight w-full max-w-[200px] ${colorClass} placeholder:text-gray-300 dark:placeholder:text-gray-700`}
               placeholder="0,00"
               autoFocus={isNew}
+              className={`bg-transparent outline-none text-center text-[44px] leading-none font-black tracking-tight w-full max-w-[220px] placeholder:text-gray-300 dark:placeholder:text-slate-700 ${colorClass}`}
             />
           </div>
-        </div>
+        </section>
 
-        {/* Status (Pago / Pendente) */}
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center transition-colors duration-300 ${isPaid ? (isIncome ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500' : 'bg-teal-50 dark:bg-teal-500/10 text-teal-600') : 'bg-gray-50 dark:bg-slate-700 text-gray-400'}`}>
-              <Check size={20} />
+        {/* 🔥 ESSENCIAIS */}
+        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
+          <div className="px-5 pt-4 pb-2">
+            <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Essenciais</h2>
+          </div>
+
+          <div className="px-5 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isPaid ? (isIncome ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400') : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500'}`}>
+                <Check size={18} />
+              </div>
+              <div>
+                <p className="text-[15px] font-semibold text-gray-900 dark:text-white">
+                  {isIncome ? 'Recebido' : creditCardId ? 'Lançado no cartão' : 'Pago'}
+                </p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500">
+                  {creditCardId ? 'Cobrança no cartão selecionado' : isPaid ? 'Transação quitada' : 'Marcar como pendente'}
+                </p>
+              </div>
             </div>
-            <span className="font-bold text-[15px] text-gray-800 dark:text-gray-200">
-              {isIncome ? 'Recebido' : creditCardId ? 'Lançado no cartão' : 'Pago'}
-            </span>
-          </div>
-          {!creditCardId && (
-            <button
-              onClick={() => { vibrate([5]); setIsPaid(!isPaid); }}
-              className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${toggleBgClass} active:scale-95`}
-            >
-              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-md ${toggleTracks}`} />
-            </button>
-          )}
-        </div>
 
-        {/* Descrição */}
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400 shrink-0">
-            <Edit3 size={18} />
-          </div>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
-            className="flex-1 text-[15px] font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-gray-600"
-          />
-        </div>
-
-        {/* Data */}
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400 shrink-0">
-            <Calendar size={18} />
-          </div>
-          <input type="date" value={date} onChange={(e) => { vibrate([5]); handleDateChange(e.target.value); }} className="flex-1 text-[15px] font-bold bg-transparent outline-none text-gray-800 dark:text-gray-200" />
-        </div>
-
-        {/* Categoria */}
-        <button onClick={() => { vibrate([5]); setShowCatModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-          <div className="flex items-center gap-3">
-            {selectedCat ? (() => {
-              const IconComp = getDynamicIcon(selectedCat.icon)
-              return (
-                <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}>
-                  <IconComp size={18} />
-                </div>
-              )
-            })() : (
-              <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400"><Tag size={18} /></div>
+            {!creditCardId && (
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setIsPaid(!isPaid)
+                }}
+                className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${toggleBgClass} active:scale-95`}
+              >
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${toggleTracks}`} />
+              </button>
             )}
-            <div className="text-left">
-              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Categoria</span>
-              <span className={`text-[15px] font-bold ${selectedCat ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
-                {selectedCat ? selectedCat.name : 'Selecionar'}
-              </span>
-            </div>
           </div>
-          <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-        </button>
 
-        {/* Conta */}
-        {!creditCardId && (
-          <button onClick={() => { vibrate([5]); setShowAccModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400"><Wallet size={18} /></div>
-              <div className="text-left">
-                <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Conta</span>
-                <span className={`text-[15px] font-bold ${selectedAcc ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
-                  {selectedAcc ? selectedAcc.name : 'Selecionar'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
-              <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
-            </div>
-          </button>
-        )}
+          <div className="mx-5 border-t border-black/5 dark:border-white/10" />
 
-        {/* Cartão de Crédito */}
-        {!isIncome && (creditCards || []).length > 0 && (
-          <button onClick={() => { vibrate([5]); setShowCardModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center ${selectedCard ? 'text-white' : 'bg-gray-50 dark:bg-slate-700/50 text-gray-400'}`} style={selectedCard ? { backgroundColor: selectedCard.color || '#f97316' } : {}}>
-                <CreditCard size={18} />
-              </div>
-              <div className="text-left">
-                <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Cartão de Crédito (Op.)</span>
-                <span className={`text-[15px] font-bold ${selectedCard ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
-                  {selectedCard ? selectedCard.name : 'Nenhum'}
-                </span>
-              </div>
+          <div className="px-5 py-4 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+              <Edit3 size={17} />
             </div>
-            {selectedCard ? (
-              <div onClick={(e) => { e.stopPropagation(); vibrate([10]); setCreditCardId(''); }} className="p-2 -mr-2 text-gray-300 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 rounded-full"><X size={14} /></div>
-            ) : <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
-          </button>
-        )}
-
-        {/* Fornecedor / Cliente */}
-        {(contacts || []).length > 0 && (
-          <button onClick={() => { vibrate([5]); setShowContactModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400">
-                <Users size={18} />
-              </div>
-              <div className="text-left">
-                <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Fornecedor / Cliente (Op.)</span>
-                <span className={`text-[15px] font-bold ${selectedContact ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
-                  {selectedContact ? selectedContact.name : 'Nenhum'}
-                </span>
-              </div>
-            </div>
-            {selectedContact ? (
-              <div onClick={(e) => { e.stopPropagation(); vibrate([10]); setContactId(''); }} className="p-2 -mr-2 text-gray-300 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 rounded-full"><X size={14} /></div>
-            ) : <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
-          </button>
-        )}
-
-        {/* Comprovante */}
-        {uploading ? (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[14px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-               <Loader2 size={18} className="animate-spin text-teal-600" />
-            </div>
-            <span className="text-[14px] font-bold text-gray-500">Enviando comprovante...</span>
-          </div>
-        ) : receiptUrl ? (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {receiptPreview ? (
-                <div className="w-12 h-12 rounded-[16px] overflow-hidden bg-gray-100 dark:bg-slate-700 shrink-0 border border-gray-200 dark:border-slate-600">
-                  <img src={receiptPreview} alt="Comprovante" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 ${receiptType === 'pdf' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
-                  {receiptType === 'pdf' ? <Paperclip size={20} /> : <ImageIcon size={20} />}
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">{receiptName || 'Comprovante anexado'}</p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Arquivo salvo</p>
-              </div>
-            </div>
-            <button onClick={() => { vibrate([10]); handleRemoveReceipt(); }} className="p-2.5 bg-gray-50 dark:bg-slate-700/50 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-full active:scale-95 transition-all"><Trash2 size={16} /></button>
-          </div>
-        ) : (
-          <button onClick={() => { vibrate([5]); setShowReceiptModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-dashed border-gray-300 dark:border-slate-600 flex items-center gap-3 text-gray-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/50 transition-all active:scale-[0.98]">
-            <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center shrink-0">
-              <Camera size={18} />
-            </div>
-            <span className="text-[14px] font-bold">Anexar comprovante / Ler imagem</span>
-          </button>
-        )}
-
-        {/* Mais Detalhes (Accordion) */}
-        <button
-          onClick={() => { vibrate([5]); setShowDetails(!showDetails); }}
-          className="text-teal-600 dark:text-teal-400 text-[13px] font-bold flex items-center justify-center gap-1.5 mx-auto py-3 px-6 bg-teal-50 dark:bg-teal-900/10 rounded-full active:scale-95 transition-transform"
-        >
-          {showDetails ? 'Ocultar opções avançadas' : 'Mais opções (Tags, Reembolso...)'}
-          {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-
-        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1000px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-          <div className="space-y-4">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-start gap-3">
-              <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
-                 <FileText size={18} />
-              </div>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Observações adicionais..."
-                rows={2}
-                className="flex-1 text-[14px] font-medium bg-transparent outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 resize-none py-2"
+            <div className="flex-1">
+              <label className="block text-[12px] font-medium text-gray-400 dark:text-gray-500 mb-1">Descrição</label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={selectedCat ? selectedCat.name : 'Nome da transação'}
+                className="w-full bg-transparent outline-none text-[16px] font-semibold text-gray-900 dark:text-white placeholder:text-gray-300 dark:placeholder:text-slate-600"
               />
             </div>
+          </div>
 
-            <button onClick={() => { vibrate([5]); setShowTagModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center text-gray-400 shrink-0">
-                  <Tag size={18} />
+          <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+
+          <div className="px-5 py-4 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+              <Calendar size={17} />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[12px] font-medium text-gray-400 dark:text-gray-500 mb-1">Data</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => {
+                  vibrate([5])
+                  handleDateChange(e.target.value)
+                }}
+                className="w-full bg-transparent outline-none text-[15px] font-semibold text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* 🔥 VÍNCULOS */}
+        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
+          <div className="px-5 pt-4 pb-2">
+            <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Vínculos</h2>
+          </div>
+
+          <button
+            onClick={() => {
+              vibrate([5])
+              setShowCatModal(true)
+            }}
+            className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {selectedCat ? (() => {
+                const IconComp = getDynamicIcon(selectedCat.icon)
+                return (
+                  <div
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}
+                  >
+                    <IconComp size={17} />
+                  </div>
+                )
+              })() : (
+                <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+                  <Tag size={17} />
                 </div>
-                <div className="text-left">
-                  <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Tags</span>
-                  <span className={`text-[14px] font-bold ${selectedTags.length > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>
-                    {selectedTags.length > 0 ? `${selectedTags.length} tag(s) selecionada(s)` : 'Nenhuma tag'}
-                  </span>
+              )}
+
+              <div className="text-left min-w-0">
+                <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Categoria</p>
+                <p className={`text-[15px] font-semibold truncate ${selectedCat ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                  {selectedCat ? selectedCat.name : 'Selecionar'}
+                </p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+          </button>
+
+          {!creditCardId && <div className="mx-5 border-t border-black/5 dark:border-white/10" />}
+
+          {!creditCardId && (
+            <button
+              onClick={() => {
+                vibrate([5])
+                setShowAccModal(true)
+              }}
+              className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+                  <Wallet size={17} />
+                </div>
+                <div className="text-left min-w-0">
+                  <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Conta</p>
+                  <p className={`text-[15px] font-semibold truncate ${selectedAcc ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                    {selectedAcc ? selectedAcc.name : 'Selecionar'}
+                  </p>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
+
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
+                <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+              </div>
             </button>
+          )}
 
-            {!isIncome && (
-              <>
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-[14px] bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
-                      <RefreshCw size={18} className="text-orange-500" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">Reembolsável</span>
-                      <span className="text-[11px] font-medium text-gray-400">Gasto será devolvido por PF/PJ</span>
-                    </div>
+          {!isIncome && (creditCards || []).length > 0 && (
+            <>
+              <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowCardModal(true)
+                }}
+                className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${selectedCard ? 'text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'}`}
+                    style={selectedCard ? { backgroundColor: selectedCard.color || '#f97316' } : {}}
+                  >
+                    <CreditCard size={17} />
                   </div>
-                  <button onClick={() => { vibrate([5]); setIsReimbursable(!isReimbursable); }} className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${isReimbursable ? 'bg-orange-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
-                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${isReimbursable ? 'translate-x-7' : 'translate-x-1'}`} />
-                  </button>
+
+                  <div className="text-left min-w-0">
+                    <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Cartão de crédito</p>
+                    <p className={`text-[15px] font-semibold truncate ${selectedCard ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                      {selectedCard ? selectedCard.name : 'Nenhum'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-[14px] bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                      <ArrowRightLeft size={18} className="text-blue-500" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[14px] font-bold text-gray-800 dark:text-gray-200">Estorno / Devolução</span>
-                      <span className="text-[11px] font-medium text-gray-400">Marcar no extrato</span>
-                    </div>
+                {selectedCard ? (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      vibrate([10])
+                      setCreditCardId('')
+                    }}
+                    className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 hover:text-red-500"
+                  >
+                    <X size={14} />
                   </div>
-                  <button onClick={() => { vibrate([5]); setIsRefund(!isRefund); }} className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${isRefund ? 'bg-blue-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
-                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${isRefund ? 'translate-x-7' : 'translate-x-1'}`} />
-                  </button>
+                ) : (
+                  <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+                )}
+              </button>
+            </>
+          )}
+
+          {(contacts || []).length > 0 && (
+            <>
+              <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowContactModal(true)
+                }}
+                className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+                    <Users size={17} />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Fornecedor / cliente</p>
+                    <p className={`text-[15px] font-semibold truncate ${selectedContact ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                      {selectedContact ? selectedContact.name : 'Nenhum'}
+                    </p>
+                  </div>
                 </div>
 
-                <button onClick={() => { vibrate([5]); setShowFinancingModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-[14px] bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
-                      <Building size={18} className="text-purple-500" />
-                    </div>
-                    <div className="text-left">
-                       <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Financiamento (Op.)</span>
-                       <span className={`text-[14px] font-bold ${financingId ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>{financingId ? 'Vinculado' : 'Nenhum'}</span>
-                    </div>
+                {selectedContact ? (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      vibrate([10])
+                      setContactId('')
+                    }}
+                    className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 hover:text-red-500"
+                  >
+                    <X size={14} />
                   </div>
-                  {financingId ? (
-                    <div onClick={(e) => { e.stopPropagation(); vibrate([10]); setFinancingId(null); }} className="p-2 -mr-2 text-gray-300 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 rounded-full"><X size={14} /></div>
-                  ) : <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
-                </button>
+                ) : (
+                  <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+                )}
+              </button>
+            </>
+          )}
 
-                <button onClick={() => { vibrate([5]); setShowLoanModal(true); }} className="w-full bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50 flex items-center justify-between active:scale-[0.98] transition-transform">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-[14px] bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                      <HandCoins size={18} className="text-amber-500" />
-                    </div>
-                    <div className="text-left">
-                       <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block">Empréstimo (Op.)</span>
-                       <span className={`text-[14px] font-bold ${debtId ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'}`}>{debtId ? 'Vinculado' : 'Nenhum'}</span>
-                    </div>
+          <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+
+          {uploading ? (
+            <div className="px-5 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                <Loader2 size={17} className="animate-spin" />
+              </div>
+              <div>
+                <p className="text-[15px] font-semibold text-gray-900 dark:text-white">Enviando comprovante</p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500">Aguarde um instante</p>
+              </div>
+            </div>
+          ) : receiptUrl ? (
+            <div className="px-5 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {receiptPreview ? (
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-gray-100 dark:bg-slate-800 border border-black/5 dark:border-white/10 shrink-0">
+                    <img src={receiptPreview} alt="Comprovante" className="w-full h-full object-cover" />
                   </div>
-                  {debtId ? (
-                    <div onClick={(e) => { e.stopPropagation(); vibrate([10]); setDebtId(null); }} className="p-2 -mr-2 text-gray-300 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 rounded-full"><X size={14} /></div>
-                  ) : <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />}
-                </button>
-              </>
-            )}
+                ) : (
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${receiptType === 'pdf' ? 'bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400' : 'bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-400'}`}>
+                    {receiptType === 'pdf' ? <Paperclip size={18} /> : <ImageIcon size={18} />}
+                  </div>
+                )}
+
+                <div className="min-w-0">
+                  <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Comprovante</p>
+                  <p className="text-[15px] font-semibold text-gray-900 dark:text-white truncate">
+                    {receiptName || 'Comprovante anexado'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  vibrate([10])
+                  handleRemoveReceipt()
+                }}
+                className="h-9 w-9 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 hover:text-red-500 active:scale-95 transition-all shrink-0"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                vibrate([5])
+                setShowReceiptModal(true)
+              }}
+              className="w-full px-5 py-4 flex items-center gap-3 text-left active:scale-[0.995] transition-transform"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+                <Camera size={17} />
+              </div>
+              <div>
+                <p className="text-[15px] font-semibold text-gray-900 dark:text-white">Anexar comprovante</p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500">Imagem, câmera ou PDF</p>
+              </div>
+            </button>
+          )}
+        </section>
+
+        {/* 🔥 AVANÇADO */}
+        <section className="space-y-3">
+          <button
+            onClick={() => {
+              vibrate([5])
+              setShowDetails(!showDetails)
+            }}
+            className="mx-auto flex items-center justify-center gap-1.5 rounded-full bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 px-5 py-3 text-[13px] font-semibold text-gray-600 dark:text-gray-300 active:scale-95 transition-transform"
+          >
+            {showDetails ? 'Ocultar opções avançadas' : 'Mais opções'}
+            {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
+              <div className="px-5 pt-4 pb-2">
+                <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Opções avançadas</h2>
+              </div>
+
+              <div className="px-5 py-4 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0 mt-0.5">
+                  <FileText size={17} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[12px] font-medium text-gray-400 dark:text-gray-500 mb-1">Observações</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Observações adicionais..."
+                    rows={3}
+                    className="w-full bg-transparent outline-none text-[15px] font-medium text-gray-900 dark:text-white placeholder:text-gray-400 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowTagModal(true)
+                }}
+                className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-slate-500 shrink-0">
+                    <Tag size={17} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Tags</p>
+                    <p className={`text-[15px] font-semibold ${selectedTags.length > 0 ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                      {selectedTags.length > 0 ? `${selectedTags.length} selecionada(s)` : 'Nenhuma tag'}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+              </button>
+
+              {!isIncome && (
+                <>
+                  <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+                  <div className="px-5 py-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400 flex items-center justify-center shrink-0">
+                        <RefreshCw size={17} />
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-gray-900 dark:text-white">Reembolsável</p>
+                        <p className="text-[12px] text-gray-400 dark:text-gray-500">Gasto será devolvido por PF/PJ</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        vibrate([5])
+                        setIsReimbursable(!isReimbursable)
+                      }}
+                      className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${isReimbursable ? 'bg-orange-500' : 'bg-gray-200 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${isReimbursable ? 'translate-x-7' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+                  <div className="px-5 py-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-400 flex items-center justify-center shrink-0">
+                        <ArrowRightLeft size={17} />
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-gray-900 dark:text-white">Estorno / devolução</p>
+                        <p className="text-[12px] text-gray-400 dark:text-gray-500">Marcar no extrato</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        vibrate([5])
+                        setIsRefund(!isRefund)
+                      }}
+                      className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${isRefund ? 'bg-blue-500' : 'bg-gray-200 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${isRefund ? 'translate-x-7' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+                  <button
+                    onClick={() => {
+                      vibrate([5])
+                      setShowFinancingModal(true)
+                    }}
+                    className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-500 dark:bg-purple-500/10 dark:text-purple-400 flex items-center justify-center shrink-0">
+                        <Building size={17} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Financiamento</p>
+                        <p className={`text-[15px] font-semibold ${financingId ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                          {financingId ? 'Vinculado' : 'Nenhum'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {financingId ? (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          vibrate([10])
+                          setFinancingId(null)
+                        }}
+                        className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 hover:text-red-500"
+                      >
+                        <X size={14} />
+                      </div>
+                    ) : (
+                      <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+                    )}
+                  </button>
+
+                  <div className="mx-5 border-t border-black/5 dark:border-white/10" />
+                  <button
+                    onClick={() => {
+                      vibrate([5])
+                      setShowLoanModal(true)
+                    }}
+                    className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.995] transition-transform"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400 flex items-center justify-center shrink-0">
+                        <HandCoins size={17} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Empréstimo</p>
+                        <p className={`text-[15px] font-semibold ${debtId ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                          {debtId ? 'Vinculado' : 'Nenhum'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {debtId ? (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          vibrate([10])
+                          setDebtId(null)
+                        }}
+                        className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 hover:text-red-500"
+                      >
+                        <X size={14} />
+                      </div>
+                    ) : (
+                      <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        </section>
       </div>
 
-      {/* FAB de Salvar */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[80px] flex justify-center z-40 pointer-events-none">
+      {/* 🔥 FAB DE SALVAR */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[96px] flex justify-center z-40 pointer-events-none">
         <button
-          onClick={() => { vibrate([10, 50]); handleSave(); }}
+          onClick={() => {
+            vibrate([10, 50])
+            handleSave()
+          }}
           disabled={saving || saved}
-          className={`w-[68px] h-[68px] rounded-full flex items-center justify-center text-white shadow-[0_8px_30px_rgba(0,0,0,0.2)] pointer-events-auto transition-all duration-300 ${
-            saved ? 'bg-emerald-500 scale-110' : 'bg-teal-600 hover:bg-teal-700 active:scale-90 shadow-teal-600/40'
+          className={`w-[70px] h-[70px] rounded-full flex items-center justify-center text-white pointer-events-auto transition-all duration-300 shadow-[0_10px_30px_rgba(15,118,110,0.28)] ${
+            saved
+              ? 'bg-emerald-500 scale-110'
+              : 'bg-teal-600 hover:bg-teal-700 active:scale-90'
           }`}
         >
-          {saving ? <Loader2 className="animate-spin" size={30} /> : <Check size={32} className={saved ? 'animate-in zoom-in duration-300' : ''} />}
+          {saving ? (
+            <Loader2 className="animate-spin" size={30} />
+          ) : (
+            <Check size={32} className={saved ? 'animate-in zoom-in duration-300' : ''} />
+          )}
         </button>
       </div>
 
-      {/* Modal Deletar - Bottom Sheet */}
+      {/* 🔥 MODAL DE DELETE */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowDeleteModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
@@ -900,7 +1171,7 @@ function EditTransactionContent() {
               <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
             </div>
             <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
-              Esta transação faz parte de um parcelamento de <strong>{tx?.total_installments} vezes</strong>. Como deseja prosseguir?
+              Esta transação faz parte de um parcelamento de <strong>{tx?.total_installments}</strong> vezes. Como deseja prosseguir?
             </p>
             <div className="space-y-3 pb-6">
               <button onClick={() => { vibrate([10]); confirmDelete('single'); }} className="w-full p-4 bg-gray-50 dark:bg-slate-700/50 rounded-[20px] text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]">
@@ -920,7 +1191,7 @@ function EditTransactionContent() {
         </div>
       )}
 
-      {/* Outros Modais Inalterados */}
+      {/* 🔥 MODAIS (mantidos com lógica intacta) */}
       {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
       {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
@@ -993,122 +1264,120 @@ function EditTransactionContent() {
       {/* Modal Conta */}
       {showAccModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
-           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-                <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contas</h3>
-                <button onClick={() => setShowAccModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
-              </div>
-              <div className="space-y-2 pb-6">
-                {accounts.map(acc => {
-                  const isActive = acc.id === accountId
-                  return (
-                    <button key={acc.id} onClick={() => { vibrate([5]); setAccountId(acc.id); setShowAccModal(false); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
-                      <BankLogo color={acc.color} name={acc.name} size="md" />
-                      <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
-                      {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-           </div>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contas</h3>
+              <button onClick={() => setShowAccModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+            </div>
+            <div className="space-y-2 pb-6">
+              {accounts.map(acc => {
+                const isActive = acc.id === accountId
+                return (
+                  <button key={acc.id} onClick={() => { vibrate([5]); setAccountId(acc.id); setShowAccModal(false); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
+                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Modal Cartão */}
       {showCardModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCardModal(false)}>
-           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-                <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Cartão de Crédito</h3>
-                <button onClick={() => setShowCardModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
-              </div>
-              <div className="space-y-2 pb-6">
-                {creditCards.map(card => {
-                  const isActive = card.id === creditCardId
-                  return (
-                    <button key={card.id} onClick={() => { vibrate([5]); setCreditCardId(card.id); setAccountId(''); setShowCardModal(false); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
-                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={22} /></div>
-                      <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
-                      {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-           </div>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Cartão de Crédito</h3>
+              <button onClick={() => setShowCardModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+            </div>
+            <div className="space-y-2 pb-6">
+              {creditCards.map(card => {
+                const isActive = card.id === creditCardId
+                return (
+                  <button key={card.id} onClick={() => { vibrate([5]); setCreditCardId(card.id); setAccountId(''); setShowCardModal(false); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
+                    <div className="w-12 h-12 rounded-[16px] flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: card.color || '#f97316' }}><CreditCard size={22} /></div>
+                    <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{card.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Modal Contato */}
       {showContactModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowContactModal(false)}>
-           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-                <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contatos</h3>
-                <button onClick={() => setShowContactModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
-              </div>
-              <div className="space-y-2 pb-6">
-                {contacts.map((contact) => {
-                  const isActive = contact.id === contactId
-                  const IconComp = getDynamicIcon(contact.icon || 'user')
-                  return (
-                    <button key={contact.id} onClick={() => { vibrate([5]); setContactId(contact.id); setShowContactModal(false); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
-                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}><IconComp size={22} /></div>
-                      <div className="flex-1 text-left">
-                         <p className={`text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</p>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</p>
-                      </div>
-                      {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-           </div>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contatos</h3>
+              <button onClick={() => setShowContactModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+            </div>
+            <div className="space-y-2 pb-6">
+              {contacts.map((contact) => {
+                const isActive = contact.id === contactId
+                const IconComp = getDynamicIcon(contact.icon || 'user')
+                return (
+                  <button key={contact.id} onClick={() => { vibrate([5]); setContactId(contact.id); setShowContactModal(false); }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
+                    <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}><IconComp size={22} /></div>
+                    <div className="flex-1 text-left">
+                      <p className={`text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{contact.name}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">{contact.type === 'supplier' ? 'Fornecedor' : contact.type === 'customer' ? 'Cliente' : 'Ambos'}</p>
+                    </div>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Modal Tags */}
       {showTagModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowTagModal(false)}>
-           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-                <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Tags</h3>
-                <button onClick={() => setShowTagModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
-              </div>
-              <div className="space-y-2 pb-6">
-                {tags.map((tag) => {
-                  const isActive = selectedTags.includes(tag.id)
-                  return (
-                    <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
-                      <div className="w-5 h-5 rounded-full shadow-sm" style={{ backgroundColor: tag.color }} />
-                      <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
-                      {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-           </div>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Tags</h3>
+              <button onClick={() => setShowTagModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+            </div>
+            <div className="space-y-2 pb-6">
+              {tags.map((tag) => {
+                const isActive = selectedTags.includes(tag.id)
+                return (
+                  <button key={tag.id} onClick={() => toggleTag(tag.id)} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent'}`}>
+                    <div className="w-5 h-5 rounded-full shadow-sm" style={{ backgroundColor: tag.color }} />
+                    <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{tag.name}</span>
+                    {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
   )
 }
 
+// 🔥 CORREÇÃO: Exportação correta para a página de Detalhes/Edição
 export default function EditTransactionPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900 transition-colors">
-        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
-          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-        </div>
-        <TransactionSkeleton />
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900">
+        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <EditTransactionContent />
