@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Bell, Check, X, RefreshCw,
-  AlertTriangle, Info, CheckCircle
+  AlertTriangle, Info, CheckCircle, Trash2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -13,10 +13,9 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { clearAllNotifications } from '@/lib/notificationUtils'
+import { useIsAdmin } from '@/hooks/useAdmin'
 
-// ============================================================
-// SKELETON LOADER
-// ============================================================
 const NotificationsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
     {[1, 2, 3, 4].map((i) => (
@@ -39,6 +38,7 @@ export default function NotificationsPage() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
+  const { isAdmin, loading: adminLoading } = useIsAdmin()
   
   const { safeDelete, safeUpdate } = useSafeDb()
   
@@ -48,15 +48,13 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all')
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [processing, setProcessing] = useState(false)
 
   const { data: localNotifications, reload: reloadNotifications } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id },
   })
 
-  // ============================================================
-  // PULL TO REFRESH
-  // ============================================================
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -96,10 +94,7 @@ export default function NotificationsPage() {
     }
   }, [loading, refreshing])
 
-  // ============================================================
-  // LOAD DATA
-  // ============================================================
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setLoadingPulse(true)
@@ -112,17 +107,14 @@ export default function NotificationsPage() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }
+  }, [user?.id, reloadNotifications])
 
   useEffect(() => {
     if (user?.id) {
       loadNotifications()
     }
-  }, [user?.id])
+  }, [user?.id, loadNotifications])
 
-  // ============================================================
-  // PROCESSAR DADOS
-  // ============================================================
   useEffect(() => {
     if (localNotifications) {
       const mapped = localNotifications.map((n: any) => ({
@@ -136,20 +128,15 @@ export default function NotificationsPage() {
     }
   }, [localNotifications])
 
-  // ============================================================
-  // 🔥 MARCAR COMO LIDA (ATÔMICO + OTIMISTIC UI)
-  // ============================================================
-  const markAsRead = async (id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     if (!user) return
     try {
-      // 1. Atualiza estado visual instantaneamente (Optimistic UI)
       const updatedList = notifications.map((n: any) => 
         n.id === id ? { ...n, is_read: true, read: true } : n
       )
       setNotifications(updatedList)
       setUnreadCount(updatedList.filter((n: any) => !n.is_read).length)
 
-      // 2. Salva no banco local e na fila
       const updateData = { is_read: true, read: true, updated_at: new Date().toISOString() }
       const result = await safeUpdate('notifications', id, updateData)
       
@@ -162,25 +149,20 @@ export default function NotificationsPage() {
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
       hapticError()
-      await loadNotifications() // Reverte visualmente em caso de erro
+      await loadNotifications()
     }
-  }
+  }, [user, notifications, safeUpdate, loadNotifications, vibrate, hapticSuccess, hapticError])
 
-  // ============================================================
-  // 🔥 MARCAR TODAS COMO LIDAS (ATÔMICO + OTIMISTIC UI)
-  // ============================================================
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!user?.id || notifications.length === 0) return
 
     try {
       const unread = notifications.filter((n: any) => !n.is_read)
       
-      // 1. Atualiza visual instantaneamente
       const updatedList = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
       setNotifications(updatedList)
       setUnreadCount(0)
 
-      // 2. Salva no banco em loop
       for (const notif of unread) {
         const updateData = { is_read: true, read: true, updated_at: new Date().toISOString() }
         const result = await safeUpdate('notifications', notif.id, updateData)
@@ -197,20 +179,46 @@ export default function NotificationsPage() {
       hapticError()
       await loadNotifications()
     }
-  }
+  }, [user, notifications, safeUpdate, loadNotifications, showToast, hapticSuccess, hapticError, vibrate])
 
-  // ============================================================
-  // 🔥 DELETAR NOTIFICAÇÃO (ATÔMICO + OTIMISTIC UI)
-  // ============================================================
-  const deleteNotification = async (id: string) => {
+  const handleClearAll = useCallback(async () => {
+    if (!user?.id) return
+    
+    if (!isAdmin) {
+      showToast('⚠️ Apenas administradores podem limpar todas as notificações.', 'warning')
+      return
+    }
+
+    if (!confirm('⚠️ Tem certeza que deseja limpar TODAS as notificações? Esta ação não pode ser desfeita.')) return
+
+    setProcessing(true)
+    try {
+      const result = await clearAllNotifications(user.id)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      
+      setNotifications([])
+      setUnreadCount(0)
+      
+      hapticSuccess()
+      vibrate([20, 10])
+      showToast('🗑️ Todas as notificações foram removidas!', 'success')
+    } catch (err: any) {
+      hapticError()
+      showToast(`❌ Erro ao limpar notificações: ${err.message}`, 'error')
+    } finally {
+      setProcessing(false)
+    }
+  }, [user, isAdmin, showToast, hapticSuccess, hapticError, vibrate])
+
+  const deleteNotification = useCallback(async (id: string) => {
     if (!user) return
     try {
-      // 1. Atualiza visual instantaneamente
       const filteredList = notifications.filter(n => n.id !== id)
       setNotifications(filteredList)
       setUnreadCount(filteredList.filter((n: any) => !n.is_read).length)
 
-      // 2. Apaga do banco local e coloca na fila de sync
       const result = await safeDelete('notifications', id)
       
       if (!result.success) {
@@ -222,9 +230,9 @@ export default function NotificationsPage() {
     } catch (err: any) {
       console.error('Erro ao deletar:', err)
       hapticError()
-      await loadNotifications() // Reverte visualmente
+      await loadNotifications()
     }
-  }
+  }, [user, notifications, safeDelete, loadNotifications, hapticSuccess, hapticError, vibrate])
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -244,7 +252,6 @@ export default function NotificationsPage() {
     }
   }
 
-  // 🔥 PERFORMANCE: filteredNotifications com useMemo
   const filteredNotifications = useMemo(() => {
     const filtered = notifications.filter((n: any) => {
       if (filter === 'unread') return !n.is_read
@@ -272,14 +279,25 @@ export default function NotificationsPage() {
           </button>
           <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Notificações</h2>
         </div>
-        {unreadCount > 0 && (
-          <button
-            onClick={markAllAsRead}
-            className="text-teal-700 dark:text-teal-400 text-sm font-bold hover:opacity-80 transition-colors active:scale-[0.95]"
-          >
-            Marcar todas
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={handleClearAll}
+              disabled={processing}
+              className="text-red-500 dark:text-red-400 text-sm font-bold hover:opacity-80 transition-colors active:scale-[0.95] flex items-center gap-1"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllAsRead}
+              className="text-teal-700 dark:text-teal-400 text-sm font-bold hover:opacity-80 transition-colors active:scale-[0.95]"
+            >
+              Marcar todas
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-hide">
@@ -385,4 +403,3 @@ export default function NotificationsPage() {
     </div>
   )
 }
-// ✅ Refatoração Premium Finalizada — Notificações
