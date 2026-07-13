@@ -963,12 +963,12 @@ function HomeContent() {
           <div className="flex items-center gap-3">
             {/* 🔥 SyncButton com isOnline e onClick para abrir modal */}
             <SyncButton
-              pendingCount={pendingCount}
-              isSyncing={isSyncing}
-              isOnline={isOnline}
+              pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
+              isSyncing={!!isSyncing}
+              isOnline={!!isOnline}
               onSync={syncQueue}
               onClick={() => setIsSyncModalOpen(true)}
-            />
+              />
             {notificationsEnabled && (
               <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
             )}
