@@ -1,17 +1,6 @@
-'use client'
-
-import React from 'react'
-import Link from 'next/link'
-import { useIsAdmin } from '@/hooks/useAdmin'
-import { useLocalSync } from '@/hooks/useLocalSync'
-
 export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  // 🔥 FALLBACK: Garantia de que os hooks retornem objetos válidos
-  const syncData = useLocalSync() || {}
-  const { pendingCount = 0, isSyncing = false, forceSync = () => {} } = syncData
-
-  const adminData = useIsAdmin() || {}
-  const { isAdmin = false } = adminData
+  const { pendingCount, isSyncing, forceSync } = useLocalSync()
+  const { isAdmin } = useIsAdmin() || { isAdmin: false } // Proteção caso useIsAdmin retorne null
 
   if (!isOpen) return null
 
@@ -22,12 +11,12 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            Itens pendentes: <strong>{pendingCount}</strong>
+            Itens pendentes: <strong>{pendingCount ?? 0}</strong>
           </p>
           
           <button 
             onClick={forceSync}
-            disabled={isSyncing}
+            disabled={!!isSyncing}
             className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold transition-all active:scale-[0.98] disabled:opacity-50"
           >
             {isSyncing ? 'Sincronizando...' : 'Forçar Sincronização'}
