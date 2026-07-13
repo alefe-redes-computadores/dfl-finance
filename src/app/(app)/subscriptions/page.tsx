@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
@@ -41,7 +41,6 @@ export default function SubscriptionsPage() {
     filters: { context: effectiveContext },
   })
 
-  // EXCLUSÃO ATÔMICA DA LISTA COM addToSyncQueue E ARRAY
   const handleDelete = async () => {
     if (!deleteModal || !user) return
     try {
@@ -87,7 +86,7 @@ export default function SubscriptionsPage() {
   
   const formatDate = (date: string | null) => {
     if (!date) return ""
-    const d = new Date(date + 'T12:00:00') // Evita problemas de fuso horário
+    const d = new Date(date + 'T12:00:00')
     return d.toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })
   }
 
@@ -126,7 +125,6 @@ export default function SubscriptionsPage() {
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 font-sans transition-colors duration-300">
       
-      {/* Ponto de Luz de Sincronização */}
       {(loadingPulse || loading || pendingCount > 0) && (
         <div className="fixed top-6 right-6 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
@@ -135,112 +133,138 @@ export default function SubscriptionsPage() {
 
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
+            <span className="text-xs font-semibold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      {/* HEADER SOFT UI */}
-      <div className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl pt-6 pb-2 px-4 shadow-[0_2px_15px_rgba(0,0,0,0.02)] border-b border-gray-100 dark:border-slate-800/50">
-        
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => router.push('/more')} className="p-1 -ml-1 text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors">
-                <ChevronLeft size={24} />
+      {/* 🔥 HEADER UNIFICADO */}
+      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => router.push('/more')}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+              >
+                <ChevronLeft size={20} />
               </button>
-              <h1 className="text-[26px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">Assinaturas</h1>
-            </div>
-            <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-0.5 ml-1">
-              {appMode === "personal_only" ? "Visão Pessoal" : "Visão Global"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSearch(!showSearch)}
-              className="w-10 h-10 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center transition-colors hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 active:scale-95"
-            >
-              {showSearch ? <X size={18} /> : <Search size={18} />}
-            </button>
-            <button
-              onClick={() => router.push("/subscriptions/new")}
-              className="w-10 h-10 bg-teal-600 hover:bg-teal-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-95"
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </div>
 
-        <div className="flex items-center justify-between mb-4">
-          <ContextToggle />
-          <button 
-            onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")} 
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 rounded-full font-bold text-[11px] active:scale-95 transition-transform"
-          >
-            <ArrowUpDown size={12} />
-            {sortOrder === 'desc' ? 'Decrescente' : 'Crescente'}
-          </button>
-        </div>
-
-        {/* Search Bar Animada */}
-        {showSearch && (
-          <div className="mb-4 animate-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-800/80 border border-gray-100 dark:border-slate-700/50 rounded-[18px] px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
-              <Search size={18} className="text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar assinatura..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-400 font-medium"
-                autoFocus
-              />
-              {search && (
-                 <button onClick={() => setSearch('')} className="p-1 text-gray-400 hover:text-gray-600"><X size={14}/></button>
-              )}
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="flex-1 overflow-y-auto px-4 pt-4 pb-28 custom-scrollbar">
-        
-        {/* CARD DE TOTAL MENSAL (GLASSMORPHISM) */}
-        {!loading && (
-          <div className="relative overflow-hidden bg-gradient-to-br from-teal-500 to-emerald-600 rounded-[28px] p-6 mb-6 shadow-lg shadow-teal-500/20 group cursor-default">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/5 rounded-full blur-xl -ml-8 -mb-8 pointer-events-none" />
-            
-            <div className="relative z-10 flex items-start justify-between">
-              <div>
-                <p className="text-[12px] font-bold text-white/80 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                  <Calendar size={14} /> Comprometimento Mensal
+              <div className="min-w-0">
+                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Assinaturas
+                </h1>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
                 </p>
-                <p className="text-3xl font-black text-white tracking-tight">{formatCurrency(monthlyTotal)}</p>
               </div>
             </div>
-            <p className="relative z-10 text-[11px] text-teal-50 font-medium mt-4 bg-black/10 inline-block px-3 py-1 rounded-full backdrop-blur-sm">
-              {subscriptions?.filter((s: any) => s.status === "active").length || 0} assinaturas ativas
-            </p>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowSearch(!showSearch)}
+                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+              >
+                {showSearch ? <X size={18} /> : <Search size={18} />}
+              </button>
+
+              <button
+                onClick={() => router.push("/subscriptions/new")}
+                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0 flex-1">
+              <ContextToggle />
+            </div>
+
+            <button
+              onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
+              className="h-10 px-3 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 text-gray-500 dark:text-gray-400 text-[12px] font-semibold flex items-center gap-1.5 active:scale-[0.98] transition-transform shrink-0"
+            >
+              <ArrowUpDown size={12} />
+              {sortOrder === 'desc' ? 'Decrescente' : 'Crescente'}
+            </button>
+          </div>
+
+          {showSearch && (
+            <div className="animate-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
+                <Search size={18} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar assinatura..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent text-[14px] text-gray-800 dark:text-gray-200 placeholder-gray-400 outline-none"
+                  autoFocus
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
+      >
+        {/* 🔥 CARD DE RESUMO - NEUTRO */}
+        {!loading && (
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                  Comprometimento mensal
+                </p>
+                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  {formatCurrency(monthlyTotal)}
+                </p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
+                  {subscriptions?.filter((s: any) => s.status === "active").length || 0} assinaturas ativas
+                </p>
+              </div>
+
+              <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
+                <Calendar size={20} className="text-teal-600 dark:text-teal-400" />
+              </div>
+            </div>
           </div>
         )}
 
-        {/* PÍLULAS DE ORDENAÇÃO */}
+        {/* 🔥 FILTROS DE ORDENAÇÃO */}
         {!loading && sortedSubscriptions.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x mb-2">
+          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
-              { key: 'updated_at', label: 'Mais Recentes' },
-              { key: 'amount', label: 'Maior Valor' },
-              { key: 'name', label: 'Por Nome' },
+              { key: 'updated_at', label: 'Mais recentes' },
+              { key: 'amount', label: 'Maior valor' },
+              { key: 'name', label: 'Por nome' },
             ].map(f => (
-              <button 
-                type="button" 
-                key={f.key} 
+              <button
+                type="button"
+                key={f.key}
                 onClick={() => setSortBy(f.key)}
-                className={`px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all border snap-start shrink-0 ${sortBy === f.key ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-md scale-105' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                  sortBy === f.key
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                }`}
               >
                 {f.label}
               </button>
@@ -248,100 +272,98 @@ export default function SubscriptionsPage() {
           </div>
         )}
 
-        {/* LISTAGEM DE ASSINATURAS */}
         {loading ? (
-          <div className="space-y-4">
-            <Skeleton count={1} height="120px" borderRadius="28px" />
-            <Skeleton count={3} height="100px" borderRadius="28px" />
+          <div className="space-y-3">
+            <Skeleton count={1} height="120px" borderRadius="24px" />
+            <Skeleton count={3} height="92px" borderRadius="24px" />
           </div>
         ) : sortedSubscriptions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 animate-in fade-in duration-300">
-            <div className="w-20 h-20 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
-               <Repeat size={32} className="opacity-30 text-gray-500" />
+            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+              <Repeat size={28} className="opacity-30 text-gray-500" />
             </div>
-            <p className="text-[16px] font-bold text-gray-800 dark:text-gray-200 tracking-tight">
+            <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 text-center">
               {search ? "Nenhuma assinatura encontrada" : "Nenhuma assinatura ativa"}
             </p>
-            <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1 font-medium text-center">
-              {search ? "Tente buscar com outro termo." : "Gerencie seus serviços de streaming, planos e contratos mensais aqui."}
+            <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1 text-center max-w-[260px]">
+              {search ? "Tente buscar com outro termo." : "Gerencie seus serviços, planos e contratos mensais aqui."}
             </p>
           </div>
         ) : (
-          <div className="space-y-4 animate-in fade-in duration-500">
+          <div className="space-y-2.5 animate-in fade-in duration-500">
             {sortedSubscriptions.map((sub: any) => {
               const status = getStatusInfo(sub.status)
-              
+
               return (
-                <div key={sub.id} className="bg-white dark:bg-slate-800 rounded-[28px] border border-gray-100 dark:border-slate-700/50 overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.02)] hover:shadow-md transition-all relative group">
-                  
-                  <div className="p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      
-                      {/* Ícone e Título */}
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-[46px] h-[46px] rounded-[16px] flex items-center justify-center shrink-0 ${status.bg}`}>
-                          <Repeat size={20} className={status.color} />
+                <div
+                  key={sub.id}
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
+                >
+                  <div className="rounded-[18px] p-3">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 ${status.bg}`}>
+                          <Repeat size={18} className={status.color} />
                         </div>
-                        <div className="min-w-0 pr-2">
-                          <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 truncate tracking-tight mb-0.5">{sub.name || "Assinatura"}</h3>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-                              POR {getBillingCycleLabel(sub.billing_cycle)}
-                            </span>
+
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {sub.name || "Assinatura"}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[12px] text-gray-400 dark:text-gray-500">
+                            <span>{getBillingCycleLabel(sub.billing_cycle)}</span>
+                            {sub.category && (
+                              <>
+                                <span className="text-gray-300 dark:text-slate-600">•</span>
+                                <span className="truncate max-w-[100px]">{sub.category}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Valor */}
                       <div className="text-right shrink-0">
-                        <p className={`font-black text-[18px] tracking-tight ${sub.status === 'active' ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                        <p className={`text-[15px] font-semibold tracking-tight ${
+                          sub.status === 'active'
+                            ? 'text-gray-900 dark:text-gray-100'
+                            : 'text-gray-400 dark:text-gray-500'
+                        }`}>
                           {formatCurrency(sub.amount || 0)}
                         </p>
-                        <div className="flex items-center justify-end gap-1 mt-1">
+                        <div className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-gray-50 dark:bg-slate-700/60">
                           <status.icon size={10} className={status.color} />
-                          <span className={`text-[10px] font-bold uppercase ${status.color}`}>
-                            {status.label}
-                          </span>
+                          <span className={status.color}>{status.label}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between mt-5">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         {sub.next_due_date && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-700/50 rounded-xl border border-gray-100 dark:border-slate-700">
-                            <Calendar size={12} className="text-gray-400" />
-                            <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
-                              Vence {formatDate(sub.next_due_date)}
-                            </span>
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                            <Calendar size={12} />
+                            <span>Vence {formatDate(sub.next_due_date)}</span>
                           </div>
-                        )}
-                        {sub.category && (
-                          <span className="px-2.5 py-1.5 bg-gray-50 dark:bg-slate-700/50 rounded-xl border border-gray-100 dark:border-slate-700 text-[11px] font-bold text-gray-600 dark:text-gray-300 truncate max-w-[100px]">
-                            {sub.category}
-                          </span>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* AÇÕES */}
-                  <div className="px-5 pb-5 pt-0 flex gap-2">
-                    <button 
-                      onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)} 
-                      className="flex-1 py-3 bg-gray-50 dark:bg-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/30 text-gray-700 dark:text-gray-200 hover:text-teal-600 dark:hover:text-teal-400 rounded-[16px] font-bold text-[13px] transition-colors active:scale-95"
-                    >
-                      Editar Assinatura
-                    </button>
-                    <button 
-                      onClick={() => setDeleteModal(sub.id)} 
-                      className="w-12 flex items-center justify-center bg-gray-50 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 rounded-[16px] transition-colors active:scale-95"
-                      aria-label="Excluir"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
+                        className="flex-1 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 font-semibold text-[13px] transition-colors active:scale-[0.98]"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => setDeleteModal(sub.id)}
+                        className="w-10 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-colors active:scale-[0.98]"
+                        aria-label="Excluir"
+                      >
+                        <Trash2 size={15} className="mx-auto" />
+                      </button>
+                    </div>
                   </div>
-
                 </div>
               )
             })}
@@ -349,22 +371,35 @@ export default function SubscriptionsPage() {
         )}
       </div>
 
-      {/* MODAL DE EXCLUSÃO SOFT UI */}
+      {/* 🔥 MODAL DE EXCLUSÃO */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteModal(null)}>
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
               <Trash2 size={28} className="text-red-500" />
             </div>
-            <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">Excluir Assinatura</h3>
+            <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">
+              Excluir Assinatura
+            </h3>
             <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
               Tem certeza que deseja remover esta assinatura do seu planejamento?
             </p>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setDeleteModal(null)} className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-95">
+              <button
+                type="button"
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
+              >
                 Cancelar
               </button>
-              <button type="button" onClick={handleDelete} className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-95">
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+              >
                 Sim, Excluir
               </button>
             </div>
