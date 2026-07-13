@@ -6,21 +6,39 @@ import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { liveQuery } from 'dexie'
 
-type AllTables = 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications' | 'chat_history' | 'chat_sessions'
+type AllTables = 
+  | 'transactions' 
+  | 'accounts' 
+  | 'categories' 
+  | 'debts' 
+  | 'loans' 
+  | 'financings' 
+  | 'subscriptions' 
+  | 'tags' 
+  | 'contacts' 
+  | 'budgets' 
+  | 'goals' 
+  | 'credit_cards' 
+  | 'credit_invoices' 
+  | 'notifications' 
+  | 'chat_history' 
+  | 'chat_sessions'
 
-export function useLocalData<T>({
+interface UseLocalDataProps {
+  table: AllTables
+  filters?: Record<string, any>
+  limit?: number
+  orderBy?: string
+  orderDir?: 'asc' | 'desc'
+}
+
+export function useLocalData<T = any>({
   table,
   filters = {},
   limit,
   orderBy = 'date',
   orderDir = 'desc',
-}: {
-  table: AllTables
-  filters?: any
-  limit?: number
-  orderBy?: string
-  orderDir?: 'asc' | 'desc'
-}) {
+}: UseLocalDataProps) {
   const { user } = useAuth()
 
   // 🔥 A MÁGICA DO FLICKER: Começa como null em vez de array vazio
@@ -28,15 +46,14 @@ export function useLocalData<T>({
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
 
-  // 🔥 Contador que força o useEffect do liveQuery a rodar de novo
-  // quando reload() é chamado manualmente.
+  // Contador que força o useEffect do liveQuery a rodar de novo
   const [reloadTick, setReloadTick] = useState(0)
 
   const lock = useRef(false)
   const filtersKey = JSON.stringify(filters)
 
   // ============================================================
-  // 🔥 1. REATIVIDADE LOCAL COM liveQuery
+  // 1. REATIVIDADE LOCAL COM liveQuery (DEXIE)
   // ============================================================
   useEffect(() => {
     if (!user?.id) {
@@ -46,27 +63,27 @@ export function useLocalData<T>({
 
     const observable = liveQuery(async () => {
       const collection = db.table(table)
-      let q = collection.where('user_id').equals(user.id)
+      let query = collection.where('user_id').equals(user.id)
 
-      // Aplica filtros
-      Object.entries(filters).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '') {
-          q = q.and((i: any) => i[k] === v)
+      // Aplica filtros dinâmicos
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          query = query.and((item: any) => item[key] === value)
         }
       })
 
-      let res = await q.toArray()
+      let results = await query.toArray()
 
       // Ordenação em memória
-      if (orderBy && res.length > 0) {
-        res = res.sort((a: any, b: any) => {
-          const valA = a[orderBy] || ''
-          const valB = b[orderBy] || ''
+      if (orderBy && results.length > 0) {
+        results = results.sort((a: any, b: any) => {
+          const valA = a[orderBy] ?? ''
+          const valB = b[orderBy] ?? ''
 
           if (orderBy === 'date' || orderBy === 'created_at' || orderBy === 'updated_at') {
-            return orderDir === 'desc'
-              ? new Date(valB).getTime() - new Date(valA).getTime()
-              : new Date(valA).getTime() - new Date(valB).getTime()
+            const timeA = new Date(valA).getTime() || 0
+            const timeB = new Date(valB).getTime() || 0
+            return orderDir === 'desc' ? timeB - timeA : timeA - timeB
           }
 
           if (typeof valA === 'number' && typeof valB === 'number') {
@@ -79,61 +96,44 @@ export function useLocalData<T>({
         })
       }
 
+      // Aplica o limite, se existir
       if (limit && limit > 0) {
-        res = res.slice(0, limit)
+        results = results.slice(0, limit)
       }
 
-      return res
+      return results as T[]
     })
 
     const subscription = observable.subscribe({
-      next: (result: any) => {
-        setData(result || []) // Alimenta os dados reais
-        setLoading(false) // Libera a tela
+      next: (result) => {
+        setData(result || [])
+        setLoading(false)
       },
       error: (err) => {
-        console.error(`Erro no liveQuery da tabela ${table}:`, err)
-        setData([]) // Em caso de erro, devolve vazio para não quebrar a tela
+        console.error(`[LocalData] Erro no liveQuery da tabela ${table}:`, err)
+        setData([]) // Evita quebrar a tela em caso de falha de leitura
         setLoading(false)
       }
     })
 
     return () => subscription.unsubscribe()
-    // 🔥 reloadTick entra nas dependências: incrementar ele força o Dexie
-    // a reabrir a subscription e reler o IndexedDB do zero.
   }, [user?.id, table, filtersKey, limit, orderBy, orderDir, reloadTick])
 
   // ============================================================
-  // 🔥 2. SINCRONIZAÇÃO COM A NUVEM (PULL)
+  // 2. SINCRONIZAÇÃO COM A NUVEM (PULL SERVER -> LOCAL)
   //
-  // BUG DO "EFEITO REBOTE" — CORRIGIDO
-  //
-  // Antes: o bulkPut sobrescrevia TODO registro local com o que
-  // vinha do Supabase, incondicionalmente — mesmo que o registro
-  // local tivesse uma edição feita pelo usuário ainda não
-  // confirmada no servidor (sync_status: 'pending' ou 'failed').
-  //
-  // Isso cria uma corrida: você edita uma categoria -> grava local
-  // como 'pending' -> ANTES do push (useOfflineQueue) confirmar no
-  // Supabase, algum componente remonta -> este pull dispara -> traz
-  // a versão AINDA ANTIGA do servidor -> bulkPut sobrescreve sua
-  // edição local -> zumbi "renasce".
-  //
-  // Agora: antes do bulkPut, buscamos localmente quais IDs dessa
-  // tabela estão com sync_status 'pending' ou 'failed' (ou seja,
-  // têm uma escrita local que ainda não foi confirmada como
-  // sincronizada) e excluímos esses IDs do que vem do servidor.
-  // Um registro pendente só volta a ser sobrescrito pelo pull
-  // depois que o push confirmar sync_status: 'synced'.
+  // Proteção contra "Efeito Rebote": Impede que dados do Supabase
+  // sobrescrevam edições locais que ainda estão com sync_status
+  // 'pending' ou 'failed' na fila de sincronização.
   // ============================================================
   useEffect(() => {
     if (!user?.id || lock.current) return
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    if (typeof window !== 'undefined' && !window.navigator.onLine) return
 
     lock.current = true
     setSyncing(true)
 
-    async function sync() {
+    async function syncPull() {
       try {
         const { data: remoteData, error } = await supabase
           .from(table)
@@ -141,61 +141,56 @@ export function useLocalData<T>({
           .eq('user_id', user!.id)
 
         if (error) {
-          console.error(`Erro ao sincronizar ${table} do Supabase:`, error)
+          console.error(`[LocalData] Erro ao buscar ${table} do Supabase:`, error)
           return
         }
 
         if (remoteData && remoteData.length > 0) {
-          // 🔥 Descobre quais registros locais têm edição pendente
-          // (ainda não confirmada no servidor) para NÃO sobrescrevê-los.
           let pendingIds = new Set<string>()
+          
           try {
             const pendingLocal = await db.table(table)
               .where('sync_status')
               .anyOf(['pending', 'failed'])
               .primaryKeys()
+            
             pendingIds = new Set(pendingLocal as string[])
           } catch (e) {
-            // Se a tabela não tiver índice em sync_status por algum
-            // motivo, cai para "sem proteção" nesse ciclo, mas não
-            // quebra a sincronização.
-            console.warn(`Não foi possível checar sync_status pendente em ${table}:`, e)
+            console.warn(`[LocalData] Índice 'sync_status' ausente ou inacessível em ${table}:`, e)
           }
 
+          // Só sobrescreve se o ID não estiver na lista de edições locais pendentes
           const safeToOverwrite = pendingIds.size > 0
-            ? remoteData.filter((r: any) => !pendingIds.has(r.id))
+            ? remoteData.filter((record: any) => !pendingIds.has(record.id))
             : remoteData
 
           if (safeToOverwrite.length > 0) {
             await db.table(table).bulkPut(
-              safeToOverwrite.map((r: any) => ({ ...r, sync_status: 'synced' }))
+              safeToOverwrite.map((record: any) => ({ ...record, sync_status: 'synced' }))
             )
           }
         }
       } catch (err) {
-        console.error(`Erro inesperado na sincronização de ${table}:`, err)
+        console.error(`[LocalData] Erro inesperado na sincronização de ${table}:`, err)
       } finally {
         lock.current = false
         setSyncing(false)
       }
     }
 
-    sync()
+    syncPull()
   }, [user?.id, table])
 
   // ============================================================
-  // 🔥 3. FUNÇÃO RELOAD (agora de verdade)
+  // 3. FUNÇÃO RELOAD MANUAL
+  // Força o efeito do liveQuery a remontar a subscription
   // ============================================================
   const reload = useCallback(async () => {
-    // Força o efeito do liveQuery a desmontar/remontar a subscription,
-    // o que reabre uma leitura fresca no IndexedDB.
     setLoading(true)
     setReloadTick(t => t + 1)
     await new Promise(resolve => setTimeout(resolve, 60))
   }, [])
 
-  // 🔥 O PULO DO GATO:
-  // Se data for null, significa que o liveQuery ainda não rodou a primeira vez.
   return {
     data: data || [],
     loading: loading || data === null,
