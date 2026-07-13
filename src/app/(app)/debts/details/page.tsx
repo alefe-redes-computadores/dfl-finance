@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, Edit2, Loader2, Check, Trash2, X, Wallet, Calendar, MessageCircle, RefreshCw, AlertTriangle
+  ChevronLeft, Edit2, Loader2, Check, Trash2, X, Wallet, Calendar, MessageCircle, RefreshCw, AlertTriangle, Clock
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
