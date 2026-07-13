@@ -158,7 +158,7 @@ function AccountsContent() {
             </button>
             <button
               type="button"
-              onClick={() => router.push("/accounts/new")}
+              <button onClick={() => router.push("/accounts/details")}>
               className="w-10 h-10 bg-teal-600 hover:bg-teal-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-95"
             >
               <Plus size={20} />
