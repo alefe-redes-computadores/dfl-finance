@@ -83,8 +83,19 @@ export function useLocalSync() {
       }
 
       for (const item of items) {
-        renderLog(`Processando ${item.operation} na tabela [${item.table}]...`, 'info')
+        renderLog(`Processando ${item.operation} na tabela [${item.table}]... (tentativa ${(item.attempts || 0) + 1})`, 'info')
+        
         try {
+          // 🔥 CORRIGIDO: Verifica se o item já tentou mais de 3 vezes
+          const attempts = item.attempts || 0
+          if (attempts >= 3) {
+            renderLog(`⚠️ Item ${item.id} atingiu limite de 3 tentativas. Removendo da fila para desbloquear.`, 'error')
+            console.error(`⚠️ [SYNC] Item corrompido removido da fila: ${item.table}/${item.record_id} após ${attempts} tentativas.`)
+            await removeFromSyncQueue(item.id)
+            await updatePendingCount()
+            continue
+          }
+
           const { table, operation, record_id, data } = item
           
           let supabaseTable: string = table
@@ -99,22 +110,39 @@ export function useLocalSync() {
             const res = await supabaseClient.delete().eq('id', record_id)
             error = res.error
           } else {
-            renderLog(`Disparando UPSERT para ID: ${record_id}`, 'info')
-            const res = await supabaseClient.upsert(data, { onConflict: 'id' })
+            renderLog(`Disparando UPSERT para ID: ${record_id} (payload contém ID: ${!!data?.id})`, 'info')
+            // 🔥 CORRIGIDO: Garante que o data tenha o ID para o upsert
+            const payload = data?.id ? data : { ...data, id: record_id }
+            const res = await supabaseClient.upsert(payload, { onConflict: 'id' })
             error = res.error
           }
 
           if (error) {
             renderLog(`Erro Supabase: ${error.message} (Código: ${error.code})`, 'error')
+            console.error(`❌ [SYNC] Erro no item ${item.id}: ${error.message}`, error)
             throw new Error(error.message)
           }
 
           renderLog(`Sucesso no ID ${record_id}. Removendo da fila local...`, 'success')
+          console.log(`✅ [SYNC] Item ${item.id} sincronizado com sucesso.`)
           await removeFromSyncQueue(item.id)
+          await updatePendingCount()
 
         } catch (err: any) {
           renderLog(`Falha no item: ${err.message}`, 'error')
+          console.error(`❌ [SYNC] Falha no item ${item.id}:`, err)
+          
+          // 🔥 CORRIGIDO: Incrementa attempts e marca como failed
+          const newAttempts = (item.attempts || 0) + 1
           await markSyncFailed(item.id, err.message)
+          
+          // 🔥 CORRIGIDO: Se atingiu 3 tentativas, remove da fila para não travar
+          if (newAttempts >= 3) {
+            renderLog(`⚠️ Item ${item.id} atingiu limite de 3 tentativas. Removendo da fila.`, 'error')
+            console.error(`⚠️ [SYNC] Item removido após 3 falhas: ${item.table}/${item.record_id}`)
+            await removeFromSyncQueue(item.id)
+            await updatePendingCount()
+          }
         }
       }
 
@@ -123,6 +151,7 @@ export function useLocalSync() {
 
     } catch (err: any) {
       renderLog(`Erro crítico na fila: ${err?.message}`, 'error')
+      console.error('❌ [SYNC] Erro crítico:', err)
     } finally {
       isSyncing.current = false
       renderLog('Ciclo de sincronização finalizado.', 'info')
