@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Save, RefreshCw } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
@@ -8,7 +8,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db' 
+import { db, addToSyncQueue } from '@/lib/db'
 import MoneyInput from '@/components/MoneyInput'
 
 const CATEGORIES = ["Streaming", "Software", "Academia", "Clube", "Seguro", "Internet", "Telefone", "TV", "Educação", "Saúde", "Outros"]
@@ -21,7 +21,7 @@ const BILLING_CYCLES = [
   { value: "semiannually", label: "Semestral" },
 ]
 
-export default function NewSubscriptionPage() {
+function NewSubscriptionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
@@ -36,7 +36,7 @@ export default function NewSubscriptionPage() {
 
   const [name, setName] = useState("")
   const [amountNum, setAmountNum] = useState(0)
-  const [amountFormatted, setAmountFormatted] = useState("0,00")
+  // 🔥 REMOVIDO: amountFormatted (não utilizado)
   const [billingCycle, setBillingCycle] = useState("monthly")
   const [category, setCategory] = useState("")
   const [nextDueDate, setNextDueDate] = useState("")
@@ -56,7 +56,6 @@ export default function NewSubscriptionPage() {
       setName(subscriptionData.name || "")
       const val = Number(subscriptionData.amount) || 0
       setAmountNum(val)
-      setAmountFormatted(val.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setBillingCycle(subscriptionData.billing_cycle || "monthly")
       setCategory(subscriptionData.category || "")
       setNextDueDate(subscriptionData.next_due_date ? subscriptionData.next_due_date.split("T")[0] : "")
@@ -124,91 +123,210 @@ export default function NewSubscriptionPage() {
   }
 
   const contextTitle = effectiveContext === "dfl" ? "da Empresa" : "Pessoal"
+  const isPersonal = effectiveContext === "personal"
+  const primaryColor = isPersonal ? "bg-emerald-600" : "bg-teal-600"
+  const primaryHover = isPersonal ? "hover:bg-emerald-700" : "hover:bg-teal-700"
+  const shadowColor = isPersonal ? "shadow-emerald-600/25" : "shadow-teal-600/25"
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-      <div className="sticky top-0 z-30 bg-gray-50/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
+    <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+      
+      {/* 🔥 HEADER */}
+      <div className="sticky top-0 z-30 bg-[#f6f7f8]/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"><ArrowLeft size={24} /></button>
+          <button
+            onClick={() => { vibrate([5]); router.back(); }}
+            className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"
+          >
+            <ArrowLeft size={24} />
+          </button>
+
           <div className="text-center">
-            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? "Editar" : "Nova"} Assinatura</h1>
-            <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{contextTitle}</p>
+            <h1 className="text-[18px] font-bold text-gray-900 dark:text-gray-50">
+              {editId ? "Editar" : "Nova"} Assinatura
+            </h1>
+            <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+              {contextTitle}
+            </p>
           </div>
+
           <div className="w-10" />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Nome da Assinatura</label>
-          <input type="text" placeholder="Ex: Netflix, Spotify..." value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-transparent text-[16px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" autoFocus />
-        </div>
+      <div className="flex-1 overflow-y-auto px-4 pt-5 pb-32 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Valor</label>
-            <div className="flex items-center gap-2">
-              <span className="text-[16px] text-gray-400 font-medium">R$</span>
-              <MoneyInput
-                value={amountNum}
-                onChange={(num, formatted) => { setAmountNum(num); setAmountFormatted(formatted) }}
-                placeholder="0,00"
-                className="text-[20px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+        {/* 🔥 HERO: Nome + Valor */}
+        <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 shadow-[0_6px_24px_rgba(15,23,42,0.05)] dark:shadow-none p-5">
+          <div className="space-y-5">
+            <div>
+              <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                Nome da assinatura
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Netflix, Spotify..."
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-transparent text-[22px] leading-tight font-bold text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                autoFocus
               />
             </div>
+
+            <div className="pt-1">
+              <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                Valor
+              </label>
+              <div className="flex items-end gap-2">
+                <span className="text-[18px] text-gray-400 font-medium pb-1">R$</span>
+                <MoneyInput
+                  value={amountNum}
+                  onChange={(num) => { setAmountNum(num) }}
+                  placeholder="0,00"
+                  className="text-[32px] leading-none font-bold bg-transparent outline-none w-full text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                />
+              </div>
+            </div>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Ciclo</label>
-            <select value={billingCycle} onChange={(e) => { vibrate([5]); setBillingCycle(e.target.value); }} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none appearance-none cursor-pointer">
-              {BILLING_CYCLES.map((cycle) => (<option key={cycle.value} value={cycle.value}>{cycle.label}</option>))}
+        </section>
+
+        {/* 🔥 CICLO + VENCIMENTO */}
+        <section className="grid grid-cols-2 gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
+            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+              Ciclo
+            </label>
+            <select
+              value={billingCycle}
+              onChange={(e) => { vibrate([5]); setBillingCycle(e.target.value) }}
+              className="w-full bg-transparent text-[15px] font-semibold text-gray-900 dark:text-gray-100 outline-none appearance-none cursor-pointer"
+            >
+              {BILLING_CYCLES.map((cycle) => (
+                <option key={cycle.value} value={cycle.value}>
+                  {cycle.label}
+                </option>
+              ))}
             </select>
           </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block">Categoria</label>
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
+            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+              Próximo vencimento
+            </label>
+            <input
+              type="date"
+              value={nextDueDate}
+              onChange={(e) => setNextDueDate(e.target.value)}
+              className="w-full bg-transparent text-[15px] font-semibold text-gray-900 dark:text-gray-100 outline-none"
+            />
+          </div>
+        </section>
+
+        {/* 🔥 CATEGORIA */}
+        <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
+          <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-3 block">
+            Categoria
+          </label>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((cat) => (
-              <button key={cat} onClick={() => { vibrate([5]); setCategory(category === cat ? "" : cat); }} className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all active:scale-95 ${category === cat ? "bg-teal-600 text-white shadow-sm" : "bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100"}`}>
+              <button
+                key={cat}
+                onClick={() => { vibrate([5]); setCategory(category === cat ? "" : cat) }}
+                className={`px-4 py-2.5 rounded-full text-[13px] font-semibold transition-all active:scale-95 border ${
+                  category === cat
+                    ? "bg-teal-600 text-white border-teal-600 shadow-sm"
+                    : "bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700"
+                }`}
+              >
                 {cat}
               </button>
             ))}
           </div>
-        </div>
+          {/* 🔥 Nota: se a lista de categorias crescer muito, substituir por um bottom sheet com busca */}
+        </section>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Próximo Vencimento (Opcional)</label>
-          <input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Forma de Pagamento (Opcional)</label>
-          <input type="text" placeholder="Ex: Cartão Final 1234, PIX..." value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block">Status da Assinatura</label>
-          <div className="flex gap-2">
-            {["active", "paused", "cancelled"].map((s) => (
-              <button key={s} onClick={() => { vibrate([5]); setStatus(s); }} className={`flex-1 py-3 rounded-[16px] text-[13px] font-bold transition-all active:scale-95 ${status === s ? s === "active" ? "bg-emerald-500 text-white shadow-sm" : s === "paused" ? "bg-orange-500 text-white shadow-sm" : "bg-red-500 text-white shadow-sm" : "bg-gray-50 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400"}`}>
-                {s === "active" ? "Ativa" : s === "paused" ? "Pausada" : "Cancelada"}
-              </button>
-            ))}
+        {/* 🔥 PAGAMENTO + STATUS */}
+        <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none space-y-4">
+          <div>
+            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+              Forma de pagamento
+            </label>
+            <input
+              type="text"
+              placeholder="Ex: Cartão final 1234, PIX..."
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full bg-transparent text-[15px] font-medium text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+            />
           </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Observações (Opcional)</label>
-          <input type="text" placeholder="Detalhes adicionais..." value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-        </div>
+          <div className="h-px bg-gray-100 dark:bg-slate-800" />
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 dark:from-slate-900 via-gray-50/80 dark:via-slate-900/80 to-transparent z-20">
-          <button onClick={() => { vibrate([10, 50]); handleSave(); }} disabled={saving} className="w-full max-w-md mx-auto bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}{editId ? "Atualizar Assinatura" : "Criar Assinatura"}
-          </button>
-        </div>
+          <div>
+            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-3 block">
+              Status da assinatura
+            </label>
+            <div className="grid grid-cols-3 gap-2 rounded-[20px] bg-gray-50 dark:bg-slate-800 p-1">
+              {["active", "paused", "cancelled"].map((s) => {
+                const isActive = status === s
+                const label = s === "active" ? "Ativa" : s === "paused" ? "Pausada" : "Cancelada"
+
+                return (
+                  <button
+                    key={s}
+                    onClick={() => { vibrate([5]); setStatus(s) }}
+                    className={`py-3 rounded-[16px] text-[13px] font-bold transition-all active:scale-95 ${
+                      isActive
+                        ? s === "active"
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : s === "paused"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "bg-red-500 text-white shadow-sm"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* 🔥 OBSERVAÇÕES */}
+        <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
+          <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+            Observações
+          </label>
+          <textarea
+            placeholder="Detalhes adicionais..."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="w-full bg-transparent text-[15px] font-medium text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 resize-none"
+          />
+        </section>
+      </div>
+
+      {/* 🔥 BOTÃO SALVAR */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#f6f7f8] dark:from-slate-950 via-[#f6f7f8]/90 dark:via-slate-950/90 to-transparent z-20">
+        <button
+          onClick={() => { vibrate([10, 50]); handleSave() }}
+          disabled={saving}
+          className={`w-full max-w-md mx-auto text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 ${primaryColor} ${primaryHover} ${shadowColor}`}
+        >
+          {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}
+          {editId ? "Atualizar Assinatura" : "Criar Assinatura"}
+        </button>
       </div>
     </div>
+  )
+}
+
+export default function NewSubscriptionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] dark:bg-slate-950"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+      <NewSubscriptionContent />
+    </Suspense>
   )
 }
