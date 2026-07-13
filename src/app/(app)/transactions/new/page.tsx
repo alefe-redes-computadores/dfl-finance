@@ -51,21 +51,6 @@ const safeNum = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed
 }
 
-// 🔥 SKELETON PARA SUSPENSE
-const TransactionSkeleton = () => (
-  <div className="space-y-4 animate-pulse p-4">
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-      <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-4" />
-      <div className="h-12 w-48 bg-gray-200 dark:bg-slate-700 rounded mx-auto" />
-    </div>
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-14 bg-gray-100 dark:bg-slate-700/50 rounded-[16px]" />
-      ))}
-    </div>
-  </div>
-)
-
 function NewTransactionContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -606,568 +591,543 @@ function NewTransactionContent() {
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
   }, [uploading, receiptUrl, receiptType])
 
-  // 🔥 RETURN PRINCIPAL REFATORADO
+  // 🔥 CORREÇÃO DO LAYOUT – ESTRUTURA COM ALTURA GARANTIDA
   return (
-    <div className="fixed inset-0 z-50 bg-[#f8f9fa] dark:bg-slate-900 font-sans text-gray-800 dark:text-gray-200 overflow-y-auto pb-40 transition-colors duration-300">
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
-        </div>
-      )}
-
-      <input
-        ref={galeriaInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) uploadFile(file)
-          e.target.value = ''
-        }}
-      />
-      <input
-        ref={pdfInputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) uploadFile(file)
-          e.target.value = ''
-        }}
-      />
-
-      {/* 🔥 HEADER UNIFICADO */}
-      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <button
-              onClick={() => { vibrate([5]); router.back(); }}
-              className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0"
-            >
-              <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
-            </button>
-
-            <div className="flex-1 min-w-0 text-center">
-              <h1 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100 capitalize">
-                {isIncome ? 'Nova receita' : 'Nova despesa'}
-              </h1>
-              <div className="mt-2 flex justify-center">
-                <ContextToggle />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
+    <div className="fixed inset-0 z-50 bg-[#f8f9fa] dark:bg-slate-900 overflow-y-auto pb-40">
+      <div className="min-h-screen flex flex-col max-w-md mx-auto">
+        
+        {/* 🔥 HEADER */}
+        <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+          <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
               <button
-                onClick={() => { setShowQRScanner(true); vibrate([10]) }}
-                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
+                onClick={() => { vibrate([5]); router.back(); }}
+                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0"
               >
-                <QrCode size={18} className="text-gray-700 dark:text-gray-300" />
+                <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
               </button>
 
-              <button
-                onClick={() => { !receiptUrl && setShowReceiptModal(true); vibrate([10]) }}
-                className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
-              >
-                {AttachmentIcon}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 pt-4 space-y-4">
-        {/* 🔥 VALOR */}
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center animate-in fade-in slide-in-from-top-4 duration-300">
-          <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2">
-            Valor {isIncome ? 'da receita' : 'da despesa'}
-          </p>
-
-          <div className="flex justify-center items-center gap-1.5">
-            <span className={`text-2xl font-bold opacity-50 ${themeColor}`}>R$</span>
-            <MoneyInput
-              value={amountNum}
-              onChange={(num, formatted) => { setAmountNum(num); setAmountFormatted(formatted) }}
-              className={`text-[42px] font-black tracking-tight outline-none bg-transparent ${themeColor} w-64 text-center placeholder:text-gray-300 dark:placeholder:text-gray-700`}
-              placeholder="0,00"
-              autoFocus
-            />
-          </div>
-
-          {type === 'expense' && budgetAlert && (
-            <div
-              className={`mt-4 max-w-sm mx-auto rounded-[16px] p-4 text-[12px] font-semibold ${
-                budgetAlert.type === 'danger'
-                  ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/50'
-                  : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800/50'
-              }`}
-            >
-              {budgetAlert.message}
-            </div>
-          )}
-        </div>
-
-        {/* 🔥 COMPROVANTE */}
-        {uploading ? (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
-            <Loader2 size={20} className="animate-spin text-teal-700" />
-            <span className="text-[13px] font-semibold text-gray-600 dark:text-gray-300">
-              Enviando comprovante...
-            </span>
-          </div>
-        ) : receiptUrl ? (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              {receiptPreview ? (
-                <div className="w-12 h-12 rounded-[16px] overflow-hidden bg-gray-200 dark:bg-slate-600 shrink-0 border border-gray-200 dark:border-slate-600">
-                  <img src={receiptPreview} alt="Preview" className="w-full h-full object-cover" />
+              <div className="flex-1 min-w-0 text-center">
+                <h1 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100 capitalize">
+                  {isIncome ? 'Nova receita' : 'Nova despesa'}
+                </h1>
+                <div className="mt-2 flex justify-center">
+                  <ContextToggle />
                 </div>
-              ) : (
-                <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 ${receiptType === 'pdf' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-500'}`}>
-                  {receiptType === 'pdf' ? <Paperclip size={22} /> : <ImageIcon size={22} />}
-                </div>
-              )}
+              </div>
 
-              <div className="min-w-0">
-                <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {receiptName}
-                </p>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  Comprovante anexado
-                </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => { setShowQRScanner(true); vibrate([10]) }}
+                  className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
+                >
+                  <QrCode size={18} className="text-gray-700 dark:text-gray-300" />
+                </button>
+
+                <button
+                  onClick={() => { !receiptUrl && setShowReceiptModal(true); vibrate([10]) }}
+                  className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform"
+                >
+                  {AttachmentIcon}
+                </button>
               </div>
             </div>
-
-            <button
-              onClick={handleRemoveReceipt}
-              className="h-9 w-9 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
-            >
-              <Trash2 size={16} />
-            </button>
           </div>
-        ) : null}
+        </div>
 
-        {/* 🔥 FORMULÁRIO PRINCIPAL */}
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
-          {/* Descrição */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Descrição
-            </label>
-            <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <Edit3 size={18} className="text-gray-400 shrink-0" />
-              <input
-                type="text"
-                value={desc}
-                onChange={(e) => setDesc(e.target.value)}
-                placeholder={selectedCat ? selectedCat.name : 'Nome ou descrição'}
-                className="flex-1 bg-transparent text-[15px] font-semibold outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+        {/* 🔥 CORPO DO FORMULÁRIO */}
+        <div className="flex-1 px-4 pt-4 space-y-4">
+          {/* Valor */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center animate-in fade-in slide-in-from-top-4 duration-300">
+            <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2">
+              Valor {isIncome ? 'da receita' : 'da despesa'}
+            </p>
+
+            <div className="flex justify-center items-center gap-1.5">
+              <span className={`text-2xl font-bold opacity-50 ${themeColor}`}>R$</span>
+              <MoneyInput
+                value={amountNum}
+                onChange={(num, formatted) => { setAmountNum(num); setAmountFormatted(formatted) }}
+                className={`text-[42px] font-black tracking-tight outline-none bg-transparent ${themeColor} w-64 text-center placeholder:text-gray-300 dark:placeholder:text-gray-700`}
+                placeholder="0,00"
+                autoFocus
               />
             </div>
-          </div>
 
-          {/* Status */}
-          <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
-            <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-              {isIncome ? 'Recebido' : creditCardId ? 'Lançado na fatura' : 'Pago'}
-            </span>
-            {!creditCardId && (
-              <button
-                onClick={() => { vibrate([5]); setIsPaid(!isPaid); }}
-                className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${toggleBgClass} active:scale-[0.98]`}
+            {type === 'expense' && budgetAlert && (
+              <div
+                className={`mt-4 max-w-sm mx-auto rounded-[16px] p-4 text-[12px] font-semibold ${
+                  budgetAlert.type === 'danger'
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/50'
+                    : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800/50'
+                }`}
               >
-                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${toggleTracks}`} />
-              </button>
+                {budgetAlert.message}
+              </div>
             )}
           </div>
 
-          {/* Categoria */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Categoria
-            </label>
-            <button
-              onClick={() => { vibrate([5]); setShowCatModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
+          {/* Comprovante */}
+          {uploading ? (
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
+              <Loader2 size={20} className="animate-spin text-teal-700" />
+              <span className="text-[13px] font-semibold text-gray-600 dark:text-gray-300">
+                Enviando comprovante...
+              </span>
+            </div>
+          ) : receiptUrl ? (
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                {selectedCat ? (() => {
-                  const IconComp = getDynamicIcon(selectedCat.icon)
-                  return (
-                    <div
-                      className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm"
-                      style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}
-                    >
-                      <IconComp size={18} />
-                    </div>
-                  )
-                })() : (
-                  <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-400">
-                    <Tag size={18} />
-                  </div>
-                )}
-
-                <div className="text-left min-w-0">
-                  <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
-                    Categoria
-                  </span>
-                  <span className={`text-[14px] font-semibold ${selectedCat ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
-                    {selectedCat ? selectedCat.name : 'Selecionar'}
-                  </span>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-gray-300" />
-            </button>
-          </div>
-
-          {/* Cartão de crédito */}
-          {!isIncome && (creditCards || []).length > 0 && (
-            <div>
-              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                Cartão de crédito
-              </label>
-              <button
-                onClick={() => { vibrate([5]); setShowCardModal(true); }}
-                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm ${selectedCard ? 'text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-400'}`}
-                    style={selectedCard ? { backgroundColor: selectedCard.color || '#f97316' } : {}}
-                  >
-                    <CreditCard size={18} />
-                  </div>
-
-                  <div className="text-left min-w-0">
-                    <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
-                      Cartão de crédito
-                    </span>
-                    <span className={`text-[14px] font-semibold ${selectedCard ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
-                      {selectedCard ? selectedCard.name : 'Nenhum'}
-                    </span>
-                  </div>
-                </div>
-
-                {selectedCard ? (
-                  <div
-                    onClick={(e) => { e.stopPropagation(); vibrate([10]); setCreditCardId('') }}
-                    className="h-8 w-8 rounded-full flex items-center justify-center bg-white dark:bg-slate-800 text-gray-400 hover:text-red-500"
-                  >
-                    <X size={14} />
+                {receiptPreview ? (
+                  <div className="w-12 h-12 rounded-[16px] overflow-hidden bg-gray-200 dark:bg-slate-600 shrink-0 border border-gray-200 dark:border-slate-600">
+                    <img src={receiptPreview} alt="Preview" className="w-full h-full object-cover" />
                   </div>
                 ) : (
-                  <ChevronRight size={18} className="text-gray-300" />
+                  <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 ${receiptType === 'pdf' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-500'}`}>
+                    {receiptType === 'pdf' ? <Paperclip size={22} /> : <ImageIcon size={22} />}
+                  </div>
                 )}
-              </button>
-            </div>
-          )}
 
-          {/* Conta */}
-          {!creditCardId && (
-            <div>
-              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                Conta
-              </label>
-              <button
-                onClick={() => { vibrate([5]); setShowAccModal(true); }}
-                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-400 shrink-0">
-                    <Wallet size={18} />
-                  </div>
-
-                  <div className="text-left min-w-0">
-                    <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
-                      Conta
-                    </span>
-                    <span className={`text-[14px] font-semibold ${selectedAcc ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
-                      {selectedAcc ? selectedAcc.name : 'Selecionar'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
-                  <ChevronRight size={18} className="text-gray-300" />
-                </div>
-              </button>
-            </div>
-          )}
-
-          {/* Fornecedor / Cliente */}
-          {(contacts || []).length > 0 && (
-            <div>
-              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                Fornecedor / Cliente
-              </label>
-              <button
-                onClick={() => { vibrate([5]); setShowContactModal(true); }}
-                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-400 shrink-0">
-                    <Users size={18} />
-                  </div>
-
-                  <div className="text-left min-w-0">
-                    <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
-                      Fornecedor / Cliente
-                    </span>
-                    <span className={`text-[14px] font-semibold ${selectedContact ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
-                      {selectedContact ? selectedContact.name : 'Nenhum'}
-                    </span>
-                  </div>
-                </div>
-
-                {selectedContact ? (
-                  <div
-                    onClick={(e) => { e.stopPropagation(); vibrate([10]); setContactId('') }}
-                    className="h-8 w-8 rounded-full flex items-center justify-center bg-white dark:bg-slate-800 text-gray-400 hover:text-red-500"
-                  >
-                    <X size={14} />
-                  </div>
-                ) : (
-                  <ChevronRight size={18} className="text-gray-300" />
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 🔥 MAIS OPÇÕES */}
-        <div>
-          <button
-            onClick={() => { vibrate([5]); setShowDetails(!showDetails) }}
-            className="w-full rounded-[20px] bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 shadow-sm px-4 py-3 text-[13px] font-bold text-teal-600 dark:text-teal-400 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
-          >
-            {showDetails ? 'Ocultar opções avançadas' : 'Mais opções'}
-            {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-
-          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1400px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-            <div className="space-y-4">
-              <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
-                {/* Data */}
-                <div>
-                  <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                    Data
-                  </label>
-                  <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-                    <Calendar size={18} className="text-gray-400 shrink-0" />
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => { vibrate([5]); handleDateChange(e.target.value) }}
-                      className="flex-1 bg-transparent text-[14px] font-semibold outline-none text-gray-800 dark:text-gray-200"
-                    />
-                  </div>
-                </div>
-
-                {/* Observações */}
-                <div>
-                  <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                    Observações
-                  </label>
-                  <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-start gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-                    <FileText size={18} className="text-gray-400 shrink-0 mt-0.5" />
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Observações adicionais..."
-                      rows={2}
-                      className="flex-1 bg-transparent text-[14px] font-medium outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 resize-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Repetição */}
-                <div>
-                  <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                    Repetição da transação
-                  </label>
-                  <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-1.5">
-                    <div className="flex gap-1.5 mb-4">
-                      {[{ key: 'once', label: 'Única' }, { key: 'installments', label: 'Parcelar' }, { key: 'recurring', label: 'Recorrente' }].map((opt) => (
-                        <button
-                          key={opt.key}
-                          onClick={() => { vibrate([5]); setRepetition(opt.key as Repetition) }}
-                          className={`flex-1 h-10 rounded-[14px] text-[12px] font-bold transition-all active:scale-[0.98] ${
-                            repetition === opt.key
-                              ? 'bg-white dark:bg-slate-800 shadow-sm text-teal-600 dark:text-teal-400'
-                              : 'text-gray-500 dark:text-gray-400'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {repetition === 'installments' && (
-                      <div className="rounded-[16px] bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
-                        <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">
-                          Quantidade de parcelas
-                        </span>
-                        <select
-                          value={installments}
-                          onChange={(e) => { vibrate([5]); setInstallments(Number(e.target.value)) }}
-                          className="bg-transparent text-[14px] font-bold outline-none text-gray-800 dark:text-gray-200 cursor-pointer"
-                        >
-                          {[2,3,4,5,6,7,8,9,10,11,12,24,36,48,60].map((n) => (
-                            <option key={n} value={n}>{n}x</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {repetition === 'recurring' && (
-                      <div className="flex flex-col gap-3">
-                        <div className="flex flex-wrap gap-2">
-                          {[{ key: 'weekly', label: 'Semanal' }, { key: 'biweekly', label: 'Quinzenal' }, { key: 'monthly', label: 'Mensal' }, { key: 'bimonthly', label: 'Bimestral' }, { key: 'custom', label: 'Personalizar' }].map((f) => (
-                            <button
-                              key={f.key}
-                              onClick={() => {
-                                vibrate([5])
-                                setFrequency(f.key as Frequency)
-                                if (f.key === 'custom') setShowCustomRecurrenceModal(true)
-                              }}
-                              className={`px-4 py-2.5 rounded-[14px] text-[12px] font-bold transition-all active:scale-[0.98] ${
-                                frequency === f.key
-                                  ? 'bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
-                                  : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-200/70 dark:border-slate-700'
-                              }`}
-                            >
-                              {f.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {frequency === 'custom' && (
-                          <div className="bg-teal-50 dark:bg-teal-900/10 p-3 rounded-[16px] text-center">
-                            <p className="text-[12px] font-semibold text-teal-700 dark:text-teal-400">
-                              {customParcels} parcelas, a cada {customInterval} mês(es).
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    {receiptName}
+                  </p>
+                  <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    Comprovante anexado
+                  </p>
                 </div>
               </div>
 
-              {/* Tags */}
               <button
-                onClick={() => { vibrate([5]); setShowTagModal(true) }}
-                className="w-full bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 flex items-center justify-between active:scale-[0.98] transition-transform"
+                onClick={handleRemoveReceipt}
+                className="h-9 w-9 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-slate-700/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
               >
-                <div className="flex items-center gap-4">
-                  <Tag size={18} className="text-gray-400" />
-                  <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                    {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
-                  </span>
-                </div>
-                <Plus size={18} className="text-teal-600 dark:text-teal-400" />
+                <Trash2 size={16} />
               </button>
+            </div>
+          ) : null}
 
-              {/* Opções de despesa */}
-              {!isIncome && (
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-2">
-                  <div className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
-                        <RefreshCw size={14} className="text-orange-500" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">É um reembolso</span>
-                        <span className="text-[12px] text-gray-400">Pago com recurso PF/PJ</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { vibrate([5]); setIsReimbursable(!isReimbursable) }}
-                      className={`w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner ${isReimbursable ? 'bg-orange-500' : 'bg-gray-200 dark:bg-slate-700'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm ${isReimbursable ? 'translate-x-7' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
+          {/* Formulário Principal */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
+            {/* Descrição */}
+            <div>
+              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                Descrição
+              </label>
+              <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
+                <Edit3 size={18} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
+                  placeholder={selectedCat ? selectedCat.name : 'Nome ou descrição'}
+                  className="flex-1 bg-transparent text-[15px] font-semibold outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                />
+              </div>
+            </div>
 
-                  <div className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0">
-                        <ArrowRightLeft size={14} className="text-blue-500" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Estorno / Devolução</span>
-                        <span className="text-[12px] text-gray-400">Despesa anulada</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { vibrate([5]); setIsRefund(!isRefund) }}
-                      className={`w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner ${isRefund ? 'bg-blue-500' : 'bg-gray-200 dark:bg-slate-700'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm ${isRefund ? 'translate-x-7' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-
-                  <div
-                    className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-100 dark:active:bg-slate-800 transition-colors"
-                    onClick={() => { vibrate([5]); setShowFinancingModal(true) }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
-                        <Building size={14} className="text-purple-500" />
-                      </div>
-                      <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Vincular financiamento</span>
-                    </div>
-                    <button className={`w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${financingId ? 'bg-purple-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
-                      <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-1 shadow-sm ${financingId ? 'translate-x-7' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-
-                  <div
-                    className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-100 dark:active:bg-slate-800 transition-colors"
-                    onClick={() => { vibrate([5]); setShowLoanModal(true) }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
-                        <HandCoins size={14} className="text-amber-500" />
-                      </div>
-                      <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Vincular empréstimo</span>
-                    </div>
-                    <button className={`w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${debtId ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
-                      <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-1 shadow-sm ${debtId ? 'translate-x-7' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                </div>
+            {/* Status */}
+            <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+              <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                {isIncome ? 'Recebido' : creditCardId ? 'Lançado na fatura' : 'Pago'}
+              </span>
+              {!creditCardId && (
+                <button
+                  onClick={() => { vibrate([5]); setIsPaid(!isPaid); }}
+                  className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${toggleBgClass} active:scale-[0.98]`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${toggleTracks}`} />
+                </button>
               )}
             </div>
+
+            {/* Categoria */}
+            <div>
+              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                Categoria
+              </label>
+              <button
+                onClick={() => { vibrate([5]); setShowCatModal(true); }}
+                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {selectedCat ? (() => {
+                    const IconComp = getDynamicIcon(selectedCat.icon)
+                    return (
+                      <div
+                        className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm"
+                        style={{ backgroundColor: `${selectedCat.color}20`, color: selectedCat.color }}
+                      >
+                        <IconComp size={18} />
+                      </div>
+                    )
+                  })() : (
+                    <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-400">
+                      <Tag size={18} />
+                    </div>
+                  )}
+
+                  <div className="text-left min-w-0">
+                    <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
+                      Categoria
+                    </span>
+                    <span className={`text-[14px] font-semibold ${selectedCat ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
+                      {selectedCat ? selectedCat.name : 'Selecionar'}
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-gray-300" />
+              </button>
+            </div>
+
+            {/* Cartão de crédito */}
+            {!isIncome && (creditCards || []).length > 0 && (
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Cartão de crédito
+                </label>
+                <button
+                  onClick={() => { vibrate([5]); setShowCardModal(true); }}
+                  className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm ${selectedCard ? 'text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-400'}`}
+                      style={selectedCard ? { backgroundColor: selectedCard.color || '#f97316' } : {}}
+                    >
+                      <CreditCard size={18} />
+                    </div>
+
+                    <div className="text-left min-w-0">
+                      <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
+                        Cartão de crédito
+                      </span>
+                      <span className={`text-[14px] font-semibold ${selectedCard ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
+                        {selectedCard ? selectedCard.name : 'Nenhum'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedCard ? (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); vibrate([10]); setCreditCardId('') }}
+                      className="h-8 w-8 rounded-full flex items-center justify-center bg-white dark:bg-slate-800 text-gray-400 hover:text-red-500"
+                    >
+                      <X size={14} />
+                    </div>
+                  ) : (
+                    <ChevronRight size={18} className="text-gray-300" />
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Conta */}
+            {!creditCardId && (
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Conta
+                </label>
+                <button
+                  onClick={() => { vibrate([5]); setShowAccModal(true); }}
+                  className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-400 shrink-0">
+                      <Wallet size={18} />
+                    </div>
+
+                    <div className="text-left min-w-0">
+                      <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
+                        Conta
+                      </span>
+                      <span className={`text-[14px] font-semibold ${selectedAcc ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
+                        {selectedAcc ? selectedAcc.name : 'Selecionar'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
+                    <ChevronRight size={18} className="text-gray-300" />
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Fornecedor / Cliente */}
+            {(contacts || []).length > 0 && (
+              <div>
+                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                  Fornecedor / Cliente
+                </label>
+                <button
+                  onClick={() => { vibrate([5]); setShowContactModal(true); }}
+                  className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-400 shrink-0">
+                      <Users size={18} />
+                    </div>
+
+                    <div className="text-left min-w-0">
+                      <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
+                        Fornecedor / Cliente
+                      </span>
+                      <span className={`text-[14px] font-semibold ${selectedContact ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
+                        {selectedContact ? selectedContact.name : 'Nenhum'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedContact ? (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); vibrate([10]); setContactId('') }}
+                      className="h-8 w-8 rounded-full flex items-center justify-center bg-white dark:bg-slate-800 text-gray-400 hover:text-red-500"
+                    >
+                      <X size={14} />
+                    </div>
+                  ) : (
+                    <ChevronRight size={18} className="text-gray-300" />
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 🔥 MAIS OPÇÕES */}
+          <div>
+            <button
+              onClick={() => { vibrate([5]); setShowDetails(!showDetails) }}
+              className="w-full rounded-[20px] bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 shadow-sm px-4 py-3 text-[13px] font-bold text-teal-600 dark:text-teal-400 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+            >
+              {showDetails ? 'Ocultar opções avançadas' : 'Mais opções'}
+              {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1400px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
+                  {/* Data */}
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                      Data
+                    </label>
+                    <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
+                      <Calendar size={18} className="text-gray-400 shrink-0" />
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => { vibrate([5]); handleDateChange(e.target.value) }}
+                        className="flex-1 bg-transparent text-[14px] font-semibold outline-none text-gray-800 dark:text-gray-200"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Observações */}
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                      Observações
+                    </label>
+                    <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-start gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
+                      <FileText size={18} className="text-gray-400 shrink-0 mt-0.5" />
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Observações adicionais..."
+                        rows={2}
+                        className="flex-1 bg-transparent text-[14px] font-medium outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Repetição */}
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                      Repetição da transação
+                    </label>
+                    <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-1.5">
+                      <div className="flex gap-1.5 mb-4">
+                        {[{ key: 'once', label: 'Única' }, { key: 'installments', label: 'Parcelar' }, { key: 'recurring', label: 'Recorrente' }].map((opt) => (
+                          <button
+                            key={opt.key}
+                            onClick={() => { vibrate([5]); setRepetition(opt.key as Repetition) }}
+                            className={`flex-1 h-10 rounded-[14px] text-[12px] font-bold transition-all active:scale-[0.98] ${
+                              repetition === opt.key
+                                ? 'bg-white dark:bg-slate-800 shadow-sm text-teal-600 dark:text-teal-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {repetition === 'installments' && (
+                        <div className="rounded-[16px] bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+                          <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">
+                            Quantidade de parcelas
+                          </span>
+                          <select
+                            value={installments}
+                            onChange={(e) => { vibrate([5]); setInstallments(Number(e.target.value)) }}
+                            className="bg-transparent text-[14px] font-bold outline-none text-gray-800 dark:text-gray-200 cursor-pointer"
+                          >
+                            {[2,3,4,5,6,7,8,9,10,11,12,24,36,48,60].map((n) => (
+                              <option key={n} value={n}>{n}x</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {repetition === 'recurring' && (
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-wrap gap-2">
+                            {[{ key: 'weekly', label: 'Semanal' }, { key: 'biweekly', label: 'Quinzenal' }, { key: 'monthly', label: 'Mensal' }, { key: 'bimonthly', label: 'Bimestral' }, { key: 'custom', label: 'Personalizar' }].map((f) => (
+                              <button
+                                key={f.key}
+                                onClick={() => {
+                                  vibrate([5])
+                                  setFrequency(f.key as Frequency)
+                                  if (f.key === 'custom') setShowCustomRecurrenceModal(true)
+                                }}
+                                className={`px-4 py-2.5 rounded-[14px] text-[12px] font-bold transition-all active:scale-[0.98] ${
+                                  frequency === f.key
+                                    ? 'bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
+                                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-200/70 dark:border-slate-700'
+                                }`}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {frequency === 'custom' && (
+                            <div className="bg-teal-50 dark:bg-teal-900/10 p-3 rounded-[16px] text-center">
+                              <p className="text-[12px] font-semibold text-teal-700 dark:text-teal-400">
+                                {customParcels} parcelas, a cada {customInterval} mês(es).
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <button
+                  onClick={() => { vibrate([5]); setShowTagModal(true) }}
+                  className="w-full bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 flex items-center justify-between active:scale-[0.98] transition-transform"
+                >
+                  <div className="flex items-center gap-4">
+                    <Tag size={18} className="text-gray-400" />
+                    <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                      {selectedTags.length > 0 ? `${selectedTags.length} tag(ns) selecionada(s)` : 'Tags'}
+                    </span>
+                  </div>
+                  <Plus size={18} className="text-teal-600 dark:text-teal-400" />
+                </button>
+
+                {/* Opções de despesa */}
+                {!isIncome && (
+                  <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-2">
+                    <div className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
+                          <RefreshCw size={14} className="text-orange-500" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">É um reembolso</span>
+                          <span className="text-[12px] text-gray-400">Pago com recurso PF/PJ</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { vibrate([5]); setIsReimbursable(!isReimbursable) }}
+                        className={`w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner ${isReimbursable ? 'bg-orange-500' : 'bg-gray-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm ${isReimbursable ? 'translate-x-7' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+
+                    <div className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0">
+                          <ArrowRightLeft size={14} className="text-blue-500" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Estorno / Devolução</span>
+                          <span className="text-[12px] text-gray-400">Despesa anulada</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { vibrate([5]); setIsRefund(!isRefund) }}
+                        className={`w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner ${isRefund ? 'bg-blue-500' : 'bg-gray-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm ${isRefund ? 'translate-x-7' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+
+                    <div
+                      className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-100 dark:active:bg-slate-800 transition-colors"
+                      onClick={() => { vibrate([5]); setShowFinancingModal(true) }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
+                          <Building size={14} className="text-purple-500" />
+                        </div>
+                        <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Vincular financiamento</span>
+                      </div>
+                      <button className={`w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${financingId ? 'bg-purple-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-1 shadow-sm ${financingId ? 'translate-x-7' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+
+                    <div
+                      className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-100 dark:active:bg-slate-800 transition-colors"
+                      onClick={() => { vibrate([5]); setShowLoanModal(true) }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
+                          <HandCoins size={14} className="text-amber-500" />
+                        </div>
+                        <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Vincular empréstimo</span>
+                      </div>
+                      <button className={`w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${debtId ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-1 shadow-sm ${debtId ? 'translate-x-7' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* 🔥 CTA FIXO INFERIOR */}
-      <div className="fixed bottom-5 left-4 right-4 z-40">
-        <button
-          onClick={() => { vibrate([10, 50]); handleSave() }}
-          disabled={isSubmitting}
-          className={`w-full h-14 rounded-[20px] flex items-center justify-center gap-2 text-white font-bold text-[15px] shadow-lg transition-all active:scale-[0.98] ${
-            isIncome
-              ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
-              : 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
-          }`}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="animate-spin" size={20} />
-              Salvando...
-            </>
-          ) : (
-            <>
-              <Check size={20} />
-              Salvar transação
-            </>
-          )}
-        </button>
+        {/* 🔥 CTA FIXO INFERIOR */}
+        <div className="sticky bottom-5 px-4 pt-6">
+          <button
+            onClick={() => { vibrate([10, 50]); handleSave() }}
+            disabled={isSubmitting}
+            className={`w-full h-14 rounded-[20px] flex items-center justify-center gap-2 text-white font-bold text-[15px] shadow-lg transition-all active:scale-[0.98] ${
+              isIncome
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                : 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
+            }`}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                Salvando...
+              </>
+            ) : (
+              <>
+                <Check size={20} />
+                Salvar transação
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* 🔥 MODAIS (mantidos com lógica intacta) */}
@@ -1454,7 +1414,7 @@ function NewTransactionContent() {
   )
 }
 
-// 🔥 CORREÇÃO: Exportação correta para a página de Nova Transação
+// 🔥 EXPORTAÇÃO CORRETA
 export default function NewTransactionPage() {
   return (
     <Suspense fallback={
