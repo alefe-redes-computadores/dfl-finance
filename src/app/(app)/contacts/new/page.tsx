@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -14,14 +14,49 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
-import { useContext_ } from '@/components/ContextToggle'
+import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
-import { useSafeDb } from '@/hooks/useSafeDb'
+import { useSafeDb } from "@/hooks/useSafeDb"
 
-// Haptic leve para toques de UI que não passam pelo hook (seleção de tipo, abrir bottom sheet, etc.)
 function lightTap() {
-  if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(10)
+  if (typeof window !== "undefined" && navigator.vibrate) navigator.vibrate(10)
 }
+
+function FieldLabel({
+  children,
+  optional = false,
+}: {
+  children: React.ReactNode
+  optional?: boolean
+}) {
+  return (
+    <label className="mb-2 block text-[13px] font-semibold text-slate-600 dark:text-slate-300">
+      {children} {optional && <span className="text-slate-400">Opcional</span>}
+    </label>
+  )
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-[28px] border border-slate-200/70 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+      <div className="mb-4">
+        <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">
+          {title}
+        </h2>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  )
+}
+
+const inputBase =
+  "w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5 text-[15px] font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900"
 
 export default function NewContactPage() {
   const router = useRouter()
@@ -32,15 +67,12 @@ export default function NewContactPage() {
   const { user } = useAuth()
   const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
-  // 🔥 Aplicando o effectiveContext para evitar vazamento de modo
   const { context, appMode } = useContext_()
-  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
+  const effectiveContext = appMode === "personal_only" ? "personal" : context
 
   const [saving, setSaving] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
   const [showDeleteSheet, setShowDeleteSheet] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const touchStartY = useRef(0)
 
   const [name, setName] = useState("")
   const [type, setType] = useState("individual")
@@ -55,13 +87,15 @@ export default function NewContactPage() {
   const [zipCode, setZipCode] = useState("")
   const [notes, setNotes] = useState("")
 
-  // 🔒 Local-First: leitura sempre via useLocalData
-  const { data: localContacts, loading: contactsLoading } = useLocalData({
-    table: 'contacts' as any,
+  const { data: localContacts } = useLocalData({
+    table: "contacts" as any,
     filters: { context: effectiveContext },
   })
 
-  const contactData = (localContacts || []).find((c: any) => c.id === editId) as any
+  const contactData = useMemo(
+    () => (localContacts || []).find((c: any) => c.id === editId) as any,
+    [localContacts, editId]
+  )
 
   useEffect(() => {
     if (contactData) {
@@ -80,21 +114,6 @@ export default function NewContactPage() {
     }
   }, [contactData])
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-  }, [])
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (window.scrollY <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        setTimeout(() => setRefreshing(false), 600)
-      }
-    }
-  }, [refreshing])
-
-  // 🔥 Blindagem de dados + arquitetura Local-First (safeAdd/safeUpdate)
   const handleSave = async () => {
     if (!(name || "").trim()) {
       showToast("Preencha o nome do contato", "warning")
@@ -122,7 +141,7 @@ export default function NewContactPage() {
       }
 
       if (editId) {
-        const result = await safeUpdate('contacts', editId, payload)
+        const result = await safeUpdate("contacts", editId, payload)
         if (!result.success) throw new Error(result.error)
         showToast("Contato atualizado com sucesso!", "success")
       } else {
@@ -132,10 +151,10 @@ export default function NewContactPage() {
           user_id: user?.id,
           ...payload,
           created_at: new Date().toISOString(),
-          sync_status: 'pending',
+          sync_status: "pending",
           sync_attempts: 0,
         }
-        const result = await safeAdd('contacts', fullPayload)
+        const result = await safeAdd("contacts", fullPayload)
         if (!result.success) throw new Error(result.error)
         showToast("Contato criado com sucesso!", "success")
       }
@@ -150,12 +169,11 @@ export default function NewContactPage() {
     }
   }
 
-  // 🔥 Delete via safeDelete, confirmação por Bottom Sheet nativo (sem window.confirm)
   const handleDelete = async () => {
     if (!editId) return
     setDeleting(true)
     try {
-      const result = await safeDelete('contacts', editId)
+      const result = await safeDelete("contacts", editId)
       if (!result.success) throw new Error(result.error)
       showToast("Contato excluído com sucesso!", "success")
       success()
@@ -172,278 +190,271 @@ export default function NewContactPage() {
   const contextTitle = effectiveContext === "dfl" ? "da Empresa" : "Pessoal"
 
   return (
-    <div
-      className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-    >
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-bold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Header com glassmorphism */}
-      <div className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+    <div className="flex min-h-[100dvh] flex-col bg-slate-50 dark:bg-slate-950">
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => { lightTap(); router.back() }}
-            className="p-2 rounded-[16px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-[0.98]"
+            onClick={() => {
+              lightTap()
+              router.back()
+            }}
+            className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-slate-100 text-slate-700 transition active:scale-[0.98] dark:bg-slate-800 dark:text-slate-200"
             aria-label="Voltar"
           >
             <ArrowLeft size={20} />
           </button>
+
           <div className="text-center">
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">
-              {editId ? "Editar" : "Novo"} Contato
+            <h1 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">
+              {editId ? "Editar contato" : "Novo contato"}
             </h1>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
               {contextTitle}
             </p>
           </div>
-          <div className="flex gap-2">
-            {editId && (
+
+          <div className="w-11 flex justify-end">
+            {editId ? (
               <button
-                onClick={() => { lightTap(); setShowDeleteSheet(true) }}
-                className="p-2 rounded-[16px] bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-all active:scale-[0.98]"
+                onClick={() => {
+                  lightTap()
+                  setShowDeleteSheet(true)
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-red-50 text-red-500 transition active:scale-[0.98] dark:bg-red-950/30"
                 aria-label="Excluir"
               >
-                <Trash2 size={20} />
+                <Trash2 size={19} />
               </button>
+            ) : (
+              <div className="h-11 w-11" />
             )}
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="p-2 rounded-[16px] bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
-              aria-label="Salvar"
-            >
-              {saving ? (
-                <RefreshCw size={20} className="animate-spin" />
-              ) : (
-                <Save size={20} />
-              )}
-            </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            Tipo
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { lightTap(); setType("individual") }}
-              className={`flex-1 py-3 rounded-[20px] text-sm font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
-                type === "individual"
-                  ? "bg-teal-500 text-white shadow-md shadow-teal-500/20"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-              }`}
-            >
-              <User size={16} />
-              Pessoa Física
-            </button>
-            <button
-              onClick={() => { lightTap(); setType("company") }}
-              className={`flex-1 py-3 rounded-[20px] text-sm font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
-                type === "company"
-                  ? "bg-blue-500 text-white shadow-md shadow-blue-500/20"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-              }`}
-            >
-              <Building2 size={16} />
-              Pessoa Jurídica
-            </button>
-          </div>
-        </div>
+      <main className="flex-1 overflow-y-auto px-4 pb-32 pt-4">
+        <div className="mx-auto max-w-xl space-y-4">
+          <Section title="Tipo de contato">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  lightTap()
+                  setType("individual")
+                }}
+                className={`flex items-center justify-center gap-2 rounded-[20px] px-4 py-3.5 text-[14px] font-semibold transition active:scale-[0.98] ${
+                  type === "individual"
+                    ? "bg-teal-500 text-white shadow-lg shadow-teal-500/20"
+                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                }`}
+              >
+                <User size={16} />
+                Pessoa física
+              </button>
 
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            {type === "company" ? "Razão Social" : "Nome Completo"}
-          </label>
-          <input
-            type="text"
-            placeholder={type === "company" ? "Nome da empresa" : "Nome da pessoa"}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-          />
-        </div>
+              <button
+                type="button"
+                onClick={() => {
+                  lightTap()
+                  setType("company")
+                }}
+                className={`flex items-center justify-center gap-2 rounded-[20px] px-4 py-3.5 text-[14px] font-semibold transition active:scale-[0.98] ${
+                  type === "company"
+                    ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                }`}
+              >
+                <Building2 size={16} />
+                Pessoa jurídica
+              </button>
+            </div>
+          </Section>
 
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            {type === "company" ? "CNPJ" : "CPF"} (opcional)
-          </label>
-          <input
-            type="text"
-            placeholder={type === "company" ? "00.000.000/0000-00" : "000.000.000-00"}
-            value={document}
-            onChange={(e) => setDocument(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-          />
-        </div>
-
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            Email (opcional)
-          </label>
-          <input
-            type="email"
-            placeholder="email@exemplo.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-          />
-        </div>
-
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            Telefone (opcional)
-          </label>
-          <input
-            type="tel"
-            placeholder="(00) 00000-0000"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-          />
-        </div>
-
-        {type === "individual" && (
-          <>
+          <Section title="Informações principais">
             <div>
-              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-                Empresa (opcional)
-              </label>
+              <FieldLabel>{type === "company" ? "Razão social" : "Nome completo"}</FieldLabel>
               <input
                 type="text"
-                placeholder="Onde trabalha"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+                autoComplete="name"
+                autoCapitalize="words"
+                placeholder={type === "company" ? "Nome da empresa" : "Nome da pessoa"}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputBase}
               />
             </div>
+
             <div>
-              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-                Cargo (opcional)
-              </label>
+              <FieldLabel optional>{type === "company" ? "CNPJ" : "CPF"}</FieldLabel>
               <input
                 type="text"
-                placeholder="Cargo na empresa"
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
+                inputMode="numeric"
+                placeholder={type === "company" ? "00.000.000/0000-00" : "000.000.000-00"}
+                value={document}
+                onChange={(e) => setDocument(e.target.value)}
+                className={inputBase}
               />
             </div>
-          </>
-        )}
+          </Section>
 
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            Endereço (opcional)
-          </label>
-          <input
-            type="text"
-            placeholder="Rua, número, bairro"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-          />
+          <Section title="Contato">
+            <div>
+              <FieldLabel optional>Email</FieldLabel>
+              <input
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="email@exemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputBase}
+              />
+            </div>
+
+            <div>
+              <FieldLabel optional>Telefone</FieldLabel>
+              <input
+                type="tel"
+                autoComplete="tel"
+                inputMode="tel"
+                placeholder="(00) 00000-0000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className={inputBase}
+              />
+            </div>
+          </Section>
+
+          {type === "individual" && (
+            <Section title="Profissional">
+              <div>
+                <FieldLabel optional>Empresa</FieldLabel>
+                <input
+                  type="text"
+                  autoCapitalize="words"
+                  placeholder="Onde trabalha"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className={inputBase}
+                />
+              </div>
+
+              <div>
+                <FieldLabel optional>Cargo</FieldLabel>
+                <input
+                  type="text"
+                  autoCapitalize="words"
+                  placeholder="Cargo na empresa"
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  className={inputBase}
+                />
+              </div>
+            </Section>
+          )}
+
+          <Section title="Endereço">
+            <div>
+              <FieldLabel optional>Endereço</FieldLabel>
+              <input
+                type="text"
+                autoComplete="street-address"
+                autoCapitalize="words"
+                placeholder="Rua, número, bairro"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className={inputBase}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-1">
+                <FieldLabel optional>Cidade</FieldLabel>
+                <input
+                  type="text"
+                  autoComplete="address-level2"
+                  autoCapitalize="words"
+                  placeholder="Cidade"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className={inputBase}
+                />
+              </div>
+
+              <div className="sm:col-span-1">
+                <FieldLabel optional>UF</FieldLabel>
+                <input
+                  type="text"
+                  autoComplete="address-level1"
+                  placeholder="SP"
+                  maxLength={2}
+                  value={state}
+                  onChange={(e) => setState(e.target.value.toUpperCase())}
+                  className={inputBase}
+                />
+              </div>
+
+              <div className="sm:col-span-1">
+                <FieldLabel optional>CEP</FieldLabel>
+                <input
+                  type="text"
+                  autoComplete="postal-code"
+                  inputMode="numeric"
+                  placeholder="00000-000"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  className={inputBase}
+                />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Observações">
+            <div>
+              <FieldLabel optional>Anotações internas</FieldLabel>
+              <textarea
+                placeholder="Detalhes adicionais..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                className={`${inputBase} resize-none`}
+              />
+            </div>
+          </Section>
         </div>
+      </main>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-              Cidade
-            </label>
-            <input
-              type="text"
-              placeholder="Cidade"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="w-full px-3 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-              UF
-            </label>
-            <input
-              type="text"
-              placeholder="SP"
-              maxLength={2}
-              value={state}
-              onChange={(e) => setState(e.target.value.toUpperCase())}
-              className="w-full px-3 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-              CEP
-            </label>
-            <input
-              type="text"
-              placeholder="00000-000"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-              className="w-full px-3 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 block uppercase tracking-widest">
-            Observações (opcional)
-          </label>
-          <textarea
-            placeholder="Detalhes adicionais..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className="w-full px-4 py-3.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400 resize-none"
-          />
-        </div>
-
-        {/* Botão flutuante fixo no rodapé */}
-        <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200/80 bg-white/90 px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+        <div className="mx-auto max-w-xl">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-4 rounded-[28px] bg-teal-500 hover:bg-teal-600 text-white font-black text-base shadow-xl shadow-teal-600/30 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-500 px-5 py-4 text-[15px] font-bold text-white shadow-xl shadow-teal-600/20 transition active:scale-[0.98] disabled:opacity-50"
           >
-            {saving ? (
-              <RefreshCw size={20} className="animate-spin" />
-            ) : (
-              <Save size={20} />
-            )}
-            {editId ? "Atualizar Contato" : "Criar Contato"}
+            {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+            {editId ? "Atualizar contato" : "Criar contato"}
           </button>
         </div>
       </div>
 
-      {/* Bottom Sheet de confirmação de exclusão */}
       {showDeleteSheet && (
         <div
           className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => !deleting && setShowDeleteSheet(false)}
         >
           <div
-            className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl w-full max-w-lg rounded-t-[32px] p-6 pb-8 animate-in slide-in-from-bottom-8 duration-300"
+            className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-8 dark:bg-slate-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto mb-6" />
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+            <div className="mx-auto mb-6 h-1.5 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
+            <div className="mb-6 flex flex-col items-center text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/30">
                 <AlertTriangle size={26} className="text-red-500" />
               </div>
-              <h3 className="font-black text-lg text-slate-800 dark:text-slate-100 mb-1">
+              <h3 className="mb-1 text-[18px] font-bold text-slate-900 dark:text-slate-100">
                 Excluir contato?
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-[260px]">
+              <p className="max-w-[280px] text-[14px] text-slate-500 dark:text-slate-400">
                 Essa ação não pode ser desfeita. O contato será removido permanentemente.
               </p>
             </div>
@@ -451,14 +462,14 @@ export default function NewContactPage() {
               <button
                 onClick={() => setShowDeleteSheet(false)}
                 disabled={deleting}
-                className="flex-1 py-3.5 rounded-[24px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+                className="flex-1 rounded-[20px] bg-slate-100 px-4 py-3.5 text-[14px] font-semibold text-slate-700 transition active:scale-[0.98] disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 py-3.5 rounded-[24px] bg-red-500 hover:bg-red-600 text-white font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex flex-1 items-center justify-center gap-2 rounded-[20px] bg-red-500 px-4 py-3.5 text-[14px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
               >
                 {deleting ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
                 Excluir
