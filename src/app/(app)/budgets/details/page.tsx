@@ -192,12 +192,14 @@ function BudgetDetailContent() {
       maximumFractionDigits: 2,
     })}`
 
-  const getAttachmentIcon = (url: string | null) => {
+    const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
-    const isImage = /.(jpg|jpeg|png|gif|webp|bmp|svg)(?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+    // 🔥 CORREÇÃO: Adicionado a barra invertida antes do ponto para escapar a Regex
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="shrink-0 text-blue-500" />
+    return <Paperclip size={12} className="shrink-0 text-slate-400" />
   }
+
 
   if (loading) {
     return (
