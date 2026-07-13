@@ -91,7 +91,9 @@ function HomeContent() {
   // 🔥 NOVO: Estado para controlar a abertura do modal de sincronização
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
+  // Substitua a chamada do hook por esta versão protegida
+  const { isOnline = true, pendingCount = 0, isSyncing = false, syncQueue = async () => {} } = useOfflineQueue() || {};
+
 
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
@@ -963,12 +965,13 @@ function HomeContent() {
           <div className="flex items-center gap-3">
             {/* 🔥 SyncButton com isOnline e onClick para abrir modal */}
             <SyncButton
-              pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
-              isSyncing={!!isSyncing}
-              isOnline={!!isOnline}
-              onSync={syncQueue}
-              onClick={() => setIsSyncModalOpen(true)}
-              />
+                pendingCount={pendingCount ?? 0}
+                isSyncing={!!isSyncing}
+                isOnline={!!isOnline}
+                onSync={syncQueue}
+                onClick={() => setIsSyncModalOpen(true)}
+             />
+
             {notificationsEnabled && (
               <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
             )}
