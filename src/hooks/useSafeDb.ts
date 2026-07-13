@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { safeAdd, safeUpdate, safeDelete } from '@/lib/safeDb'
