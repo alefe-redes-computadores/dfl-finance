@@ -3,7 +3,23 @@
 import { db } from './db'
 import { addToSyncQueue } from './db'
 
-type TableName = 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications' | 'chat_history' | 'chat_sessions'
+type TableName = 
+  | 'transactions' 
+  | 'accounts' 
+  | 'categories' 
+  | 'debts' 
+  | 'loans' 
+  | 'financings' 
+  | 'subscriptions' 
+  | 'tags' 
+  | 'contacts' 
+  | 'budgets' 
+  | 'goals' 
+  | 'credit_cards' 
+  | 'credit_invoices' 
+  | 'notifications' 
+  | 'chat_history' 
+  | 'chat_sessions'
 
 interface SafeResult<T = any> {
   success: boolean
@@ -15,21 +31,31 @@ interface SafeResult<T = any> {
   id?: string
 }
 
+/**
+ * 🔥 LOG DE OPERAÇÕES
+ */
 function logOperation(operation: string, table: string, id: string | undefined, result: any) {
   const timestamp = new Date().toISOString()
   console.log(`[${timestamp}] 📝 ${operation} ${table}${id ? ` id:${id}` : ''} => ${result.success ? '✅' : '❌'}`)
+  
   if (!result.success) {
     console.error(`❌ Falha em ${operation} ${table}:`, result.error)
   }
+  
   return result
 }
 
+/**
+ * 🔥 CAMADA 1: ADD SEGURO
+ * Verifica se o ID existe antes de adicionar
+ */
 export async function safeAdd<T extends Record<string, any>>(
   table: TableName,
   data: T,
   userId: string
 ): Promise<SafeResult<T>> {
   try {
+    // Verifica se já existe um registro com esse ID
     if (data.id) {
       const existing = await db.table(table).get(data.id)
       if (existing) {
@@ -43,8 +69,11 @@ export async function safeAdd<T extends Record<string, any>>(
       }
     }
 
+    // Adiciona ao IndexedDB
     const id = await db.table(table).add(data)
-    await addToSyncQueue(userId, table, 'create', id as string, { ...data, id: id as string })
+    
+    // 🔥 Enfileira para sincronização
+    await addToSyncQueue(userId, table, 'create', id as string, data)
     
     const result = {
       success: true,
@@ -65,6 +94,10 @@ export async function safeAdd<T extends Record<string, any>>(
   }
 }
 
+/**
+ * 🔥 CAMADA 2: UPDATE SEGURO
+ * Verifica se o registro existe antes de atualizar
+ */
 export async function safeUpdate(
   table: TableName,
   id: string,
@@ -72,6 +105,7 @@ export async function safeUpdate(
   userId: string
 ): Promise<SafeResult> {
   try {
+    // 🔥 VALIDAÇÃO: Verifica se o registro existe
     const existing = await db.table(table).get(id)
     if (!existing) {
       return logOperation('update', table, id, {
@@ -83,6 +117,7 @@ export async function safeUpdate(
       })
     }
 
+    // Atualiza no IndexedDB
     const affected = await db.table(table).update(id, data)
     
     if (affected === 0) {
@@ -96,7 +131,7 @@ export async function safeUpdate(
       })
     }
 
-    // 🔥 CORREÇÃO: Enviando o ID dentro do payload para o Supabase reconhecer o registro
+    // 🔥 CORRIGIDO: Enfileira para sincronização COM O ID INCLUÍDO NO PAYLOAD
     await addToSyncQueue(userId, table, 'update', id, { ...data, id })
     
     const result = {
@@ -119,12 +154,17 @@ export async function safeUpdate(
   }
 }
 
+/**
+ * 🔥 CAMADA 3: DELETE SEGURO
+ * Verifica se o registro existe antes de deletar
+ */
 export async function safeDelete(
   table: TableName,
   id: string,
   userId: string
 ): Promise<SafeResult> {
   try {
+    // 🔥 VALIDAÇÃO: Verifica se o registro existe
     const existing = await db.table(table).get(id)
     if (!existing) {
       return logOperation('delete', table, id, {
@@ -136,7 +176,10 @@ export async function safeDelete(
       })
     }
 
+    // Deleta do IndexedDB
     await db.table(table).delete(id)
+    
+    // Enfileira para sincronização
     await addToSyncQueue(userId, table, 'delete', id, { id })
     
     const result = {
