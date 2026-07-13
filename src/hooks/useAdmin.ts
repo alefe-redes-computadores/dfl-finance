@@ -1,9 +1,30 @@
 // src/hooks/useAdmin.ts
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 
 export function useIsAdmin() {
   const { user } = useAuth()
-  const ADMIN_ID = '64c7cfd8-218a-4366-aba1-2150b95a37ba' 
-  
-  return user?.id === ADMIN_ID
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function checkAdmin() {
+      if (!user?.id) {
+        setLoading(false)
+        return
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
+      
+      setIsAdmin(data?.is_admin || false)
+      setLoading(false)
+    }
+    checkAdmin()
+  }, [user?.id])
+
+  return { isAdmin, loading }
 }
