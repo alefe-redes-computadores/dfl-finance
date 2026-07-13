@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { ContextProvider } from '@/components/ContextToggle'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -72,12 +72,13 @@ function AssistantContent() {
     { label: 'Categorias', value: '0', icon: PieChart, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-900/30' },
   ])
 
-  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
+  // 🔥 HOOKS CORRIGIDOS (Adicionado o parâmetro 'loading')
+  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
   })
 
-  const { data: localCategories, reload: reloadCategories } = useLocalData({
+  const { data: localCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context },
   })
@@ -100,6 +101,7 @@ function AssistantContent() {
     }, 2000)
   }
 
+  // Lógica do Pull to Refresh
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -116,7 +118,7 @@ function AssistantContent() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => setRefreshing(false))
+      Promise.all([reloadTransactions(), reloadCategories()]).finally(() => setRefreshing(false))
     }
   }
 
@@ -137,104 +139,91 @@ function AssistantContent() {
     }
   }, [loading, refreshing])
 
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
+  // 🔥 O SEGREDO DO LOOP RESOLVIDO: O cálculo reage aos dados automaticamente
+  useEffect(() => {
+    if (txLoading || catLoading) {
+      setLoading(true)
+      setLoadingPulse(true)
+      return
+    }
 
-    try {
-      await Promise.all([reloadTransactions(), reloadCategories()])
+    const txs = localTransactions || []
+    const cats = localCategories || []
 
-      const txs = localTransactions || []
-      const cats = localCategories || []
+    const income = txs
+      .filter((t: any) => t.type === 'income' && t.status === 'done')
+      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
-      const income = txs
-        .filter((t: any) => t.type === 'income' && t.status === 'done')
-        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+    const expense = txs
+      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
-      const expense = txs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-
-      const categoryExpense: Record<string, number> = {}
-      txs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .forEach((t: any) => {
-          const catId = t.category_id || 'uncategorized'
-          categoryExpense[catId] = (categoryExpense[catId] || 0) + (Number(t.amount) || 0)
-        })
-
-      let biggestCategory = ''
-      let biggestCategoryAmount = 0
-      for (const [catId, amount] of Object.entries(categoryExpense)) {
-        if (amount > biggestCategoryAmount) {
-          biggestCategoryAmount = amount
-          const cat = cats.find((c: any) => c.id === catId) as any
-          biggestCategory = cat?.name || 'Sem categoria'
-        }
-      }
-
-      const now = new Date()
-      const threeMonthsAgo = subMonths(now, 3)
-      const recentTxs = txs.filter((t: any) => new Date(t.date) >= threeMonthsAgo && t.status === 'done')
-      const monthlyIncome = recentTxs
-        .filter((t: any) => t.type === 'income')
-        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-      const monthlyExpense = recentTxs
-        .filter((t: any) => (t.type === 'expense' || t.type === 'sangria'))
-        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-      const monthlyAverage = (monthlyIncome - monthlyExpense) / 3
-
-      const lastMonth = subMonths(now, 1)
-      const thisMonthTxs = txs.filter((t: any) => 
-        new Date(t.date) >= new Date(now.getFullYear(), now.getMonth(), 1) && t.status === 'done'
-      )
-      const lastMonthTxs = txs.filter((t: any) => 
-        new Date(t.date) >= new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1) &&
-        new Date(t.date) < new Date(now.getFullYear(), now.getMonth(), 1) &&
-        t.status === 'done'
-      )
-
-      const thisMonthIncome = thisMonthTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-      const thisMonthExpense = thisMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria')).reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-      const lastMonthIncome = lastMonthTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-      const lastMonthExpense = lastMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria')).reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-
-      const thisMonthBalance = thisMonthIncome - thisMonthExpense
-      const lastMonthBalance = lastMonthIncome - lastMonthExpense
-      const lastMonthChange = lastMonthBalance !== 0 
-        ? ((thisMonthBalance - lastMonthBalance) / Math.abs(lastMonthBalance)) * 100 
-        : 0
-
-      setStats({
-        totalIncome: income,
-        totalExpense: expense,
-        balance: income - expense,
-        transactionCount: txs.length,
-        categoriesCount: cats.length,
-        monthlyAverage,
-        lastMonthChange,
-        biggestCategory,
-        biggestCategoryAmount
+    const categoryExpense: Record<string, number> = {}
+    txs
+      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+      .forEach((t: any) => {
+        const catId = t.category_id || 'uncategorized'
+        categoryExpense[catId] = (categoryExpense[catId] || 0) + (Number(t.amount) || 0)
       })
 
-      setQuickStats([
-        { label: 'Receitas', value: formatCurrency(income), icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
-        { label: 'Despesas', value: formatCurrency(expense), icon: TrendingDown, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30' },
-        { label: 'Transações', value: `${txs.length}`, icon: Calendar, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30' },
-        { label: 'Categorias', value: `${cats.length}`, icon: PieChart, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-900/30' },
-      ])
-    } catch (err) {
-      console.error('Erro ao carregar dados do assistente:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
+    let biggestCategory = ''
+    let biggestCategoryAmount = 0
+    for (const [catId, amount] of Object.entries(categoryExpense)) {
+      if (amount > biggestCategoryAmount) {
+        biggestCategoryAmount = amount
+        const cat = cats.find((c: any) => c.id === catId) as any
+        biggestCategory = cat?.name || 'Sem categoria'
+      }
     }
-  }, [user?.id, localTransactions, localCategories])
 
-  useEffect(() => {
-    if (user?.id) loadData()
-  }, [user?.id, context, loadData])
+    const now = new Date()
+    const threeMonthsAgo = subMonths(now, 3)
+    const recentTxs = txs.filter((t: any) => new Date(t.date) >= threeMonthsAgo && t.status === 'done')
+    const monthlyIncome = recentTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+    const monthlyExpense = recentTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria')).reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+    const monthlyAverage = (monthlyIncome - monthlyExpense) / 3
+
+    const lastMonth = subMonths(now, 1)
+    const thisMonthTxs = txs.filter((t: any) => new Date(t.date) >= new Date(now.getFullYear(), now.getMonth(), 1) && t.status === 'done')
+    const lastMonthTxs = txs.filter((t: any) => 
+      new Date(t.date) >= new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1) &&
+      new Date(t.date) < new Date(now.getFullYear(), now.getMonth(), 1) &&
+      t.status === 'done'
+    )
+
+    const thisMonthIncome = thisMonthTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+    const thisMonthExpense = thisMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria')).reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+    const lastMonthIncome = lastMonthTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+    const lastMonthExpense = lastMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria')).reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
+    const thisMonthBalance = thisMonthIncome - thisMonthExpense
+    const lastMonthBalance = lastMonthIncome - lastMonthExpense
+    const lastMonthChange = lastMonthBalance !== 0 
+      ? ((thisMonthBalance - lastMonthBalance) / Math.abs(lastMonthBalance)) * 100 
+      : 0
+
+    setStats({
+      totalIncome: income,
+      totalExpense: expense,
+      balance: income - expense,
+      transactionCount: txs.length,
+      categoriesCount: cats.length,
+      monthlyAverage,
+      lastMonthChange,
+      biggestCategory,
+      biggestCategoryAmount
+    })
+
+    setQuickStats([
+      { label: 'Receitas', value: formatCurrency(income), icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
+      { label: 'Despesas', value: formatCurrency(expense), icon: TrendingDown, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30' },
+      { label: 'Transações', value: `${txs.length}`, icon: Calendar, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30' },
+      { label: 'Categorias', value: `${cats.length}`, icon: PieChart, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-900/30' },
+    ])
+
+    setLoading(false)
+    setLoadingPulse(false)
+  }, [localTransactions, localCategories, txLoading, catLoading])
 
   return (
     <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
