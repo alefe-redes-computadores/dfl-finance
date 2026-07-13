@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
-import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+// 🔥 CORREÇÃO 1: Importamos o ContextProvider separadamente aqui
+import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
@@ -90,7 +91,7 @@ function DebtsContent() {
 
   useEffect(() => {
     if (user?.id && context) loadDebts()
-  }, [user?.id, context, filter])
+  }, [user?.id, context, filter, loadDebts])
 
   useEffect(() => {
     const consolidated = consolidateDebts()
@@ -119,7 +120,7 @@ function DebtsContent() {
     if (e.touches[0].clientY - pullStartY.current > 60) {
       setRefreshing(true)
       isPulling.current = false
-      vibrate([10])
+      vibrate(10)
       loadDebts().finally(() => setRefreshing(false))
     }
   }
@@ -166,7 +167,7 @@ function DebtsContent() {
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
-                onClick={() => { vibrate([5]); router.push('/more'); }}
+                onClick={() => { vibrate(5); router.push('/more'); }}
                 className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
               >
                 <ChevronLeft size={20} />
@@ -183,7 +184,7 @@ function DebtsContent() {
             </div>
 
             <button
-              onClick={() => { vibrate([10]); router.push('/debts/new'); }}
+              onClick={() => { vibrate(10); router.push('/debts/new'); }}
               className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
             >
               <Plus size={20} />
@@ -230,7 +231,7 @@ function DebtsContent() {
         <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-1.5 mb-4">
           <div className="flex gap-1.5">
             <button
-              onClick={() => { vibrate([5]); setFilter('active'); }}
+              onClick={() => { vibrate(5); setFilter('active'); }}
               className={`flex-1 h-10 rounded-[18px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
                 filter === 'active'
                   ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
@@ -240,7 +241,7 @@ function DebtsContent() {
               Pendentes
             </button>
             <button
-              onClick={() => { vibrate([5]); setFilter('paid'); }}
+              onClick={() => { vibrate(5); setFilter('paid'); }}
               className={`flex-1 h-10 rounded-[18px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
                 filter === 'paid'
                   ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
@@ -270,7 +271,7 @@ function DebtsContent() {
                 : 'Registre empréstimos para acompanhar quem te deve.'}
             </p>
             <button
-              onClick={() => { vibrate([10]); router.push('/debts/new'); }}
+              onClick={() => { vibrate(10); router.push('/debts/new'); }}
               className="bg-teal-600 text-white px-8 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
             >
               Novo empréstimo
@@ -289,7 +290,7 @@ function DebtsContent() {
               return (
                 <div
                   key={debt.id}
-                  onClick={() => { vibrate([5]); router.push(`/debts/details?id=${debt.id}`); }}
+                  onClick={() => { vibrate(5); router.push(`/debts/details?id=${debt.id}`); }}
                   className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer"
                 >
                   <div className="rounded-[18px] p-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all">
@@ -378,8 +379,9 @@ export default function DebtsPage() {
   if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
   
   return (
-    <ContextToggle.ContextProvider>
+    // 🔥 CORREÇÃO 2: Aqui usamos o ContextProvider importado lá em cima
+    <ContextProvider>
       <DebtsContent />
-    </ContextToggle.ContextProvider>
+    </ContextProvider>
   )
 }
