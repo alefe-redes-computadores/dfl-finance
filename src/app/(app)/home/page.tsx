@@ -69,7 +69,7 @@ function HomeContent() {
   const { context, appMode, effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { success: hapticSuccess, vibrate } = useHapticFeedback()
-  
+
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
@@ -98,28 +98,28 @@ function HomeContent() {
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
-    table: 'transactions' as any, 
+  const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({
+    table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
-  const { data: localCategories, loading: catLoading } = useLocalData({ 
-    table: 'categories' as any, 
+  const { data: localCategories, loading: catLoading } = useLocalData({
+    table: 'categories' as any,
     filters: { context: effectiveContext }
   })
-  const { data: localAccountsData, loading: accLoading } = useLocalData({ 
-    table: 'accounts' as any, 
+  const { data: localAccountsData, loading: accLoading } = useLocalData({
+    table: 'accounts' as any,
     filters: { context: effectiveContext }
   })
-  const { data: localDebts, loading: debtsLoading } = useLocalData({ 
-    table: 'debts' as any, 
+  const { data: localDebts, loading: debtsLoading } = useLocalData({
+    table: 'debts' as any,
     filters: { context: effectiveContext }
   })
-  const { data: localFinancings, loading: finLoading } = useLocalData({ 
-    table: 'financings' as any, 
+  const { data: localFinancings, loading: finLoading } = useLocalData({
+    table: 'financings' as any,
     filters: { context: effectiveContext, status: 'active' }
   })
-  const { data: localCards, loading: cardsLoading } = useLocalData({ 
-    table: 'credit_cards' as any, 
+  const { data: localCards, loading: cardsLoading } = useLocalData({
+    table: 'credit_cards' as any,
     filters: { context: effectiveContext, is_archived: false }
   })
   const { data: localBudgets, loading: budgetsLoading } = useLocalData({
@@ -162,7 +162,7 @@ function HomeContent() {
     })
   }, [localTransactions, localCategories, localAccountsData])
 
-  const monthTransactions = useMemo(() => 
+  const monthTransactions = useMemo(() =>
     (transactionsWithJoin || [])
       .filter((t: any) => t.date >= start && t.date <= end)
       .sort((a: any, b: any) => {
@@ -187,11 +187,11 @@ function HomeContent() {
     const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
     const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
     const prevMonthTxs = (transactionsWithJoin || []).filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
-    
+
     const prevInc = prevMonthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
     const prevExp = prevMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
     const prevBal = prevInc - prevExp
-    
+
     const variation = prevBal !== 0 ? ((summary.balance - prevBal) / Math.abs(prevBal)) * 100 : (summary.balance > 0 ? 100 : summary.balance < 0 ? -100 : 0)
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
@@ -218,17 +218,17 @@ function HomeContent() {
 
   const pendings = useMemo(() => {
     const allPending = (localTransactions || []).filter((t: any) => t.status === 'pending')
-    
+
     const toPay = allPending
       .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && !t.credit_card_id)
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      
+
     const toReceive = allPending
       .filter((t: any) => t.type === 'income')
       .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      
+
     const faturas = (cards || []).reduce((acc: number, c: any) => acc + (c.faturaAtual || 0), 0)
-    
+
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
@@ -239,10 +239,10 @@ function HomeContent() {
       const totalAmount = Number(debt.total_amount) || 0
       const isEffectivelyPaid = totalAmount > 0 && paidAmount >= totalAmount
       const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
-      
-      return { 
-        ...debt, 
-        paid_amount: paidAmount, 
+
+      return {
+        ...debt,
+        paid_amount: paidAmount,
         percent: Math.min(percent, 100),
         status: isEffectivelyPaid ? 'paid' : debt.status
       }
@@ -260,14 +260,14 @@ function HomeContent() {
         .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
       const remaining = Number(budget.amount) - spent
       const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
-      return { 
-        ...budget, 
+      return {
+        ...budget,
         name: cat?.name ?? budget.name,
         icon: cat?.icon ?? budget.icon,
         color: cat?.color ?? budget.color,
-        spent, 
-        remaining, 
-        percent: Math.min(percent, 100) 
+        spent,
+        remaining,
+        percent: Math.min(percent, 100)
       }
     })
     return budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3)
@@ -399,18 +399,18 @@ function HomeContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = (accounts || []).reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
-  
+
   const today = new Date()
   const todayDay = today.getDate()
   const sortedByDue = [...cards].sort((a, b) => { const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day; const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day; return aDue - bDue })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
   const allCardsPaid = cards.length > 0 && cards.every((c) => (c.faturaAtual || 0) === 0)
 
-  const getAttachmentIcon = (url: string | null) => { 
-    if (!url) return null; 
-    const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase()); 
-    if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />; 
-    return <Image size={12} className="text-blue-500 shrink-0" />; 
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null;
+    const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase());
+    if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />;
+    return <Image size={12} className="text-blue-500 shrink-0" />;
   }
 
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
@@ -448,11 +448,7 @@ function HomeContent() {
                 {hideBalance ? '••••••' : formatCurrency(totalAccountsBalance)}
               </h1>
               {!hideBalance && previousBalance !== 0 && (
-                <div className={`inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold relative z-10 ${
-                  balanceVariation >= 0
-                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                }`}>
+                <div className={`inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold relative z-10 ${balanceVariation >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
                   {balanceVariation >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                   {balanceVariation >= 0 ? '+' : ''}{balanceVariation.toFixed(1)}% vs. mês anterior
                 </div>
@@ -746,11 +742,10 @@ function HomeContent() {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1.5">
                           <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 truncate">{budget.name}</p>
-                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
-                            isDanger ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
-                            isWarning ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' :
-                            'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                          }`}>
+                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${isDanger ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
+                              isWarning ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' :
+                              'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                            }`}>
                             {isDanger && <AlertTriangle size={10} />}
                             {isDanger ? 'Estourado' : isWarning ? 'Atenção' : 'Seguro'}
                           </span>
@@ -849,7 +844,7 @@ function HomeContent() {
                     const isPending = tx.status === 'pending'
                     const IconComp = tx.type === 'transfer' ? ArrowRightLeft : getDynamicIcon(tx.categories?.icon)
                     const attachmentIcon = getAttachmentIcon(tx.receipt_url)
-                    
+
                     const isIncome = tx.type === 'income';
                     const isExpense = tx.type === 'expense' || tx.type === 'sangria';
                     const isTransfer = tx.type === 'transfer';
@@ -960,6 +955,7 @@ function HomeContent() {
         </div>
         <div className="flex flex-col items-end gap-3 shrink-0">
           <div className="flex items-center gap-3">
+            {/* 🔥 Blindagem de Hydration: só renderiza no cliente */}
             {isClient ? (
               <SyncButton
                 pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
@@ -969,7 +965,7 @@ function HomeContent() {
                 onClick={() => setIsSyncModalOpen(true)}
               />
             ) : (
-              <div className="w-10 h-10" />
+              <div className="w-10 h-10 animate-pulse bg-gray-200 dark:bg-slate-700 rounded-full" />
             )}
             {notificationsEnabled && (
               <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
@@ -1017,7 +1013,7 @@ function HomeContent() {
         />
       )}
 
-      {/* 🔥 Delayed Hydration: só renderiza no cliente */}
+      {/* 🔥 Blindagem do Modal: só renderiza no cliente */}
       {isClient && (
         <SyncStatusModal
           isOpen={isSyncModalOpen}
