@@ -138,14 +138,13 @@ function ContactDetailContent() {
     }
   }, [contactsLoading, contact, router])
 
-    const getAttachmentIcon = (url: string | null) => {
+  // 🔥 CORRIGIDO: regex com (\?|$) em vez de (?|$)
+  const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
-    // 🔥 CORREÇÃO: Adicionado a barra invertida antes do ponto para escapar a Regex
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(?|$)/i.test(url)
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
     if (isImage) return <Image size={12} className="shrink-0 text-blue-500" />
     return <Paperclip size={12} className="shrink-0 text-slate-400" />
   }
-
 
   const handleDelete = async () => {
     if (!contact) return
