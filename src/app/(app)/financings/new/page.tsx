@@ -9,6 +9,13 @@ import {
   Car,
   Home,
   Percent,
+  CalendarDays,
+  Landmark,
+  FileText,
+  Wallet,
+  Hash,
+  BadgePercent,
+  CheckCircle2,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -36,7 +43,6 @@ export default function NewFinancingPage() {
 
   const [description, setDescription] = useState("")
   const [totalAmountNum, setTotalAmountNum] = useState(0)
-  const [totalAmountFormatted, setTotalAmountFormatted] = useState("0,00")
   const [installmentsCount, setInstallmentsCount] = useState("")
   const [installmentAmountNum, setInstallmentAmountNum] = useState(0)
   const [interestRate, setInterestRate] = useState("")
@@ -60,7 +66,6 @@ export default function NewFinancingPage() {
       setDescription(financingData.description || "")
       const total = Number(financingData.total_amount) || 0
       setTotalAmountNum(total)
-      setTotalAmountFormatted(total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setInstallmentsCount(financingData.installments_count ? String(financingData.installments_count) : "")
       setInstallmentAmountNum(Number(financingData.installment_amount) || 0)
       setInterestRate(financingData.interest_rate ? String(financingData.interest_rate) : "")
@@ -81,7 +86,9 @@ export default function NewFinancingPage() {
     }
   }, [totalAmountNum, installmentsCount])
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }, [])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (window.scrollY <= 0) {
@@ -163,8 +170,21 @@ export default function NewFinancingPage() {
 
   const contextTitle = effectiveContext === "dfl" ? "Empresa" : "Pessoal"
 
+  const sectionClass =
+    "bg-white/92 dark:bg-slate-800/92 border border-gray-100/80 dark:border-slate-700/70 rounded-[28px]"
+  const fieldClass =
+    "rounded-[20px] bg-gray-50/90 dark:bg-slate-700/35 border border-gray-100 dark:border-slate-700/60 px-4 py-3.5"
+  const labelClass =
+    "text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block"
+  const inputClass =
+    "w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+
   return (
-    <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
+    <div
+      className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -176,112 +196,277 @@ export default function NewFinancingPage() {
 
       <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"><ArrowLeft size={24} /></button>
+          <button
+            onClick={() => { vibrate([5]); router.back() }}
+            className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"
+          >
+            <ArrowLeft size={24} />
+          </button>
+
           <div className="text-center">
-            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? "Editar" : "Novo"} Financiamento</h1>
-            <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{contextTitle}</p>
+            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">
+              {editId ? "Editar" : "Novo"} Financiamento
+            </h1>
+            <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+              Contexto: {contextTitle}
+            </p>
           </div>
+
           <div className="w-10" />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block">Tipo de Bem</label>
-          <div className="flex gap-2">
+      <div className="flex-1 overflow-y-auto px-4 pt-5 pb-32 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="rounded-[28px] bg-gradient-to-br from-teal-600 to-teal-700 text-white p-5 shadow-[0_14px_40px_rgba(13,148,136,0.28)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[12px] font-semibold text-teal-50/90">Resumo</p>
+              <h2 className="text-[24px] font-black mt-1 leading-none">
+                {totalAmountNum > 0
+                  ? totalAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  : "R$ 0,00"}
+              </h2>
+            </div>
+            <div className="rounded-[18px] bg-white/14 px-3 py-2 text-right">
+              <p className="text-[10px] font-medium text-teal-50/80">Parcela estimada</p>
+              <p className="text-[15px] font-bold">
+                {installmentAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold">
+              {installmentsCount ? `${installmentsCount} parcelas` : "Sem parcelas"}
+            </div>
+            <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold">
+              {status === "active" ? "Ativo" : status === "paid" ? "Quitado" : "Atrasado"}
+            </div>
+            <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold capitalize">
+              {assetType === "vehicle" ? "Veículo" : assetType === "property" ? "Imóvel" : "Outro"}
+            </div>
+          </div>
+        </div>
+
+        <section className={`${sectionClass} p-4`}>
+          <div className="mb-4">
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Identificação</p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Informações principais do financiamento.</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mb-4">
             {[
               { value: "vehicle", label: "Veículo", icon: Car },
               { value: "property", label: "Imóvel", icon: Home },
               { value: "other", label: "Outro", icon: Percent },
-            ].map(({ value, label, icon: Icon }) => (
-              <button key={value} onClick={() => { vibrate([5]); setAssetType(value); }} className={`flex-1 py-3.5 rounded-[16px] text-[13px] font-bold transition-all active:scale-95 flex flex-col items-center justify-center gap-1.5 ${assetType === value ? "bg-teal-600 text-white shadow-md shadow-teal-600/20" : "bg-gray-50 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}`}>
-                <Icon size={20} />{label}
-              </button>
-            ))}
+            ].map(({ value, label, icon: Icon }) => {
+              const active = assetType === value
+              return (
+                <button
+                  key={value}
+                  onClick={() => { vibrate([5]); setAssetType(value) }}
+                  className={`rounded-[20px] px-3 py-3.5 flex flex-col items-center justify-center gap-1.5 border transition-all active:scale-95 ${
+                    active
+                      ? "bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-600/20"
+                      : "bg-gray-50 dark:bg-slate-700/35 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-slate-700/60"
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="text-[12px] font-bold">{label}</span>
+                </button>
+              )
+            })}
           </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Descrição</label>
-          <input type="text" placeholder="Ex: Financiamento Itaú..." value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-transparent text-[16px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" autoFocus />
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Bem Financiado (Opcional)</label>
-          <input type="text" placeholder="Ex: Honda Civic 2024..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Banco / Financeira (Opcional)</label>
-          <input type="text" placeholder="Ex: Banco do Brasil..." value={bank} onChange={(e) => setBank(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Valor Total</label>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[15px] text-gray-400 font-medium">R$</span>
-              <MoneyInput
-                value={totalAmountNum}
-                onChange={(num, formatted) => { setTotalAmountNum(num); setTotalAmountFormatted(formatted) }}
-                placeholder="0,00"
-                className="w-full bg-transparent text-[18px] font-black text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+          <div className="space-y-3">
+            <div className={fieldClass}>
+              <label className={labelClass}>Descrição</label>
+              <input
+                type="text"
+                placeholder="Ex: Financiamento Itaú"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full bg-transparent text-[17px] font-bold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+                autoFocus
               />
             </div>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Nº Parcelas</label>
-            <input type="number" placeholder="Ex: 36" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full bg-transparent text-[18px] font-black text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-          </div>
-        </div>
 
-        <div className="bg-gray-50 dark:bg-slate-700/30 rounded-[24px] p-4 border border-gray-100 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Valor da Parcela (Calculado)</label>
-          <div className="flex items-center gap-2">
-            <span className="text-[15px] text-gray-400 font-medium">R$</span>
-            <span className="text-[20px] font-black text-teal-600 dark:text-teal-400">
-              {installmentAmountNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-        </div>
+            <div className={fieldClass}>
+              <label className={labelClass}>Bem financiado</label>
+              <div className="flex items-center gap-3">
+                <FileText size={16} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Ex: Honda Civic 2024"
+                  value={asset}
+                  onChange={(e) => setAsset(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Juros (% a.m.)</label>
-            <input type="number" step="0.01" placeholder="Ex: 1,5" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
+            <div className={fieldClass}>
+              <label className={labelClass}>Banco / Financeira</label>
+              <div className="flex items-center gap-3">
+                <Landmark size={16} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Ex: Banco do Brasil"
+                  value={bank}
+                  onChange={(e) => setBank(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </div>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Status</label>
-            <select value={status} onChange={(e) => { vibrate([5]); setStatus(e.target.value); }} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none appearance-none cursor-pointer">
-              <option value="active">Ativo</option>
-              <option value="paid">Quitado</option>
-              <option value="overdue">Atrasado</option>
-            </select>
-          </div>
-        </div>
+        </section>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Data Início</label>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
+        <section className={`${sectionClass} p-4`}>
+          <div className="mb-4">
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Valores</p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Total, quantidade de parcelas e cálculo automático.</p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">1º Vencimento</label>
-            <input type="date" value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} className="w-full bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${fieldClass} min-h-[92px] flex flex-col justify-between`}>
+              <label className={labelClass}>Valor total</label>
+              <div className="flex items-center gap-2">
+                <Wallet size={16} className="text-gray-400 shrink-0" />
+                <span className="text-[15px] font-semibold text-gray-400">R$</span>
+                <MoneyInput
+                  value={totalAmountNum}
+                  onChange={(num) => setTotalAmountNum(num)}
+                  placeholder="0,00"
+                  className="w-full bg-transparent text-[22px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+                />
+              </div>
+            </div>
+
+            <div className={`${fieldClass} min-h-[92px] flex flex-col justify-between`}>
+              <label className={labelClass}>Número de parcelas</label>
+              <div className="flex items-center gap-2">
+                <Hash size={16} className="text-gray-400 shrink-0" />
+                <input
+                  type="number"
+                  placeholder="Ex: 36"
+                  value={installmentsCount}
+                  onChange={(e) => setInstallmentsCount(e.target.value)}
+                  className="w-full bg-transparent text-[22px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Observações Adicionais</label>
-          <input type="text" placeholder="Detalhes extra..." value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
-        </div>
+          <div className="mt-3 rounded-[22px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/40 px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">Valor estimado por parcela</p>
+                <p className="text-[12px] text-teal-700/80 dark:text-teal-300/80 mt-0.5">Calculado automaticamente com base no total e nas parcelas.</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[22px] font-black text-teal-700 dark:text-teal-300">
+                  {installmentAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 dark:from-slate-900 via-gray-50/80 dark:via-slate-900/80 to-transparent z-20">
-          <button onClick={() => { vibrate([10, 50]); handleSave(); }} disabled={saving} className="w-full max-w-md mx-auto bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50">
-            {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}{editId ? "Atualizar Financiamento" : "Criar Financiamento"}
-          </button>
-        </div>
+        <section className={`${sectionClass} p-4`}>
+          <div className="mb-4">
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Condições</p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Status atual, juros e datas de controle.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className={fieldClass}>
+              <label className={labelClass}>Juros (% a.m.)</label>
+              <div className="flex items-center gap-2">
+                <BadgePercent size={16} className="text-gray-400 shrink-0" />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 1,5"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className={fieldClass}>
+              <label className={labelClass}>Status</label>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-gray-400 shrink-0" />
+                <select
+                  value={status}
+                  onChange={(e) => { vibrate([5]); setStatus(e.target.value) }}
+                  className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-100 outline-none appearance-none cursor-pointer"
+                >
+                  <option value="active">Ativo</option>
+                  <option value="paid">Quitado</option>
+                  <option value="overdue">Atrasado</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className={fieldClass}>
+              <label className={labelClass}>Data de início</label>
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-gray-400 shrink-0" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-100 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className={fieldClass}>
+              <label className={labelClass}>Primeiro vencimento</label>
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-gray-400 shrink-0" />
+                <input
+                  type="date"
+                  value={firstDueDate}
+                  onChange={(e) => setFirstDueDate(e.target.value)}
+                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-100 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className={`${sectionClass} p-4`}>
+          <div className="mb-3">
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Observações</p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Informações complementares para consulta futura.</p>
+          </div>
+
+          <div className={fieldClass}>
+            <textarea
+              placeholder="Ex: entrada já paga, contrato assinado, observações do banco..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500 resize-none"
+            />
+          </div>
+        </section>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 dark:from-slate-900 via-gray-50/90 dark:via-slate-900/90 to-transparent z-20">
+        <button
+          onClick={() => { vibrate([10, 50]); handleSave() }}
+          disabled={saving}
+          className="w-full max-w-md mx-auto bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}
+          {editId ? "Atualizar Financiamento" : "Criar Financiamento"}
+        </button>
       </div>
     </div>
   )
