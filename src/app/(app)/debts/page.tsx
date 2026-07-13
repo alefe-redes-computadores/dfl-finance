@@ -5,57 +5,18 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
-import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
+import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
-// 🔥 Importando useHapticFeedback para feedback tátil
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-
-const DebtsSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
-    <div className="grid grid-cols-2 gap-3">
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
-      <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
-        <div className="h-3 w-14 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
-        <div className="h-5 w-10 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
-      </div>
-    </div>
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-slate-700" />
-            <div className="space-y-2">
-              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-            </div>
-          </div>
-          <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
-        </div>
-        <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-          <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-1/2" />
-        </div>
-        <div className="flex justify-between">
-          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
-        </div>
-      </div>
-    ))}
-  </div>
-)
+import Skeleton from '@/components/Skeleton'
 
 function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
-  // 🔥 Haptic feedback
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
   
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
@@ -158,6 +119,7 @@ function DebtsContent() {
     if (e.touches[0].clientY - pullStartY.current > 60) {
       setRefreshing(true)
       isPulling.current = false
+      vibrate([10])
       loadDebts().finally(() => setRefreshing(false))
     }
   }
@@ -174,128 +136,140 @@ function DebtsContent() {
       c.removeEventListener('touchmove', handleTouchMove)
       c.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [loading, refreshing])
+  }, [loading, refreshing, vibrate])
 
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
       )}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/more')}
-            className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Quem me deve</h1>
+
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+      )}
+
+      <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl pt-6 pb-2 px-4 shadow-sm border-b border-gray-100 dark:border-slate-800/50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <button onClick={() => { vibrate([5]); router.push('/more'); }} className="p-1 -ml-1 text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors active:scale-95">
+              <ChevronLeft size={24} />
+            </button>
+            <h1 className="text-[26px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">Quem me deve</h1>
+          </div>
+          <button onClick={() => { vibrate([10]); router.push('/debts/new'); }} className="w-10 h-10 bg-teal-600 hover:bg-teal-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-95">
+            <Plus size={20} />
+          </button>
+        </div>
+
+        <div className="mb-4">
           <ContextToggle />
-          <button
-            onClick={() => router.push('/debts/new')}
-            className="w-9 h-9 bg-teal-700 dark:bg-teal-600 rounded-full flex items-center justify-center shadow-lg shadow-teal-700/20 active:scale-90 transition-transform"
-          >
-            <Plus size={20} className="text-white" />
-          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-          <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-2">
-            <Wallet size={16} className="text-orange-600 dark:text-orange-400" />
+      <div className="px-4 pt-4">
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center">
+            <div className="w-12 h-12 rounded-[16px] bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-3">
+              <Wallet size={20} className="text-orange-600 dark:text-orange-400" />
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">A receber</p>
+            <p className="text-[18px] font-black tracking-tight text-orange-600 dark:text-orange-400">{formatCurrency(totalToReceiveState)}</p>
           </div>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">A receber</p>
-          <p className="text-[15px] font-bold text-orange-600">{formatCurrency(totalToReceiveState)}</p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-          <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
-            <Users size={16} className="text-teal-700 dark:text-teal-400" />
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 text-center">
+            <div className="w-12 h-12 rounded-[16px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-3">
+              <Users size={20} className="text-teal-600 dark:text-teal-400" />
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">Pessoas</p>
+            <p className="text-[18px] font-black tracking-tight text-teal-700 dark:text-teal-400">{debts.length}</p>
           </div>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 font-bold mb-1">Pessoas</p>
-          <p className="text-[15px] font-bold text-teal-700 dark:text-teal-400">{debts.length}</p>
         </div>
-      </div>
 
-      <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-50 dark:border-slate-700 p-1 rounded-full mb-6">
-        <button onClick={() => setFilter('active')} className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${filter === 'active' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>Pendentes</button>
-        <button onClick={() => setFilter('paid')} className={`flex-1 py-2 rounded-full text-[13px] font-bold transition-all ${filter === 'paid' ? 'bg-[#f4f6f8] dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]' : 'text-gray-400 dark:text-gray-500'}`}>Pagos</button>
-      </div>
-
-      {loading ? (
-        <DebtsSkeleton />
-      ) : debts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Users size={40} className="text-gray-400 dark:text-gray-500" />
-          </div>
-          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhum registro</h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
-            {filter === 'paid' ? 'Nenhuma dívida foi paga ainda.' : 'Registre empréstimos para acompanhar quem te deve.'}
-          </p>
-          <button onClick={() => router.push('/debts/new')} className="bg-teal-700 text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-teal-800 transition-colors">Novo empréstimo</button>
+        <div className="flex bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 p-1.5 rounded-full mb-6">
+          <button onClick={() => { vibrate([5]); setFilter('active'); }} className={`flex-1 py-2.5 rounded-full text-[13px] font-bold transition-all ${filter === 'active' ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Pendentes</button>
+          <button onClick={() => { vibrate([5]); setFilter('paid'); }} className={`flex-1 py-2.5 rounded-full text-[13px] font-bold transition-all ${filter === 'paid' ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Pagos</button>
         </div>
-      ) : (
-        <div className="space-y-3 animate-in fade-in duration-300">
-          {debts.map((debt: any) => {
-            const IconComp = getDynamicIcon(debt.icon || 'user')
-            const isPaid = debt.status === 'paid'
-            const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
-            const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
-            const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
-            const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
-            return (
-              <div
-                key={debt.id}
-                onClick={() => router.push(`/debts/details?id=${debt.id}`)}
-                className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98] ${isPaid ? 'border-emerald-200 dark:border-emerald-800' : isOverdue ? 'border-red-200 dark:border-red-800' : 'border-gray-50 dark:border-slate-700'}`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${debt.color}20`, color: debt.color }}><IconComp size={18} /></div>
-                    <div>
-                      <span className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{debt.person_name}</span>
-                      {debt.description && <p className="text-[11px] text-gray-400 dark:text-gray-500">{debt.description}</p>}
+
+        {loading ? (
+          <div className="space-y-4">
+             <Skeleton count={3} height="130px" borderRadius="28px" />
+          </div>
+        ) : debts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-300">
+            <div className="w-20 h-20 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
+              <Users size={40} className="opacity-30 text-gray-500" />
+            </div>
+            <h3 className="font-bold text-[18px] text-gray-800 dark:text-gray-100 mb-2 tracking-tight">Nenhum registro</h3>
+            <p className="text-gray-400 dark:text-gray-500 text-[13px] font-medium mb-6 max-w-[250px]">
+              {filter === 'paid' ? 'Nenhuma dívida foi paga ainda.' : 'Registre empréstimos para acompanhar quem te deve.'}
+            </p>
+            <button onClick={() => { vibrate([10]); router.push('/debts/new'); }} className="bg-teal-600 text-white px-8 py-3.5 rounded-full font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/30 active:scale-95">
+              Novo empréstimo
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4 animate-in fade-in duration-500">
+            {debts.map((debt: any) => {
+              const IconComp = getDynamicIcon(debt.icon || 'user')
+              const isPaid = debt.status === 'paid'
+              const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
+              const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
+              const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
+              const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
+              
+              return (
+                <div
+                  key={debt.id}
+                  onClick={() => { vibrate([5]); router.push(`/debts/details?id=${debt.id}`); }}
+                  className={`bg-white dark:bg-slate-800 rounded-[28px] p-5 shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group ${isPaid ? 'border-emerald-200 dark:border-emerald-800/50' : isOverdue ? 'border-red-200 dark:border-red-800/50' : 'border-gray-50 dark:border-slate-700/50'}`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${debt.color}15`, color: debt.color }}><IconComp size={22} /></div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-[16px] text-gray-800 dark:text-gray-100 truncate tracking-tight mb-0.5">{debt.person_name}</p>
+                        {debt.description && <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 truncate">{debt.description}</p>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {isPaid && <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-[10px] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Check size={10} /> Pago</span>}
+                      {isOverdue && <span className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2.5 py-1 rounded-[10px] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Atrasado {Math.abs(daysUntilDue)}d</span>}
+                      {isNearDue && <span className="bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2.5 py-1 rounded-[10px] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Clock size={10} /> Vence em {daysUntilDue}d</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {isPaid && <Check size={14} className="text-emerald-500" />}
-                    {isOverdue && <AlertTriangle size={14} className="text-red-500" />}
-                    {isNearDue && <Clock size={14} className="text-orange-500" />}
-                    <span className={`text-[11px] font-bold ${isPaid ? 'text-emerald-600' : isOverdue ? 'text-red-500' : isNearDue ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {isPaid ? 'Pago' : isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dia(s)` : isNearDue ? `Vence em ${daysUntilDue} dia(s)` : ''}
+                  
+                  <div className="w-full bg-gray-100 dark:bg-slate-700/50 rounded-full h-3 overflow-hidden mb-2 shadow-inner">
+                    <div className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : isNearDue ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(debt.percent, 100)}%` }} />
+                  </div>
+                  
+                  <div className="flex justify-between text-[11px] font-bold text-gray-400 dark:text-gray-500 mt-1">
+                    <span className={isOverdue ? 'text-red-500' : ''}>
+                      {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
                     </span>
+                    <span>{debt.percent.toFixed(0)}% • {formatCurrency(Number(debt.total_amount))}</span>
                   </div>
                 </div>
-                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
-                  <div className={`h-full rounded-full transition-all duration-1000 ease-out ${isPaid ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : isNearDue ? 'bg-orange-500' : 'bg-teal-500'}`} style={{ width: `${Math.min(debt.percent, 100)}%` }} />
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
-                  </span>
-                  <span className="text-gray-400 dark:text-gray-500 font-medium">{debt.percent.toFixed(0)}% • {formatCurrency(Number(debt.total_amount))}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 export default function DebtsPage() {
   return (
-    <ContextProvider>
+    <ContextToggle.ContextProvider>
       <DebtsContent />
-    </ContextProvider>
+    </ContextToggle.ContextProvider>
   )
 }
