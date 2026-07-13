@@ -17,12 +17,14 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDay
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
-import NetworkStatus from '@/components/NetworkStatus'
+// 🔥 REMOVIDO: NetworkStatus (substituído pelo modal e ícone)
 import InvoiceAlert from '@/components/InvoiceAlert'
 import DebtAlert from '@/components/DebtAlert'
 import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
+// 🔥 NOVO: Importando o SyncStatusModal
+import SyncStatusModal from '@/components/SyncStatusModal'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import FAB from '@/components/FAB'
@@ -85,6 +87,9 @@ function HomeContent() {
   const [personalizeEnabled, setPersonalizeEnabled] = useState<Set<string>>(new Set(DEFAULT_SECTION_ORDER))
 
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
+
+  // 🔥 NOVO: Estado para controlar a abertura do modal de sincronização
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
   const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
@@ -924,7 +929,7 @@ function HomeContent() {
         />
       )}
 
-      <NetworkStatus isOnline={isOnline} pendingCount={pendingCount} isSyncing={isSyncing} />
+      {/* 🔥 REMOVIDO: NetworkStatus — substituído pelo ícone SyncButton e modal */}
 
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
@@ -956,7 +961,14 @@ function HomeContent() {
         </div>
         <div className="flex flex-col items-end gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            <SyncButton pendingCount={pendingCount} isSyncing={isSyncing} onSync={syncQueue} />
+            {/* 🔥 SyncButton com isOnline e onClick para abrir modal */}
+            <SyncButton
+              pendingCount={pendingCount}
+              isSyncing={isSyncing}
+              isOnline={isOnline}
+              onSync={syncQueue}
+              onClick={() => setIsSyncModalOpen(true)}
+            />
             {notificationsEnabled && (
               <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
             )}
@@ -991,17 +1003,23 @@ function HomeContent() {
         onSave={handleSavePersonalize}
       />
 
-    {notificationsEnabled && (
-      <NotificationCenter
-        isOpen={showNotifications}
-        onClose={() => {
-          setShowNotifications(false)
-          reloadNotifs()
-        }}
-        notifications={notificationsMap}
-        onReadChange={() => reloadNotifs()}
+      {notificationsEnabled && (
+        <NotificationCenter
+          isOpen={showNotifications}
+          onClose={() => {
+            setShowNotifications(false)
+            reloadNotifs()
+          }}
+          notifications={notificationsMap}
+          onReadChange={() => reloadNotifs()}
+        />
+      )}
+
+      {/* 🔥 NOVO: SyncStatusModal para feedback de sincronização */}
+      <SyncStatusModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
       />
-    )}
     </div>
   )
 }
