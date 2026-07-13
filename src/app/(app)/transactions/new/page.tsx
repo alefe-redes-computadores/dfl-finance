@@ -51,6 +51,12 @@ const safeNum = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed
 }
 
+// 🔥 FUNÇÃO SEGURA PARA TYPE
+const getSafeType = (value: string | null): TxType => {
+  if (value === 'income' || value === 'expense' || value === 'transfer') return value
+  return 'expense'
+}
+
 function NewTransactionContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -68,7 +74,13 @@ function NewTransactionContent() {
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
-  const [type, setType] = useState<TxType>((searchParams.get('type') as TxType) || 'expense')
+  // 🔥 TYPE INICIALIZADO COM SEGURANÇA
+  const [type, setType] = useState<TxType>('expense')
+
+  useEffect(() => {
+    setType(getSafeType(searchParams.get('type')))
+  }, [searchParams])
+
   const [amountNum, setAmountNum] = useState(0)
   const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
@@ -533,7 +545,7 @@ function NewTransactionContent() {
             status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
             context: effectiveContext,
             receipt_url: i === 0 ? receiptUrl : null,
-            notes: notes || null,
+            notes: finalNotes || null, // 🔥 CORRIGIDO: usando finalNotes
             recurring_group_id: recurringGroupId,
             installment_index: totalParcels > 1 ? i + 1 : 1,
             total_installments: totalParcels > 1 ? totalParcels : 1,
@@ -591,7 +603,13 @@ function NewTransactionContent() {
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
   }, [uploading, receiptUrl, receiptType])
 
-  // 🔥 CORREÇÃO DEFINITIVA - ESTRUTURA SIMPLIFICADA
+  // 🔥 ÍCONES COM FALLBACK SEGURO
+  const safeIcon = (iconName: string | undefined, fallback: string = 'Plus') => {
+    const Icon = getDynamicIcon(iconName)
+    return Icon || Icons[fallback as keyof typeof Icons] || Icons.Plus
+  }
+
+  // 🔥 RENDERIZAÇÃO PRINCIPAL
   return (
     <div className="fixed inset-0 z-50 bg-[#f8f9fa] dark:bg-slate-900 flex flex-col">
       
@@ -634,7 +652,7 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* 🔥 CORPO DO FORMULÁRIO - COM VISIBILIDADE GARANTIDA */}
+      {/* CORPO DO FORMULÁRIO */}
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-32">
         <div className="space-y-4">
           
@@ -742,7 +760,7 @@ function NewTransactionContent() {
               )}
             </div>
 
-            {/* Categoria */}
+            {/* Categoria - COM FALLBACK SEGURO */}
             <div>
               <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
                 Categoria
@@ -753,7 +771,7 @@ function NewTransactionContent() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {selectedCat ? (() => {
-                    const IconComp = getDynamicIcon(selectedCat.icon)
+                    const IconComp = safeIcon(selectedCat.icon)
                     return (
                       <div
                         className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm"
@@ -856,7 +874,7 @@ function NewTransactionContent() {
               </div>
             )}
 
-            {/* Fornecedor / Cliente */}
+            {/* Fornecedor / Cliente - COM FALLBACK SEGURO */}
             {(contacts || []).length > 0 && (
               <div>
                 <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
@@ -1106,7 +1124,7 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* 🔥 CTA FIXO INFERIOR */}
+      {/* CTA FIXO INFERIOR */}
       <div className="sticky bottom-0 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 py-5">
         <button
           onClick={() => { vibrate([10, 50]); handleSave() }}
@@ -1131,7 +1149,10 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* 🔥 MODAIS (mantidos com lógica intacta) */}
+      {/* ============================================================
+          MODAIS COM PROTEÇÃO - Blindagem contra hydration
+          ============================================================ */}
+
       {showCatModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
@@ -1142,9 +1163,9 @@ function NewTransactionContent() {
               <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
             </div>
             <div className="space-y-2 pb-10">
-              {mainCategories.map((cat: any) => {
-                const IconComp = getDynamicIcon(cat.icon)
-                const subCount = subcategories[cat.id]?.length || 0
+              {(mainCategories || []).map((cat: any) => {
+                const IconComp = safeIcon(cat.icon)
+                const subCount = subcategories?.[cat.id]?.length || 0
                 const isActive = cat.id === categoryId
                 return (
                   <button key={cat.id} onClick={() => { vibrate([5]); setCategoryId(cat.id); setSelectedParentCat(cat); subCount > 0 ? setShowSubCatModal(true) : setShowCatModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
@@ -1174,8 +1195,8 @@ function NewTransactionContent() {
               </div>
             </div>
             <div className="space-y-2 pb-6">
-              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
-                const SubIcon = getDynamicIcon(sub.icon)
+              {(subcategories?.[selectedParentCat.id] || []).map((sub: any) => {
+                const SubIcon = safeIcon(sub.icon)
                 const isActive = sub.id === categoryId
                 return (
                   <button key={sub.id} onClick={() => { vibrate([5]); setCategoryId(sub.id); setShowSubCatModal(false); setShowCatModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
@@ -1258,7 +1279,7 @@ function NewTransactionContent() {
             <div className="space-y-2 pb-6">
               {(contacts || []).map((contact) => {
                 const isActive = contact.id === contactId
-                const IconComp = getDynamicIcon(contact.icon || 'user')
+                const IconComp = safeIcon(contact?.icon || 'User')
                 return (
                   <button key={contact.id} onClick={() => { vibrate([5]); setContactId(contact.id); setShowContactModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
                     <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${contact.color}20`, color: contact.color }}><IconComp size={22} /></div>
@@ -1303,11 +1324,23 @@ function NewTransactionContent() {
         </div>
       )}
 
-      {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
-      {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
-      {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
-      {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
-      {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
+      {/* 🔥 MODAIS EXTERNOS COM PROTEÇÃO DE HYDRATION */}
+      {typeof window !== 'undefined' && (
+        <>
+          {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
+          {showCamera && (
+            <CameraCapture
+              isOpen={showCamera}
+              onClose={() => setShowCamera(false)}
+              onCapture={handleCameraCapture}
+            />
+          )}
+          {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
+          {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
+          {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
+        </>
+      )}
+      
       <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={newCatIcon} onSelect={setNewCatIcon} />
 
       {/* Modais de criação */}
@@ -1323,7 +1356,7 @@ function NewTransactionContent() {
             <div className="space-y-4">
               <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Nome da categoria" className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[14px] font-semibold outline-none text-gray-800 dark:text-gray-200" />
               <button onClick={() => setShowIconPicker(true)} className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 w-full text-left active:scale-[0.98] transition-transform">
-                <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>{(() => { const I = getDynamicIcon(newCatIcon); return <I size={24} /> })()}</div>
+                <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>{(() => { const I = safeIcon(newCatIcon); return <I size={24} /> })()}</div>
                 <span className="text-[15px] font-bold text-gray-800 dark:text-white flex-1">{newCatIcon}</span>
                 <ChevronDown size={20} className="text-gray-400" />
               </button>
@@ -1415,7 +1448,7 @@ function NewTransactionContent() {
   )
 }
 
-// 🔥 EXPORTAÇÃO CORRETA
+// 🔥 EXPORTAÇÃO CORRETA COM SUSPENSE
 export default function NewTransactionPage() {
   return (
     <Suspense fallback={
