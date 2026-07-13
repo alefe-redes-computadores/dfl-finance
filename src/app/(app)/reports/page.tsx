@@ -21,37 +21,38 @@ import {
   PieChart as RePieChart, Pie, Cell, LineChart as ReLineChart, Line
 } from 'recharts'
 
+// 🔥 SKELETON ATUALIZADO
 const ReportsSkeleton = () => (
   <div className="space-y-4 animate-pulse">
     <div className="grid grid-cols-3 gap-3">
       {[1, 2, 3].map(i => (
-        <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
+        <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 text-center">
           <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 mx-auto mb-2" />
           <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-1" />
           <div className="h-5 w-20 bg-gray-100 dark:bg-slate-700/50 rounded mx-auto" />
         </div>
       ))}
     </div>
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
       <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-xl" />
+      <div className="h-[200px] bg-gray-100 dark:bg-slate-700/50 rounded-[18px]" />
     </div>
   </div>
 )
 
-// 🔥 MODAL ANIMADO DE EXPORTAÇÃO
-function ExportModal({ isOpen, onClose, onExport, exportStatus }: { 
-  isOpen: boolean; 
-  onClose: () => void; 
+// 🔥 EXPORT MODAL ATUALIZADO
+function ExportModal({ isOpen, onClose, onExport, exportStatus }: {
+  isOpen: boolean;
+  onClose: () => void;
   onExport: (format: 'pdf' | 'csv') => void;
-  exportStatus: 'idle' | 'exporting' | 'success' 
+  exportStatus: 'idle' | 'exporting' | 'success'
 }) {
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={exportStatus === 'exporting' ? undefined : onClose}>
-      <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6 animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
-        
+      <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-6 animate-in slide-in-from-bottom-10 duration-300 shadow-2xl" onClick={e => e.stopPropagation()}>
+
         {exportStatus === 'success' ? (
           <div className="flex flex-col items-center justify-center py-8 animate-in zoom-in duration-500">
             <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/20">
@@ -61,43 +62,50 @@ function ExportModal({ isOpen, onClose, onExport, exportStatus }: {
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-[280px] mb-8 font-medium">
               O download foi iniciado. Acesse a <strong className="text-emerald-600 dark:text-emerald-400">pasta de downloads</strong> do seu dispositivo para abrir o arquivo.
             </p>
-            <button 
-              type="button" 
-              onClick={onClose} 
-              className="w-full bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-4 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-4 rounded-[20px] font-bold hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
             >
               Concluir
             </button>
           </div>
         ) : (
           <>
+            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
+
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Exportar Relatório</h3>
-              <button type="button" onClick={onClose} className="text-gray-400 dark:text-gray-500 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+              <div>
+                <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Exportar Relatório</h3>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Escolha o formato para exportar os dados
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-400 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Escolha o formato para exportar o relatório do período selecionado.
-            </p>
-
             <div className="flex gap-3">
               <button
-                type="button" // 🔥 ISSO EVITA O REFRESH DA PÁGINA
+                type="button"
                 onClick={() => onExport('pdf')}
                 disabled={exportStatus === 'exporting'}
-                className="flex-1 bg-teal-700 text-white py-4 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 h-12 rounded-[20px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {exportStatus === 'exporting' ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
                 PDF
               </button>
-              
+
               <button
-                type="button" // 🔥 ISSO EVITA O REFRESH DA PÁGINA
+                type="button"
                 onClick={() => onExport('csv')}
                 disabled={exportStatus === 'exporting'}
-                className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-4 rounded-xl font-bold text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 h-12 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold text-[14px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {exportStatus === 'exporting' ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
                 CSV
@@ -115,13 +123,13 @@ export default function ReportsPage() {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
-  
+
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [period, setPeriod] = useState<'1m' | '3m' | '6m' | '12m'>('3m')
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
-  
+
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
 
@@ -211,10 +219,9 @@ export default function ReportsPage() {
     })
   })()
 
-  // 🔥 MUDANÇA OBRIGATÓRIA: Usando { csv, filename }
   const handleExport = async (format: 'pdf' | 'csv') => {
     if (!user?.id) return
-    
+
     if (format === 'pdf') {
       showToast('A exportação em PDF estará disponível em breve.', 'info')
       return
@@ -224,12 +231,11 @@ export default function ReportsPage() {
     try {
       const daysRange = (parseInt(period) * 30).toString()
       const { csv, filename } = await exportTransactionsToCSV(user.id, effectiveContext, daysRange)
-      
+
       downloadCSV(csv, filename)
-      
+
       setExportStatus('success')
 
-      // Fecha o modal automaticamente após 5 segundos se o usuário não clicar em Concluir
       setTimeout(() => {
         setShowExportModal(false)
         setExportStatus('idle')
@@ -257,95 +263,153 @@ export default function ReportsPage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
-      <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <button type="button" onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors">
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-            <BarChart3 size={20} className="text-teal-500" />
-            Relatórios
-          </h1>
-          <button type="button" onClick={loadData} className="p-2 text-gray-400 hover:text-teal-600 transition-colors">
-            <RefreshCw size={20} className={loadingPulse ? 'animate-spin' : ''} />
-          </button>
+      {loadingPulse && (
+        <div className="fixed top-20 right-4 z-50">
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
         </div>
-        <ContextToggle />
+      )}
+
+      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => router.push('/home')}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="min-w-0">
+                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">
+                  <BarChart3 size={18} className="text-teal-500" />
+                  Relatórios
+                </h1>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Análise consolidada do período
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadData}
+              className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98] shrink-0"
+            >
+              <RefreshCw size={18} className={loadingPulse ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          <div className="mb-3">
+            <ContextToggle />
+          </div>
+
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex gap-1 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 p-1 shadow-sm">
+              {periods.map(p => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setPeriod(p.key as any)}
+                  className={`h-9 px-3 rounded-[14px] text-[12px] font-semibold transition-all active:scale-[0.98] ${
+                    period === p.key
+                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-1 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 p-1 shadow-sm">
+              {filterOptions.map(f => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setFilterType(f.key as any)}
+                  className={`h-9 px-3 rounded-[14px] text-[12px] font-semibold transition-all active:scale-[0.98] ${
+                    filterType === f.key
+                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-4">
-        <div className="flex flex-wrap gap-2 items-center justify-between">
-          <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
-            {periods.map(p => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setPeriod(p.key as any)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${period === p.key ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
-            {filterOptions.map(f => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setFilterType(f.key as any)}
-                className={`px-2 py-1.5 rounded-full text-[10px] font-bold transition-all ${filterType === f.key ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
+      <div className="px-4 pt-3 space-y-4">
         {loading ? (
           <ReportsSkeleton />
         ) : filteredByPeriod.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-            <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-              <BarChart3 size={40} className="text-gray-400 dark:text-gray-500" />
+            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+              <BarChart3 size={28} className="text-gray-400 dark:text-gray-500" />
             </div>
-            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">Nenhum dado disponível</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-[250px]">
+            <h3 className="font-semibold text-[16px] text-gray-800 dark:text-gray-100 mb-1">
+              Nenhum dado disponível
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 text-[12px] max-w-[250px]">
               Não há transações no período selecionado.
             </p>
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in duration-300">
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-                <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-2">
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4">
+                <div className="w-9 h-9 rounded-[14px] bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-3">
                   <TrendingUp size={16} className="text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold mb-1">Receitas</p>
-                <p className="text-[15px] font-bold text-emerald-600">{formatCurrency(totalIncome)}</p>
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                  Receitas
+                </p>
+                <p className="text-[16px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  {formatCurrency(totalIncome)}
+                </p>
               </div>
-              <div className="bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border border-gray-50 dark:border-slate-700 text-center">
-                <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-2">
+
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4">
+                <div className="w-9 h-9 rounded-[14px] bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-3">
                   <TrendingDown size={16} className="text-red-500" />
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold mb-1">Despesas</p>
-                <p className="text-[15px] font-bold text-red-500">{formatCurrency(totalExpense)}</p>
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                  Despesas
+                </p>
+                <p className="text-[16px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  {formatCurrency(totalExpense)}
+                </p>
               </div>
-              <div className={`bg-white dark:bg-slate-800 rounded-[20px] p-4 shadow-sm border text-center ${balance >= 0 ? 'border-emerald-200 dark:border-emerald-800' : 'border-red-200 dark:border-red-800'}`}>
-                <div className="w-8 h-8 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-2">
+
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4">
+                <div className="w-9 h-9 rounded-[14px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center mb-3">
                   <Wallet size={16} className="text-teal-600 dark:text-teal-400" />
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold mb-1">Saldo</p>
-                <p className={`text-[15px] font-bold ${balance >= 0 ? 'text-teal-600' : 'text-red-500'}`}>{formatCurrency(balance)}</p>
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                  Saldo
+                </p>
+                <p className={`text-[16px] font-bold tracking-tight ${balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}`}>
+                  {formatCurrency(balance)}
+                </p>
               </div>
             </div>
 
             {monthlyData.length > 0 && (
-              <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
-                  <BarChart3 size={16} className="text-gray-400" /> Evolução Mensal
-                </h3>
-                <div className="h-[200px]">
+              <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-[14px] text-gray-900 dark:text-gray-100">
+                    Evolução mensal
+                  </h3>
+                  <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    Receitas e despesas por mês
+                  </p>
+                </div>
+
+                <div className="h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -362,9 +426,17 @@ export default function ReportsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               {categoryData.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-                  <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Categorias</h3>
-                  <div className="h-[150px]">
+                <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+                  <div className="mb-3">
+                    <h3 className="font-semibold text-[14px] text-gray-900 dark:text-gray-100">
+                      Categorias
+                    </h3>
+                    <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                      Distribuição por valor
+                    </p>
+                  </div>
+
+                  <div className="h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RePieChart>
                         <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={60} paddingAngle={2}>
@@ -378,9 +450,17 @@ export default function ReportsPage() {
               )}
 
               {dailyData.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700">
-                  <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 mb-3 text-center">Saldo Diário</h3>
-                  <div className="h-[150px]">
+                <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+                  <div className="mb-3">
+                    <h3 className="font-semibold text-[14px] text-gray-900 dark:text-gray-100">
+                      Saldo diário
+                    </h3>
+                    <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                      Últimos 30 dias
+                    </p>
+                  </div>
+
+                  <div className="h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <ReLineChart data={dailyData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -395,19 +475,17 @@ export default function ReportsPage() {
               )}
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button" // 🔥 PREVINE REFRESH
-                onClick={() => {
-                  setExportStatus('idle')
-                  setShowExportModal(true)
-                }}
-                className="flex-1 bg-teal-700 text-white py-4 rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20"
-              >
-                <Download size={18} />
-                Exportar Relatório
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setExportStatus('idle')
+                setShowExportModal(true)
+              }}
+              className="w-full bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[14px] hover:bg-teal-800 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20 active:scale-[0.98]"
+            >
+              <Download size={18} />
+              Exportar relatório
+            </button>
           </div>
         )}
       </div>
