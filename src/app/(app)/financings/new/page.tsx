@@ -16,17 +16,17 @@ import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
+import MoneyInput from '@/components/MoneyInput'
 
 export default function NewFinancingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
   const { showToast } = useToast()
-  const { success, error: errorHaptic } = useHapticFeedback()
+  const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { user } = useAuth()
   const { safeAdd, safeUpdate } = useSafeDb()
 
-  // 🔥 CORRIGIDO: effectiveContext injetado contra o vazamento de dados do appMode
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
@@ -35,9 +35,10 @@ export default function NewFinancingPage() {
   const touchStartY = useRef(0)
 
   const [description, setDescription] = useState("")
-  const [totalAmount, setTotalAmount] = useState("")
+  const [totalAmountNum, setTotalAmountNum] = useState(0)
+  const [totalAmountFormatted, setTotalAmountFormatted] = useState("0,00")
   const [installmentsCount, setInstallmentsCount] = useState("")
-  const [installmentAmount, setInstallmentAmount] = useState("")
+  const [installmentAmountNum, setInstallmentAmountNum] = useState(0)
   const [interestRate, setInterestRate] = useState("")
   const [bank, setBank] = useState("")
   const [assetType, setAssetType] = useState("other")
@@ -57,9 +58,11 @@ export default function NewFinancingPage() {
   useEffect(() => {
     if (financingData) {
       setDescription(financingData.description || "")
-      setTotalAmount(financingData.total_amount ? String(financingData.total_amount) : "")
+      const total = Number(financingData.total_amount) || 0
+      setTotalAmountNum(total)
+      setTotalAmountFormatted(total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
       setInstallmentsCount(financingData.installments_count ? String(financingData.installments_count) : "")
-      setInstallmentAmount(financingData.installment_amount ? String(financingData.installment_amount) : "")
+      setInstallmentAmountNum(Number(financingData.installment_amount) || 0)
       setInterestRate(financingData.interest_rate ? String(financingData.interest_rate) : "")
       setBank(financingData.bank || "")
       setAssetType(financingData.asset_type || "other")
@@ -72,15 +75,11 @@ export default function NewFinancingPage() {
   }, [financingData])
 
   useEffect(() => {
-    if (totalAmount && installmentsCount && parseFloat(installmentsCount) > 0) {
-      const total = parseFloat(totalAmount)
-      const count = parseInt(installmentsCount)
-      if (total > 0 && count > 0) {
-        const installment = total / count
-        setInstallmentAmount(installment.toFixed(2))
-      }
+    if (totalAmountNum > 0 && installmentsCount && parseInt(installmentsCount) > 0) {
+      const installment = totalAmountNum / parseInt(installmentsCount)
+      setInstallmentAmountNum(installment)
     }
-  }, [totalAmount, installmentsCount])
+  }, [totalAmountNum, installmentsCount])
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
 
@@ -89,26 +88,26 @@ export default function NewFinancingPage() {
       const deltaY = e.touches[0].clientY - touchStartY.current
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
+        vibrate([10])
         setTimeout(() => setRefreshing(false), 600)
       }
     }
-  }, [refreshing])
+  }, [refreshing, vibrate])
 
-  // 🔥 SALVAR ATÔMICO E SEGURO (Sem loops manuais de syncQueue)
   const handleSave = async () => {
     if (!description.trim()) {
-      showToast("Preencha a descrição do financiamento", "warning")
       errorHaptic()
+      showToast("⚠️ Preencha a descrição", "warning")
       return
     }
-    if (!totalAmount || parseFloat(totalAmount) <= 0) {
-      showToast("Informe um valor total válido", "warning")
+    if (totalAmountNum <= 0) {
       errorHaptic()
+      showToast("⚠️ Informe um valor válido", "warning")
       return
     }
     if (!installmentsCount || parseInt(installmentsCount) <= 0) {
-      showToast("Informe o número de parcelas", "warning")
       errorHaptic()
+      showToast("⚠️ Informe o número de parcelas", "warning")
       return
     }
 
@@ -116,10 +115,10 @@ export default function NewFinancingPage() {
     try {
       const payload = {
         description: description.trim(),
-        total_amount: parseFloat(totalAmount),
+        total_amount: totalAmountNum,
         installments_count: parseInt(installmentsCount),
-        installment_amount: parseFloat(installmentAmount) || 0,
-        interest_rate: interestRate ? parseFloat(interestRate) : null,
+        installment_amount: installmentAmountNum,
+        interest_rate: interestRate ? parseFloat(interestRate.replace(',', '.')) : null,
         bank: bank.trim() || null,
         asset_type: assetType,
         asset: asset.trim() || null,
@@ -134,136 +133,153 @@ export default function NewFinancingPage() {
       if (editId) {
         const res = await safeUpdate('financings', editId, payload)
         if (!res.success) throw new Error(res.error)
+        success()
+        showToast("✅ Financiamento atualizado!", "success")
       } else {
         const id = crypto.randomUUID()
         const fullPayload = {
           id,
           user_id: user!.id,
           ...payload,
-          remaining_amount: parseFloat(totalAmount),
+          remaining_amount: totalAmountNum,
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
         }
         const res = await safeAdd('financings', fullPayload)
         if (!res.success) throw new Error(res.error)
+        success()
+        showToast("✅ Financiamento criado!", "success")
       }
 
-      showToast(editId ? "Financiamento atualizado com sucesso!" : "Financiamento criado com sucesso!", "success")
-      success()
       router.back()
     } catch (err: any) {
-      showToast(err?.message || "Erro ao salvar financiamento", "error")
       errorHaptic()
+      showToast(`❌ Erro: ${err.message}`, "error")
     } finally {
       setSaving(false)
     }
   }
 
-  const contextTitle = effectiveContext === "pj" ? "da Empresa" : "Pessoal"
+  const contextTitle = effectiveContext === "dfl" ? "Empresa" : "Pessoal"
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
+    <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 pt-4 pb-3">
+      <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => router.back()} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Voltar"><ArrowLeft size={20} /></button>
+          <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"><ArrowLeft size={24} /></button>
           <div className="text-center">
-            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100">{editId ? "Editar" : "Novo"} Financiamento</h1>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{contextTitle}</p>
+            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{editId ? "Editar" : "Novo"} Financiamento</h1>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{contextTitle}</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={handleSave} disabled={saving} className="p-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-md shadow-teal-500/20 transition-all active:scale-95 disabled:opacity-50" aria-label="Salvar">
-              {saving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
-            </button>
-          </div>
+          <div className="w-10" />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-4">
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Tipo de Bem</label>
+      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 block">Tipo de Bem</label>
           <div className="flex gap-2">
             {[
               { value: "vehicle", label: "Veículo", icon: Car },
               { value: "property", label: "Imóvel", icon: Home },
               { value: "other", label: "Outro", icon: Percent },
             ].map(({ value, label, icon: Icon }) => (
-              <button key={value} onClick={() => setAssetType(value)} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${assetType === value ? "bg-teal-500 text-white shadow-md shadow-teal-500/20" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}>
-                <Icon size={16} />{label}
+              <button key={value} onClick={() => { vibrate([5]); setAssetType(value); }} className={`flex-1 py-3.5 rounded-[16px] text-[13px] font-bold transition-all active:scale-95 flex flex-col items-center justify-center gap-1.5 ${assetType === value ? "bg-teal-600 text-white shadow-md shadow-teal-600/20" : "bg-gray-50 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}`}>
+                <Icon size={20} />{label}
               </button>
             ))}
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Descrição</label>
-          <input type="text" placeholder="Ex: Financiamento do veículo..." value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Descrição</label>
+          <input type="text" placeholder="Ex: Financiamento Itaú..." value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-transparent text-[16px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" autoFocus />
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Bem (opcional)</label>
-          <input type="text" placeholder="Ex: Honda Civic 2024, Apartamento Centro..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Bem Financiado (Opcional)</label>
+          <input type="text" placeholder="Ex: Honda Civic 2024..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Banco/Financeira (opcional)</label>
-          <input type="text" placeholder="Ex: Banco do Brasil, BV Financeira..." value={bank} onChange={(e) => setBank(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Valor Total (R$)</label>
-            <input type="number" step="0.01" placeholder="0,00" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Nº Parcelas</label>
-            <input type="number" placeholder="Ex: 36" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Valor da Parcela (calculado)</label>
-          <input type="number" step="0.01" value={installmentAmount} onChange={(e) => setInstallmentAmount(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold text-teal-600 dark:text-teal-400 outline-none focus:ring-2 focus:ring-teal-500/50" />
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Taxa de Juros (% a.m.) — opcional</label>
-          <input type="number" step="0.01" placeholder="0,00" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400" />
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Banco / Financeira (Opcional)</label>
+          <input type="text" placeholder="Ex: Banco do Brasil..." value={bank} onChange={(e) => setBank(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Data Início</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50" /></div>
-          <div><label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">1º Vencimento</label><input type="date" value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50" /></div>
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Status</label>
-          <div className="flex gap-2">
-            {["active", "paid", "overdue"].map((s) => (
-              <button key={s} onClick={() => setStatus(s)} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors ${status === s ? s === "active" ? "bg-blue-500 text-white" : s === "paid" ? "bg-teal-500 text-white" : "bg-red-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}>
-                {s === "active" ? "Ativo" : s === "paid" ? "Quitado" : "Atrasado"}
-              </button>
-            ))}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Valor Total</label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[15px] text-gray-400 font-medium">R$</span>
+              <MoneyInput
+                value={totalAmountNum}
+                onChange={(num, formatted) => { setTotalAmountNum(num); setTotalAmountFormatted(formatted) }}
+                placeholder="0,00"
+                className="w-full bg-transparent text-[18px] font-black text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+              />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Nº Parcelas</label>
+            <input type="number" placeholder="Ex: 36" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full bg-transparent text-[18px] font-black text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 block">Observações (opcional)</label>
-          <textarea placeholder="Detalhes adicionais..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-500/50 placeholder:text-slate-400 resize-none" />
+        <div className="bg-gray-50 dark:bg-slate-700/30 rounded-[24px] p-4 border border-gray-100 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Valor da Parcela (Calculado)</label>
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] text-gray-400 font-medium">R$</span>
+            <span className="text-[20px] font-black text-teal-600 dark:text-teal-400">
+              {installmentAmountNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
         </div>
 
-        <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
-          <button onClick={handleSave} disabled={saving} className="w-full py-4 rounded-2xl bg-teal-500 hover:bg-teal-600 text-white font-black text-base shadow-xl shadow-teal-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}{editId ? "Atualizar Financiamento" : "Criar Financiamento"}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Juros (% a.m.)</label>
+            <input type="number" step="0.01" placeholder="Ex: 1,5" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Status</label>
+            <select value={status} onChange={(e) => { vibrate([5]); setStatus(e.target.value); }} className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-200 outline-none appearance-none cursor-pointer">
+              <option value="active">Ativo</option>
+              <option value="paid">Quitado</option>
+              <option value="overdue">Atrasado</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Data Início</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+            <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">1º Vencimento</label>
+            <input type="date" value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} className="w-full bg-transparent text-[14px] font-bold text-gray-800 dark:text-gray-200 outline-none" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-50 dark:border-slate-700/50">
+          <label className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Observações Adicionais</label>
+          <input type="text" placeholder="Detalhes extra..." value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600" />
+        </div>
+
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 dark:from-slate-900 via-gray-50/80 dark:via-slate-900/80 to-transparent z-20">
+          <button onClick={() => { vibrate([10, 50]); handleSave(); }} disabled={saving} className="w-full max-w-md mx-auto bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50">
+            {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}{editId ? "Atualizar Financiamento" : "Criar Financiamento"}
           </button>
         </div>
       </div>
