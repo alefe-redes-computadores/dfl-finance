@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, ChevronRight, Edit2, Loader2, Check, Clock,
-  AlertTriangle, CheckCircle, RefreshCw, Image, Paperclip
+  ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
+  Clock, AlertTriangle, CheckCircle
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -13,39 +13,38 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import Skeleton from '@/components/Skeleton'
 
 const BudgetDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6">
     <div className="flex items-center justify-between mb-6">
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
+      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-2xl" />
+      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded-full" />
+      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-2xl" />
     </div>
 
-    <div className="flex items-center justify-center mb-4">
-      <div className="h-10 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" />
+    <div className="flex items-center justify-center mb-5">
+      <div className="h-11 w-48 bg-gray-200 dark:bg-slate-700 rounded-full" />
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 mb-4">
+    <div className="rounded-[28px] border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-800 p-5 shadow-sm mb-4">
       <div className="flex items-center gap-4 mb-5">
         <div className="w-14 h-14 rounded-[18px] bg-gray-200 dark:bg-slate-700" />
         <div className="space-y-2">
           <div className="h-5 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/60 rounded" />
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-[16px] p-3 bg-gray-100 dark:bg-slate-700">
+          <div key={i} className="rounded-[18px] p-3 bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/60">
             <div className="h-3 w-12 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
             <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
           </div>
         ))}
       </div>
 
-      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
+      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
         <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
       </div>
     </div>
@@ -70,12 +69,12 @@ function BudgetDetailContent() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [projection, setProjection] = useState('')
 
-  const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
+  const { data: localBudgets, reload: reloadBudgets } = useLocalData({
     table: 'budgets' as any,
     filters: { id: id as string },
   })
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context },
   })
@@ -101,14 +100,18 @@ function BudgetDetailContent() {
     }
   }
 
-  const handleTouchEnd = () => { isPulling.current = false }
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+
     container.addEventListener('touchstart', handleTouchStart, { passive: true })
     container.addEventListener('touchmove', handleTouchMove, { passive: true })
     container.addEventListener('touchend', handleTouchEnd, { passive: true })
+
     return () => {
       container.removeEventListener('touchstart', handleTouchStart)
       container.removeEventListener('touchmove', handleTouchMove)
@@ -129,15 +132,16 @@ function BudgetDetailContent() {
         router.push('/budgets')
         return
       }
+
       setBudget(budgetData)
 
       const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
       const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-      const today = format(new Date(), 'yyyy-MM-dd')
       const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
 
-      let filteredTxs = (localTransactions || [])
-        .filter((tx: any) => tx.date >= start && tx.date <= end && tx.status === 'done')
+      let filteredTxs = (localTransactions || []).filter(
+        (tx: any) => tx.date >= start && tx.date <= end && tx.status === 'done'
+      )
 
       if (budgetData.category_id) {
         filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
@@ -156,6 +160,7 @@ function BudgetDetailContent() {
       if (dailyAverage > 0 && remaining > 0) {
         const projectedDays = Math.floor(remaining / dailyAverage)
         setDaysLeft(projectedDays)
+
         if (projectedDays <= 3) {
           setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`)
         } else if (projectedDays <= 7) {
@@ -175,29 +180,37 @@ function BudgetDetailContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [id, user, currentDate, localBudgets, localTransactions, router])
+  }, [id, user, currentDate, localBudgets, localTransactions, router, reloadBudgets, reloadTransactions])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    const isImage = /.(jpg|jpeg|png|gif|webp|bmp|svg)(?|$)/i.test(url)
     if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  const IconComp = getDynamicIcon(budget?.icon || 'tag')
-
-  if (loading) return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-20 font-sans transition-colors duration-300">
-      <div className="flex items-center justify-between px-4 pt-6 mb-6">
-        <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 pb-24 font-sans transition-colors duration-300">
+        <div className="flex items-center justify-between px-4 pt-6 mb-2">
+          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-2xl animate-pulse" />
+          <div className="h-5 w-28 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-2xl animate-pulse" />
+        </div>
+        <BudgetDetailSkeleton />
       </div>
-      <BudgetDetailSkeleton />
-    </div>
-  )
+    )
+  }
 
   if (!budget) return null
 
@@ -206,150 +219,289 @@ function BudgetDetailContent() {
   const isOverBudget = remaining < 0
   const isWarning = percent >= 75 && percent < 100
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-24 font-sans px-4 pt-6 transition-colors duration-300">
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-4 pb-28 font-sans transition-colors duration-300"
+    >
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.45)]" />
         </div>
       )}
 
       {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-5 pointer-events-none">
+          <div className="rounded-full bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08)] border border-gray-100 dark:border-slate-700/60 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+            <RefreshCw size={15} className="animate-spin text-teal-600" />
+            <span className="text-[12px] font-semibold text-teal-700 dark:text-teal-400">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6 sticky top-0 z-10 bg-gray-50/90 dark:bg-slate-900/90 backdrop-blur-xl py-2">
-        <button onClick={() => { vibrate([5]); router.push('/budgets'); }} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:bg-white dark:hover:bg-slate-800 rounded-full transition-colors active:scale-95">
-          <ChevronLeft size={24} />
-        </button>
-        <h2 className="text-[18px] font-bold text-gray-800 dark:text-gray-100">{budget.name}</h2>
-        <button onClick={() => { vibrate([5]); router.push(`/budgets/new?edit=${budget.id}`); }} className="p-2 -mr-2 text-teal-700 dark:text-teal-400 active:scale-95 rounded-full hover:bg-teal-50 dark:hover:bg-teal-900/30">
-          <Edit2 size={20} />
-        </button>
-      </div>
+      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f6f7f8]/92 dark:bg-slate-950/92 backdrop-blur-xl">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => {
+              vibrate([5])
+              router.push('/budgets')
+            }}
+            className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-gray-800 dark:text-gray-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+          >
+            <ChevronLeft size={22} />
+          </button>
 
-      <div className="flex items-center justify-center mb-6">
-        <div className="flex items-center gap-3 bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700/50 px-2 py-1.5 rounded-full">
-          <button onClick={() => { vibrate([5]); setCurrentDate(subMonths(currentDate, 1)); }} className="p-1.5 text-gray-400 bg-gray-50 dark:bg-slate-700/50 rounded-full hover:text-gray-800 transition-colors active:scale-95"><ChevronLeft size={16} /></button>
-          <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200 capitalize tracking-wide w-[100px] text-center">{monthLabel}</span>
-          <button onClick={() => { vibrate([5]); setCurrentDate(addMonths(currentDate, 1)); }} className="p-1.5 text-gray-400 bg-gray-50 dark:bg-slate-700/50 rounded-full hover:text-gray-800 transition-colors active:scale-95"><ChevronRight size={16} /></button>
+          <div className="px-4 text-center min-w-0">
+            <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em]">
+              Detalhes do orçamento
+            </p>
+            <h2 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 truncate">
+              {budget.name}
+            </h2>
+          </div>
+
+          <button
+            onClick={() => {
+              vibrate([5])
+              router.push(`/budgets/new?edit=${budget.id}`)
+            }}
+            className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+          >
+            <Edit2 size={18} />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-1.5 shadow-sm">
+            <button
+              onClick={() => {
+                vibrate([5])
+                setCurrentDate(subMonths(currentDate, 1))
+              }}
+              className="w-9 h-9 rounded-full bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <span className="min-w-[120px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize px-2">
+              {monthLabel}
+            </span>
+
+            <button
+              onClick={() => {
+                vibrate([5])
+                setCurrentDate(addMonths(currentDate, 1))
+              }}
+              className="w-9 h-9 rounded-full bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-center mb-5">
-        <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border ${
-          isOverBudget 
-            ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:border-red-500/20' 
-            : isWarning 
-              ? 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:border-orange-500/20' 
-              : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20'
-        }`}>
-          {isOverBudget && <AlertTriangle size={12} />}
-          {!isOverBudget && !isWarning && <CheckCircle size={12} />}
-          {isOverBudget ? 'Orçamento Estourado' : isWarning ? 'Atenção ao Limite' : 'Dentro do limite'}
+      <div className="mb-4 flex justify-center">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold border ${
+            isOverBudget
+              ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
+              : isWarning
+                ? 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20'
+                : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+          }`}
+        >
+          {isOverBudget ? <AlertTriangle size={12} /> : <CheckCircle size={12} />}
+          {isOverBudget ? 'Orçamento estourado' : isWarning ? 'Atenção ao limite' : 'Dentro do limite'}
         </span>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-gray-50 dark:border-slate-700/50 mb-4 animate-in fade-in duration-300">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${budget.color}15`, color: budget.color }}>
-            <IconComp size={24} />
-          </div>
-          <div>
-            <p className="font-black text-[18px] text-gray-800 dark:text-gray-100 leading-tight">{budget.name}</p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-1">{budget.categories?.name || 'Geral'} • {budget.period === 'monthly' ? 'Mensal' : budget.period === 'biweekly' ? 'Quinzenal' : 'Semanal'}</p>
-          </div>
-        </div>
+      <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
+        <div className="p-5 pb-4">
+          <div className="flex items-center gap-4 mb-5">
+            <div
+              className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm"
+              style={{ backgroundColor: `${budget.color}18`, color: budget.color }}
+            >
+              <IconComp size={24} />
+            </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="text-center bg-gray-50 dark:bg-slate-700/40 rounded-[20px] p-3.5 border border-gray-100 dark:border-slate-700/50">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">Orçado</p>
-            <p className="text-[15px] font-black text-gray-800 dark:text-gray-200">{formatCurrency(Number(budget.amount))}</p>
+            <div className="min-w-0">
+              <h3 className="text-[19px] font-bold text-gray-900 dark:text-gray-100 leading-tight">
+                {budget.name}
+              </h3>
+              <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">
+                {budget.categories?.name || 'Geral'} •{' '}
+                {budget.period === 'monthly'
+                  ? 'Mensal'
+                  : budget.period === 'biweekly'
+                    ? 'Quinzenal'
+                    : 'Semanal'}
+              </p>
+            </div>
           </div>
-          <div className="text-center bg-red-50 dark:bg-red-500/10 rounded-[20px] p-3.5 border border-red-100 dark:border-red-500/20">
-            <p className="text-[10px] text-red-600/70 font-bold uppercase tracking-widest mb-1">Gasto</p>
-            <p className="text-[15px] font-black text-red-500">{formatCurrency(spent)}</p>
-          </div>
-          <div className={`text-center rounded-[20px] p-3.5 border ${remaining >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20'}`}>
-            <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${remaining >= 0 ? 'text-emerald-600/70' : 'text-red-600/70'}`}>Restante</p>
-            <p className={`text-[15px] font-black ${remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(Math.abs(remaining))}</p>
-          </div>
-        </div>
 
-        <div className="w-full bg-gray-100 dark:bg-slate-700/50 rounded-full h-3 overflow-hidden mb-2 shadow-inner">
-          <div
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'}`}
-            style={{ width: `${Math.min(percent, 100)}%` }}
-          />
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="rounded-[20px] bg-gray-50 dark:bg-slate-800 p-3.5 border border-gray-100 dark:border-slate-700/70">
+              <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Orçado</p>
+              <p className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                {formatCurrency(Number(budget.amount))}
+              </p>
+            </div>
+
+            <div className="rounded-[20px] bg-red-50 dark:bg-red-500/10 p-3.5 border border-red-100 dark:border-red-500/20">
+              <p className="text-[11px] font-medium text-red-600/80 dark:text-red-400/80 mb-1">Gasto</p>
+              <p className="text-[15px] font-bold text-red-600 dark:text-red-400">
+                {formatCurrency(spent)}
+              </p>
+            </div>
+
+            <div
+              className={`rounded-[20px] p-3.5 border ${
+                remaining >= 0
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20'
+                  : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20'
+              }`}
+            >
+              <p
+                className={`text-[11px] font-medium mb-1 ${
+                  remaining >= 0
+                    ? 'text-emerald-700/80 dark:text-emerald-400/80'
+                    : 'text-red-600/80 dark:text-red-400/80'
+                }`}
+              >
+                Restante
+              </p>
+              <p
+                className={`text-[15px] font-bold ${
+                  remaining >= 0
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}
+              >
+                {formatCurrency(Math.abs(remaining))}
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-2">
+            <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                  isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
+                }`}
+                style={{ width: `${Math.min(percent, 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Consumo do período</p>
+            <p
+              className={`text-[12px] font-semibold ${
+                isOverBudget ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+              }`}
+            >
+              {percent.toFixed(1)}% utilizado
+            </p>
+          </div>
         </div>
-        <p className={`text-[12px] font-bold text-right ${isOverBudget ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-          {percent.toFixed(1)}% utilizado
-        </p>
-      </div>
+      </section>
 
       {projection && (
-        <div className={`rounded-[24px] p-4.5 mb-5 shadow-sm border flex items-start gap-3 animate-in zoom-in-95 duration-300 ${
-          isOverBudget 
-            ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400' 
-            : isWarning || (daysLeft !== null && daysLeft <= 7) 
-              ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400' 
-              : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-        }`}>
+        <div
+          className={`rounded-[24px] p-4 mb-4 border flex items-start gap-3 ${
+            isOverBudget
+              ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400'
+              : isWarning || (daysLeft !== null && daysLeft <= 7)
+                ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400'
+                : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+          }`}
+        >
           <div className="mt-0.5 shrink-0">
             {isOverBudget ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
           </div>
-          <p className="text-[13px] font-bold leading-snug">{projection}</p>
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] opacity-70 mb-1">
+              Projeção
+            </p>
+            <p className="text-[13px] font-semibold leading-snug">{projection}</p>
+          </div>
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 animate-in fade-in duration-300">
-        <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 mb-5">Transações deste orçamento</h3>
+      <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
+          <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
+            Transações deste orçamento
+          </h3>
+          <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">
+            Gastos concluídos vinculados a este período.
+          </p>
+        </div>
+
         {transactions.length === 0 ? (
-          <div className="text-center py-6">
-            <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Clock size={20} className="text-gray-400" />
+          <div className="py-10 px-5 text-center">
+            <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+              <Clock size={20} className="text-gray-400 dark:text-gray-500" />
             </div>
-            <p className="text-gray-400 dark:text-gray-500 text-[13px] font-medium">Nenhum gasto registrado neste mês.</p>
+            <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400">
+              Nenhum gasto registrado neste mês.
+            </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {transactions.map((tx: any, index: number) => {
+          <div className="divide-y divide-gray-100 dark:divide-slate-800">
+            {transactions.map((tx: any) => {
               const TxIconComp = getDynamicIcon(tx.categories?.icon || 'tag')
               const isPending = tx.status === 'pending'
               const attachmentIcon = getAttachmentIcon(tx.receipt_url)
+
               return (
-                <div
+                <button
                   key={tx.id}
-                  onClick={() => { vibrate([5]); router.push(`/transactions/details?id=${tx.id}`); }}
-                  className={`flex items-center justify-between p-3.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-[20px] transition-all active:scale-[0.98] ${isPending ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
+                  onClick={() => {
+                    vibrate([5])
+                    router.push(`/transactions/details?id=${tx.id}`)
+                  }}
+                  className={`w-full text-left px-5 py-4 flex items-center gap-3 active:scale-[0.99] transition-transform ${
+                    isPending ? 'bg-amber-50/60 dark:bg-amber-900/10' : 'bg-transparent'
+                  }`}
                 >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center flex-shrink-0 ${isPending ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500' : 'bg-red-50 dark:bg-red-900/30 text-red-500'}`}>
-                      <TxIconComp size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">{tx.description || tx.categories?.name}</p>
-                        {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
-                      </div>
-                      <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">{format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}</p>
-                    </div>
+                  <div
+                    className={`w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0 ${
+                      isPending
+                        ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500'
+                        : 'bg-red-50 dark:bg-red-900/30 text-red-500'
+                    }`}
+                  >
+                    <TxIconComp size={18} />
                   </div>
-                  <p className="text-[15px] font-black text-red-500 flex-shrink-0">
-                    - {formatCurrency(Number(tx.amount) || 0)}
-                  </p>
-                </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {tx.description || tx.categories?.name}
+                      </p>
+                      {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
+                    </div>
+
+                    <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">
+                      {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
+                    </p>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className="text-[15px] font-bold text-red-600 dark:text-red-400">
+                      - {formatCurrency(Number(tx.amount) || 0)}
+                    </p>
+                  </div>
+                </button>
               )
             })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }
