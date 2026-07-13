@@ -1,17 +1,20 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useIsAdmin } from '@/hooks/useAdmin'
 import { useLocalSync } from '@/hooks/useLocalSync'
-import { RefreshCw, Wifi, WifiOff, CheckCircle, AlertCircle } from 'lucide-react'
+import { RefreshCw, Wifi, WifiOff, CheckCircle, AlertCircle, X } from 'lucide-react'
 
 export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { pendingCount, isSyncing, forceSync, isOnline, syncStatus } = useLocalSync() || {}
   const { isAdmin } = useIsAdmin() || { isAdmin: false }
+  const [mounted, setMounted] = useState(false)
 
-  // Bloqueia/desbloqueia o scroll do body quando o modal abre/fecha
+  // Bloqueia scroll e monta portal
   useEffect(() => {
+    setMounted(true)
     if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
@@ -22,47 +25,49 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
     }
   }, [isOpen])
 
-  // Se não estiver aberto, não renderiza nada
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
-  // Status para exibição
   const isOnlineStatus = isOnline ?? navigator.onLine
-  const statusText = isOnlineStatus ? 'Online' : 'Offline'
   const StatusIcon = isOnlineStatus ? Wifi : WifiOff
   const statusColor = isOnlineStatus ? 'text-emerald-500' : 'text-red-500'
+  const statusText = isOnlineStatus ? 'Online' : 'Offline'
   const syncStatusText = isSyncing ? 'Sincronizando...' : pendingCount > 0 ? `${pendingCount} pendente(s)` : 'Tudo sincronizado'
 
-  return (
-    // Container fixo que cobre a tela inteira
+  const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      {/* Backdrop com blur e transição suave */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
         onClick={onClose}
       />
-
-      {/* Modal com posicionamento centralizado via transform */}
       <div
         className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
         style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
       >
-        {/* Cabeçalho com ícone e título */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
-            <RefreshCw size={22} className={isSyncing ? 'animate-spin' : ''} />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white">Sincronização</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              <StatusIcon size={14} className={statusColor} />
-              <span className={`text-xs font-medium ${statusColor}`}>{statusText}</span>
-              <span className="text-gray-300 dark:text-gray-600">•</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">{syncStatusText}</span>
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
+              <RefreshCw size={22} className={isSyncing ? 'animate-spin' : ''} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Sincronização</h2>
+              <div className="flex items-center gap-2 mt-0.5">
+                <StatusIcon size={14} className={statusColor} />
+                <span className={`text-xs font-medium ${statusColor}`}>{statusText}</span>
+                <span className="text-gray-300 dark:text-gray-600">•</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{syncStatusText}</span>
+              </div>
             </div>
           </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-400 hover:text-gray-600 dark:text-gray-500"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        {/* Indicador de pendências */}
+        {/* Pendências */}
         <div className="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 flex items-center justify-between">
           <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Itens pendentes</span>
           <span className="text-2xl font-bold text-gray-800 dark:text-white">
@@ -70,7 +75,7 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           </span>
         </div>
 
-        {/* Botão de força de sincronização */}
+        {/* Botão principal */}
         <button
           onClick={forceSync}
           disabled={isSyncing || !isOnlineStatus}
@@ -101,7 +106,7 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           )}
         </button>
 
-        {/* Botão fechar */}
+        {/* Fechar */}
         <button
           onClick={onClose}
           className="w-full mt-3 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
@@ -109,7 +114,7 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           Fechar
         </button>
 
-        {/* Link para admin (se admin) */}
+        {/* Admin link */}
         {isAdmin && (
           <Link
             href="/admin/sync"
@@ -122,4 +127,6 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
