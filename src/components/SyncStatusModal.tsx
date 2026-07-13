@@ -28,11 +28,23 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           <div className={`p-3 rounded-full ${isSyncing ? 'bg-blue-500/20 text-blue-500' : pendingCount > 0 ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/20 text-emerald-500'}`}>
             {isSyncing ? <RefreshCw className="animate-spin" /> : pendingCount > 0 ? <AlertCircle /> : <CheckCircle2 />}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm text-gray-500 dark:text-gray-400">Itens pendentes</p>
             <p className="text-lg font-semibold dark:text-white">{pendingCount} transações na fila</p>
           </div>
         </div>
+
+        {/* BARRA DE PROGRESSO ADICIONADA */}
+        {isSyncing && (
+          <div className="mb-6">
+            <div className="flex justify-between text-xs text-gray-400 mb-2">
+              <span>Sincronizando com servidor...</span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+              <div className="bg-blue-600 h-full rounded-full animate-[loading_1.5s_ease-in-out_infinite]"></div>
+            </div>
+          </div>
+        )}
 
         {/* Ação Principal */}
         <button
@@ -40,13 +52,21 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           disabled={isSyncing || pendingCount === 0}
           className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-2xl font-semibold transition-all active:scale-[0.98]"
         >
-          {isSyncing ? 'Sincronizando...' : 'Forçar Sincronização Agora'}
+          {isSyncing ? 'Sincronizando...' : 'Forçar Sincronização'}
         </button>
         
         <p className="text-center text-xs text-gray-400 mt-4">
-          Local-First System v3.0 | Status: {isSyncing ? 'Ativo' : 'Aguardando'}
+          Local-First System v3.0
         </p>
       </div>
+      
+      {/* Estilização da animação da barra */}
+      <style jsx global>{`
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
     </div>
   )
 }
