@@ -8,44 +8,45 @@ function urlBase64ToUint8Array(base64String: string) {
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
   const rawData = window.atob(base64)
   const outputArray = new Uint8Array(rawData.length)
+
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i)
   }
+
   return outputArray
 }
 
 async function subscribeUser(userId: string) {
+  if (!userId) return
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
 
   const registration = await navigator.serviceWorker.ready
   const existingSubscription = await registration.pushManager.getSubscription()
 
   if (existingSubscription) {
-    // Salva no banco se ainda não estiver
     const { data } = await supabase
       .from('push_subscriptions')
       .select('id')
       .eq('endpoint', existingSubscription.endpoint)
-      .single()
+      .maybeSingle()
 
     if (!data) {
       const json = existingSubscription.toJSON()
       await supabase.from('push_subscriptions').insert({
         user_id: userId,
         endpoint: json.endpoint!,
-        p256dh: json.keys!.p256dh,
-        auth: json.keys!.auth,
+        p256dh: json.keys?.p256dh ?? '',
+        auth: json.keys?.auth ?? '',
         user_agent: navigator.userAgent,
       })
     }
+
     return
   }
 
-  // Solicita permissão
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') return
 
-  // Chave pública VAPID (você vai gerar depois)
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
   if (!vapidPublicKey) {
     console.warn('Chave VAPID não configurada.')
@@ -58,38 +59,51 @@ async function subscribeUser(userId: string) {
   })
 
   const json = newSubscription.toJSON()
-  await supabase.from('push_subscriptions').upsert({
-    user_id: userId,
-    endpoint: json.endpoint!,
-    p256dh: json.keys!.p256dh,
-    auth: json.keys!.auth,
-    user_agent: navigator.userAgent,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'endpoint' })
+
+  await supabase.from('push_subscriptions').upsert(
+    {
+      user_id: userId,
+      endpoint: json.endpoint!,
+      p256dh: json.keys?.p256dh ?? '',
+      auth: json.keys?.auth ?? '',
+      user_agent: navigator.userAgent,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'endpoint' }
+  )
 }
 
 export default function PushNotificationManager({ userId }: { userId: string }) {
   const [supported, setSupported] = useState(false)
   const [permission, setPermission] = useState<NotificationPermission>('default')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    const isSupported =
+      typeof window !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      'PushManager' in window &&
+      'Notification' in window
+
+    if (!isSupported) return
+
     setSupported(true)
     setPermission(Notification.permission)
   }, [])
 
-  useEffect(() => {
-    if (!userId || !supported) return
-    subscribeUser(userId)
-  }, [userId, supported])
-
   const handleSubscribe = async () => {
-    if (!userId) return
-    await subscribeUser(userId)
-    setPermission(Notification.permission)
+    if (!userId || loading) return
+
+    try {
+      setLoading(true)
+      await subscribeUser(userId)
+      setPermission(Notification.permission)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (!supported) return null
+  if (!supported || permission === 'granted') return null
 
   if (permission === 'default') {
     return (
@@ -102,10 +116,12 @@ export default function PushNotificationManager({ userId }: { userId: string }) 
               <p className="text-xs text-gray-500 mt-0.5">Receba alertas de vencimentos e metas</p>
             </div>
             <button
+              type="button"
               onClick={handleSubscribe}
-              className="px-4 py-2 bg-teal-700 text-white rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors"
+              disabled={loading}
+              className="px-4 py-2 bg-teal-700 text-white rounded-xl font-bold text-sm hover:bg-teal-800 transition-colors disabled:opacity-50"
             >
-              Ativar
+              {loading ? 'Ativando...' : 'Ativar'}
             </button>
           </div>
         </div>

@@ -1,8 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink, Trash2 } from 'lucide-react'
+import {
+  X,
+  Bell,
+  CreditCard,
+  Repeat,
+  Target,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  ExternalLink,
+  Trash2
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { db } from '@/lib/db'
@@ -24,7 +37,7 @@ interface Notification {
   financingId?: string
   debtId?: string
   route?: string
-  severity: 'critical' | 'warning' | 'info' | 'success'
+  severity?: 'critical' | 'warning' | 'info' | 'success'
   is_read?: boolean
   read?: boolean
 }
@@ -43,29 +56,33 @@ interface NotificationCenterProps {
   isOpen: boolean
   onClose: () => void
   notifications: Notification[]
-  onReadChange?: (unreadCount: number) => void
+  onReadChange?: ((unreadCount: number) => void) | (() => void)
 }
+
+const isNotifRead = (n: Notification) => Boolean(n.is_read || n.read)
 
 function groupNotifications(notifs: Notification[]): NotificationGroup[] {
   const groups: Record<string, NotificationGroup> = {}
 
-  notifs.forEach(n => {
-    let key = n.id.split('-')[0]
-    
+  notifs.forEach((n) => {
+    const safeId = String(n.id || '')
+    let key = safeId.split('-')[0] || safeId || crypto.randomUUID()
+
     if (n.route) key = n.route
-    if (n.cardId || n.budgetId || n.financingId || n.debtId) key = n.id
+    if (n.cardId || n.budgetId || n.financingId || n.debtId) key = safeId || key
 
     if (!groups[key]) {
       groups[key] = {
         key,
-        title: n.title,
-        subtitle: n.subtitle,
+        title: n.title || 'Notificação',
+        subtitle: n.subtitle || '',
         route: n.route || '',
-        severity: n.severity,
+        severity: n.severity || 'info',
         count: 0,
         items: []
       }
     }
+
     groups[key].count++
     groups[key].items.push(n)
   })
@@ -73,146 +90,184 @@ function groupNotifications(notifs: Notification[]): NotificationGroup[] {
   return Object.values(groups)
 }
 
-export default function NotificationCenter({ isOpen, onClose, notifications, onReadChange }: NotificationCenterProps) {
+export default function NotificationCenter({
+  isOpen,
+  onClose,
+  notifications,
+  onReadChange
+}: NotificationCenterProps) {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
   const { addToSyncQueue } = useOfflineQueue()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
-  const { isAdmin, loading: adminLoading } = useIsAdmin()
-  
-  const [localNotifs, setLocalNotifs] = useState<Notification[]>(notifications)
+  const { isAdmin } = useIsAdmin()
+
+  const [localNotifs, setLocalNotifs] = useState<Notification[]>(Array.isArray(notifications) ? notifications : [])
   const [processing, setProcessing] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  // Bloqueia scroll e monta portal
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
     }
+
     return () => {
       document.body.style.overflow = ''
     }
-  }, [isOpen])
+  }, [isOpen, mounted])
 
   useEffect(() => {
-    setLocalNotifs(notifications)
+    setLocalNotifs(Array.isArray(notifications) ? notifications : [])
   }, [notifications])
 
+  const emitReadChange = useCallback((unread: number) => {
+    if (!onReadChange) return
+    try {
+      onReadChange(unread)
+    } catch {
+      try {
+        ;(onReadChange as () => void)()
+      } catch {}
+    }
+  }, [onReadChange])
+
   const markAsRead = useCallback(async (notifIds: string[]) => {
-    if (!user || processing) return
+    if (!user?.id || processing || !Array.isArray(notifIds) || notifIds.length === 0) return
+
     setProcessing(true)
 
     try {
       for (const notifId of notifIds) {
+        if (!notifId) continue
+
         const updateData = {
           is_read: true,
           read: true,
           updated_at: new Date().toISOString()
         }
+
         await db.table('notifications').update(notifId, updateData)
         await addToSyncQueue(user.id, 'notifications', 'update', notifId, updateData)
       }
 
-      const updated = localNotifs.map((n: any) => {
-        if (notifIds.includes(n.id)) {
-          return { ...n, is_read: true, read: true }
-        }
-        return n
-      })
+      const updated = localNotifs.map((n) =>
+        notifIds.includes(n.id) ? { ...n, is_read: true, read: true } : n
+      )
+
       setLocalNotifs(updated)
 
-      const unread = updated.filter((n: any) => !n.is_read && !n.read).length
-      if (onReadChange) onReadChange(unread)
-
+      const unread = updated.filter((n) => !isNotifRead(n)).length
+      emitReadChange(unread)
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
-      showToast(`❌ Erro ao processar: ${err.message}`, 'error')
+      showToast(`❌ Erro ao processar: ${err?.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setProcessing(false)
     }
-  }, [user, processing, localNotifs, addToSyncQueue, onReadChange, showToast])
+  }, [user?.id, processing, localNotifs, addToSyncQueue, emitReadChange, showToast])
 
   const markAllAsRead = useCallback(async () => {
-    if (!user) return
-    const unreadIds = localNotifs.filter(n => !n.is_read && !n.read).map(n => n.id)
+    if (!user?.id) return
+
+    const unreadIds = localNotifs.filter((n) => !isNotifRead(n)).map((n) => n.id)
+
     if (unreadIds.length > 0) {
       success()
       await markAsRead(unreadIds)
       showToast('✅ Notificações marcadas como lidas!', 'success')
       vibrate([10])
     }
-  }, [user, localNotifs, markAsRead, showToast, success, vibrate])
+  }, [user?.id, localNotifs, markAsRead, showToast, success, vibrate])
 
   const handleClearAll = useCallback(async () => {
-    if (!user?.id) return
-    
+    if (!user?.id || processing) return
+
     if (!isAdmin) {
       showToast('⚠️ Apenas administradores podem limpar todas as notificações.', 'warning')
       return
     }
 
-    if (!confirm('⚠️ Tem certeza que deseja limpar TODAS as notificações? Esta ação não pode ser desfeita.')) return
+    if (!window.confirm('⚠️ Tem certeza que deseja limpar TODAS as notificações? Esta ação não pode ser desfeita.')) {
+      return
+    }
 
     setProcessing(true)
+
     try {
       const result = await clearAllNotifications(user.id)
-      if (!result.success) {
-        throw new Error(result.error)
+
+      if (!result?.success) {
+        throw new Error(result?.error || 'Falha ao limpar notificações')
       }
-      
+
       setLocalNotifs([])
-      if (onReadChange) onReadChange(0)
-      
+      emitReadChange(0)
+
       success()
       vibrate([20, 10])
       showToast('🗑️ Todas as notificações foram removidas!', 'success')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro ao limpar notificações: ${err.message}`, 'error')
+      showToast(`❌ Erro ao limpar notificações: ${err?.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setProcessing(false)
     }
-  }, [user, isAdmin, onReadChange, showToast, success, errorHaptic, vibrate])
+  }, [user?.id, processing, isAdmin, emitReadChange, showToast, success, errorHaptic, vibrate])
 
-  if (!isOpen || !mounted) return null
+  const activeNotifs = useMemo(
+    () => localNotifs.filter((n) => !isNotifRead(n)),
+    [localNotifs]
+  )
 
-  const activeNotifs = localNotifs.filter(n => !n.is_read && !n.read)
-  const grouped = groupNotifications(activeNotifs)
+  const grouped = useMemo(
+    () => groupNotifications(activeNotifs),
+    [activeNotifs]
+  )
+
   const unreadCount = activeNotifs.length
-  
   const displayedGroups = grouped.slice(0, 5)
+  const criticalCount = grouped.filter((g) => g.severity === 'critical').length
+  const warningCount = grouped.filter((g) => g.severity === 'warning').length
 
   const handleClick = async (group: NotificationGroup) => {
     vibrate([5])
-    const notifIds = group.items.map(n => n.id)
+
+    const notifIds = group.items.map((n) => n.id).filter(Boolean)
     await markAsRead(notifIds)
 
     if (group.route) {
       router.push(group.route)
     } else if (group.items.length === 1) {
       const notif = group.items[0]
+
       if (notif.cardId) router.push(`/cards/details?id=${notif.cardId}`)
       else if (notif.budgetId) router.push(`/budgets/details?id=${notif.budgetId}`)
       else if (notif.financingId) router.push(`/financings/details?id=${notif.financingId}`)
       else if (notif.debtId) router.push(`/debts/details?id=${notif.debtId}`)
       else if (notif.subId) router.push('/subscriptions')
     }
-    
+
     onClose()
   }
 
   const getIcon = (type: string) => {
-    if (type.includes('invoice')) return <CreditCard size={18} />
-    if (type.includes('subscription')) return <Repeat size={18} />
-    if (type.includes('budget')) return <Target size={18} />
-    if (type.includes('pending_expense')) return <Clock size={18} />
-    if (type.includes('pending_income')) return <CheckCircle size={18} />
-    if (type.includes('financing')) return <AlertTriangle size={18} />
-    if (type.includes('debt')) return <AlertTriangle size={18} />
+    const safeType = String(type || '')
+    if (safeType.includes('invoice')) return <CreditCard size={18} />
+    if (safeType.includes('subscription')) return <Repeat size={18} />
+    if (safeType.includes('budget')) return <Target size={18} />
+    if (safeType.includes('pending_expense')) return <Clock size={18} />
+    if (safeType.includes('pending_income')) return <CheckCircle size={18} />
+    if (safeType.includes('financing')) return <AlertTriangle size={18} />
+    if (safeType.includes('debt')) return <AlertTriangle size={18} />
     return <Bell size={18} />
   }
 
@@ -236,15 +291,12 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     }
   }
 
-  const criticalCount = grouped.filter(g => g.severity === 'critical').length
-  const warningCount = grouped.filter(g => g.severity === 'warning').length
+  if (!isOpen || !mounted) return null
 
   const modalContent = (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.25)] overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-bottom-4 border border-white/20 dark:border-slate-700/50 pointer-events-auto max-h-[90vh] flex flex-col">
-        
-        {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-700/50">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-[18px] bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center">
@@ -257,9 +309,10 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               </p>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <button 
+              <button
                 onClick={handleClearAll}
                 disabled={processing}
                 className="flex items-center gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[11px] font-bold hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 active:scale-95"
@@ -268,8 +321,9 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                 <Trash2 size={14} />
               </button>
             )}
+
             {unreadCount > 0 && (
-              <button 
+              <button
                 onClick={markAllAsRead}
                 disabled={processing}
                 className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-full text-[11px] font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 active:scale-95"
@@ -278,13 +332,19 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                 Marcar todas
               </button>
             )}
-            <button onClick={() => { vibrate([5]); onClose(); }} className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2.5 rounded-full active:scale-95 transition-transform">
+
+            <button
+              onClick={() => {
+                vibrate([5])
+                onClose()
+              }}
+              className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2.5 rounded-full active:scale-95 transition-transform"
+            >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Resumo crítico/atenção */}
         <div className="flex-shrink-0 grid grid-cols-2 gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-700/50 bg-gray-50/50 dark:bg-slate-800/50">
           <div className="text-center">
             <span className="text-[13px] font-black text-red-500">{criticalCount}</span>
@@ -296,7 +356,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
           </div>
         </div>
 
-        {/* Lista de notificações */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {grouped.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -307,7 +366,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500 mt-1">Nenhum alerta no momento.</p>
             </div>
           ) : (
-            displayedGroups.map(group => (
+            displayedGroups.map((group) => (
               <button
                 key={group.key}
                 onClick={() => handleClick(group)}
@@ -320,6 +379,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                   </span>
                   <span className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-white dark:border-slate-800" />
                 </div>
+
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-[14px] font-bold text-gray-800 dark:text-gray-100 leading-tight">
                     {group.title}
@@ -329,8 +389,11 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                       </span>
                     )}
                   </p>
-                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 truncate mt-0.5">{group.subtitle}</p>
+                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                    {group.subtitle}
+                  </p>
                 </div>
+
                 <div className="flex items-center gap-1 shrink-0">
                   {group.count > 1 && (
                     <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">
@@ -344,7 +407,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
           )}
         </div>
 
-        {/* Ver mais */}
         <div className="flex-shrink-0 p-3 border-t border-gray-100 dark:border-slate-700/50">
           <button
             onClick={() => {

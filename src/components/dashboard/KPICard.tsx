@@ -1,7 +1,16 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, Wallet, Clock, Flame, Gauge, Percent, DollarSign } from 'lucide-react'
+import React from 'react'
+import {
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Clock,
+  Flame,
+  Gauge,
+  Percent,
+  DollarSign,
+} from 'lucide-react'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface KPICardProps {
@@ -18,12 +27,12 @@ interface KPICardProps {
 const iconMap = {
   'trending-up': TrendingUp,
   'trending-down': TrendingDown,
-  'wallet': Wallet,
-  'clock': Clock,
-  'fire': Flame,
-  'gauge': Gauge,
-  'percent': Percent,
-  'dollar': DollarSign,
+  wallet: Wallet,
+  clock: Clock,
+  fire: Flame,
+  gauge: Gauge,
+  percent: Percent,
+  dollar: DollarSign,
 }
 
 const colorMap = {
@@ -35,54 +44,56 @@ const colorMap = {
   teal: 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
 }
 
-function KPICardComponent({ 
-  title, 
-  value, 
-  icon, 
-  subtitle, 
-  suffix = '', 
-  prefix = '', 
-  color = 'teal', 
-  formatter 
+function KPICardComponent({
+  title,
+  value,
+  icon,
+  subtitle,
+  suffix = '',
+  prefix = '',
+  color = 'teal',
+  formatter,
 }: KPICardProps) {
-  const [displayValue, setDisplayValue] = useState(0)
   const { vibrate } = useHapticFeedback()
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDisplayValue(value)
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [value])
-
   const Icon = iconMap[icon] || Wallet
   const colorClass = colorMap[color] || colorMap.teal
 
+  const safeValue = Number.isFinite(value) ? value : 0
+
   const formatValue = (val: number) => {
     if (formatter) return formatter(val)
-    if (val === Infinity) return '∞'
     if (Number.isInteger(val)) return val.toLocaleString('pt-BR')
-    return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return val.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
   }
 
   return (
-    <div 
-      className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-all hover:shadow-md active:scale-[0.98]"
+    <button
+      type="button"
+      className="w-full text-left bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-all hover:shadow-md active:scale-[0.98]"
       onClick={() => vibrate([5])}
     >
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{title}</p>
+        <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+          {title}
+        </p>
         <div className={`w-8 h-8 rounded-[12px] flex items-center justify-center ${colorClass}`}>
           <Icon size={16} />
         </div>
       </div>
+
       <p className="text-[22px] font-black text-gray-800 dark:text-gray-100 tracking-tight">
-        {prefix}{formatValue(displayValue)}{suffix}
+        {prefix}{formatValue(safeValue)}{suffix}
       </p>
+
       {subtitle && (
-        <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-1">{subtitle}</p>
+        <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-1">
+          {subtitle}
+        </p>
       )}
-    </div>
+    </button>
   )
 }
 

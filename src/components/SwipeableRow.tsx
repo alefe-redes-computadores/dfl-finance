@@ -1,16 +1,16 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, ReactNode } from 'react'
 
 interface SwipeAction {
   label: string
   onAction: () => void
   bgColor: string
-  icon?: React.ReactNode
+  icon?: ReactNode
 }
 
 interface SwipeableRowProps {
-  children: React.ReactNode
+  children: ReactNode
   leftAction?: SwipeAction
   rightAction?: SwipeAction
   threshold?: number
@@ -39,6 +39,7 @@ export default function SwipeableRow({
 
   const handleTouchEnd = useCallback(() => {
     const dx = touchEndX.current - touchStartX.current
+
     if (Math.abs(dx) > threshold) {
       if (dx > 0 && rightAction) {
         setSwipe('right')
@@ -48,43 +49,45 @@ export default function SwipeableRow({
         leftAction.onAction()
       }
     }
+
     setSwiping(false)
     setTimeout(() => setSwipe(null), 300)
   }, [leftAction, rightAction, threshold])
 
   return (
     <div className="relative overflow-hidden rounded-[16px]">
-      {/* Ações de fundo (esquerda) */}
       {leftAction && (
         <div
           className="absolute inset-y-0 right-0 flex items-center justify-end px-4 rounded-r-[16px]"
           style={{ backgroundColor: leftAction.bgColor }}
         >
-          <span className="text-white font-bold text-sm">
+          <span className="text-white font-bold text-sm flex items-center gap-2">
             {leftAction.icon}
             {leftAction.label}
           </span>
         </div>
       )}
 
-      {/* Ações de fundo (direita) */}
       {rightAction && (
         <div
           className="absolute inset-y-0 left-0 flex items-center px-4 rounded-l-[16px]"
           style={{ backgroundColor: rightAction.bgColor }}
         >
-          <span className="text-white font-bold text-sm">
+          <span className="text-white font-bold text-sm flex items-center gap-2">
             {rightAction.icon}
             {rightAction.label}
           </span>
         </div>
       )}
 
-      {/* Conteúdo deslizável */}
       <div
         className={`relative bg-white dark:bg-slate-800 transition-transform duration-300 ${
-          swipe === 'left' ? '-translate-x-[80px]' : swipe === 'right' ? 'translate-x-[80px]' : ''
-        }`}
+          swipe === 'left'
+            ? '-translate-x-[80px]'
+            : swipe === 'right'
+            ? 'translate-x-[80px]'
+            : ''
+        } ${swiping ? 'select-none' : ''}`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

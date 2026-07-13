@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 interface SkeletonProps {
   className?: string
   variant?: 'text' | 'card' | 'circle' | 'rect'
@@ -22,9 +24,11 @@ export default function Skeleton({
     rect: 'rounded-xl',
   }
 
-  const style: React.CSSProperties = {}
+  const style: CSSProperties = {}
+
   if (width) style.width = width
   if (height) style.height = height
+
   if (variant === 'circle') {
     style.width = width || '48px'
     style.height = height || '48px'

@@ -1,25 +1,24 @@
 'use client'
 
+type ReceiptOption = 'camera' | 'galeria' | 'pdf'
+
 interface ReceiptModalProps {
   isOpen: boolean
   onClose: () => void
-  onOptionSelect: (option: string) => void
+  onOptionSelect: (option: ReceiptOption) => void
 }
 
 export default function ReceiptModal({ isOpen, onClose, onOptionSelect }: ReceiptModalProps) {
   if (!isOpen) return null
 
-  const options = [
+  const options: { id: ReceiptOption; label: string; desc: string }[] = [
     { id: 'camera', label: 'Câmera', desc: 'Tirar foto agora' },
     { id: 'galeria', label: 'Galeria', desc: 'Screenshot ou foto do comprovante' },
     { id: 'pdf', label: 'PDF', desc: 'Arquivo de comprovante do banco' },
   ]
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={onClose}>
       <div
         className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl p-6"
         onClick={(e) => e.stopPropagation()}
@@ -34,6 +33,7 @@ export default function ReceiptModal({ isOpen, onClose, onOptionSelect }: Receip
         <div className="space-y-4">
           {options.map((opt) => (
             <button
+              type="button"
               key={opt.id}
               onClick={() => onOptionSelect(opt.id)}
               className="w-full text-left p-4 rounded-xl border border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
@@ -45,6 +45,7 @@ export default function ReceiptModal({ isOpen, onClose, onOptionSelect }: Receip
         </div>
 
         <button
+          type="button"
           onClick={onClose}
           className="w-full mt-6 py-4 font-bold text-gray-700 dark:text-gray-300"
         >

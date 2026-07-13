@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -16,12 +16,29 @@ interface ProjectionData {
   projected_balance: number
 }
 
-export default function DetailedProjectionChart() {
-  const [data, setData] = useState<ProjectionData[]>([])
-  const [loading, setLoading] = useState(true)
+interface DetailedProjectionChartProps {
+  data?: ProjectionData[]
+  title?: string
+  subtitle?: string
+}
+
+export default function DetailedProjectionChart({
+  data: externalData,
+  title = 'Projeção de Saldo (30 dias)',
+  subtitle = 'Saldo estimado dia a dia com base em transações futuras, faturas e assinaturas',
+}: DetailedProjectionChartProps) {
+  const [data, setData] = useState<ProjectionData[]>(externalData ?? [])
+  const [loading, setLoading] = useState(!externalData)
   const [error, setError] = useState(false)
 
   useEffect(() => {
+    if (externalData) {
+      setData(externalData)
+      setLoading(false)
+      setError(false)
+      return
+    }
+
     async function fetchProjection() {
       try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -29,7 +46,6 @@ export default function DetailedProjectionChart() {
 
         if (!supabaseUrl || !supabaseAnonKey) {
           setError(true)
-          setLoading(false)
           return
         }
 
@@ -37,23 +53,21 @@ export default function DetailedProjectionChart() {
           `${supabaseUrl}/rest/v1/projected_daily_balance?select=projection_date,projected_balance&order=projection_date.asc&limit=30`,
           {
             headers: {
-              'apikey': supabaseAnonKey,
-              'Authorization': `Bearer ${supabaseAnonKey}`,
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
               'Content-Type': 'application/json',
             },
           }
         )
 
         if (!response.ok) {
-          console.error('Erro ao buscar projeção:', response.status)
           setError(true)
           return
         }
 
         const projection = await response.json()
-        setData(projection || [])
-      } catch (err) {
-        console.error('Erro:', err)
+        setData(Array.isArray(projection) ? projection : [])
+      } catch {
         setError(true)
       } finally {
         setLoading(false)
@@ -61,7 +75,12 @@ export default function DetailedProjectionChart() {
     }
 
     fetchProjection()
-  }, [])
+  }, [externalData])
+
+  const isPositiveTrend = useMemo(
+    () => data.length > 0 && Number(data[data.length - 1].projected_balance) >= 0,
+    [data]
+  )
 
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-')
@@ -72,13 +91,9 @@ export default function DetailedProjectionChart() {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
   const formatCurrencyAxis = (value: number) => {
-    if (Math.abs(value) >= 1000) {
-      return `${(value / 1000).toFixed(0)}k`
-    }
+    if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}k`
     return value.toString()
   }
-
-  const isPositiveTrend = data.length > 0 && data[data.length - 1].projected_balance >= 0
 
   if (loading) {
     return (
@@ -101,41 +116,31 @@ export default function DetailedProjectionChart() {
   }
 
   const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const value = payload[0].value
-      const isPositive = value >= 0
-      return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-3">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-            {new Date(label + 'T00:00:00').toLocaleDateString('pt-BR', {
-              day: '2-digit',
-              month: 'long',
-              year: 'numeric',
-            })}
-          </p>
-          <p
-            className={`text-lg font-bold ${
-              isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-            }`}
-          >
-            {formatCurrencyTooltip(value)}
-          </p>
-        </div>
-      )
-    }
-    return null
+    if (!active || !payload?.length) return null
+    const value = Number(payload[0].value || 0)
+
+    return (
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-3">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+          {new Date(`${label}T00:00:00`).toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+          })}
+        </p>
+        <p className={`text-lg font-bold ${value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+          {formatCurrencyTooltip(value)}
+        </p>
+      </div>
+    )
   }
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-            Projeção de Saldo (30 dias)
-          </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Saldo estimado dia a dia com base em transações futuras, faturas e assinaturas
-          </p>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>
         </div>
         <div
           className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -153,25 +158,12 @@ export default function DetailedProjectionChart() {
           <AreaChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
             <defs>
               <linearGradient id="projectionGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="0%"
-                  stopColor={isPositiveTrend ? '#10b981' : '#ef4444'}
-                  stopOpacity={0.3}
-                />
-                <stop
-                  offset="100%"
-                  stopColor={isPositiveTrend ? '#10b981' : '#ef4444'}
-                  stopOpacity={0.0}
-                />
+                <stop offset="0%" stopColor={isPositiveTrend ? '#10b981' : '#ef4444'} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={isPositiveTrend ? '#10b981' : '#ef4444'} stopOpacity={0.0} />
               </linearGradient>
             </defs>
 
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="#e2e8f0"
-              className="dark:opacity-10"
-            />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:opacity-10" />
 
             <XAxis
               dataKey="projection_date"
@@ -204,7 +196,7 @@ export default function DetailedProjectionChart() {
                 stroke: isPositiveTrend ? '#10b981' : '#ef4444',
                 strokeWidth: 2,
               }}
-              isAnimationActive={true}
+              isAnimationActive
               animationDuration={1000}
               animationEasing="ease-out"
             />

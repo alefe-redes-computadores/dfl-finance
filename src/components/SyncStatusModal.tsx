@@ -7,30 +7,67 @@ import { useIsAdmin } from '@/hooks/useAdmin'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { RefreshCw, Wifi, WifiOff, X, Shield } from 'lucide-react'
 
-export default function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { pendingCount, isSyncing, forceSync, isOnline, syncStatus } = useLocalSync() || {}
+interface SyncStatusModalProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProps) {
+  const localSync = useLocalSync()
   const { isAdmin } = useIsAdmin() || { isAdmin: false }
+
+  const pendingCount = Number(localSync?.pendingCount ?? 0)
+  const isSyncing = Boolean(localSync?.isSyncing)
+  const forceSync = localSync?.forceSync
+  const isOnline = localSync?.isOnline
+  const syncStatus = localSync?.syncStatus
+
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
     }
+
     return () => {
       document.body.style.overflow = ''
     }
-  }, [isOpen])
+  }, [isOpen, mounted])
 
   if (!isOpen || !mounted) return null
 
-  const isOnlineStatus = isOnline ?? navigator.onLine
+  const browserOnline =
+    typeof window !== 'undefined' && typeof navigator !== 'undefined'
+      ? navigator.onLine
+      : true
+
+  const isOnlineStatus = typeof isOnline === 'boolean' ? isOnline : browserOnline
   const StatusIcon = isOnlineStatus ? Wifi : WifiOff
   const statusColor = isOnlineStatus ? 'text-emerald-500' : 'text-red-500'
   const statusText = isOnlineStatus ? 'Online' : 'Offline'
-  const syncStatusText = isSyncing ? 'Sincronizando...' : pendingCount > 0 ? `${pendingCount} pendente(s)` : 'Tudo sincronizado'
+  const syncStatusText =
+    isSyncing
+      ? 'Sincronizando...'
+      : pendingCount > 0
+        ? `${pendingCount} pendente(s)`
+        : syncStatus === 'offline'
+          ? 'Aguardando conexão'
+          : 'Tudo sincronizado'
+
+  const handleForceSync = () => {
+    if (!isOnlineStatus || isSyncing) return
+    if (typeof forceSync === 'function') {
+      forceSync()
+    }
+  }
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -42,7 +79,6 @@ export default function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; 
         className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
         style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
       >
-        {/* Cabeçalho */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-full text-teal-600 dark:text-teal-400">
@@ -58,32 +94,33 @@ export default function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; 
               </div>
             </div>
           </div>
+
           <button
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-400 hover:text-gray-600 dark:text-gray-500"
+            type="button"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Pendências */}
         <div className="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6 flex items-center justify-between">
           <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Itens pendentes</span>
           <span className="text-2xl font-bold text-gray-800 dark:text-white">
-            {pendingCount ?? 0}
+            {pendingCount}
           </span>
         </div>
 
-        {/* Botão principal */}
         <button
-          onClick={forceSync}
+          onClick={handleForceSync}
           disabled={isSyncing || !isOnlineStatus}
+          type="button"
           className={`
             w-full py-3.5 rounded-2xl font-bold text-white transition-all duration-200
             flex items-center justify-center gap-2
             ${isSyncing || !isOnlineStatus
               ? 'bg-gray-300 dark:bg-slate-700 cursor-not-allowed opacity-70'
-              : 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 shadow-lg shadow-teal-500/30 active:scale-[0.97]'
+              : 'bg-teal-500 hover:bg-teal-600 shadow-lg shadow-teal-500/30 active:scale-[0.97]'
             }
           `}
         >
@@ -105,15 +142,14 @@ export default function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; 
           )}
         </button>
 
-        {/* Fechar */}
         <button
           onClick={onClose}
           className="w-full mt-3 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+          type="button"
         >
           Fechar
         </button>
 
-        {/* 🔥 Admin Link - agora aponta para /admin */}
         {isAdmin && (
           <Link
             href="/admin"
