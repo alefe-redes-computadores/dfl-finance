@@ -73,30 +73,35 @@ export default function ContextToggle() {
     }
   }
 
+  // 🔥 Skeleton atualizado
   if (!mounted) {
-    return <div className="w-[120px] h-[32px] bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+    return (
+      <div className="h-10 w-[148px] rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm animate-pulse" />
+    )
   }
 
   if (appMode === 'personal_only') return null
 
+  // 🔥 Seletor refatorado
   return (
-    <div className="inline-flex bg-[#f0f2f5] dark:bg-slate-800/80 backdrop-blur-md rounded-full p-0.5 gap-0.5 border border-gray-100 dark:border-slate-700/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] shrink-0 transition-colors duration-300">
+    <div className="inline-flex h-10 items-center rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 shadow-sm shrink-0 transition-colors duration-300">
       <button
         onClick={() => handleToggle('dfl')}
-        className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-all duration-300 active:scale-[0.95] ${
+        className={`h-8 px-3 rounded-[14px] text-[13px] font-semibold transition-all duration-200 active:scale-[0.98] ${
           context === 'dfl'
-            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-sm'
-            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            ? 'bg-gray-900 dark:bg-slate-700 text-white dark:text-gray-100 shadow-sm'
+            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-700 dark:hover:text-gray-200'
         }`}
       >
         Empresa
       </button>
+
       <button
         onClick={() => handleToggle('personal')}
-        className={`px-3 py-1.5 rounded-full text-[12px] font-bold transition-all duration-300 active:scale-[0.95] ${
+        className={`h-8 px-3 rounded-[14px] text-[13px] font-semibold transition-all duration-200 active:scale-[0.98] ${
           context === 'personal'
-            ? 'bg-white dark:bg-slate-600 text-teal-700 dark:text-teal-400 shadow-sm'
-            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            ? 'bg-gray-900 dark:bg-slate-700 text-white dark:text-gray-100 shadow-sm'
+            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-700 dark:hover:text-gray-200'
         }`}
       >
         Pessoal
