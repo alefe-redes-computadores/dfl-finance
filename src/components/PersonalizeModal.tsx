@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { MoveUp, MoveDown, X, Save, LayoutGrid } from 'lucide-react'
 
 interface Section {
@@ -22,6 +23,19 @@ interface Props {
 export default function PersonalizeModal({ isOpen, onClose, sections, enabled, order, onToggle, onMove, onSave }: Props) {
   const [localOrder, setLocalOrder] = useState<Section[]>(order)
   const [animatingId, setAnimatingId] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isOpen])
 
   useEffect(() => {
     setLocalOrder(order)
@@ -45,15 +59,15 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
     onMove(id, dir)
   }
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
       
-      <div className="relative w-full max-w-lg bg-[#f8f9fa] dark:bg-slate-900 rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-8 duration-300" onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-[32px] shadow-2xl flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-8 duration-300" onClick={e => e.stopPropagation()}>
         
-        {/* Header Premium */}
+        {/* Header */}
         <div className="flex-shrink-0 bg-white dark:bg-slate-800 px-6 pt-6 pb-4 rounded-t-[32px] border-b border-gray-100 dark:border-slate-700/50">
           <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
           <div className="flex items-center justify-between">
@@ -72,7 +86,7 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
           </div>
         </div>
 
-        {/* Lista de Seções */}
+        {/* Lista de seções */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {localOrder.map((sec, idx) => {
             const active = enabled.has(sec.id)
@@ -87,7 +101,7 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
                     : 'bg-gray-100/50 dark:bg-slate-800/30 border-transparent opacity-60 grayscale-[0.2]'
                 } ${isAnimating ? 'scale-[1.02] shadow-md border-teal-200 dark:border-teal-800/50' : 'scale-100'}`}
               >
-                {/* Switch iOS Style */}
+                {/* Switch estilo iOS */}
                 <button 
                   onClick={() => onToggle(sec.id)} 
                   className={`relative w-12 h-7 rounded-full flex-shrink-0 transition-colors duration-300 ease-in-out focus:outline-none shadow-inner ${active ? 'bg-teal-500' : 'bg-gray-300 dark:bg-slate-600'}`}
@@ -99,7 +113,6 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
                   {sec.label}
                 </span>
                 
-                {/* Botões de Ordem */}
                 <div className={`flex flex-col gap-1 transition-opacity duration-300 ${active ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
                     onClick={() => handleMove(sec.id, 'up')}
@@ -133,4 +146,6 @@ export default function PersonalizeModal({ isOpen, onClose, sections, enabled, o
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
