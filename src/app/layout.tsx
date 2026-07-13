@@ -1,26 +1,54 @@
-'use client'
+import type { Metadata, Viewport } from 'next'
+import { Poppins } from 'next/font/google'
+import './globals.css'
+import { ToastProvider } from '@/contexts/ToastContext'
+import ErudaButton from '@/components/ErudaButton' // 🔥 Importando o botão secreto
 
-import { Navigation } from '@/components/Navigation'
-import { ContextToggleProvider } from '@/components/ContextToggle'
-import ErudaButton from '@/components/ErudaButton' // 🔥 Importe aqui
+// Configuração oficial da Fonte Poppins
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
 
-export default function AppLayout({
+export const metadata: Metadata = {
+  title: 'Meu App Financeiro',
+  description: 'Controle de Finanças Premium',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Meu App',
+  },
+}
+
+// 🔥 ISSO IMPEDE O ZOOM NO IPHONE AO CLICAR EM INPUTS
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8f9fa' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+  ],
+}
+
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <ContextToggleProvider>
-      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 overflow-hidden">
-        <main className="flex-1 overflow-y-auto custom-scrollbar">
+    <html lang="pt-BR" className={`${poppins.variable} font-sans antialiased`} suppressHydrationWarning>
+      <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen selection:bg-teal-500/30">
+        <ToastProvider>
           {children}
-        </main>
-        <Navigation />
-        
-        {/* 🔥 Botão Flutuante de Debug */}
-        <ErudaButton />
-        
-      </div>
-    </ContextToggleProvider>
+          
+          {/* 🔥 Botão invisível (só aparece com ?debug=1) */}
+          <ErudaButton />
+        </ToastProvider>
+      </body>
+    </html>
   )
 }
