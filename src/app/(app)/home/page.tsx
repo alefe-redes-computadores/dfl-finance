@@ -17,13 +17,11 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDay
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
-// 🔥 REMOVIDO: NetworkStatus (substituído pelo modal e ícone)
 import InvoiceAlert from '@/components/InvoiceAlert'
 import DebtAlert from '@/components/DebtAlert'
 import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
-// 🔥 NOVO: Importando o SyncStatusModal
 import SyncStatusModal from '@/components/SyncStatusModal'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
@@ -88,12 +86,13 @@ function HomeContent() {
 
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
 
-  // 🔥 NOVO: Estado para controlar a abertura do modal de sincronização
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  // Substitua a chamada do hook por esta versão protegida
-  const { isOnline = true, pendingCount = 0, isSyncing = false, syncQueue = async () => {} } = useOfflineQueue() || {};
+  // 🔥 Delayed Hydration: evita erro React #130
+  const [isClient, setIsClient] = useState(false)
+  useEffect(() => setIsClient(true), [])
 
+  const { isOnline, pendingCount, isSyncing, syncQueue } = useOfflineQueue()
 
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
@@ -931,8 +930,6 @@ function HomeContent() {
         />
       )}
 
-      {/* 🔥 REMOVIDO: NetworkStatus — substituído pelo ícone SyncButton e modal */}
-
       {cards.length > 0 && (
         <div className="mb-4 space-y-2">
           {cards.map((card: any) => (
@@ -963,15 +960,17 @@ function HomeContent() {
         </div>
         <div className="flex flex-col items-end gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            {/* 🔥 SyncButton com isOnline e onClick para abrir modal */}
-            <SyncButton
-                pendingCount={pendingCount ?? 0}
+            {isClient ? (
+              <SyncButton
+                pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
                 isSyncing={!!isSyncing}
                 isOnline={!!isOnline}
                 onSync={syncQueue}
                 onClick={() => setIsSyncModalOpen(true)}
-             />
-
+              />
+            ) : (
+              <div className="w-10 h-10" />
+            )}
             {notificationsEnabled && (
               <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
             )}
@@ -1018,11 +1017,13 @@ function HomeContent() {
         />
       )}
 
-      {/* 🔥 NOVO: SyncStatusModal para feedback de sincronização */}
-      <SyncStatusModal
-        isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
-      />
+      {/* 🔥 Delayed Hydration: só renderiza no cliente */}
+      {isClient && (
+        <SyncStatusModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
