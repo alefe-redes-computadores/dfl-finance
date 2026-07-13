@@ -6,6 +6,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db, addToSyncQueue, getPendingSyncItems, removeFromSyncQueue, markSyncFailed } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
+// 🔥 IMPORTANDO O HOOK DE ADMIN
+import { useIsAdmin } from '@/hooks/useAdmin'
 
 type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline'
 
@@ -17,14 +19,19 @@ type AllTables =
 export function useLocalSync() {
   const { user } = useAuth()
   const { showToast } = useToast()
+  // 🔥 BUSCA O STATUS DE ADMIN DO USUÁRIO
+  const { isAdmin } = useIsAdmin()
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [pendingCount, setPendingCount] = useState(0)
   const isSyncing = useRef(false)
 
-  // 🔥 GERADOR DE LOG DIRETO NA TELA DO CELULAR (Bypassa restrições de build)
+  // 🔥 GERADOR DE LOG DIRETO NA TELA DO CELULAR (APENAS PARA ADMIN)
   const renderLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
+    // 🔥 SEGURANÇA: SE NÃO FOR ADMIN, NÃO INJETA A CAIXINHA
+    if (!isAdmin) return
     if (typeof window === 'undefined') return
+    
     let box = document.getElementById('screen-debug-console')
     if (!box) {
       box = document.createElement('div')
