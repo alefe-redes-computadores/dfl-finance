@@ -16,14 +16,15 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { clearAllNotifications } from '@/lib/notificationUtils'
 import { useIsAdmin } from '@/hooks/useAdmin'
 
+// 🔥 SKELETON ATUALIZADO
 const NotificationsSkeleton = () => (
-  <div className="space-y-3 animate-pulse">
+  <div className="space-y-2.5 animate-pulse">
     {[1, 2, 3, 4].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-700" />
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2">
+        <div className="rounded-[18px] p-3 flex items-start gap-3">
+          <div className="w-10 h-10 rounded-[14px] bg-gray-200 dark:bg-slate-700 shrink-0" />
           <div className="flex-1 space-y-2">
-            <div className="h-4 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
+            <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
             <div className="h-3 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
             <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700/50 rounded" />
           </div>
@@ -262,144 +263,179 @@ export default function NotificationsPage() {
   }, [notifications, filter])
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-6 transition-colors duration-300">
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300"
+    >
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-lg shadow-teal-500/50" />
+          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => router.push('/more')} 
-            className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors active:scale-[0.95]"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <h2 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Notificações</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              onClick={handleClearAll}
-              disabled={processing}
-              className="text-red-500 dark:text-red-400 text-sm font-bold hover:opacity-80 transition-colors active:scale-[0.95] flex items-center gap-1"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllAsRead}
-              className="text-teal-700 dark:text-teal-400 text-sm font-bold hover:opacity-80 transition-colors active:scale-[0.95]"
-            >
-              Marcar todas
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-hide">
-        {[
-          { key: 'all', label: 'Todas' },
-          { key: 'unread', label: 'Não lidas' },
-          { key: 'critical', label: 'Críticas' },
-        ].map(f => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key as any)}
-            className={`px-4 py-2 rounded-full text-[12px] font-bold whitespace-nowrap transition-all border active:scale-[0.95] ${
-              filter === f.key
-                ? 'bg-teal-700 text-white border-teal-700 shadow-md'
-                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-            }`}
-          >
-            {f.label}
-            {f.key === 'unread' && unreadCount > 0 && (
-              <span className="ml-1 text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300 px-1.5 py-0.5 rounded-full">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <NotificationsSkeleton />
-      ) : filteredNotifications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-            <Bell size={40} className="text-gray-400 dark:text-gray-500" />
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-[12px] font-semibold text-teal-600">Atualizando...</span>
           </div>
-          <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">
-            {filter === 'unread' ? 'Nenhuma notificação não lida' : 'Nenhuma notificação'}
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm max-w-[250px]">
-            {filter === 'critical' 
-              ? 'Nenhuma notificação crítica no momento.' 
-              : 'Você está em dia com todas as novidades!'}
-          </p>
         </div>
-      ) : (
-        <div className="space-y-3 animate-in fade-in duration-300">
-          {filteredNotifications.map((notif: any) => {
-            const isUnread = !notif.is_read
-            return (
-              <div
-                key={notif.id}
-                className={`bg-white dark:bg-slate-800 rounded-[28px] p-4 shadow-sm border transition-all ${
-                  isUnread 
-                    ? 'border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10' 
-                    : 'border-gray-100 dark:border-slate-700'
+      )}
+
+      {/* 🔥 HEADER UNIFICADO */}
+      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => router.push('/more')}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="min-w-0">
+                <h2 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Notificações
+                </h2>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Atualizações e alertas do app
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {isAdmin && (
+                <button
+                  onClick={handleClearAll}
+                  disabled={processing}
+                  className="h-10 w-10 rounded-[16px] border border-red-200/70 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors active:scale-[0.98]"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="h-10 px-3 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 text-[12px] font-semibold text-teal-700 dark:text-teal-400 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+                >
+                  Marcar todas
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+            {[
+              { key: 'all', label: 'Todas' },
+              { key: 'unread', label: 'Não lidas' },
+              { key: 'critical', label: 'Críticas' },
+            ].map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key as any)}
+                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                  filter === f.key
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getSeverityBg(notif.severity)}`}>
-                    {getSeverityIcon(notif.severity)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200 truncate">
-                        {notif.title}
-                      </p>
-                      {isUnread && (
-                        <span className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0" />
-                      )}
-                    </div>
-                    {notif.subtitle && (
-                      <p className="text-[13px] text-gray-600 dark:text-gray-400 mt-0.5">
-                        {notif.subtitle}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                        {format(new Date(notif.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {isUnread && (
-                          <button
-                            onClick={() => markAsRead(notif.id)}
-                            className="text-teal-700 dark:text-teal-400 text-[10px] font-bold hover:opacity-80 transition-colors active:scale-[0.95]"
-                          >
-                            <Check size={14} />
-                          </button>
+                {f.label}
+                {f.key === 'unread' && unreadCount > 0 && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 dark:bg-gray-900/10">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 pt-3">
+        {loading ? (
+          <NotificationsSkeleton />
+        ) : filteredNotifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+              <Bell size={28} className="text-gray-400 dark:text-gray-500" />
+            </div>
+            <h3 className="font-semibold text-[16px] text-gray-800 dark:text-gray-100 mb-1">
+              {filter === 'unread' ? 'Nenhuma notificação não lida' : 'Nenhuma notificação'}
+            </h3>
+            <p className="text-gray-400 dark:text-gray-500 text-[12px] max-w-[250px]">
+              {filter === 'critical'
+                ? 'Nenhuma notificação crítica no momento.'
+                : 'Você está em dia com todas as novidades!'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5 animate-in fade-in duration-300">
+            {filteredNotifications.map((notif: any) => {
+              const isUnread = !notif.is_read
+              return (
+                <div
+                  key={notif.id}
+                  className={`bg-white dark:bg-slate-800 rounded-[24px] border shadow-sm p-2 transition-all ${
+                    isUnread
+                      ? 'border-teal-200/80 dark:border-teal-800/50'
+                      : 'border-gray-200/70 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="rounded-[18px] p-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center flex-shrink-0 ${getSeverityBg(notif.severity)}`}>
+                        {getSeverityIcon(notif.severity)}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-[14px] text-gray-900 dark:text-gray-100 truncate">
+                            {notif.title}
+                          </p>
+                          {isUnread && (
+                            <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+                          )}
+                        </div>
+
+                        {notif.subtitle && (
+                          <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                            {notif.subtitle}
+                          </p>
                         )}
-                        <button
-                          onClick={() => deleteNotification(notif.id)}
-                          className="text-gray-400 hover:text-red-500 transition-colors active:scale-[0.95]"
-                        >
-                          <X size={14} />
-                        </button>
+
+                        <div className="flex items-center justify-between gap-3 mt-2">
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                            {format(new Date(notif.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </span>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isUnread && (
+                              <button
+                                onClick={() => markAsRead(notif.id)}
+                                className="h-8 w-8 rounded-full flex items-center justify-center text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors active:scale-[0.95]"
+                              >
+                                <Check size={14} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => deleteNotification(notif.id)}
+                              className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.95]"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
