@@ -22,6 +22,38 @@ export function useLocalSync() {
   const [pendingCount, setPendingCount] = useState(0)
   const isSyncing = useRef(false)
 
+  // 🔥 GERADOR DE LOG DIRETO NA TELA DO CELULAR (Bypassa restrições de build)
+  const renderLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
+    if (typeof window === 'undefined') return
+    let box = document.getElementById('screen-debug-console')
+    if (!box) {
+      box = document.createElement('div')
+      box.id = 'screen-debug-console'
+      box.style.position = 'fixed'
+      box.style.bottom = '85px'
+      box.style.left = '12px'
+      box.style.right = '12px'
+      box.style.maxHeight = '160px'
+      box.style.overflowY = 'auto'
+      box.style.backgroundColor = 'rgba(15, 23, 42, 0.95)'
+      box.style.color = '#fff'
+      box.style.fontFamily = 'monospace'
+      box.style.fontSize = '11px'
+      box.style.padding = '10px'
+      box.style.borderRadius = '14px'
+      box.style.zIndex = '999999'
+      box.style.border = '1px solid rgba(255,255,255,0.1)'
+      box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)'
+      document.body.appendChild(box)
+    }
+    const line = document.createElement('div')
+    line.style.marginBottom = '4px'
+    line.style.color = type === 'error' ? '#f87171' : type === 'success' ? '#4ade80' : '#e2e8f0'
+    line.innerText = `> ${msg}`
+    box.appendChild(line)
+    box.scrollTop = box.scrollHeight
+  }
+
   const updatePendingCount = useCallback(async () => {
     if (!user?.id) return
     const items = await getPendingSyncItems(user.id)
@@ -29,31 +61,29 @@ export function useLocalSync() {
   }, [user?.id])
 
   const processSyncQueue = useCallback(async () => {
-    // 🔔 PASSO 1: O motor foi chamado?
-    alert('👉 PASSO 1: processSyncQueue foi acionado!')
+    renderLog('Iniciando processSyncQueue...', 'info')
     
-    if (!user?.id) { alert('❌ Parou: Usuário não identificado no useAuth'); return }
-    if (isSyncing.current) { alert('⚠️ Parou: Já existe um sincronismo em execução (bloqueado)'); return }
-    if (!isOnline) { alert('❌ Parou: O navegador acha que está offline'); return }
+    if (!user?.id) { renderLog('Cancelado: Usuário sem ID logado', 'error'); return }
+    if (isSyncing.current) { renderLog('Cancelado: Já existe uma fila rodando', 'info'); return }
+    if (!isOnline) { renderLog('Cancelado: Dispositivo detectado como Offline', 'error'); return }
 
     isSyncing.current = true
     setSyncStatus('syncing')
 
     try {
-      // 🔔 PASSO 2: Vai tentar ler o Dexie
-      alert('👉 PASSO 2: Tentando buscar itens pendentes no Dexie...');
+      renderLog('Buscando itens pendentes no Dexie...', 'info')
       const items = await getPendingSyncItems(user.id)
-      
-      // 🔔 PASSO 3: Quantos itens leu?
-      alert(`👉 PASSO 3: Dexie respondeu! Itens encontrados na fila: ${items.length}`)
+      renderLog(`Dexie retornou ${items.length} itens pendentes.`, 'info')
 
       if (items.length === 0) {
         setSyncStatus(isOnline ? 'online' : 'offline')
         isSyncing.current = false
+        renderLog('Nenhum item pendente. Sincronismo concluído.', 'success')
         return
       }
 
       for (const item of items) {
+        renderLog(`Processando ${item.operation} na tabela [${item.table}]...`, 'info')
         try {
           const { table, operation, record_id, data } = item
           
@@ -61,31 +91,29 @@ export function useLocalSync() {
           if (table === 'credit_cards') supabaseTable = 'credit_cards'
           if (table === 'credit_invoices') supabaseTable = 'credit_invoices'
 
-          // 🔔 PASSO 4: Vai disparar para o Supabase
-          alert(`👉 PASSO 4: Enviando ${operation} da tabela ${table} para o Supabase...`)
-
           const supabaseClient = supabase.from(supabaseTable)
           let error = null
 
           if (operation === 'delete') {
+            renderLog(`Disparando DELETE para ID: ${record_id}`, 'info')
             const res = await supabaseClient.delete().eq('id', record_id)
             error = res.error
           } else {
+            renderLog(`Disparando UPSERT para ID: ${record_id}`, 'info')
             const res = await supabaseClient.upsert(data, { onConflict: 'id' })
             error = res.error
           }
 
           if (error) {
-            // 🔔 ALERTA DE ERRO REAL DO SUPABASE
-            alert(`🚨 ERRO DO SUPABASE!\nTabela: ${table}\nMensagem: ${error.message}\nCódigo: ${error.code}`)
+            renderLog(`Erro Supabase: ${error.message} (Código: ${error.code})`, 'error')
             throw new Error(error.message)
           }
 
-          // 🔔 PASSO 5: Sucesso no item
-          alert(`✅ PASSO 5: Item ${record_id} enviado com sucesso! Removendo da fila local...`)
+          renderLog(`Sucesso no ID ${record_id}. Removendo da fila local...`, 'success')
           await removeFromSyncQueue(item.id)
 
         } catch (err: any) {
+          renderLog(`Falha no item: ${err.message}`, 'error')
           await markSyncFailed(item.id, err.message)
         }
       }
@@ -94,10 +122,10 @@ export function useLocalSync() {
       if (pendingCount === 0) setSyncStatus(isOnline ? 'online' : 'offline')
 
     } catch (err: any) {
-      alert(`💥 ERRO CRÍTICO NO PROCESSO:\n${err?.message || err}`)
+      renderLog(`Erro crítico na fila: ${err?.message}`, 'error')
     } finally {
       isSyncing.current = false
-      alert('🏁 PASSO 7: Fim do ciclo de sincronização.')
+      renderLog('Ciclo de sincronização finalizado.', 'info')
     }
   }, [user?.id, isOnline, pendingCount, updatePendingCount])
 
@@ -105,11 +133,13 @@ export function useLocalSync() {
     const handleOnline = () => {
       setIsOnline(true)
       setSyncStatus('online')
+      renderLog('🌐 Rede detectou conexão reestabelecida.', 'success')
       processSyncQueue()
     }
     const handleOffline = () => {
       setIsOnline(false)
       setSyncStatus('offline')
+      renderLog('📡 Rede detectou queda de conexão.', 'error')
     }
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -128,6 +158,7 @@ export function useLocalSync() {
   }, [user?.id, isOnline, updatePendingCount, processSyncQueue])
 
   const forceSync = useCallback(async () => {
+    renderLog('Ação manual: Forçar Sincronismo acionado.', 'info')
     if (!isOnline) {
       showToast('📡 Sem conexão.', 'warning')
       return
