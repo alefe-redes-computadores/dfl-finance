@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { X, Bell, CreditCard, Repeat, Target, Clock, CheckCircle, AlertTriangle, ArrowRight, Check, ExternalLink, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { db } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { clearAllNotifications } from '@/lib/notificationUtils'
+import { useIsAdmin } from '@/hooks/useAdmin'
 
 interface Notification {
   id: string
@@ -75,7 +77,8 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const { user } = useAuth()
   const { showToast } = useToast()
   const { addToSyncQueue } = useOfflineQueue()
-  const { vibrate, success } = useHapticFeedback()
+  const { vibrate, success, error: errorHaptic } = useHapticFeedback()
+  const { isAdmin, loading: adminLoading } = useIsAdmin()
   
   const [localNotifs, setLocalNotifs] = useState<Notification[]>(notifications)
   const [processing, setProcessing] = useState(false)
@@ -84,7 +87,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
     setLocalNotifs(notifications)
   }, [notifications])
 
-  const markAsRead = async (notifIds: string[]) => {
+  const markAsRead = useCallback(async (notifIds: string[]) => {
     if (!user || processing) return
     setProcessing(true)
 
@@ -112,21 +115,53 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
 
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
-      showToast(`Erro ao processar: ${err.message}`, 'error')
+      showToast(`❌ Erro ao processar: ${err.message}`, 'error')
     } finally {
       setProcessing(false)
     }
-  }
+  }, [user, processing, localNotifs, addToSyncQueue, onReadChange, showToast])
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!user) return
     const unreadIds = localNotifs.filter(n => !n.is_read && !n.read).map(n => n.id)
     if (unreadIds.length > 0) {
-      success() // Haptic de sucesso
+      success()
       await markAsRead(unreadIds)
       showToast('✅ Notificações marcadas como lidas!', 'success')
+      vibrate([10])
     }
-  }
+  }, [user, localNotifs, markAsRead, showToast, success, vibrate])
+
+  const handleClearAll = useCallback(async () => {
+    if (!user?.id) return
+    
+    if (!isAdmin) {
+      showToast('⚠️ Apenas administradores podem limpar todas as notificações.', 'warning')
+      return
+    }
+
+    if (!confirm('⚠️ Tem certeza que deseja limpar TODAS as notificações? Esta ação não pode ser desfeita.')) return
+
+    setProcessing(true)
+    try {
+      const result = await clearAllNotifications(user.id)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      
+      setLocalNotifs([])
+      if (onReadChange) onReadChange(0)
+      
+      success()
+      vibrate([20, 10])
+      showToast('🗑️ Todas as notificações foram removidas!', 'success')
+    } catch (err: any) {
+      errorHaptic()
+      showToast(`❌ Erro ao limpar notificações: ${err.message}`, 'error')
+    } finally {
+      setProcessing(false)
+    }
+  }, [user, isAdmin, onReadChange, showToast, success, errorHaptic, vibrate])
 
   if (!isOpen) return null
 
@@ -137,7 +172,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
   const displayedGroups = grouped.slice(0, 5)
 
   const handleClick = async (group: NotificationGroup) => {
-    vibrate([5]) // Haptic leve ao clicar
+    vibrate([5])
     const notifIds = group.items.map(n => n.id)
     await markAsRead(notifIds)
 
@@ -145,7 +180,7 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
       router.push(group.route)
     } else if (group.items.length === 1) {
       const notif = group.items[0]
-      if (notif.cardId) router.push(`/cards/details?id=${notif.cardId}`) // Ajustado rota
+      if (notif.cardId) router.push(`/cards/details?id=${notif.cardId}`)
       else if (notif.budgetId) router.push(`/budgets/details?id=${notif.budgetId}`)
       else if (notif.financingId) router.push(`/financings/details?id=${notif.financingId}`)
       else if (notif.debtId) router.push(`/debts/details?id=${notif.debtId}`)
@@ -195,7 +230,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
       <div className="fixed inset-x-0 top-0 z-[610] mx-auto max-w-md pt-14 px-4">
         <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in slide-in-from-top-6 duration-300 pointer-events-auto border border-white/20 dark:border-slate-700/50">
           
-          {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-700/50">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
@@ -209,6 +243,16 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button 
+                  onClick={handleClearAll}
+                  disabled={processing}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[11px] font-bold hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 active:scale-95"
+                  title="Limpar todas as notificações"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
               {unreadCount > 0 && (
                 <button 
                   onClick={markAllAsRead}
@@ -225,7 +269,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
             </div>
           </div>
 
-          {/* Indicadores */}
           <div className="grid grid-cols-2 gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-700/50 bg-gray-50/50 dark:bg-slate-800/50">
             <div className="text-center">
               <span className="text-[13px] font-black text-red-500">{criticalCount}</span>
@@ -237,7 +280,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
             </div>
           </div>
 
-          {/* Lista de Notificações */}
           <div className="max-h-[55vh] overflow-y-auto">
             {grouped.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -284,7 +326,6 @@ export default function NotificationCenter({ isOpen, onClose, notifications, onR
                   </button>
                 ))}
                 
-                {/* Botão Ver Todas */}
                 <div className="pt-2">
                   <button
                     onClick={() => {
