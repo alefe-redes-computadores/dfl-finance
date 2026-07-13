@@ -3,9 +3,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 
 export function useIsAdmin() {
   const { user } = useAuth()
-  
-  // Substitua pelo seu ID real do Supabase
-  const ADMIN_ID = 'SEU_ID_DO_SUPABASE_AQUI' 
+  const ADMIN_ID = '64c7cfd8-218a-4366-aba1-2150b95a37ba' 
   
   return user?.id === ADMIN_ID
 }
