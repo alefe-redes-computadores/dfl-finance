@@ -5,9 +5,9 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useIsAdmin } from '@/hooks/useAdmin'
 import { useLocalSync } from '@/hooks/useLocalSync'
-import { RefreshCw, Wifi, WifiOff, X } from 'lucide-react'
+import { RefreshCw, Wifi, WifiOff, X, Shield } from 'lucide-react'
 
-export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { pendingCount, isSyncing, forceSync, isOnline, syncStatus } = useLocalSync() || {}
   const { isAdmin } = useIsAdmin() || { isAdmin: false }
   const [mounted, setMounted] = useState(false)
@@ -113,14 +113,18 @@ export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           Fechar
         </button>
 
-        {/* Admin link */}
+        {/* 🔥 Admin Link - agora aponta para /admin */}
         {isAdmin && (
           <Link
-            href="/admin/sync"
-            className="block text-center text-xs text-purple-500 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300 mt-4 underline-offset-2 underline font-medium transition-colors"
+            href="/admin"
             onClick={onClose}
+            className="mt-4 w-full flex items-center justify-center gap-2.5 px-4 py-3.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border border-purple-200 dark:border-purple-800/30 rounded-2xl transition-all group active:scale-[0.97]"
           >
-            Acessar Painel de Admin
+            <Shield size={18} className="text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
+              Acessar Painel de Admin
+            </span>
+            <span className="text-purple-400 dark:text-purple-500 group-hover:translate-x-0.5 transition-transform">→</span>
           </Link>
         )}
       </div>
