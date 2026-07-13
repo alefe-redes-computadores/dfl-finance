@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from '@/contexts/ToastContext'
-import ErudaButton from '@/components/ErudaButton' // 🔥 Importando o botão secreto
+import dynamic from 'next/dynamic'
 
 // Configuração oficial da Fonte Poppins
 const poppins = Poppins({
@@ -22,7 +22,6 @@ export const metadata: Metadata = {
   },
 }
 
-// 🔥 ISSO IMPEDE O ZOOM NO IPHONE AO CLICAR EM INPUTS
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -33,6 +32,13 @@ export const viewport: Viewport = {
     { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
   ],
 }
+
+// 🔥 Carregamento dinâmico do ErudaButton (ssr: false)
+// O componente só será carregado no cliente e condicionalmente
+const ErudaButton = dynamic(() => import('@/components/ErudaButton'), {
+  ssr: false,
+  loading: () => null, // Não renderiza nada enquanto carrega
+})
 
 export default function RootLayout({
   children,
@@ -45,7 +51,7 @@ export default function RootLayout({
         <ToastProvider>
           {children}
           
-          {/* 🔥 Botão invisível (só aparece com ?debug=1) */}
+          {/* 🔥 O componente agora decide se renderiza baseado no isAdmin */}
           <ErudaButton />
         </ToastProvider>
       </body>
