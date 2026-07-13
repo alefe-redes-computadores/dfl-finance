@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Mail, Lock, ArrowRight } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
 
@@ -58,18 +58,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
       
       {/* Luzes de Fundo (Efeito moderno) */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brand-teal/20 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-teal-500/20 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
 
-      <div className="w-full max-w-sm relative z-10">
+      <div className="w-full max-w-sm relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center mb-8">
-          {/* Novo Logotipo DFL em SVG */}
+          {/* Logotipo DFL em SVG */}
           <div className="flex justify-center mb-4">
             <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 drop-shadow-xl">
-              <rect width="40" height="40" rx="12" className="fill-brand-teal dark:fill-brand-teal" />
+              <rect width="40" height="40" rx="12" className="fill-teal-600 dark:fill-teal-500" />
               <path d="M12 28V12H20C23.3137 12 26 14.6863 26 18C26 21.3137 23.3137 24 20 24H16V28H12Z" fill="white"/>
               <path d="M28 28V12H24V28H28Z" fill="white" fillOpacity="0.7"/>
               <defs>
@@ -80,29 +80,29 @@ export default function LoginPage() {
               </defs>
             </svg>
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">DFL Finance</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gestão inteligente do seu dinheiro</p>
+          <h1 className="text-[26px] font-black text-gray-900 dark:text-white tracking-tight">DFL Finance</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mt-1 uppercase tracking-widest">Gestão Inteligente</p>
         </div>
 
-        {/* Card Principal */}
-        <div className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-zinc-800/50">
+        {/* Card Principal - Padrão Soft UI */}
+        <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white/40 dark:border-slate-700/50">
           <div className="space-y-4">
             
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <Mail size={18} className="text-gray-400" />
               </div>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-teal text-gray-800 dark:text-white transition-all shadow-sm"
+                className="w-full bg-gray-50 dark:bg-slate-700/50 border border-gray-100 dark:border-slate-600/50 rounded-[20px] pl-11 pr-4 py-4 text-[15px] font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 text-gray-800 dark:text-white transition-all placeholder:text-gray-400"
                 placeholder="Seu melhor e-mail"
               />
             </div>
 
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <Lock size={18} className="text-gray-400" />
               </div>
               <input
@@ -110,13 +110,13 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleEmail()}
-                className="w-full bg-white dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-2xl pl-10 pr-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-teal text-gray-800 dark:text-white transition-all shadow-sm"
+                className="w-full bg-gray-50 dark:bg-slate-700/50 border border-gray-100 dark:border-slate-600/50 rounded-[20px] pl-11 pr-4 py-4 text-[15px] font-semibold outline-none focus:ring-2 focus:ring-teal-500/50 text-gray-800 dark:text-white transition-all placeholder:text-gray-400"
                 placeholder="Sua senha"
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-xl text-xs text-center font-medium">
+              <div className="bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 p-3 rounded-[16px] text-[13px] text-center font-bold border border-red-100 dark:border-red-500/20">
                 {error}
               </div>
             )}
@@ -124,29 +124,29 @@ export default function LoginPage() {
             <button
               onClick={handleEmail}
               disabled={loading || !email || !password}
-              className="w-full bg-brand-teal hover:opacity-90 text-white rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-brand-teal/30 transition-all disabled:opacity-50 disabled:shadow-none"
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-[24px] py-4 font-bold text-[16px] flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:shadow-none disabled:active:scale-100 mt-2"
             >
-              {loading ? 'Processando...' : (
+              {loading ? <Loader2 className="animate-spin" size={20} /> : (
                 <>
                   Entrar na conta
-                  <ArrowRight size={16} />
+                  <ArrowRight size={18} />
                 </>
               )}
             </button>
 
-            <div className="flex items-center gap-3 py-2">
-              <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-800" />
-              <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">ou acesse com</span>
-              <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-800" />
+            <div className="flex items-center gap-3 py-3">
+              <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ou acesse com</span>
+              <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />
             </div>
 
             <button
               onClick={handleGoogle}
               disabled={loading}
-              className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-800 dark:text-white rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-3 shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all disabled:opacity-50"
+              className="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-800 dark:text-white rounded-[24px] py-4 font-bold text-[15px] flex items-center justify-center gap-3 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                <Loader2 className="animate-spin text-gray-400" size={20} />
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -161,7 +161,7 @@ export default function LoginPage() {
         </div>
         
         <div className="mt-8 text-center">
-          <p className="text-xs text-gray-400 font-medium">Uso Interno e Pessoal</p>
+          <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Uso Interno e Pessoal</p>
         </div>
       </div>
     </div>
