@@ -5,14 +5,13 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useIsAdmin } from '@/hooks/useAdmin'
 import { useLocalSync } from '@/hooks/useLocalSync'
-import { RefreshCw, Wifi, WifiOff, CheckCircle, AlertCircle, X } from 'lucide-react'
+import { RefreshCw, Wifi, WifiOff, X } from 'lucide-react'
 
 export function SyncStatusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { pendingCount, isSyncing, forceSync, isOnline, syncStatus } = useLocalSync() || {}
   const { isAdmin } = useIsAdmin() || { isAdmin: false }
   const [mounted, setMounted] = useState(false)
 
-  // Bloqueia scroll e monta portal
   useEffect(() => {
     setMounted(true)
     if (isOpen) {
