@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
   ArrowUpDown, Search, Plus, X, ChevronDown, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, Car, Home, Percent,
 } from "lucide-react"
@@ -148,7 +149,7 @@ export default function FinancingsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -387,10 +388,10 @@ export default function FinancingsPage() {
         )}
       </div>
 
-      {/* 🔥 MODAL DE EXCLUSÃO */}
-      {deleteModal && (
+      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {deleteModal && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
           onClick={() => setDeleteModal(null)}
         >
           <div
@@ -423,7 +424,8 @@ export default function FinancingsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
