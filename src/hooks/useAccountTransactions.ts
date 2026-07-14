@@ -9,8 +9,8 @@ export function useAccountTransactions(accountId?: string | null) {
 
   const data = useLiveQuery(async () => {
     if (!user?.id || !accountId) return []
+    if (!db || !db.transactions) return [] // ✅ Segurança extra
 
-    // ✅ Usa índice account_id (que existe) e filtra por user_id
     return await db.transactions
       .where('account_id')
       .equals(accountId)
