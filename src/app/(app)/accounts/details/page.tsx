@@ -53,7 +53,7 @@ function AccountDetailContent() {
   const { context } = useContext_()
   const { user } = useAuth()
 
-  // ✅ TODOS OS HOOKS SÃO CHAMADOS PRIMEIRO, SEM CONDICIONAIS
+  // ✅ TODOS OS HOOKS SÃO CHAMADOS PRIMEIRO, SEM CONDICIONAIS ANTES DELES
   const { data: accountData, loading, notFound } = useAccountById(accountId)
   const { data: transactions } = useAccountTransactions(accountId)
   const { data: allAccounts } = useLocalData({
@@ -75,7 +75,7 @@ function AccountDetailContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ✅ AGORA PODEMOS TER RETORNOS CONDICIONAIS, DEPOIS DE TODOS OS HOOKS
+  // ✅ SÓ AGORA, DEPOIS DE TODOS OS HOOKS, PODEMOS TER RETURNS CONDICIONAIS
 
   if (!accountId) {
     return (
