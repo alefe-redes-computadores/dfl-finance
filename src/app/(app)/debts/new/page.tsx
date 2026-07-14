@@ -10,11 +10,11 @@ import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useDebtById } from '@/hooks/useDebtById'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
-import Skeleton from '@/components/Skeleton'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -27,6 +27,7 @@ function NewDebtContent() {
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { safeAdd, safeUpdate } = useSafeDb()
+
   const editId = searchParams.get('edit')
 
   const [initialized, setInitialized] = useState(!editId)
@@ -56,30 +57,48 @@ function NewDebtContent() {
     filters: { context },
   })
 
-  const { data: localDebt, loading: debtLoading } = useLocalData({
-    table: 'debts' as any,
-    filters: { id: editId || '' },
-  })
+  const {
+    debt: localDebt,
+    loading: debtLoading,
+    notFound: debtNotFound,
+  } = useDebtById(editId)
 
-  // Carrega dados para edição
   useEffect(() => {
-    if (editId && localDebt && localDebt.length > 0 && !initialized) {
-      const data = localDebt[0] as any
-      setPersonName(data.person_name)
-      const numValue = Number(data.total_amount) || 0
-      setAmountNum(numValue)
-      setDueDate(data.due_date || '')
-      setDescription(data.description || '')
-      setCategoryId(data.category_id || '')
-      setAccountId(data.account_id || '')
-      setColor(data.color || '#14b8a6')
-      setIcon(data.icon ? data.icon.charAt(0).toUpperCase() + data.icon.slice(1) : 'User')
-      setDebtContext(data.context || 'dfl')
+    if (!editId && !initialized) {
       setInitialized(true)
-    } else if (!editId && !initialized) {
+      return
+    }
+
+    if (!editId) return
+    if (debtLoading) return
+
+    if (debtNotFound) {
+      showToast('⚠️ Registro não encontrado para edição.', 'warning')
+      router.replace('/debts')
+      return
+    }
+
+    if (localDebt && !initialized) {
+      setPersonName(localDebt.person_name || '')
+      setAmountNum(Number(localDebt.total_amount) || 0)
+      setDueDate(localDebt.due_date || '')
+      setDescription(localDebt.description || '')
+      setCategoryId(localDebt.category_id || '')
+      setAccountId(localDebt.account_id || '')
+      setColor(localDebt.color || '#14b8a6')
+      setIcon(localDebt.icon ? localDebt.icon.charAt(0).toUpperCase() + localDebt.icon.slice(1) : 'User')
+      setDebtContext(localDebt.context || 'dfl')
       setInitialized(true)
     }
-  }, [editId, localDebt, initialized])
+  }, [
+    editId,
+    localDebt,
+    debtLoading,
+    debtNotFound,
+    initialized,
+    router,
+    showToast,
+  ])
 
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0) {
@@ -89,6 +108,8 @@ function NewDebtContent() {
     }
 
     setSaving(true)
+
+    const now = new Date().toISOString()
 
     const payload = {
       person_name: personName.trim(),
@@ -101,32 +122,40 @@ function NewDebtContent() {
       icon: icon.toLowerCase(),
       status: 'pending',
       context: debtContext,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     }
 
     try {
       if (editId) {
         await db.transaction('rw', db.debts, db.syncQueue, async () => {
           const result = await safeUpdate('debts', editId, payload)
-          if (!result.success) throw new Error(result.error)
+          if (!result.success) {
+            throw new Error(result.error || 'Falha ao atualizar débito')
+          }
         })
+
         success()
         showToast('✅ Empréstimo atualizado!', 'success')
       } else {
         const id = crypto.randomUUID()
+
         const fullPayload = {
           id,
           user_id: user.id,
           ...payload,
           paid_amount: 0,
-          created_at: new Date().toISOString(),
+          created_at: now,
           sync_status: 'pending',
           sync_attempts: 0,
         }
+
         await db.transaction('rw', db.debts, db.syncQueue, async () => {
           const result = await safeAdd('debts', fullPayload)
-          if (!result.success) throw new Error(result.error)
+          if (!result.success) {
+            throw new Error(result.error || 'Falha ao criar débito')
+          }
         })
+
         success()
         showToast('✅ Empréstimo registrado!', 'success')
       }
@@ -134,13 +163,21 @@ function NewDebtContent() {
       router.push('/debts')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, 'error')
+      showToast(`❌ Erro: ${err?.message || 'Erro desconhecido ao salvar'}`, 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  if (!initialized) {
+  if (editId && (debtLoading || !initialized)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <Loader2 className="animate-spin text-teal-600" size={40} />
+      </div>
+    )
+  }
+
+  if (!editId && !initialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
         <Loader2 className="animate-spin text-teal-600" size={40} />
@@ -186,6 +223,7 @@ function NewDebtContent() {
               {CONTEXTS.map((c) => (
                 <button
                   key={c}
+                  type="button"
                   onClick={() => {
                     vibrate([5])
                     setDebtContext(c)
@@ -268,6 +306,7 @@ function NewDebtContent() {
 
           <div className="space-y-3">
             <button
+              type="button"
               onClick={() => {
                 vibrate([5])
                 setShowCatModal(true)
@@ -291,6 +330,7 @@ function NewDebtContent() {
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 vibrate([5])
                 setShowAccModal(true)
@@ -322,6 +362,7 @@ function NewDebtContent() {
               {COLORS.map((c) => (
                 <button
                   key={c}
+                  type="button"
                   onClick={() => {
                     vibrate([5])
                     setColor(c)
@@ -332,12 +373,14 @@ function NewDebtContent() {
                       : 'hover:scale-110'
                   }`}
                   style={{ backgroundColor: c }}
+                  aria-label={`Selecionar cor ${c}`}
                 />
               ))}
             </div>
           </section>
 
           <button
+            type="button"
             onClick={() => {
               vibrate([5])
               setShowIconModal(true)
@@ -366,6 +409,7 @@ function NewDebtContent() {
 
         <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent px-4 pb-4 pt-8 dark:from-slate-900 dark:via-slate-900/95">
           <button
+            type="button"
             onClick={() => {
               vibrate([10, 50])
               handleSave()
@@ -389,13 +433,14 @@ function NewDebtContent() {
             <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
             <div className="sticky top-0 mb-4 flex items-center justify-between bg-white py-2 dark:bg-slate-800">
               <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Selecionar Categoria</h3>
-              <button onClick={() => setShowCatModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700">
+              <button type="button" onClick={() => setShowCatModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700">
                 <X size={20} />
               </button>
             </div>
 
             <div className="space-y-2 pb-10">
               <button
+                type="button"
                 onClick={() => {
                   vibrate([5])
                   setCategoryId('')
@@ -423,6 +468,7 @@ function NewDebtContent() {
                 return (
                   <button
                     key={cat.id}
+                    type="button"
                     onClick={() => {
                       vibrate([5])
                       setCategoryId(cat.id)
@@ -460,13 +506,14 @@ function NewDebtContent() {
             <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
             <div className="sticky top-0 mb-4 flex items-center justify-between bg-white py-2 dark:bg-slate-800">
               <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">Contas</h3>
-              <button onClick={() => setShowAccModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700">
+              <button type="button" onClick={() => setShowAccModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700">
                 <X size={20} />
               </button>
             </div>
 
             <div className="space-y-2 pb-10">
               <button
+                type="button"
                 onClick={() => {
                   vibrate([5])
                   setAccountId('')
@@ -493,6 +540,7 @@ function NewDebtContent() {
                 return (
                   <button
                     key={acc.id}
+                    type="button"
                     onClick={() => {
                       vibrate([5])
                       setAccountId(acc.id)
