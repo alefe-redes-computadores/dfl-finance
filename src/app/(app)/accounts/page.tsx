@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
   Search,
   Plus,
@@ -139,7 +140,7 @@ function AccountsContent() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -213,7 +214,7 @@ function AccountsContent() {
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
       >
-        {/* 🔥 CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
+        {/* CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
         {!loading && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div className="flex items-start justify-between gap-3">
@@ -236,7 +237,7 @@ function AccountsContent() {
           </div>
         )}
 
-        {/* 🔥 FILTROS RÁPIDOS - MAIS COMPACTOS */}
+        {/* FILTROS RÁPIDOS - MAIS COMPACTOS */}
         {!loading && accounts?.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
@@ -347,45 +348,48 @@ function AccountsContent() {
         )}
       </div>
 
-      {/* MODAL DE EXCLUSÃO */}
+      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
       {deleteModal && createPortal(
-  <div
-    className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
-    onClick={() => setDeleteModal(null)}
-  >
-    <div
-      className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 duration-300"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-        <Trash2 size={28} className="text-red-500" />
-      </div>
-      <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">
-        Excluir Conta
-      </h3>
-      <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
-        Tem certeza que deseja excluir esta conta?
-      </p>
-      <div className="flex gap-3 pb-safe">
-        <button
-          type="button"
+        <div
+          className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
           onClick={() => setDeleteModal(null)}
-          className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] active:scale-[0.98]"
         >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="flex-1 py-4 rounded-[20px] bg-red-500 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 active:scale-[0.98]"
-        >
-          Sim, Excluir
-        </button>
-      </div>
+          <div
+            className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+              <Trash2 size={28} className="text-red-500" />
+            </div>
+            <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">
+              Excluir Conta
+            </h3>
+            <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
+              Tem certeza que deseja excluir esta conta?
+            </p>
+            <div className="flex gap-3 pb-safe">
+              <button
+                type="button"
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] active:scale-[0.98]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="flex-1 py-4 rounded-[20px] bg-red-500 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 active:scale-[0.98]"
+              >
+                Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
-  </div>,
-  document.body
-)}
+  ) // ✅ FECHA A DIV PRINCIPAL DO AccountsContent
+} // ✅ FECHA A FUNCTION AccountsContent
 
 export default function AccountsPage() {
   const [isClient, setIsClient] = useState(false)
