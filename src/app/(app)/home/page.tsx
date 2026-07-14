@@ -31,6 +31,13 @@ import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import {
+  safeNumber,
+  safeDate,
+  safeFormatDate,
+  safeArray,
+  safeNavigate,
+} from '@/lib/safe'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -90,50 +97,69 @@ function HomeContent() {
 
   const { isOnline = true, pendingCount = 0, isSyncing = false, syncQueue = async () => {} } = useOfflineQueue() || {}
 
+  // ========== CLIENTE ==========
   useEffect(() => {
     setIsClient(true)
+  }, [])
+
+  // ========== LOCALSTORAGE (seguro) ==========
+  useEffect(() => {
+    const saved = localStorage.getItem('dfl_notifications_enabled')
+    setNotificationsEnabled(saved !== 'false')
   }, [])
 
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
+  // ========== DADOS LOCAIS (sempre normalizados) ==========
+  const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext },
   })
-  const { data: localCategories, loading: catLoading } = useLocalData({ 
+  const { data: rawCategories, loading: catLoading } = useLocalData({ 
     table: 'categories' as any, 
     filters: { context: effectiveContext }
   })
-  const { data: localAccountsData, loading: accLoading } = useLocalData({ 
+  const { data: rawAccounts, loading: accLoading } = useLocalData({ 
     table: 'accounts' as any, 
     filters: { context: effectiveContext }
   })
-  const { data: localDebts, loading: debtsLoading } = useLocalData({ 
+  const { data: rawDebts, loading: debtsLoading } = useLocalData({ 
     table: 'debts' as any, 
     filters: { context: effectiveContext }
   })
-  const { data: localFinancings, loading: finLoading } = useLocalData({ 
+  const { data: rawFinancings, loading: finLoading } = useLocalData({ 
     table: 'financings' as any, 
     filters: { context: effectiveContext, status: 'active' }
   })
-  const { data: localCards, loading: cardsLoading } = useLocalData({ 
+  const { data: rawCards, loading: cardsLoading } = useLocalData({ 
     table: 'credit_cards' as any, 
     filters: { context: effectiveContext, is_archived: false }
   })
-  const { data: localBudgets, loading: budgetsLoading } = useLocalData({
+  const { data: rawBudgets, loading: budgetsLoading } = useLocalData({
     table: 'budgets' as any,
     filters: { context: effectiveContext }
   })
-  const { data: localLoans, loading: loansLoading } = useLocalData({
+  const { data: rawLoans, loading: loansLoading } = useLocalData({
     table: 'loans' as any,
     filters: { context: effectiveContext }
   })
-  const { data: localNotifications, reload: reloadNotifs } = useLocalData({
+  const { data: rawNotifications, reload: reloadNotifs } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id }
   })
+
+  // ========== NORMALIZAÇÃO DE ARRAYS ==========
+  const localTransactions = safeArray<any>(rawTransactions)
+  const localCategories = safeArray<any>(rawCategories)
+  const localAccountsData = safeArray<any>(rawAccounts)
+  const localDebts = safeArray<any>(rawDebts)
+  const localFinancings = safeArray<any>(rawFinancings)
+  const localCards = safeArray<any>(rawCards)
+  const localBudgets = safeArray<any>(rawBudgets)
+  const localLoans = safeArray<any>(rawLoans)
+  const localNotifications = safeArray<any>(rawNotifications)
 
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
@@ -142,19 +168,21 @@ function HomeContent() {
   }, [isDataLoading])
 
   useEffect(() => {
-    if (!isDataLoading && (localTransactions?.length || localAccountsData?.length)) {
+    if (!isDataLoading && (localTransactions.length || localAccountsData.length)) {
       setIsInitialLoad(false)
     }
   }, [isDataLoading, localTransactions, localAccountsData])
 
+  // ========== DATAS SEGURAS ==========
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const today = useMemo(() => new Date(), [])
 
+  // ========== JOIN SEGURO ==========
   const transactionsWithJoin = useMemo(() => {
-    return (localTransactions || []).map((tx: any) => {
-      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-      const account = (localAccountsData || []).find((a: any) => a.id === tx.account_id) as any
+    return localTransactions.map((tx: any) => {
+      const category = localCategories.find((c: any) => c.id === tx.category_id) as any
+      const account = localAccountsData.find((a: any) => a.id === tx.account_id) as any
       return {
         ...tx,
         categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
@@ -163,8 +191,9 @@ function HomeContent() {
     })
   }, [localTransactions, localCategories, localAccountsData])
 
+  // ========== FILTRO MÊS ==========
   const monthTransactions = useMemo(() => 
-    (transactionsWithJoin || [])
+    transactionsWithJoin
       .filter((t: any) => t.date >= start && t.date <= end)
       .sort((a: any, b: any) => {
         const timeA = new Date(a.created_at || a.date || 0).getTime()
@@ -173,71 +202,86 @@ function HomeContent() {
       }),
   [transactionsWithJoin, start, end])
 
+  // ========== RESUMO (safeNumber) ==========
   const summary = useMemo(() => {
-    const income = (monthTransactions || [])
+    const income = monthTransactions
       .filter((t: any) => t.type === 'income' && t.status === 'done')
-      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-    const expense = (monthTransactions || [])
+      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
+    const expense = monthTransactions
       .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
     return { income, expense, balance: income - expense }
   }, [monthTransactions])
 
+  // ========== VARIAÇÃO ==========
   const { previousBalance, balanceVariation } = useMemo(() => {
     const prevMonthDate = subMonths(currentDate, 1)
     const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
     const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
-    const prevMonthTxs = (transactionsWithJoin || []).filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
+    const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
     
-    const prevInc = prevMonthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
-    const prevExp = prevMonthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a, t) => a + (parseFloat(t.amount) || 0), 0)
+    const prevInc = prevMonthTxs
+      .filter((t: any) => t.type === 'income' && t.status === 'done')
+      .reduce((a, t) => a + safeNumber(t.amount), 0)
+    const prevExp = prevMonthTxs
+      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
+      .reduce((a, t) => a + safeNumber(t.amount), 0)
     const prevBal = prevInc - prevExp
     
     const variation = prevBal !== 0 ? ((summary.balance - prevBal) / Math.abs(prevBal)) * 100 : (summary.balance > 0 ? 100 : summary.balance < 0 ? -100 : 0)
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
 
-  const recentTransactions = useMemo(() => (monthTransactions || []).slice(0, 5), [monthTransactions])
+  // ========== RECENTES ==========
+  const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
 
+  // ========== CONTAS ==========
   const accounts = useMemo(() => {
-    return (localAccountsData || []).map((acc: any) => {
-      const accTxs = (monthTransactions || []).filter((t: any) => t.account_id === acc.id && t.status === 'pending')
-      const pendingIncome = accTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const pendingExpense = accTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const previsto = (Number(acc.balance) || 0) + pendingIncome - pendingExpense
+    return localAccountsData.map((acc: any) => {
+      const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
+      const pendingIncome = accTxs
+        .filter((t: any) => t.type === 'income')
+        .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
+      const pendingExpense = accTxs
+        .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
+        .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
+      const previsto = safeNumber(acc.balance) + pendingIncome - pendingExpense
       return { ...acc, previsto }
     })
   }, [localAccountsData, monthTransactions])
 
+  // ========== CARTÕES ==========
   const cards = useMemo(() => {
-    return (localCards || []).map((card: any) => {
-      const cardTxs = (monthTransactions || []).filter((t: any) => t.credit_card_id === card.id)
-      const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + (parseFloat(t.amount) || 0), 0)
+    return localCards.map((card: any) => {
+      const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
+      const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + safeNumber(t.amount), 0)
       return { ...card, faturaAtual }
     })
   }, [localCards, monthTransactions])
 
+  // ========== PENDÊNCIAS ==========
   const pendings = useMemo(() => {
-    const allPending = (localTransactions || []).filter((t: any) => t.status === 'pending')
+    const allPending = localTransactions.filter((t: any) => t.status === 'pending')
     
     const toPay = allPending
       .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && !t.credit_card_id)
-      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
       
     const toReceive = allPending
       .filter((t: any) => t.type === 'income')
-      .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
+      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
       
-    const faturas = (cards || []).reduce((acc: number, c: any) => acc + (c.faturaAtual || 0), 0)
+    const faturas = cards.reduce((acc: number, c: any) => acc + (c.faturaAtual || 0), 0)
     
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
+  // ========== DÍVIDAS ==========
   const debtsList = useMemo(() => {
-    const allDebts = (localDebts || []).map((debt: any) => {
-      const payments = (localTransactions || []).filter((t: any) => t.debt_id === debt.id && t.type === 'income')
-      const paidAmount = payments.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0)
-      const totalAmount = Number(debt.total_amount) || 0
+    const allDebts = localDebts.map((debt: any) => {
+      const payments = localTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
+      const paidAmount = payments.reduce((sum: number, p: any) => sum + safeNumber(p.amount), 0)
+      const totalAmount = safeNumber(debt.total_amount)
       const isEffectivelyPaid = totalAmount > 0 && paidAmount >= totalAmount
       const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
       
@@ -251,16 +295,18 @@ function HomeContent() {
     return allDebts.filter(d => d.status !== 'paid' && d.status !== 'cancelled')
   }, [localDebts, localTransactions])
 
-  const financings = localFinancings || []
+  // ========== FINANCIAMENTOS ==========
+  const financings = localFinancings
 
+  // ========== ORÇAMENTOS ==========
   const budgets = useMemo(() => {
-    const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
-      const cat = (localCategories || []).find((c: any) => c.id === budget.category_id) as any
-      const spent = (monthTransactions || [])
+    const budgetsWithSpent = localBudgets.map((budget: any) => {
+      const cat = localCategories.find((c: any) => c.id === budget.category_id) as any
+      const spent = monthTransactions
         .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + (parseFloat(t.amount) || 0), 0)
-      const remaining = Number(budget.amount) - spent
-      const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
+        .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
+      const remaining = safeNumber(budget.amount) - spent
+      const percent = safeNumber(budget.amount) > 0 ? (spent / safeNumber(budget.amount)) * 100 : 0
       return { 
         ...budget, 
         name: cat?.name ?? budget.name,
@@ -274,12 +320,24 @@ function HomeContent() {
     return budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3)
   }, [localBudgets, localCategories, monthTransactions])
 
+  // ========== EMPRÉSTIMOS ==========
   const loans = useMemo(() => {
-    return (localLoans || [])
+    return localLoans
       .filter((l: any) => l.status === 'active' || l.status === 'completed')
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [localLoans])
 
+  // ========== NOTIFICAÇÕES ==========
+  const notificationsMap = useMemo(() => {
+    return localNotifications
+      .map((n: any) => ({ ...n, isRead: n.is_read || n.isRead, cardId: n.card_id || n.cardId }))
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [localNotifications])
+
+  const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
+  const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
+
+  // ========== GERAR NOTIFICAÇÕES DE FATURA ==========
   useEffect(() => {
     if (!user?.id || cards.length === 0) return
     const generateNotifs = async () => {
@@ -329,15 +387,7 @@ function HomeContent() {
     generateNotifs()
   }, [cards, user?.id, currentDate, reloadNotifs])
 
-  const notificationsMap = useMemo(() => {
-    return (localNotifications || [])
-      .map((n: any) => ({ ...n, isRead: n.is_read || n.isRead, cardId: n.card_id || n.cardId }))
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  }, [localNotifications])
-
-  const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
-  const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
-
+  // ========== CARREGAR LAYOUT ==========
   useEffect(() => {
     if (user?.id && isOnline) {
       supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single().then(({ data }) => {
@@ -356,6 +406,7 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
+  // ========== PULL TO REFRESH ==========
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -393,13 +444,15 @@ function HomeContent() {
     }
   }, [isDataLoading, refreshing])
 
+  // ========== PERSONALIZAÇÃO ==========
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
   const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('✅ Tela inicial personalizada!', 'success'); hapticSuccess() }
   const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  const totalAccountsBalance = (accounts || []).reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0)
+  // ========== UTILITÁRIOS ==========
+  const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const totalAccountsBalance = accounts.reduce((acc, curr) => acc + safeNumber(curr.balance), 0)
   
   const sortedByDue = [...cards].sort((a, b) => { const todayDay = today.getDate(); const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day; const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day; return aDue - bDue })
   const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
@@ -423,8 +476,16 @@ function HomeContent() {
 
   const getBalanceStyle = (val: number) => { if (val > 0) return 'text-emerald-600 font-semibold'; if (val < 0) return 'text-red-500 font-semibold'; return 'text-gray-800 dark:text-gray-200 font-semibold' }
 
-  useEffect(() => { const saved = localStorage.getItem('dfl_notifications_enabled'); setNotificationsEnabled(saved !== 'false') }, [])
+  // ========== NAVEGAÇÃO SEGURA ==========
+  const goToTransaction = (id?: string) => { if (!id) return; safeNavigate(router, '/transactions/details', id) }
+  const goToLoan = (id?: string) => { if (!id) return; safeNavigate(router, '/loans/details', id) }
+  const goToCard = (id?: string) => { if (!id) return; safeNavigate(router, '/cards/details', id) }
+  const goToDebt = (id?: string) => { if (!id) return; safeNavigate(router, '/debts/details', id) }
+  const goToFinancing = (id?: string) => { if (!id) return; safeNavigate(router, '/financings/details', id) }
+  const goToBudget = (id?: string) => { if (!id) return; safeNavigate(router, '/budgets/details', id) }
+  const goToAccount = (id?: string) => { if (!id) return; safeNavigate(router, '/accounts/details', id) }
 
+  // ========== RENDERIZAÇÃO DE SEÇÕES ==========
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
     const isFixed = FIXED_SECTIONS.includes(sectionId)
@@ -474,7 +535,7 @@ function HomeContent() {
                     }`}
                   >
                     {balanceVariation >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                    {balanceVariation.toFixed(1)}% vs. mês anterior
+                    {safeNumber(balanceVariation).toFixed(1)}% vs. mês anterior
                   </div>
                 )}
               </div>
@@ -568,13 +629,16 @@ function HomeContent() {
 
               <div className="px-2 pb-2">
                 {loans.slice(0, 3).map((loan: any) => {
-                  const progress = Number(loan.total_amount) > 0 ? ((Number(loan.total_amount) - Number(loan.remaining_amount)) / Number(loan.total_amount)) * 100 : 0;
-                  const isOverdue = loan.due_date ? differenceInDays(new Date(loan.due_date), today) < 0 : false;
+                  const progress = safeNumber(loan.total_amount) > 0 
+                    ? ((safeNumber(loan.total_amount) - safeNumber(loan.remaining_amount)) / safeNumber(loan.total_amount)) * 100 
+                    : 0;
+                  const dueDate = safeDate(loan.due_date)
+                  const isOverdue = dueDate ? differenceInDays(dueDate, today) < 0 : false;
 
                   return (
                     <div
                       key={loan.id}
-                      onClick={() => router.push(`/loans/details?id=${loan.id}`)}
+                      onClick={() => goToLoan(loan.id)}
                       className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
                     >
                       <div className="mb-2 flex items-start justify-between gap-3">
@@ -592,13 +656,13 @@ function HomeContent() {
                               <span>{getContextLabel(loan.dest_context)}</span>
                             </div>
                             <p className="mt-1 text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                              {loan.paid_installments}/{loan.total_installments} parcelas
+                              {safeNumber(loan.paid_installments)}/{safeNumber(loan.total_installments)} parcelas
                             </p>
                           </div>
                         </div>
 
                         <p className="shrink-0 text-[15px] font-bold text-teal-600 dark:text-teal-400">
-                          {hideBalance ? "••••" : formatCurrency(Number(loan.remaining_amount) || 0)}
+                          {hideBalance ? "••••" : formatCurrency(safeNumber(loan.remaining_amount))}
                         </p>
                       </div>
 
@@ -612,9 +676,9 @@ function HomeContent() {
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                        <span>{progress.toFixed(0)}% pago</span>
+                        <span>{Math.min(progress, 100).toFixed(0)}% pago</span>
                         <span>
-                          {loan.due_date ? `Vence ${format(new Date(loan.due_date), "dd/MM")}` : "Sem prazo"}
+                          {loan.due_date ? `Vence ${safeFormatDate(loan.due_date, 'dd/MM')}` : "Sem prazo"}
                         </span>
                       </div>
                     </div>
@@ -640,7 +704,7 @@ function HomeContent() {
 
             {nextCard ? (
               <div
-                onClick={() => router.push(`/cards/details?id=${nextCard.id}`)}
+                onClick={() => goToCard(nextCard.id)}
                 className="flex items-center justify-between gap-3 rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
               >
                 <div className="flex min-w-0 items-center gap-3">
@@ -667,7 +731,7 @@ function HomeContent() {
                       nextCard.faturaAtual > 0 ? "text-orange-500" : "text-gray-800 dark:text-gray-200"
                     }`}
                   >
-                    {hideBalance ? "••••" : formatCurrency(nextCard.faturaAtual || 0)}
+                    {hideBalance ? "••••" : formatCurrency(safeNumber(nextCard.faturaAtual))}
                   </p>
                 </div>
               </div>
@@ -775,15 +839,16 @@ function HomeContent() {
               <div className="px-2 pb-2">
                 {debtsList.slice(0, 3).map((debt: any) => {
                   const IconComp = getDynamicIcon(debt.icon || "user");
-                  const remaining = Number(debt.total_amount) - debt.paid_amount || 0;
-                  const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), today) : null;
+                  const remaining = safeNumber(debt.total_amount) - debt.paid_amount || 0;
+                  const dueDate = safeDate(debt.due_date);
+                  const daysUntilDue = dueDate ? differenceInDays(dueDate, today) : null;
                   const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
                   const percent = Math.min(debt.percent, 100);
 
                   return (
                     <div
                       key={debt.id}
-                      onClick={() => router.push(`/debts/details?id=${debt.id}`)}
+                      onClick={() => goToDebt(debt.id)}
                       className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
                     >
                       <div className="mb-2 flex items-start justify-between gap-3">
@@ -807,7 +872,7 @@ function HomeContent() {
                               {isOverdue
                                 ? `Atrasado ${Math.abs(daysUntilDue)} dias`
                                 : debt.due_date
-                                ? `Vence ${format(new Date(debt.due_date), "dd/MM")}`
+                                ? `Vence ${safeFormatDate(debt.due_date, 'dd/MM')}`
                                 : "Sem prazo"}
                             </p>
                           </div>
@@ -829,7 +894,7 @@ function HomeContent() {
 
                       <div className="flex items-center justify-between text-[11px] font-medium text-gray-400 dark:text-gray-500">
                         <span>{percent.toFixed(0)}% pago</span>
-                        <span>{hideBalance ? "••••" : formatCurrency(Number(debt.total_amount) || 0)}</span>
+                        <span>{hideBalance ? "••••" : formatCurrency(safeNumber(debt.total_amount))}</span>
                       </div>
                     </div>
                   );
@@ -866,13 +931,14 @@ function HomeContent() {
               <div className="px-2 pb-2">
                 {financings.slice(0, 3).map((fin: any) => {
                   const IconComp = getDynamicIcon(fin.icon || "wallet");
-                  const remaining = fin.total_installments - fin.current_installment + 1;
-                  const isOverdue = fin.next_due_date ? differenceInDays(new Date(fin.next_due_date), today) < 0 : false;
+                  const remaining = safeNumber(fin.total_installments) - safeNumber(fin.current_installment) + 1;
+                  const dueDate = safeDate(fin.next_due_date);
+                  const isOverdue = dueDate ? differenceInDays(dueDate, today) < 0 : false;
 
                   return (
                     <div
                       key={fin.id}
-                      onClick={() => router.push(`/financings/details?id=${fin.id}`)}
+                      onClick={() => goToFinancing(fin.id)}
                       className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
                     >
                       <div className="mb-2 flex items-start justify-between gap-3">
@@ -893,7 +959,7 @@ function HomeContent() {
                                 isOverdue ? "text-red-500" : "text-gray-400 dark:text-gray-500"
                               }`}
                             >
-                              {remaining} px de {formatCurrency(Number(fin.installment_value))}
+                              {remaining} px de {formatCurrency(safeNumber(fin.installment_value))}
                             </p>
                           </div>
                         </div>
@@ -906,7 +972,7 @@ function HomeContent() {
                               }`}
                               style={{
                                 width: `${Math.min(
-                                  (fin.current_installment / fin.total_installments) * 100,
+                                  (safeNumber(fin.current_installment) / safeNumber(fin.total_installments)) * 100,
                                   100
                                 )}%`,
                               }}
@@ -955,7 +1021,7 @@ function HomeContent() {
                   return (
                     <div
                       key={budget.id}
-                      onClick={() => router.push(`/budgets/details?id=${budget.id}`)}
+                      onClick={() => goToBudget(budget.id)}
                       className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
                     >
                       <div className="mb-2 flex items-start justify-between gap-3">
@@ -1001,7 +1067,7 @@ function HomeContent() {
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                        <span>Limite {hideBalance ? "••••" : formatCurrency(Number(budget.amount))}</span>
+                        <span>Limite {hideBalance ? "••••" : formatCurrency(safeNumber(budget.amount))}</span>
                         <span>{budget.percent.toFixed(0)}%</span>
                       </div>
                     </div>
@@ -1034,7 +1100,7 @@ function HomeContent() {
                   accounts.map((acc: any) => (
                     <div
                       key={acc.id}
-                      onClick={() => router.push(`/accounts/details?id=${acc.id}`)}
+                      onClick={() => goToAccount(acc.id)}
                       className="flex items-center justify-between gap-3 rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -1050,15 +1116,15 @@ function HomeContent() {
                       </div>
 
                       <div className="shrink-0 text-right">
-                        <p className={`text-[15px] ${getBalanceStyle(Number(acc.balance) || 0)}`}>
-                          {hideBalance ? "••••" : formatCurrency(Number(acc.balance) || 0)}
+                        <p className={`text-[15px] ${getBalanceStyle(safeNumber(acc.balance))}`}>
+                          {hideBalance ? "••••" : formatCurrency(safeNumber(acc.balance))}
                         </p>
                         <p
                           className={`mt-0.5 text-[12px] font-semibold ${
-                            acc.previsto || 0 >= 0 ? "text-gray-400 dark:text-gray-500" : "text-red-400"
+                            safeNumber(acc.previsto) >= 0 ? "text-gray-400 dark:text-gray-500" : "text-red-400"
                           }`}
                         >
-                          {hideBalance ? "••••" : formatCurrency(acc.previsto || 0)}
+                          {hideBalance ? "••••" : formatCurrency(safeNumber(acc.previsto))}
                         </p>
                       </div>
                     </div>
@@ -1095,7 +1161,7 @@ function HomeContent() {
                   cards.map((card: any) => (
                     <div
                       key={card.id}
-                      onClick={() => router.push(`/cards/details?id=${card.id}`)}
+                      onClick={() => goToCard(card.id)}
                       className="flex items-center justify-between gap-3 rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -1119,10 +1185,10 @@ function HomeContent() {
                       <div className="shrink-0 text-right">
                         <p
                           className={`text-[15px] font-bold ${
-                            card.faturaAtual > 0 ? "text-orange-500" : "text-gray-400 dark:text-gray-500"
+                            safeNumber(card.faturaAtual) > 0 ? "text-orange-500" : "text-gray-400 dark:text-gray-500"
                           }`}
                         >
-                          {hideBalance ? "••••" : formatCurrency(card.faturaAtual || 0)}
+                          {hideBalance ? "••••" : formatCurrency(safeNumber(card.faturaAtual))}
                         </p>
                         <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
                           Vence dia {card.due_day}
@@ -1185,7 +1251,7 @@ function HomeContent() {
                     return (
                       <div
                         key={tx.id}
-                        onClick={() => router.push(`/transactions/details?id=${tx.id}`)}
+                        onClick={() => goToTransaction(tx.id)}
                         className={`flex items-center justify-between gap-3 rounded-[18px] p-3 cursor-pointer transition-colors active:scale-[0.98] hover:bg-gray-50 dark:hover:bg-slate-700/50 ${
                           isPending ? "bg-amber-50 dark:bg-amber-900/10" : ""
                         } ${
@@ -1223,14 +1289,14 @@ function HomeContent() {
                             </div>
 
                             <p className="mt-0.5 truncate text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                              {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })} •{" "}
+                              {safeFormatDate(tx.date, "dd 'de' MMM")} •{" "}
                               {tx.categories?.name || "Geral"}
                             </p>
                           </div>
                         </div>
 
                         <p className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${amountColorClass}`}>
-                          {amountPrefix} {hideBalance ? "••••" : formatCurrency(Number(tx.amount) || 0)}
+                          {amountPrefix} {hideBalance ? "••••" : formatCurrency(safeNumber(tx.amount))}
                         </p>
                       </div>
                     );
@@ -1245,7 +1311,8 @@ function HomeContent() {
     }
   }
 
-  if (isInitialLoad || (isDataLoading && !localTransactions?.length && !localAccountsData?.length)) {
+  // ========== RENDERIZAÇÃO PRINCIPAL ==========
+  if (isInitialLoad || (isDataLoading && !localTransactions.length && !localAccountsData.length)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 pt-6">
         <Skeleton count={1} className="h-10 w-full mb-6 rounded-2xl" />
@@ -1285,12 +1352,15 @@ function HomeContent() {
       )}
 
       {debtsList
-        .filter((d: any) => d.due_date && differenceInDays(new Date(), new Date(d.due_date)) >= 0 && d.status !== 'paid')
+        .filter((d: any) => {
+          const due = safeDate(d.due_date)
+          return due && differenceInDays(today, due) >= 0 && d.status !== 'paid'
+        })
         .map((debt: any) => (
           <DebtAlert
             key={debt.id}
             personName={debt.person_name}
-            amount={Number(debt.total_amount) - (debt.paid_amount || 0)}
+            amount={safeNumber(debt.total_amount) - (debt.paid_amount || 0)}
             dueDate={debt.due_date}
             debtId={debt.id}
           />
