@@ -1006,95 +1006,89 @@ function AnalysisContent() {
         </div>
       )}
 
-      {/* 🔥 DRAWER DE FILTROS ATUALIZADO */}
+            {/* 🔥 DRAWER DE FILTROS AVANÇADOS - FIXA NO RODAPÉ E RESPONSIVA */}
       {showFilterDrawer && (
-        <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowFilterDrawer(false)}
-        >
-          <div
-            className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[70vh] overflow-y-auto shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
+          {/* Fundo que fecha ao clicar */}
+          <div className="absolute inset-0" onClick={() => setShowFilterDrawer(false)} />
 
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="font-semibold text-[18px] text-gray-900 dark:text-gray-100">Filtros</h3>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  Refine a análise exibida
-                </p>
+          {/* Container do Modal */}
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[85dvh] sm:max-h-[85vh]">
+            
+            {/* Handle & Header Fixos no Topo */}
+            <div className="shrink-0 px-6 pt-4 pb-4 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[32px]">
+              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-[20px] font-bold text-gray-900 dark:text-white">Filtros</h2>
+                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1">Refine a análise exibida</p>
+                </div>
+                <button onClick={() => setShowFilterDrawer(false)} className="p-2 -mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  <X size={22} />
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setShowFilterDrawer(false)}
-                className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
             </div>
 
-            <div className="space-y-5">
+            {/* Conteúdo com Scroll Independente */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-6 custom-scrollbar">
               <div>
-                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                  Conta
-                </label>
-                <select
-                  value={filterAccount}
-                  onChange={(e) => setFilterAccount(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200/70 dark:border-slate-600 rounded-[18px] px-4 py-3 text-[14px] outline-none text-gray-800 dark:text-gray-200"
-                >
-                  <option value="">Todas as contas</option>
-                  {(localAccounts || []).map((acc: any) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Conta</label>
+                <div className="relative">
+                  <select
+                    value={filterAccount}
+                    onChange={(e) => setFilterAccount(e.target.value)}
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
+                  >
+                    <option value="">Todas as contas</option>
+                    {(localAccounts || []).map((acc: any) => (
+                      <option key={acc.id} value={acc.id}>{acc.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
               </div>
 
               <div>
-                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                  Categoria
-                </label>
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200/70 dark:border-slate-600 rounded-[18px] px-4 py-3 text-[14px] outline-none text-gray-800 dark:text-gray-200"
-                >
-                  <option value="">Todas as categorias</option>
-                  {(localCategories || []).map((cat: any) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Categoria</label>
+                <div className="relative">
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
+                  >
+                    <option value="">Todas as categorias</option>
+                    {(localCategories || []).map((cat: any) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
               </div>
+            </div>
 
-              <div className="flex gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 py-3 rounded-[18px] font-semibold text-[14px] active:scale-[0.98] transition-transform"
+            {/* Footer Fixo com Botões - Adicionado pb-8 para segurança */}
+            <div className="shrink-0 px-6 pt-4 pb-8 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60">
+              <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={handleClearFilters} 
+                  className="w-1/3 py-4 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-[20px] font-bold active:scale-[0.98] transition-all text-[15px]"
                 >
                   Limpar
                 </button>
-                <button
-                  type="button"
-                  onClick={handleApplyFilters}
-                  className="flex-1 bg-teal-700 text-white py-3 rounded-[18px] font-semibold text-[14px] active:scale-[0.98] transition-transform"
+                <button 
+                  type="button" 
+                  onClick={handleApplyFilters} 
+                  className="w-2/3 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 active:scale-[0.98] transition-all text-[15px]"
                 >
                   Aplicar filtros
                 </button>
               </div>
             </div>
+
           </div>
         </div>
       )}
-    </div>
-  )
-}
 
 export default function AnalysisPage() {
   const [isClient, setIsClient] = useState(false)
