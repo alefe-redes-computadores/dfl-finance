@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createPortal } from 'react-dom' // ✅ ADICIONADO
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Edit2, Trash2, AlertTriangle, CheckCircle, Plus, RefreshCw,
@@ -13,7 +13,8 @@ import { ptBR } from 'date-fns/locale'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useGoalById } from '@/hooks/useGoalById' // ✅ NOVO HOOK
+import { useGoalTransactions } from '@/hooks/useGoalTransactions' // ✅ NOVO HOOK
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
@@ -85,67 +86,16 @@ function GoalDetailContent() {
   const [contribNote, setContribNote] = useState('')
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
 
-  const { data: goals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
-    table: 'goals' as any,
-    filters: { id: id as string, context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: goal, loading: goalsLoading, notFound } = useGoalById(id)
 
-  const { data: allTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { goal_id: id as string, context: effectiveContext },
-  })
-
-  const goal = useMemo(() => goals?.find((g: any) => g.id === id), [goals, id])
-
-  const transactions = useMemo(() => {
-    if (!allTransactions || !goal) return []
-    return allTransactions
-      .filter((tx: any) => tx.goal_id === goal.id)
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [allTransactions, goal])
-
-  const saved = useMemo(() => {
-    return transactions
-      .filter((tx: any) => tx.type === 'income' && tx.status === 'done')
-      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-  }, [transactions])
+  // ✅ HOOK DE RELACIONAMENTO (transações da meta)
+  const { data: transactions, loading: txLoading } = useGoalTransactions(id)
 
   const loading = goalsLoading || txLoading
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      vibrate([10])
-      Promise.all([reloadGoals(), reloadTransactions()]).finally(() => setRefreshing(false))
-    }
-  }
-
-  const handleTouchEnd = () => { isPulling.current = false }
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing, vibrate])
+  // ✅ REMOVIDO pull-to-refresh manual (hooks já são reativos)
 
   const handleDelete = async () => {
     if (!user) return
@@ -199,7 +149,7 @@ function GoalDetailContent() {
       setContribAmount('')
       setContribAmountNum(0)
       setContribNote('')
-      reloadTransactions()
+      // ✅ NÃO PRECISA reloadTransactions() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro ao registrar: ${err.message}`, 'error')
@@ -207,7 +157,7 @@ function GoalDetailContent() {
   }
 
   const handleContribAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/D/g, '')
+    const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
       setContribAmount('')
       setContribAmountNum(0)
@@ -218,7 +168,6 @@ function GoalDetailContent() {
     setContribAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
   }
 
-  // 🔥 CORRIGIDO: regex com (\?|$) e ponto escapado
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -228,19 +177,47 @@ function GoalDetailContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  if (loading && !goal) return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-      <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
-        <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-      </div>
-      <GoalDetailSkeleton />
-    </div>
-  )
+  // ✅ Cálculo de progresso com useMemo
+  const saved = useMemo(() => {
+    return (transactions || [])
+      .filter((tx: any) => tx.type === 'income' && tx.status === 'done')
+      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
+  }, [transactions])
 
-  if (!loading && !goal) {
-    router.push('/goals')
-    return null
+  // ✅ TRATAMENTO DE LOADING
+  if (loading && !goal) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
+          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+        </div>
+        <GoalDetailSkeleton />
+      </div>
+    )
   }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (notFound) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <Target size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Meta não encontrada</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          A meta que você está tentando acessar pode ter sido excluída ou você não tem permissão.
+        </p>
+        <button
+          onClick={() => router.push('/goals')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  if (!goal) return null
 
   const IconComp = getDynamicIcon(goal.icon || 'target')
   const remaining = Number(goal.target_amount) - saved
@@ -341,10 +318,14 @@ function GoalDetailContent() {
         <section className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100">Histórico de Contribuições</h3>
-            <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{transactions.length} lançamentos</span>
+            <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{transactions?.length || 0} lançamentos</span>
           </div>
 
-          {transactions.length === 0 ? (
+          {txLoading ? (
+            <div className="flex justify-center py-6">
+              <RefreshCw size={24} className="animate-spin text-teal-500" />
+            </div>
+          ) : !transactions || transactions.length === 0 ? (
             <p className="text-center text-[13px] font-medium text-gray-400 py-6">Nenhuma contribuição registrada.</p>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-slate-700/70">
@@ -382,7 +363,7 @@ function GoalDetailContent() {
         </section>
       </div>
 
-      {/* ✅ MODAL DE CONTRIBUIÇÃO COM PORTAL */}
+      {/* MODAL DE CONTRIBUIÇÃO COM PORTAL */}
       {showContributionModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowContributionModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
