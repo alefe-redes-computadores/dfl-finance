@@ -15,7 +15,6 @@ export default function AdminSyncPage() {
   return (
     <main className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-24">
       <div className="max-w-2xl mx-auto space-y-4">
-        {/* HEADER */}
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-5 flex items-center gap-4">
           <button 
             onClick={() => router.back()}
@@ -28,12 +27,11 @@ export default function AdminSyncPage() {
               Painel do Administrador
             </h1>
             <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1">
-              Modo Desenvolvedor Ativo
+              Modo Desenvolvedor (Acesso Livre)
             </p>
           </div>
         </div>
 
-        {/* COMPONENTES ADMIN */}
         <div className="space-y-4">
           <AdminStatus />
           <SyncQueueTable />
