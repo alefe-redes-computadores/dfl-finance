@@ -22,6 +22,8 @@ import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useTransactionById } from '@/hooks/useTransactionById' // ✅ NOVO HOOK
+import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
@@ -33,7 +35,6 @@ const safeNum = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed
 }
 
-// 🔥 SKELETON PARA SUSPENSE
 const TransactionSkeleton = () => (
   <div className="animate-pulse px-4 pt-5 space-y-4">
     <div className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-5">
@@ -64,11 +65,12 @@ function EditTransactionContent() {
   const galeriaInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
-  const [loading, setLoading] = useState(true)
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: tx, loading, notFound } = useTransactionById(id)
+
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [tx, setTx] = useState<any>(null)
   const [isNew, setIsNew] = useState(false)
 
   const [accounts, setAccounts] = useState<any[]>([])
@@ -116,6 +118,140 @@ function EditTransactionContent() {
   const [showLoanModal, setShowLoanModal] = useState(false)
 
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const [initialized, setInitialized] = useState(!id || id === 'new')
+
+  // ✅ CARREGA DADOS AUXILIARES (contas, categorias, tags, etc)
+  useEffect(() => {
+    if (!user?.id) return
+
+    const loadAuxData = async () => {
+      try {
+        const [accData, catData, tagData, cardsData, contactsData] = await Promise.all([
+          db.table('accounts').where('user_id').equals(user.id).toArray(),
+          db.table('categories').where('user_id').equals(user.id).toArray(),
+          db.table('tags').where('user_id').equals(user.id).toArray(),
+          db.table('credit_cards').where('user_id').equals(user.id).toArray(),
+          db.table('contacts').where('user_id').equals(user.id).toArray(),
+        ])
+
+        setAccounts(accData.filter((a: any) => a.context === effectiveContext))
+        setCreditCards(cardsData.filter((c: any) => c.context === effectiveContext))
+        setContacts(contactsData.filter((c: any) => c.context === effectiveContext))
+        setTags(tagData.filter((t: any) => t.context === effectiveContext))
+
+        const allCats = catData.filter((c: any) => c.context === effectiveContext)
+        const mainCats = allCats.filter((c: any) => !c.parent_id)
+        const subCats = allCats.filter((c: any) => c.parent_id)
+        const subsMap: Record<string, any[]> = {}
+        subCats.forEach((sub: any) => {
+          if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
+          subsMap[sub.parent_id].push(sub)
+        })
+        setLocalCategories(mainCats)
+        setSubcategories(subsMap)
+      } catch (err) {
+        console.error('Erro ao carregar dados auxiliares:', err)
+      }
+    }
+
+    loadAuxData()
+  }, [user, effectiveContext])
+
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
+  useEffect(() => {
+    if (id && id !== 'new' && tx && !initialized) {
+      setTxType(tx.type || 'expense')
+      setIsPaid(tx.status === 'done')
+      setDate(tx.date || format(new Date(), 'yyyy-MM-dd'))
+      setDescription(tx.description || '')
+      setNotes(tx.notes || '')
+      setCategoryId(tx.category_id || '')
+      setAccountId(tx.account_id || '')
+      setCreditCardId(tx.credit_card_id || '')
+      setContactId(tx.contact_id || '')
+      setSelectedTags(Array.isArray(tx.tag_ids) ? tx.tag_ids : [])
+      setIsReimbursable(tx.is_reimbursable || false)
+      setIsRefund(tx.notes?.includes('[Devolução/Estorno]') || false)
+      setFinancingId(tx.financing_id || null)
+      setDebtId(tx.debt_id || null)
+
+      const amountSafe = Number(tx.amount) || 0
+      setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+
+      if (tx.receipt_url) {
+        setReceiptUrl(tx.receipt_url)
+        const isPdf = tx.receipt_url.toLowerCase().includes('.pdf')
+        setReceiptType(isPdf ? 'pdf' : 'image')
+        setReceiptName(isPdf ? 'comprovante.pdf' : 'comprovante.jpg')
+        if (!isPdf) setReceiptPreview(tx.receipt_url)
+      }
+
+      setInitialized(true)
+      setIsNew(false)
+    }
+
+    if ((!id || id === 'new') && !initialized) {
+      const paramType = searchParams.get('type')
+      if (paramType === 'income') {
+        setTxType('income')
+        setIsPaid(true)
+      } else {
+        setTxType('expense')
+        setIsPaid(false)
+      }
+      setIsNew(true)
+      setInitialized(true)
+    }
+  }, [id, tx, initialized, searchParams])
+
+  // ✅ TRATAMENTO DE LOADING
+  if (id && id !== 'new' && loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#f6f7f8] dark:bg-slate-950 transition-colors">
+        <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          </div>
+        </div>
+        <TransactionSkeleton />
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (id && id !== 'new' && notFound) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f6f7f8] dark:bg-slate-950 px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <Trash2 size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Transação não encontrada</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          A transação que você está tentando editar pode ter sido excluída ou você não tem permissão para acessá-la.
+        </p>
+        <button
+          onClick={() => router.push('/transactions')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (!initialized) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   const categories = useMemo(() => {
     return (localCategories || []).sort((a: any, b: any) => {
@@ -267,103 +403,6 @@ function EditTransactionContent() {
     uploadFile(file)
     setShowCamera(false)
   }
-
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    try {
-      const [accData, catData, tagData, cardsData, contactsData] = await Promise.all([
-        db.table('accounts').where('user_id').equals(user.id).toArray(),
-        db.table('categories').where('user_id').equals(user.id).toArray(),
-        db.table('tags').where('user_id').equals(user.id).toArray(),
-        db.table('credit_cards').where('user_id').equals(user.id).toArray(),
-        db.table('contacts').where('user_id').equals(user.id).toArray(),
-      ])
-
-      setAccounts(accData.filter((a: any) => a.context === effectiveContext))
-      setCreditCards(cardsData.filter((c: any) => c.context === effectiveContext))
-      setContacts(contactsData.filter((c: any) => c.context === effectiveContext))
-      setTags(tagData.filter((t: any) => t.context === effectiveContext))
-
-      const isEditMode = id && id !== 'new' && typeof id === 'string' && id.length > 5
-      let currentTxType = 'expense'
-
-      if (isEditMode) {
-        let txData = await db.table('transactions').get(id as string)
-
-        if (!txData) {
-          const { data: remoteTx } = await supabase.from('transactions').select('*').eq('id', id).single()
-          if (remoteTx) txData = remoteTx
-        }
-
-        if (txData && txData.user_id === user.id) {
-          setTx(txData)
-          setTxType(txData.type)
-          currentTxType = txData.type
-          setIsNew(false)
-          setIsPaid(txData.status === 'done')
-          setDate(txData.date)
-          setDescription(txData.description || '')
-          setNotes(txData.notes || '')
-          setCategoryId(txData.category_id || '')
-          setAccountId(txData.account_id || '')
-          setCreditCardId(txData.credit_card_id || '')
-          setContactId(txData.contact_id || '')
-          setSelectedTags(Array.isArray(txData.tag_ids) ? txData.tag_ids : [])
-          setIsReimbursable(txData.is_reimbursable || false)
-
-          const amountSafe = Number(txData.amount) || 0
-          setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-
-          if (txData.receipt_url) {
-            setReceiptUrl(txData.receipt_url)
-            const isPdf = txData.receipt_url.toLowerCase().includes('.pdf')
-            setReceiptType(isPdf ? 'pdf' : 'image')
-            setReceiptName(isPdf ? 'comprovante.pdf' : 'comprovante.jpg')
-            if (!isPdf) setReceiptPreview(txData.receipt_url)
-          }
-
-          if (txData.financing_id) setFinancingId(txData.financing_id)
-          if (txData.debt_id) setDebtId(txData.debt_id)
-          if (txData.notes?.includes('[Devolução/Estorno]')) setIsRefund(true)
-        }
-      } else {
-        setIsNew(true)
-        const paramType = searchParams.get('type')
-        if (paramType === 'income') {
-          setTxType('income')
-          currentTxType = 'income'
-          setIsPaid(true)
-        } else {
-          setTxType('expense')
-          currentTxType = 'expense'
-          setIsPaid(false)
-        }
-      }
-
-      const allCats = catData.filter((c: any) => c.context === effectiveContext && c.type === currentTxType)
-      const mainCats = allCats.filter((c: any) => !c.parent_id)
-      const subCats = allCats.filter((c: any) => c.parent_id)
-      const subsMap: Record<string, any[]> = {}
-      subCats.forEach((sub: any) => {
-        if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
-        subsMap[sub.parent_id].push(sub)
-      })
-      setLocalCategories(mainCats)
-      setSubcategories(subsMap)
-
-    } catch (err) {
-      console.error('Erro:', err)
-      showToast('❌ Erro ao carregar a transação.', 'error')
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [id, user, effectiveContext, searchParams])
-
-  useEffect(() => { loadData() }, [loadData])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '')
@@ -535,22 +574,6 @@ function EditTransactionContent() {
     }
   }
 
-  // 🔥 LOADING STATE
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-[#f6f7f8] dark:bg-slate-950 transition-colors">
-        <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-          </div>
-        </div>
-        <TransactionSkeleton />
-      </div>
-    )
-  }
-
   const isIncome = txType === 'income'
   const colorClass = isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-500' : 'bg-teal-600') : 'bg-gray-200 dark:bg-slate-700'
@@ -564,7 +587,6 @@ function EditTransactionContent() {
   const isParcelado = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
   const parcelaLabel = isParcelado ? `${tx.installment_index || 1}/${tx.total_installments}` : null
 
-  // 🔥 RETURN PRINCIPAL REFATORADO (com a mesma estrutura premium da edição)
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 font-sans pb-36 relative transition-colors duration-300">
       <input
@@ -590,7 +612,7 @@ function EditTransactionContent() {
         }}
       />
 
-      {/* 🔥 HEADER */}
+      {/* HEADER */}
       <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <button
@@ -631,7 +653,7 @@ function EditTransactionContent() {
       </div>
 
       <div className="px-4 pt-5 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        {/* 🔥 HERO VALOR */}
+        {/* HERO VALOR */}
         <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 px-5 pt-5 pb-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)] dark:shadow-none">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[12px] font-semibold text-gray-400 dark:text-gray-500">
@@ -666,7 +688,7 @@ function EditTransactionContent() {
           </div>
         </section>
 
-        {/* 🔥 ESSENCIAIS */}
+        {/* ESSENCIAIS */}
         <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
           <div className="px-5 pt-4 pb-2">
             <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Essenciais</h2>
@@ -739,7 +761,7 @@ function EditTransactionContent() {
           </div>
         </section>
 
-        {/* 🔥 VÍNCULOS */}
+        {/* VÍNCULOS */}
         <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
           <div className="px-5 pt-4 pb-2">
             <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Vínculos</h2>
@@ -954,7 +976,7 @@ function EditTransactionContent() {
           )}
         </section>
 
-        {/* 🔥 AVANÇADO */}
+        {/* AVANÇADO */}
         <section className="space-y-3">
           <button
             onClick={() => {
@@ -1138,7 +1160,7 @@ function EditTransactionContent() {
         </section>
       </div>
 
-      {/* 🔥 FAB DE SALVAR */}
+      {/* FAB DE SALVAR */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[96px] flex justify-center z-40 pointer-events-none">
         <button
           onClick={() => {
@@ -1160,7 +1182,7 @@ function EditTransactionContent() {
         </button>
       </div>
 
-      {/* 🔥 MODAL DE DELETE */}
+      {/* MODAL DE DELETE */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowDeleteModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
@@ -1191,7 +1213,7 @@ function EditTransactionContent() {
         </div>
       )}
 
-      {/* 🔥 MODAIS (mantidos com lógica intacta) */}
+      {/* MODAIS (mantidos com lógica intacta) */}
       {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
       {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
@@ -1372,7 +1394,7 @@ function EditTransactionContent() {
   )
 }
 
-// 🔥 CORREÇÃO: Exportação correta para a página de Detalhes/Edição
+// EXPORTAÇÃO CORRETA
 export default function EditTransactionPage() {
   return (
     <Suspense fallback={
