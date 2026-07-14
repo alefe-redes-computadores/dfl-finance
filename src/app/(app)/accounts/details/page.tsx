@@ -12,6 +12,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useAccountById } from "@/hooks/useAccountById"
 import { useAccountTransactions } from "@/hooks/useAccountTransactions"
+import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
@@ -52,7 +53,32 @@ function AccountDetailContent() {
   const { context } = useContext_()
   const { user } = useAuth()
 
-  // Validação de ID
+  // ✅ CORRETO: TODOS OS HOOKS SÃO CHAMADOS PRIMEIRO, SEM CONDICIONAIS
+  // Hook por ID
+  const { data: accountData, loading, notFound } = useAccountById(accountId)
+  // Hook de relacionamento (transações)
+  const { data: transactions } = useAccountTransactions(accountId)
+  // Dados auxiliares para o modal de transferência
+  const { data: allAccounts } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context },
+  })
+
+  const [refreshing, setRefreshing] = useState(false)
+  const [expandedTransactions, setExpandedTransactions] = useState(false)
+  const [showAdjustModal, setShowAdjustModal] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [adjustAmount, setAdjustAmount] = useState("")
+  const [adjustNotes, setAdjustNotes] = useState("")
+  const [transferAmount, setTransferAmount] = useState("")
+  const [transferToAccount, setTransferToAccount] = useState("")
+  const [transferNotes, setTransferNotes] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  const touchStartY = useRef(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // ✅ AGORA PODEMOS TER RETORNOS CONDICIONAIS
   if (!accountId) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
@@ -74,29 +100,40 @@ function AccountDetailContent() {
     )
   }
 
-  const [refreshing, setRefreshing] = useState(false)
-  const [expandedTransactions, setExpandedTransactions] = useState(false)
-  const [showAdjustModal, setShowAdjustModal] = useState(false)
-  const [showTransferModal, setShowTransferModal] = useState(false)
-  const [adjustAmount, setAdjustAmount] = useState("")
-  const [adjustNotes, setAdjustNotes] = useState("")
-  const [transferAmount, setTransferAmount] = useState("")
-  const [transferToAccount, setTransferToAccount] = useState("")
-  const [transferNotes, setTransferNotes] = useState("")
-  const [saving, setSaving] = useState(false)
+  // 🔥 Estados de carregamento
+  if (loading) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
+        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+          <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-800" />
+        </div>
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={4} />
+        </div>
+      </div>
+    )
+  }
 
-  const touchStartY = useRef(0)
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  // 🔥 NOVOS HOOKS REATIVOS
-  const { data: accountData, loading, notFound } = useAccountById(accountId)
-  const { data: transactions } = useAccountTransactions(accountId)
-
-  // Ainda precisamos de contas para o modal de transferência (lista de contas destino)
-  const { data: allAccounts } = useLocalData({
-    table: 'accounts' as any,
-    filters: { context },
-  })
+  if (notFound || !accountData) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
+            <X size={32} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Conta não encontrada</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A conta que você procura não existe ou foi removida.</p>
+          <button
+            onClick={() => router.back()}
+            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+          >
+            <ArrowLeft size={18} />
+            Voltar
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -282,47 +319,10 @@ function AccountDetailContent() {
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
         vibrate([10])
-        // 🔥 Apenas recarrega a lista de contas para o modal de transferência
-        // Como accountData e transactions são reativos, não precisamos recarregá-los
         setTimeout(() => setRefreshing(false), 600)
       }
     }
   }, [refreshing, vibrate])
-
-  // 🔥 Estados de carregamento
-  if (loading) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-          <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-800" />
-        </div>
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={4} />
-        </div>
-      </div>
-    )
-  }
-
-  if (notFound || !accountData) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
-        <div className="max-w-sm text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
-            <X size={32} />
-          </div>
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Conta não encontrada</p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A conta que você procura não existe ou foi removida.</p>
-          <button
-            onClick={() => router.back()}
-            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
-          >
-            <ArrowLeft size={18} />
-            Voltar
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   const Icon = ACCOUNT_ICONS[accountData.type] || Wallet
 
