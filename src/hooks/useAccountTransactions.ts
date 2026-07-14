@@ -1,4 +1,3 @@
-// src/hooks/useAccountTransactions.ts
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -11,10 +10,11 @@ export function useAccountTransactions(accountId?: string | null) {
   const data = useLiveQuery(async () => {
     if (!user?.id || !accountId) return []
 
-    // Usa índice composto [user_id+account_id] se disponível
+    // ✅ Usa índice account_id (que existe) e filtra por user_id
     return await db.transactions
-      .where('[user_id+account_id]')
-      .equals([user.id, accountId])
+      .where('account_id')
+      .equals(accountId)
+      .and(tx => tx.user_id === user.id)
       .toArray()
   }, [user?.id, accountId])
 
