@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ChevronLeft, Check, Loader2, X, Target, Calendar } from 'lucide-react'
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -12,6 +13,7 @@ import { format } from 'date-fns'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
+import Skeleton from '@/components/Skeleton' // ✅ ADICIONADO
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const ICON_NAMES = ['target', 'piggy-bank', 'wallet', 'trending-up', 'home', 'car', 'graduation-cap', 'heart', 'briefcase', 'gift', 'shopping-bag', 'zap']
@@ -28,7 +30,8 @@ function NewGoalContent() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  const [loading, setLoading] = useState(true)
+  // ✅ ADICIONADO: initialized
+  const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
   const [categories, setCategories] = useState<any[]>([])
 
@@ -59,25 +62,28 @@ function NewGoalContent() {
     if (localCategories) setCategories(localCategories)
   }, [localCategories])
 
+  // ✅ CORRIGIDO: useEffect com initialized
   useEffect(() => {
-    if (editId && localGoal) {
+    if (editId && localGoal && !initialized) {
       const data = localGoal.find((g: any) => g.id === editId) as any
       if (data) {
-        setName(data.name)
+        setName(data.name || '')
         const numValue = Number(data.target_amount) || 0
         setTargetAmountNum(numValue)
         setTargetAmountFormatted(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
         setDeadline(data.deadline || '')
         setCategoryId(data.category_id || '')
-        setColor(data.color)
+        setColor(data.color || '#14b8a6')
         setIcon(data.icon || 'target')
         setDescription(data.description || '')
+        setInitialized(true)
       }
-      setLoading(false)
-    } else {
-      setLoading(false)
     }
-  }, [editId, localGoal])
+    
+    if (!editId && !initialized) {
+      setInitialized(true)
+    }
+  }, [editId, localGoal, initialized])
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
@@ -157,11 +163,16 @@ function NewGoalContent() {
     }
   }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-slate-900 transition-colors duration-300">
-      <Loader2 className="animate-spin text-teal-600" size={40} />
-    </div>
-  )
+  // ✅ ADICIONADO: tela de skeleton durante carregamento
+  if (!initialized) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={5} />
+        </div>
+      </div>
+    )
+  }
 
   const selectedCat = categories.find((c: any) => c.id === categoryId)
 
@@ -305,8 +316,9 @@ function NewGoalContent() {
         </button>
       </div>
 
-      {showCatModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
+      {/* ✅ MODAL DE CATEGORIA COM PORTAL */}
+      {showCatModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
             className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[70vh] overflow-y-auto"
@@ -355,7 +367,8 @@ function NewGoalContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
