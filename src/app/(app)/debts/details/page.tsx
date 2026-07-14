@@ -28,7 +28,6 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
-import Skeleton from '@/components/Skeleton'
 import MoneyInput from '@/components/MoneyInput'
 
 type DebtStatus = 'pending' | 'partial' | 'paid'
@@ -243,6 +242,7 @@ function PaymentHistoryItem({
 }
 
 function DebtDetailContent() {
+  // ========== TODOS OS HOOKS NO TOPO ==========
   const searchParams = useSearchParams()
   const router = useRouter()
   const { user } = useAuth()
@@ -251,41 +251,9 @@ function DebtDetailContent() {
   const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
   const debtId = searchParams.get('id') as string
-
-  // ✅ USANDO O HOOK COM isLoading
   const { debt, isLoading } = useDebtById(debtId)
 
-  // ========== ESTADOS DE CARREGAMENTO ==========
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Carregando...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // ========== SÓ MOSTRA "NÃO ENCONTRADO" SE A BUSCA TERMINOU ==========
-  if (!debt) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-slate-900">
-        <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-4">
-          <AlertTriangle size={32} className="text-red-500" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Registro não encontrado</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">A dívida que você procura não existe ou foi removida.</p>
-        <button
-          onClick={() => router.back()}
-          className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-[20px] font-bold hover:bg-teal-700 transition-colors active:scale-[0.98]"
-        >
-          Voltar
-        </button>
-      </div>
-    )
-  }
-
+  // ✅ HOOKS DE DADOS (chamados incondicionalmente)
   const {
     data: localTransactions,
     reload: reloadTransactions,
@@ -302,9 +270,7 @@ function DebtDetailContent() {
     filters: { context: debt?.context || 'dfl' },
   })
 
-  const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
-  const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
-
+  // ✅ TODOS OS STATES
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -325,11 +291,32 @@ function DebtDetailContent() {
   const [payNote, setPayNote] = useState('')
   const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
+  // ✅ TODOS OS MEMOS
+  const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
+  const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
+
+  const totalPaid = useMemo(
+    () => payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0),
+    [payments]
+  )
+
+  const totalAmountCents = Math.round(Number(debt?.total_amount || 0) * 100)
+  const totalPaidCents = Math.round(totalPaid * 100)
+  const remainingCents = totalAmountCents - totalPaidCents
+  const remaining = remainingCents / 100
+  const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
+  const isPaid = debt?.status === 'paid' || remainingCents <= 0
+  const daysUntilDue = debt?.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
+  const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
+
+  const IconComp = getDynamicIcon(debt?.icon || 'user')
+  const selectedAcc = accounts.find((a) => a.id === payAccountId)
+
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  // 🔥 REMOVIDO reloadDebt do loadData, pois a dívida é reativa via useDebtById
+  // ✅ TODOS OS CALLBACKS
   const loadData = useCallback(async () => {
     if (!debtId) return
     setLoadingPulse(true)
@@ -343,6 +330,7 @@ function DebtDetailContent() {
     }
   }, [debtId, reloadTransactions, reloadAccounts])
 
+  // ✅ TODOS OS EFFECTS
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
       if (window.scrollY > 10 || isLoading) return
@@ -380,7 +368,6 @@ function DebtDetailContent() {
     }
   }, [isLoading, refreshing, loadData, vibrate])
 
-  // 🔥 REDIRECIONAMENTO CORRIGIDO: usa debt do hook
   useEffect(() => {
     if (!isLoading && !debt && debtId) {
       router.replace('/debts')
@@ -398,21 +385,37 @@ function DebtDetailContent() {
     setWhatsAppNumber(debt.phone || debt.whatsapp || '')
   }, [debt])
 
-  const totalPaid = useMemo(
-    () => payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0),
-    [payments]
-  )
+  // ========== SÓ DEPOIS DE TODOS OS HOOKS, OS RETORNOS CONDICIONAIS ==========
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
 
-  const totalAmountCents = Math.round(Number(debt?.total_amount || 0) * 100)
-  const totalPaidCents = Math.round(totalPaid * 100)
-  const remainingCents = totalAmountCents - totalPaidCents
-  const remaining = remainingCents / 100
-  const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
-  const isPaid = debt?.status === 'paid' || remainingCents <= 0
-  const daysUntilDue = debt?.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
-  const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
-  const selectedAcc = accounts.find((a) => a.id === payAccountId)
+  if (!debt) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-slate-900">
+        <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-4">
+          <AlertTriangle size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Registro não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">A dívida que você procura não existe ou foi removida.</p>
+        <button
+          onClick={() => router.back()}
+          className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-[20px] font-bold hover:bg-teal-700 transition-colors active:scale-[0.98]"
+        >
+          Voltar
+        </button>
+      </div>
+    )
+  }
 
+  // ========== RESTO DA LÓGICA (HANDLERS) ==========
   const resetPaymentForm = () => {
     setPayAmountNum(0)
     setPayNote('')
@@ -611,6 +614,7 @@ function DebtDetailContent() {
     setShowWhatsAppModal(false)
   }
 
+  // ========== RENDER ==========
   return (
     <div
       ref={containerRef}
