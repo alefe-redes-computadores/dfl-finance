@@ -1,16 +1,17 @@
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
 
+// 🔥 SUBSTITUÍDO: Fonte Poppins (opcional)
 Font.register({
-  family: 'Inter',
-  src: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtM.ttf',
+  family: 'Poppins',
+  src: 'https://fonts.gstatic.com/s/poppins/v20/pxiEyp8kv8JHgFVrJJfecg.ttf',
 })
 
 const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontSize: 10,
-    fontFamily: 'Inter',
+    fontFamily: 'Poppins',
     backgroundColor: '#ffffff',
   },
   header: {
@@ -119,13 +120,16 @@ const styles = StyleSheet.create({
   },
 })
 
+// 🔥 SUBSTITUÍDO: interface com campos opcionais
 interface Transaction {
-  date: string
-  description: string
-  categories?: { name: string }
+  id?: string
+  date?: string
+  description?: string | null
+  category?: string | null
+  categories?: { name?: string | null } | null
   type: string
-  amount: number
-  status: string
+  amount: number | string
+  status?: string | null
 }
 
 interface ReportPDFProps {
@@ -137,9 +141,18 @@ interface ReportPDFProps {
   transactions: Transaction[]
 }
 
-export default function ReportPDF({ title, period, income, expense, balance, transactions }: ReportPDFProps) {
-  const safeNum = (val: any) => parseFloat(String(val)) || 0;
+// 🔥 SUBSTITUÍDO: safeNum com Number
+const safeNum = (val: unknown) => Number(val) || 0
 
+// 🔥 SUBSTITUÍDO: formatDate com validação
+function formatDate(dateStr: string) {
+  if (!dateStr) return ''
+  const d = new Date(`${dateStr}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('pt-BR')
+}
+
+export default function ReportPDF({ title, period, income, expense, balance, transactions }: ReportPDFProps) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -178,17 +191,24 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
             <Text style={styles.cellAmount}>VALOR</Text>
           </View>
 
-          {transactions.map((tx, index) => (
-            <View key={index} style={styles.tableRow}>
-              <Text style={styles.cellDate}>{formatDate(tx.date)}</Text>
-              <Text style={styles.cellDesc}>{tx.description || 'Sem descrição'}</Text>
-              <Text style={styles.cellCategory}>{tx.categories?.name || 'Geral'}</Text>
-              <Text style={[styles.cellAmount, { color: tx.type === 'income' ? '#10b981' : '#ef4444' }]}>
-                {tx.type === 'income' ? '+ ' : '- '}
-                R$ {safeNum(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </Text>
-            </View>
-          ))}
+          {/* 🔥 SUBSTITUÍDO: map com fallbacks robustos */}
+          {transactions.map((tx, index) => {
+            const categoryName = tx.categories?.name || tx.category || 'Geral'
+            const description = tx.description || categoryName || 'Sem descrição'
+            const amount = safeNum(tx.amount)
+
+            return (
+              <View key={tx.id || index} style={styles.tableRow}>
+                <Text style={styles.cellDate}>{formatDate(tx.date || '')}</Text>
+                <Text style={styles.cellDesc}>{description}</Text>
+                <Text style={styles.cellCategory}>{categoryName}</Text>
+                <Text style={[styles.cellAmount, { color: tx.type === 'income' ? '#10b981' : '#ef4444' }]}>
+                  {tx.type === 'income' ? '+ ' : '- '}
+                  R$ {amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </Text>
+              </View>
+            )
+          })}
         </View>
 
         <Text style={styles.footer}>
@@ -197,10 +217,4 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
       </Page>
     </Document>
   )
-}
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00')
-  return d.toLocaleDateString('pt-BR')
 }
