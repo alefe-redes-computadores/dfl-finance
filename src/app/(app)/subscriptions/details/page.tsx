@@ -27,7 +27,8 @@ function formatCurrency(val: number) {
 
 function formatDate(date: string | null | undefined) {
   if (!date) return '—'
-  const d = new Date(date.includes('T') ? date : `${date}T12:00:00`)
+  const normalized = date.includes('T') ? date : `${date}T12:00:00`
+  const d = new Date(normalized)
   return d.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: 'long',
