@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createPortal } from 'react-dom' // ✅ ADICIONADO
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft,
@@ -123,6 +123,27 @@ function CardDetailContent() {
   const { context } = useContext_()
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
+
+  if (!id) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
+            <X size={32} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Cartão não identificado</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">O ID do cartão não foi fornecido.</p>
+          <button
+            onClick={() => router.back()}
+            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+          >
+            <ChevronLeft size={18} />
+            Voltar
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const [card, setCard] = useState<any>(null)
   const [transactions, setTransactions] = useState<any[]>([])
@@ -381,7 +402,7 @@ function CardDetailContent() {
             vibrate([5])
             router.push('/cards')
           }}
-          className="rounded-full p-2 -ml-2 text-gray-800 transition-colors active:scale-95 dark:text-gray-200"
+          className="rounded-full p-2 -ml-2 text-gray-700 transition-colors active:scale-95 dark:text-gray-200"
         >
           <ChevronLeft size={24} />
         </button>
@@ -393,7 +414,6 @@ function CardDetailContent() {
         <button
           onClick={() => {
             vibrate([5])
-            // ✅ CORRIGIDO: usa ?edit= para consistência
             router.push(`/cards/new?edit=${card.id}`)
           }}
           className="rounded-full p-2 -mr-2 text-teal-700 active:scale-95 dark:text-teal-400"
@@ -555,156 +575,155 @@ function CardDetailContent() {
           </div>
 
           {transactions.length === 0 ? (
-            <div className="py-8 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-slate-700/50">
-                <CreditCard size={20} className="text-gray-400" />
-              </div>
-              <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500">
-                Nenhuma transação neste período.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {transactions.map((tx: any) => {
-                const isPending = tx.status === 'pending'
+                <div className="py-8 text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-slate-700/50">
+                    <CreditCard size={20} className="text-gray-400" />
+                  </div>
+                  <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500">
+                    Nenhuma transação neste período.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((tx: any) => {
+                    const isPending = tx.status === 'pending'
 
-                return (
-                  <button
-                    key={tx.id}
-                    onClick={() => {
-                      vibrate([5])
-                      router.push(`/transactions/details?id=${tx.id}`)
-                    }}
-                    className={`flex w-full items-center justify-between rounded-[20px] border px-3.5 py-3.5 text-left transition-all active:scale-[0.98] ${
-                      isPending
-                        ? 'border-orange-100 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/10'
-                        : 'border-transparent bg-gray-50/70 dark:bg-slate-700/30'
-                    }`}
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
-                      <div
-                        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] ${
+                    return (
+                      <button
+                        key={tx.id}
+                        onClick={() => {
+                          vibrate([5])
+                          router.push(`/transactions/details?id=${tx.id}`)
+                        }}
+                        className={`flex w-full items-center justify-between rounded-[20px] border px-3.5 py-3.5 text-left transition-all active:scale-[0.98] ${
                           isPending
-                            ? 'bg-orange-100 dark:bg-orange-900/30'
-                            : 'bg-emerald-50 dark:bg-emerald-900/30'
+                            ? 'border-orange-100 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/10'
+                            : 'border-transparent bg-gray-50/70 dark:bg-slate-700/30'
                         }`}
                       >
-                        {isPending ? (
-                          <Clock size={18} className="text-orange-500" />
-                        ) : (
-                          <Check size={18} className="text-emerald-500" />
-                        )}
-                      </div>
+                        <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                          <div
+                            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] ${
+                              isPending
+                                ? 'bg-orange-100 dark:bg-orange-900/30'
+                                : 'bg-emerald-50 dark:bg-emerald-900/30'
+                            }`}
+                          >
+                            {isPending ? (
+                              <Clock size={18} className="text-orange-500" />
+                            ) : (
+                              <Check size={18} className="text-emerald-500" />
+                            )}
+                          </div>
 
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                          {tx.description || tx.categories?.name || 'Compra'}
-                        </p>
-                        <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                          {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
-                        </p>
-                      </div>
-                    </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                              {tx.description || tx.categories?.name || 'Compra'}
+                            </p>
+                            <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
+                              {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
+                            </p>
+                          </div>
+                        </div>
 
-                    <p className="ml-3 flex-shrink-0 text-[15px] font-black text-red-500">
-                      - {formatCurrency(Number(tx.amount) || 0)}
-                    </p>
-                  </button>
-                )
-              })}
+                        <p className="ml-3 flex-shrink-0 text-[15px] font-black text-red-500">
+                          - {formatCurrency(Number(tx.amount) || 0)}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
+          </div>
+
+          {showPayModal && createPortal(
+            <div
+              className="fixed inset-0 z-[600] flex items-end justify-center"
+              onClick={() => setShowPayModal(false)}
+            >
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+
+              <div
+                className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
+                    Pagar fatura
+                  </h3>
+
+                  <button
+                    onClick={() => {
+                      vibrate([5])
+                      setShowPayModal(false)
+                    }}
+                    className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-5 dark:border-slate-700/50 dark:bg-slate-700/40">
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                      Cartão
+                    </span>
+                    <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                      {card.name}
+                    </span>
+                  </div>
+
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                      Vencimento
+                    </span>
+                    <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                      Dia {card.due_day}
+                    </span>
+                  </div>
+
+                  <div className="my-3 h-px w-full bg-gray-200 dark:bg-slate-600" />
+
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                      Valor da fatura
+                    </span>
+                    <span className="text-[22px] font-black tracking-tight text-red-500">
+                      {formatCurrency(totalFatura)}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="mb-6 px-2 text-center text-[13px] font-medium leading-relaxed text-gray-500 dark:text-gray-400">
+                  O valor será debitado da sua conta de pagamento padrão e as transações do
+                  cartão passarão a afetar seu saldo principal.
+                </p>
+
+                <button
+                  onClick={() => {
+                    vibrate([10, 50])
+                    handlePayFatura()
+                  }}
+                  disabled={paying}
+                  className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98] disabled:opacity-50 hover:bg-teal-700"
+                >
+                  {paying ? (
+                    <Loader2 size={22} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={22} />
+                  )}
+                  {paying ? 'Processando...' : 'Confirmar pagamento'}
+                </button>
+              </div>
+            </div>,
+            document.body
           )}
         </div>
-      </div>
-
-      {/* ✅ MODAL PAY FATURA COM PORTAL */}
-      {showPayModal && createPortal(
-        <div
-          className="fixed inset-0 z-[600] flex items-end justify-center"
-          onClick={() => setShowPayModal(false)}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-
-          <div
-            className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
-
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
-                Pagar fatura
-              </h3>
-
-              <button
-                onClick={() => {
-                  vibrate([5])
-                  setShowPayModal(false)
-                }}
-                className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-5 dark:border-slate-700/50 dark:bg-slate-700/40">
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                  Cartão
-                </span>
-                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                  {card.name}
-                </span>
-              </div>
-
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                  Vencimento
-                </span>
-                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                  Dia {card.due_day}
-                </span>
-              </div>
-
-              <div className="my-3 h-px w-full bg-gray-200 dark:bg-slate-600" />
-
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
-                  Valor da fatura
-                </span>
-                <span className="text-[22px] font-black tracking-tight text-red-500">
-                  {formatCurrency(totalFatura)}
-                </span>
-              </div>
-            </div>
-
-            <p className="mb-6 px-2 text-center text-[13px] font-medium leading-relaxed text-gray-500 dark:text-gray-400">
-              O valor será debitado da sua conta de pagamento padrão e as transações do
-              cartão passarão a afetar seu saldo principal.
-            </p>
-
-            <button
-              onClick={() => {
-                vibrate([10, 50])
-                handlePayFatura()
-              }}
-              disabled={paying}
-              className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98] disabled:opacity-50 hover:bg-teal-700"
-            >
-              {paying ? (
-                <Loader2 size={22} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={22} />
-              )}
-              {paying ? 'Processando...' : 'Confirmar pagamento'}
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  )
-}
+      )
+    }
 
 export default function CardDetailPage() {
   return (
