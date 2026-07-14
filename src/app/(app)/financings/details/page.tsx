@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
+import { createPortal } from "react-dom"
 import {
   ArrowLeft, Trash2, RefreshCw, Pencil, Car, Home, Percent,
   ChevronDown, CheckCircle2, AlertTriangle, Clock, Building2, Calendar, X,
@@ -10,7 +10,8 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useFinancingById } from "@/hooks/useFinancingById" // ✅ NOVO HOOK
+import { useFinancingInstallments } from "@/hooks/useFinancingInstallments" // ✅ NOVO HOOK
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
@@ -98,21 +99,11 @@ function FinancingDetailContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: localFinancings, loading, reload } = useLocalData({
-    table: 'financings' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: financingData, loading, notFound } = useFinancingById(financingId)
 
-  const financingData = useMemo(() => {
-    return (localFinancings || []).find((f: any) => f.id === financingId) as any
-  }, [localFinancings, financingId])
-
-  const { data: allInstallments } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context: effectiveContext, type: 'financing_installment', financing_id: financingId },
-  })
-
-  const installments = (allInstallments || []) as Installment[]
+  // ✅ HOOK DE RELACIONAMENTO (parcelas do financiamento)
+  const { data: installments, loading: installmentsLoading } = useFinancingInstallments(financingId)
 
   const handlePayInstallment = async (installment: Installment) => {
     if (!user) return
@@ -126,7 +117,10 @@ function FinancingDetailContent() {
       const res1 = await safeUpdate('transactions', installment.id, updateData)
       if (!res1.success) throw new Error(res1.error)
 
-      const updatedInstallments = installments.map((i: Installment) => i.id === installment.id ? { ...i, paid: true } : i)
+      // Verifica se todas as parcelas estão pagas
+      const updatedInstallments = installments.map((i: Installment) => 
+        i.id === installment.id ? { ...i, paid: true } : i
+      )
       const allPaid = updatedInstallments.every((i: Installment) => i.paid)
 
       if (allPaid && financingData?.status !== "paid") {
@@ -137,7 +131,7 @@ function FinancingDetailContent() {
 
       success()
       showToast("✅ Parcela paga com sucesso!", "success")
-      reload()
+      // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ ${err?.message || "Erro ao pagar parcela"}`, "error")
@@ -165,7 +159,7 @@ function FinancingDetailContent() {
 
       success()
       showToast("🔄 Pagamento desfeito com sucesso!", "success")
-      reload()
+      // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ ${err?.message || "Erro ao desfazer pagamento"}`, "error")
@@ -181,7 +175,7 @@ function FinancingDetailContent() {
       success()
       showToast("🗑️ Parcela excluída com sucesso!", "success")
       setDeleteModal(null)
-      reload()
+      // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast("❌ Erro ao excluir parcela", "error")
@@ -210,20 +204,7 @@ function FinancingDetailContent() {
     }
   }
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        vibrate([10])
-        reload().finally(() => setTimeout(() => setRefreshing(false), 600))
-      }
-    }
-  }
+  // ✅ REMOVIDO pull-to-refresh manual (hooks já são reativos)
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -255,11 +236,7 @@ function FinancingDetailContent() {
     }
   }
 
-  const paidInstallments = installments.filter((i: Installment) => i.paid)
-  const totalPaid = paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0)
-  const remaining = (financingData?.total_amount || 0) - totalPaid
-  const progressPercent = financingData?.total_amount ? (totalPaid / financingData.total_amount) * 100 : 0
-
+  // ✅ TRATAMENTO DE LOADING
   if (loading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors">
@@ -271,7 +248,8 @@ function FinancingDetailContent() {
     )
   }
 
-  if (!financingData) {
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (notFound) {
     return (
       <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900">
         <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
@@ -283,6 +261,13 @@ function FinancingDetailContent() {
       </div>
     )
   }
+
+  if (!financingData) return null
+
+  const paidInstallments = installments.filter((i: Installment) => i.paid)
+  const totalPaid = paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0)
+  const remaining = (financingData?.total_amount || 0) - totalPaid
+  const progressPercent = financingData?.total_amount ? (totalPaid / financingData.total_amount) * 100 : 0
 
   return (
     <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors">
@@ -340,8 +325,6 @@ function FinancingDetailContent() {
 
       <div
         ref={scrollRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-5 pb-24 space-y-4"
       >
         <section className="rounded-[30px] bg-gradient-to-br from-teal-600 to-teal-700 text-white p-6 shadow-[0_16px_40px_rgba(13,148,136,0.28)]">
@@ -465,7 +448,11 @@ function FinancingDetailContent() {
             </div>
           </div>
 
-          {installments.length === 0 ? (
+          {installmentsLoading ? (
+            <div className="flex justify-center p-8">
+              <RefreshCw size={24} className="animate-spin text-teal-500" />
+            </div>
+          ) : installments.length === 0 ? (
             <div className="rounded-[22px] bg-gray-50 dark:bg-slate-700/30 border border-gray-100 dark:border-slate-700/60 py-8 px-4 text-center">
               <p className="text-[13px] font-medium text-gray-400">Nenhuma parcela gerada.</p>
             </div>
