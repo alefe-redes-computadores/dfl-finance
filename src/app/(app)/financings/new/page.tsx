@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
   ArrowLeft,
   Save,
@@ -39,6 +40,7 @@ export default function NewFinancingPage() {
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [initialized, setInitialized] = useState(false) // ✅ ADICIONADO
   const touchStartY = useRef(0)
 
   const [description, setDescription] = useState("")
@@ -61,8 +63,9 @@ export default function NewFinancingPage() {
 
   const financingData = localFinancings?.find((f: any) => f.id === editId) as any
 
+  // ✅ CORRIGIDO: useEffect com initialized
   useEffect(() => {
-    if (financingData) {
+    if (editId && financingData && !initialized) {
       setDescription(financingData.description || "")
       const total = Number(financingData.total_amount) || 0
       setTotalAmountNum(total)
@@ -76,8 +79,13 @@ export default function NewFinancingPage() {
       setFirstDueDate(financingData.first_due_date ? financingData.first_due_date.split("T")[0] : "")
       setNotes(financingData.notes || "")
       setStatus(financingData.status || "active")
+      setInitialized(true)
     }
-  }, [financingData])
+    
+    if (!editId && !initialized) {
+      setInitialized(true)
+    }
+  }, [editId, financingData, initialized])
 
   useEffect(() => {
     if (totalAmountNum > 0 && installmentsCount && parseInt(installmentsCount) > 0) {
@@ -178,6 +186,16 @@ export default function NewFinancingPage() {
     "text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block"
   const inputClass =
     "w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+
+  if (!initialized) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={5} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
