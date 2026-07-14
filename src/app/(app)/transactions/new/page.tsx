@@ -27,6 +27,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useTransactionsList } from '@/hooks/useTransactionsList' // ✅ NOVO HOOK
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { db } from '@/lib/db'
 
@@ -136,12 +137,16 @@ function NewTransactionContent() {
 
   const { isOnline } = useOfflineQueue()
 
+  // ✅ DADOS AUXILIARES (useLocalData mantido para joins)
   const { data: accounts } = useLocalData({ table: 'accounts' as any, filters: { context: effectiveContext } })
   const { data: localCategories } = useLocalData({ table: 'categories' as any, filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' } })
   const { data: tags } = useLocalData({ table: 'tags' as any, filters: { context: effectiveContext } })
   const { data: creditCards } = useLocalData({ table: 'credit_cards' as any, filters: { context: effectiveContext, is_archived: false } })
   const { data: contacts } = useLocalData({ table: 'contacts' as any, filters: { context: effectiveContext } })
   const { data: budgets } = useLocalData({ table: 'budgets' as any, filters: { context: effectiveContext } })
+
+  // ✅ NOTA: Nova transação NÃO usa useTransactionById porque é criação
+  // Apenas os dados auxiliares vêm do banco local via useLocalData
 
   const mainCategories = useMemo(() => {
     return (localCategories || [])
@@ -591,11 +596,6 @@ function NewTransactionContent() {
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
   }, [uploading, receiptUrl, receiptType])
 
-  // 🔥 PATCH: h-[100dvh] explícito (blindagem contra containing block errado caso algum
-  // ancestral do layout tenha transform/filter/perspective, o que faz o `inset-0` deixar
-  // de ser relativo ao viewport) + min-h-0 no container flex-1 (obrigatório: um item flex
-  // sem min-h-0 mantém min-height:auto, que em containers de altura ambígua colapsa a
-  // área de overflow-y-auto para ~0 e "esconde" todo o conteúdo abaixo do header).
   return (
     <div className="fixed inset-0 z-50 h-[100dvh] w-full bg-[#f8f9fa] dark:bg-slate-900 flex flex-col">
       
@@ -638,7 +638,7 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* CORPO DO FORMULÁRIO — min-h-0 adicionado (fix do bug de conteúdo invisível) */}
+      {/* CORPO DO FORMULÁRIO */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-32">
         <div className="space-y-4">
           
