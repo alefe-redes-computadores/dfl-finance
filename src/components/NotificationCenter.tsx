@@ -103,28 +103,29 @@ export default function NotificationCenter({
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { isAdmin } = useIsAdmin()
 
-  const [localNotifs, setLocalNotifs] = useState<Notification[]>(Array.isArray(notifications) ? notifications : [])
+  const [localNotifs, setLocalNotifs] = useState<Notification[]>([])
   const [processing, setProcessing] = useState(false)
   const [mounted, setMounted] = useState(false)
 
+  // Evita hidratação incorreta
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  // Trava o scroll do body quando o modal abre
   useEffect(() => {
     if (!mounted) return
-
     if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
     }
-
     return () => {
       document.body.style.overflow = ''
     }
   }, [isOpen, mounted])
 
+  // Sincroniza as notificações que vêm da prop
   useEffect(() => {
     setLocalNotifs(Array.isArray(notifications) ? notifications : [])
   }, [notifications])
@@ -140,6 +141,7 @@ export default function NotificationCenter({
     }
   }, [onReadChange])
 
+  // Função robusta para marcar como lida no Dexie e na fila
   const markAsRead = useCallback(async (notifIds: string[]) => {
     if (!user?.id || processing || !Array.isArray(notifIds) || notifIds.length === 0) return
 
@@ -159,6 +161,7 @@ export default function NotificationCenter({
         await addToSyncQueue(user.id, 'notifications', 'update', notifId, updateData)
       }
 
+      // Atualiza a interface otimisticamente (instantâneo)
       const updated = localNotifs.map((n) =>
         notifIds.includes(n.id) ? { ...n, is_read: true, read: true } : n
       )
