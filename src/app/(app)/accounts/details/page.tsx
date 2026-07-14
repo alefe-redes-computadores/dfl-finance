@@ -1,3 +1,48 @@
+'use client'
+
+import { useState, useCallback, useRef, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { createPortal } from "react-dom"
+import {
+  ArrowLeft, Trash2, RefreshCw, Pencil, Wallet, Building2, CreditCard,
+  PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Loader2, ArrowRightLeft, X
+} from "lucide-react"
+import { useToast } from "@/contexts/ToastContext"
+import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useLocalData } from "@/hooks/useLocalData"
+import { useAccountById } from "@/hooks/useAccountById"
+import { useAccountTransactions } from "@/hooks/useAccountTransactions"
+import { useLocalSync } from "@/hooks/useLocalSync"
+import { useContext_ } from '@/components/ContextToggle'
+import { useAuth } from '@/lib/hooks/useAuth'
+import Skeleton from '@/components/Skeleton'
+import { db, addToSyncQueue } from '@/lib/db'
+
+const ACCOUNT_ICONS: Record<string, any> = {
+  checking: Wallet,
+  savings: PiggyBank,
+  investment: Building2,
+  credit_card: CreditCard,
+  wallet: Wallet,
+  other: Wallet,
+}
+
+const ACCOUNT_LABELS: Record<string, string> = {
+  checking: "Conta Corrente",
+  savings: "Poupança",
+  investment: "Investimento",
+  credit_card: "Cartão de Crédito",
+  wallet: "Carteira",
+  other: "Outro",
+}
+
+const safeNum = (val: any): number => {
+  if (val === null || val === undefined || val === '') return 0
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ''))
+  return isNaN(parsed) ? 0 : parsed
+}
+
 function AccountDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -102,10 +147,6 @@ function AccountDetailContent() {
       </div>
     )
   }
-
-  // ====================================================================
-  // A PARTIR DAQUI, O RESTO DO CÓDIGO PERMANECE IGUAL (funções e JSX)
-  // ====================================================================
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -357,9 +398,367 @@ function AccountDetailContent() {
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pb-28 pt-5"
       >
-        {/* ... o resto do JSX permanece IGUAL ao que você já tem ... */}
-        {/* (seção de saldo, transações, modais, etc.) */}
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+          <section className="overflow-hidden rounded-[28px] border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="p-6">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`flex h-14 w-14 items-center justify-center rounded-[18px] ${
+                      balancePositive
+                        ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                        : "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                    }`}
+                  >
+                    <Icon size={28} />
+                  </div>
+
+                  <div>
+                    <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                      Saldo atual
+                    </p>
+                    <p className="mt-1 text-[32px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                      {formatCurrency(balance)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-[12px] font-medium text-gray-600 dark:bg-slate-800 dark:text-gray-300">
+                  {ACCOUNT_LABELS[accountData.type] || accountData.type}
+                </span>
+
+                {accountData.bank && (
+                  <span className="rounded-full bg-gray-100 px-3 py-1.5 text-[12px] font-medium text-gray-600 dark:bg-slate-800 dark:text-gray-300">
+                    {accountData.bank}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-gray-100 p-4 dark:border-slate-800">
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowAdjustModal(true)
+                }}
+                className="rounded-[18px] bg-teal-600 px-4 py-3.5 text-[14px] font-semibold text-white transition-transform active:scale-[0.98]"
+              >
+                Ajustar saldo
+              </button>
+
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowTransferModal(true)
+                }}
+                className="rounded-[18px] border border-blue-200 bg-blue-50 px-4 py-3.5 text-[14px] font-semibold text-blue-700 transition-transform active:scale-[0.98] dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300"
+              >
+                Transferir
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between px-5 pb-2 pt-5">
+              <div>
+                <h2 className="text-[16px] font-semibold text-gray-900 dark:text-gray-100">
+                  Transações recentes
+                </h2>
+                <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
+                  Movimentações ligadas a esta conta
+                </p>
+              </div>
+            </div>
+
+            {sortedTransactions.length === 0 ? (
+              <div className="px-5 pb-6 pt-4">
+                <div className="rounded-[22px] bg-gray-50 px-4 py-8 text-center dark:bg-slate-800/70">
+                  <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-white dark:bg-slate-700">
+                    <RefreshCw size={18} className="text-gray-400" />
+                  </div>
+                  <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400">
+                    Nenhuma movimentação nesta conta.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="px-3 pb-3">
+                {sortedTransactions
+                  .slice(0, expandedTransactions ? undefined : 5)
+                  .map((tx: any) => {
+                    const isIncoming =
+                      tx.type === 'income' ||
+                      (tx.type === 'transfer' && tx.description?.includes('de '))
+
+                    return (
+                      <div
+                        key={tx.id}
+                        className="flex items-center justify-between gap-3 rounded-[20px] px-3 py-3 transition-colors hover:bg-gray-50 active:scale-[0.99] dark:hover:bg-slate-800"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${
+                              isIncoming
+                                ? "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400"
+                                : "bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400"
+                            }`}
+                          >
+                            {isIncoming ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                              {tx.description || "Sem descrição"}
+                            </p>
+                            <span className="text-[12px] text-gray-500 dark:text-gray-400">
+                              {formatDate(tx.date)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 text-[14px] font-semibold ${
+                            isIncoming
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-red-500 dark:text-red-400"
+                          }`}
+                        >
+                          {isIncoming ? '+' : '-'} {formatCurrency(Math.abs(safeNum(tx.amount)))}
+                        </span>
+                      </div>
+                    )
+                  })}
+
+                {sortedTransactions.length > 5 && (
+                  <div className="px-2 pt-2">
+                    <button
+                      onClick={() => {
+                        vibrate([5])
+                        setExpandedTransactions(!expandedTransactions)
+                      }}
+                      className="flex w-full items-center justify-center gap-1 rounded-[16px] bg-gray-50 py-3 text-[13px] font-medium text-teal-700 transition-colors active:scale-95 dark:bg-slate-800 dark:text-teal-300"
+                    >
+                      {expandedTransactions ? "Recolher transações" : `Ver todas (${sortedTransactions.length})`}
+                      <ChevronDown
+                        size={14}
+                        className={`transition-transform ${expandedTransactions ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
+
+      {/* MODAL AJUSTAR SALDO */}
+      {showAdjustModal && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center"
+          onClick={() => setShowAdjustModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-lg rounded-t-[30px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-[20px] font-semibold text-gray-900 dark:text-gray-100">
+                  Ajustar saldo
+                </h3>
+                <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">
+                  Informe um valor positivo ou negativo
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowAdjustModal(false)
+                }}
+                className="rounded-full bg-gray-100 p-2 text-gray-500 active:scale-95 dark:bg-slate-800 dark:text-gray-300"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-[20px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-800/70">
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Valor
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[18px] font-medium text-gray-400">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={adjustAmount}
+                    onChange={(e) => setAdjustAmount(e.target.value)}
+                    className="w-full bg-transparent text-[28px] font-semibold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[20px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-800/70">
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Observação
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Ajuste de final de mês"
+                  value={adjustNotes}
+                  onChange={(e) => setAdjustNotes(e.target.value)}
+                  className="w-full bg-transparent text-[15px] font-medium text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                vibrate([10, 50])
+                handleAdjustBalance()
+              }}
+              disabled={saving}
+              className="mt-6 flex w-full items-center justify-center rounded-[22px] bg-teal-600 py-4 text-[16px] font-semibold text-white shadow-lg shadow-teal-600/20 transition-transform active:scale-[0.98] disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="animate-spin" size={22} /> : "Confirmar ajuste"}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL TRANSFERIR */}
+      {showTransferModal && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center"
+          onClick={() => setShowTransferModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-t-[30px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-[20px] font-semibold text-gray-900 dark:text-gray-100">
+                  Transferir
+                </h3>
+                <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">
+                  Mova saldo entre suas contas
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowTransferModal(false)
+                }}
+                className="rounded-full bg-gray-100 p-2 text-gray-500 active:scale-95 dark:bg-slate-800 dark:text-gray-300"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-[20px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-800/70">
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Valor
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[18px] font-medium text-gray-400">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    className="w-full bg-transparent text-[28px] font-semibold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="relative rounded-[20px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-800/70">
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Conta destino
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                    <ArrowRightLeft size={18} />
+                  </div>
+
+                  <select
+                    value={transferToAccount}
+                    onChange={(e) => setTransferToAccount(e.target.value)}
+                    className="w-full appearance-none bg-transparent pr-8 text-[15px] font-medium text-gray-900 outline-none dark:text-gray-100"
+                  >
+                    <option value="" disabled>
+                      Selecione uma conta...
+                    </option>
+                    {(allAccounts || [])
+                      .filter((a: any) => a.id !== accountId)
+                      .map((a: any) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <ChevronDown
+                  size={18}
+                  className="pointer-events-none absolute right-4 top-1/2 mt-3 text-gray-400"
+                />
+              </div>
+
+              <div className="rounded-[20px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-800/70">
+                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Observação
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Pagamento de empréstimo"
+                  value={transferNotes}
+                  onChange={(e) => setTransferNotes(e.target.value)}
+                  className="w-full bg-transparent text-[15px] font-medium text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                vibrate([10, 50])
+                handleTransfer()
+              }}
+              disabled={saving}
+              className="mt-6 flex w-full items-center justify-center rounded-[22px] bg-blue-600 py-4 text-[16px] font-semibold text-white shadow-lg shadow-blue-600/20 transition-transform active:scale-[0.98] disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="animate-spin" size={22} /> : "Confirmar transferência"}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
+  )
+}
+
+export default function AccountDetailPage() {
+  return (
+    <Suspense fallback={<Skeleton count={4} />}>
+      <AccountDetailContent />
+    </Suspense>
   )
 }
