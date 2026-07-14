@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ChevronLeft, Check, Loader2, X, Wallet, Calendar, User, FileText, Tag } from 'lucide-react'
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -13,6 +14,7 @@ import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
+import Skeleton from '@/components/Skeleton'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -27,7 +29,7 @@ function NewDebtContent() {
   const { safeAdd, safeUpdate } = useSafeDb()
   const editId = searchParams.get('edit')
 
-  const [loading, setLoading] = useState(!!editId)
+  const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
 
   const [personName, setPersonName] = useState('')
@@ -59,8 +61,9 @@ function NewDebtContent() {
     filters: { id: editId || '' },
   })
 
+  // Carrega dados para edição
   useEffect(() => {
-    if (editId && localDebt && localDebt.length > 0) {
+    if (editId && localDebt && localDebt.length > 0 && !initialized) {
       const data = localDebt[0] as any
       setPersonName(data.person_name)
       const numValue = Number(data.total_amount) || 0
@@ -72,11 +75,11 @@ function NewDebtContent() {
       setColor(data.color || '#14b8a6')
       setIcon(data.icon ? data.icon.charAt(0).toUpperCase() + data.icon.slice(1) : 'User')
       setDebtContext(data.context || 'dfl')
-      setLoading(false)
-    } else if (!editId) {
-      setLoading(false)
+      setInitialized(true)
+    } else if (!editId && !initialized) {
+      setInitialized(true)
     }
-  }, [editId, localDebt])
+  }, [editId, localDebt, initialized])
 
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0) {
@@ -137,9 +140,9 @@ function NewDebtContent() {
     }
   }
 
-  if (loading || debtLoading) {
+  if (!initialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
         <Loader2 className="animate-spin text-teal-600" size={40} />
       </div>
     )
@@ -376,8 +379,8 @@ function NewDebtContent() {
         </div>
       </div>
 
-      {showCatModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
+      {showCatModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
             className="relative h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
@@ -443,11 +446,12 @@ function NewDebtContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showAccModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
+      {showAccModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
             className="relative h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
@@ -515,7 +519,8 @@ function NewDebtContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <IconPicker
