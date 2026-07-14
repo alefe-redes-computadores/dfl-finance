@@ -35,7 +35,8 @@ export default function MoneyInput({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      let raw = e.target.value.replace(/D/g, '')
+      // CORREÇÃO: \D em vez de D para remover tudo que não for dígito
+      let raw = e.target.value.replace(/\D/g, '')
 
       if (!raw) {
         setDisplayValue('0,00')
