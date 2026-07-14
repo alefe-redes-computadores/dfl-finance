@@ -348,46 +348,44 @@ function AccountsContent() {
       </div>
 
       {/* MODAL DE EXCLUSÃO */}
-      {deleteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
+      {deleteModal && createPortal(
+  <div
+    className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
+    onClick={() => setDeleteModal(null)}
+  >
+    <div
+      className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 duration-300"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+        <Trash2 size={28} className="text-red-500" />
+      </div>
+      <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">
+        Excluir Conta
+      </h3>
+      <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
+        Tem certeza que deseja excluir esta conta?
+      </p>
+      <div className="flex gap-3 pb-safe">
+        <button
+          type="button"
           onClick={() => setDeleteModal(null)}
+          className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] active:scale-[0.98]"
         >
-          <div
-            className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-              <Trash2 size={28} className="text-red-500" />
-            </div>
-            <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">
-              Excluir Conta
-            </h3>
-            <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
-              Tem certeza que deseja excluir esta conta? As transações vinculadas não serão afetadas.
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setDeleteModal(null)}
-                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
-              >
-                Sim, Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="flex-1 py-4 rounded-[20px] bg-red-500 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 active:scale-[0.98]"
+        >
+          Sim, Excluir
+        </button>
+      </div>
     </div>
-  )
-}
+  </div>,
+  document.body
+)}
 
 export default function AccountsPage() {
   const [isClient, setIsClient] = useState(false)
