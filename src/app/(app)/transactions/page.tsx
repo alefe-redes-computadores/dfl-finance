@@ -618,14 +618,14 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* 🔥 GAVETA DE FILTROS AVANÇADOS - RECONSTRUÍDA PARA NUNCA BUGAR LÁ EMBAIXO */}
+            {/* 🔥 GAVETA DE FILTROS AVANÇADOS - CORRIGIDA PARA MOBILE (DVH + SAFE AREA) */}
       {showFilterDrawer && (
         <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
           {/* Fundo que fecha ao clicar */}
           <div className="absolute inset-0" onClick={() => setShowFilterDrawer(false)} />
 
-          {/* Container do Modal */}
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[90vh]">
+          {/* Container do Modal - Trocado para dvh (Dynamic Viewport) e reduzido para 85% */}
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[85dvh] sm:max-h-[85vh]">
             
             {/* Handle & Header Fixos no Topo */}
             <div className="shrink-0 px-6 pt-4 pb-4 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[32px]">
@@ -642,7 +642,7 @@ export default function TransactionsPage() {
             </div>
 
             {/* Conteúdo com Scroll Independente */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-20 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-6 custom-scrollbar">
               
               {/* Status */}
               <div>
@@ -777,8 +777,8 @@ export default function TransactionsPage() {
 
             </div>
 
-            {/* Footer Fixo com Botões (Sempre visível) */}
-            <div className="shrink-0 px-6 py-4 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60 rounded-b-[32px] mb-2">
+            {/* Footer Fixo com Botões (Sempre visível) - pb-8 cria o espaço seguro para a barra do celular! */}
+            <div className="shrink-0 px-6 pt-4 pb-8 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60">
               <div className="flex gap-3">
                 <button 
                   type="button" 
