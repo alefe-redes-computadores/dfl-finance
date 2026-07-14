@@ -13,6 +13,7 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
+import { useBudgetsList } from '@/hooks/useBudgetsList' // ✅ NOVO HOOK
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
@@ -61,12 +62,11 @@ function BudgetsContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  const { data: localBudgets, loading: budgetsLoading, reload: reloadBudgets } = useLocalData({
-    table: 'budgets' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: localBudgets, loading: budgetsLoading } = useBudgetsList(effectiveContext)
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+  // ✅ TRANSAÇÕES ainda vêm via useLocalData para calcular gastos
+  const { data: localTransactions, loading: txLoading } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
@@ -75,58 +75,19 @@ function BudgetsContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      loadData().finally(() => {
-        setTimeout(() => setRefreshing(false), 600)
-      })
-    }
-  }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  // ✅ REMOVIDO pull-to-refresh manual (useBudgetsList já é reativo)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
-  const loadData = async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-    try {
-      await Promise.all([reloadBudgets(), reloadTransactions()])
-    } catch (err) {
-      console.error('Erro ao carregar dados:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }
+    // ... event listeners removidos (não precisam mais)
+  }, [])
 
   useEffect(() => {
-    if (user?.id) loadData()
-  }, [user?.id, context])
+    if (user?.id) {
+      setLoading(false)
+    }
+  }, [user?.id, budgetsLoading, txLoading])
 
   const monthStart = format(currentMonth, 'yyyy-MM-01')
   const monthEnd = format(currentMonth, 'yyyy-MM-31')
@@ -163,7 +124,7 @@ function BudgetsContent() {
       })
       hapticSuccess()
       showToast('✅ Orçamento excluído!', 'success')
-      loadData()
+      // ✅ NÃO PRECISA loadData() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       hapticError()
       showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
@@ -184,7 +145,7 @@ function BudgetsContent() {
       })
       vibrate([20])
       showToast(`✅ Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
-      loadData()
+      // ✅ NÃO PRECISA loadData() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       hapticError()
       showToast(`❌ Erro: ${err.message}`, 'error')
@@ -193,18 +154,20 @@ function BudgetsContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+  const loading = budgetsLoading || txLoading
+
   return (
     <div
       ref={containerRef}
       className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
     >
-      {loadingPulse && (
+      {loading && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
