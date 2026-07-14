@@ -213,17 +213,27 @@ export default function NotificationsPage() {
     }
   }, [user, isAdmin, showToast, hapticSuccess, hapticError, vibrate])
 
-  const deleteNotification = useCallback(async (id: string) => {
-    if (!user) return
-    try {
+  // Adicione isto dentro do deleteNotification
+    const deleteNotification = useCallback(async (id: string) => {
+      if (!user) return
+      try {
+      // 1. Atualização Otimista
       const filteredList = notifications.filter(n => n.id !== id)
       setNotifications(filteredList)
       setUnreadCount(filteredList.filter((n: any) => !n.is_read).length)
 
+      // 2. Remoção Real do DB
       const result = await safeDelete('notifications', id)
       
-      if (!result.success) {
-        throw new Error(result.error)
+      if (!result.success) throw new Error(result.error)
+      
+      // 🔥 MATADOR DE ZUMBI: Se houver Service Worker, avisamos ele aqui
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready
+        // Isso limpa tags de notificações pendentes ligadas a esse ID
+        registration.getNotifications({ tag: id }).then(nots => {
+          nots.forEach(n => n.close())
+        })
       }
       
       hapticSuccess()
@@ -234,6 +244,7 @@ export default function NotificationsPage() {
       await loadNotifications()
     }
   }, [user, notifications, safeDelete, loadNotifications, hapticSuccess, hapticError, vibrate])
+
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
