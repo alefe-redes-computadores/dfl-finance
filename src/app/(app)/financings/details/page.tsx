@@ -2,6 +2,7 @@
 
 import { useState, useRef, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
   ArrowLeft, Trash2, RefreshCw, Pencil, Car, Home, Percent,
   ChevronDown, CheckCircle2, AlertTriangle, Clock, Building2, Calendar, X,
@@ -24,6 +25,57 @@ type Installment = {
   paid: boolean
   paid_date?: string
   number: number
+}
+
+// ✅ AppBottomSheet CORRIGIDO com createPortal
+function AppBottomSheet({
+  open,
+  onClose,
+  title,
+  children,
+  zIndex = 600,
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  children: React.ReactNode
+  zIndex?: number
+}) {
+  if (!open) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-end justify-center"
+      style={{ zIndex }}
+      onClick={onClose}
+      aria-hidden={!open}
+    >
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800 pb-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+        <div className="mb-6 flex items-center justify-between">
+          <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">{title}</h3>
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>,
+    document.body
+  )
 }
 
 function FinancingDetailContent() {
@@ -493,8 +545,9 @@ function FinancingDetailContent() {
         </section>
       </div>
 
-      {deleteModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setDeleteModal(null)}>
+      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {deleteModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setDeleteModal(null)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
             className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300"
@@ -528,7 +581,8 @@ function FinancingDetailContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
