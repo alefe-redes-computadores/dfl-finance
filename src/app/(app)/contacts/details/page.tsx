@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   ChevronLeft, Edit3, Trash2, Loader2, Phone, Mail, Building, User,
@@ -432,13 +433,14 @@ function ContactDetailContent() {
         </div>
       </main>
 
-      {showDeleteSheet && (
+      {/* ✅ DELETE SHEET COM PORTAL */}
+      {showDeleteSheet && createPortal(
         <div
-          className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => !deleting && setShowDeleteSheet(false)}
         >
           <div
-            className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-8 dark:bg-slate-900"
+            className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-8 dark:bg-slate-900 shadow-2xl animate-in slide-in-from-bottom-8 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-6 h-1.5 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
@@ -449,11 +451,10 @@ function ContactDetailContent() {
               <h3 className="mb-1 text-[18px] font-bold text-slate-900 dark:text-slate-100">
                 Excluir contato?
               </h3>
-              <p className="max-w-[290px] text-[14px] text-slate-500 dark:text-slate-400">
-                As transações vinculadas continuarão existindo, mas sem este contato associado.
+              <p className="max-w-[280px] text-[14px] text-slate-500 dark:text-slate-400">
+                Essa ação não pode ser desfeita. O contato será removido permanentemente.
               </p>
             </div>
-
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteSheet(false)}
@@ -472,7 +473,8 @@ function ContactDetailContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
