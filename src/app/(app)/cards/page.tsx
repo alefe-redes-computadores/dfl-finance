@@ -4,8 +4,8 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, Plus, CreditCard, RefreshCw, AlertTriangle,
-  ChevronRight, CalendarDays, Receipt, X
+  ChevronLeft, Plus, CreditCard, RefreshCw,
+  ChevronRight, Receipt
 } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useCardsList } from '@/hooks/useCardsList'
@@ -14,33 +14,17 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns
 import { ptBR } from 'date-fns/locale'
 import Skeleton from '@/components/Skeleton'
 
-// SKELETON
 const CardsSkeleton = () => (
   <div className="space-y-4 animate-pulse pt-2">
     {[1, 2, 3].map((i) => (
       <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] p-2 shadow-sm border border-gray-200/70 dark:border-slate-700">
-        <div className="rounded-[18px] p-3">
-          <div className="flex items-start gap-3 mb-3">
-            <div className="w-[58px] h-[38px] rounded-[10px] bg-gray-200 dark:bg-slate-700 shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-16 bg-gray-100 dark:bg-slate-700/50 rounded" />
-            </div>
-            <div className="w-8 h-8 bg-gray-200 dark:bg-slate-700 rounded-full" />
-          </div>
-          <div className="rounded-[18px] bg-gray-100 dark:bg-slate-700/50 p-3 space-y-3">
+        <div className="h-[180px] rounded-[18px] bg-gray-200 dark:bg-slate-700 mb-2" />
+        <div className="px-2 pb-2">
+          <div className="flex justify-between mb-3">
             <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-6 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-2.5 w-full bg-gray-200 dark:bg-slate-700 rounded-full" />
-            <div className="flex justify-between">
-              <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
-            </div>
+            <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded" />
           </div>
-          <div className="flex gap-2 mt-3">
-            <div className="flex-1 h-12 bg-gray-100 dark:bg-slate-700/50 rounded-[16px]" />
-            <div className="flex-1 h-12 bg-gray-100 dark:bg-slate-700/50 rounded-[16px]" />
-          </div>
+          <div className="h-2.5 w-full bg-gray-200 dark:bg-slate-700 rounded-full" />
         </div>
       </div>
     ))}
@@ -57,10 +41,8 @@ export default function CardsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
 
-  // 🔥 USANDO useCardsList (reativo)
   const { data: localCards, loading: cardsLoading } = useCardsList(effectiveContext)
 
-  // Ainda precisamos de transações para calcular as faturas
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -82,7 +64,7 @@ export default function CardsPage() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      // 🔥 Apenas recarrega transações
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10)
       reloadTransactions().finally(() => setTimeout(() => setRefreshing(false), 600))
     }
   }, [refreshing, reloadTransactions])
@@ -104,7 +86,6 @@ export default function CardsPage() {
     }
   }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
-  // 🔥 Atualiza loading quando os dados chegam
   useEffect(() => {
     if (!user?.id) return
     if (!cardsLoading && !txLoading) {
@@ -146,23 +127,24 @@ export default function CardsPage() {
     return { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' }
   }
 
-  const getBrandLabel = (brand: string | null) => {
-    if (!brand) return null
-    const brands: Record<string, string> = {
-      visa: 'Visa',
-      mastercard: 'Mastercard',
-      elo: 'Elo',
-      amex: 'American Express',
-      hipercard: 'Hipercard',
-    }
-    return brands[brand.toLowerCase()] || brand
+  const getBrandLogo = (brand: string | null) => {
+    if (!brand) return <CreditCard size={20} className="opacity-80" />
+    const b = brand.toLowerCase()
+    if (b === 'visa') return <span className="text-xl font-bold italic tracking-tighter">VISA</span>
+    if (b === 'mastercard') return (
+      <div className="flex">
+        <div className="w-5 h-5 bg-red-500 rounded-full mix-blend-multiply opacity-90" />
+        <div className="w-5 h-5 bg-yellow-500 rounded-full mix-blend-multiply -ml-2 opacity-90" />
+      </div>
+    )
+    if (b === 'elo') return <span className="text-sm font-bold tracking-tight">elo</span>
+    if (b === 'amex') return <span className="text-[10px] font-bold bg-blue-500 text-white px-1 py-0.5 rounded">AMEX</span>
+    if (b === 'hipercard') return <span className="text-xs font-bold text-red-100 italic">HIPER</span>
+    return <span className="text-sm font-bold opacity-80">{brand}</span>
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-28 relative transition-colors duration-300"
-    >
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-28 relative transition-colors duration-300">
       {loadingPulse && (
         <div className="fixed top-6 right-6 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
@@ -178,74 +160,44 @@ export default function CardsPage() {
         </div>
       )}
 
-      {/* HEADER UNIFICADO */}
+      {/* HEADER */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => router.push('/more')}
-                  className="h-9 w-9 -ml-1 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
-                >
+                <button onClick={() => router.push('/more')} className="h-9 w-9 -ml-1 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]">
                   <ChevronLeft size={20} />
                 </button>
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                  Cartões
-                </h1>
+                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Cartões</h1>
               </div>
               <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5 ml-1">
                 {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
               </p>
             </div>
 
-            <button
-              onClick={() => router.push('/cards/new')}
-              className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
-            >
+            <button onClick={() => router.push('/cards/new')} className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0">
               <Plus size={20} />
             </button>
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <ContextToggle />
-            </div>
-
+            <div className="min-w-0 flex-1"><ContextToggle /></div>
             <div className="flex items-center gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-1.5 py-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              <span className="min-w-[78px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">
-                {monthLabel}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-              >
-                <ChevronRight size={16} />
-              </button>
+              <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98]"><ChevronLeft size={16} /></button>
+              <span className="min-w-[78px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">{monthLabel}</span>
+              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98]"><ChevronRight size={16} /></button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="px-4 pt-3 space-y-3">
-        {/* CARD CONSOLIDADO */}
         {!loading && cardsWithInvoice.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
-                  Faturas do mês
-                </p>
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">Faturas do mês</p>
                 <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
                   {formatCurrency(totalInvoices)}
                 </p>
@@ -253,7 +205,6 @@ export default function CardsPage() {
                   Total de {cardsWithInvoice.length} {cardsWithInvoice.length === 1 ? 'cartão' : 'cartões'}
                 </p>
               </div>
-
               <div className="w-12 h-12 rounded-[18px] bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
                 <Receipt size={20} className="text-indigo-600 dark:text-indigo-400" />
               </div>
@@ -268,37 +219,87 @@ export default function CardsPage() {
             <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
               <CreditCard size={28} className="opacity-30 text-gray-500" />
             </div>
-            <h3 className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 mb-1">
-              Nenhum cartão cadastrado
-            </h3>
-            <p className="text-gray-400 dark:text-gray-500 text-[12px] mb-6 max-w-[250px]">
-              Adicione cartões de crédito para acompanhar faturas e limites em um só lugar.
-            </p>
-            <button
-              onClick={() => router.push('/cards/new')}
-              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-[20px] font-bold text-[14px] shadow-lg shadow-teal-600/20 active:scale-[0.98] transition-all"
-            >
+            <h3 className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 mb-1">Nenhum cartão</h3>
+            <p className="text-gray-400 dark:text-gray-500 text-[12px] mb-6 max-w-[250px]">Adicione cartões para acompanhar faturas e limites.</p>
+            <button onClick={() => router.push('/cards/new')} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-[20px] font-bold text-[14px] shadow-lg shadow-teal-600/20 active:scale-[0.98] transition-all">
               Adicionar Cartão
             </button>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {cardsWithInvoice.map((card: any, index: number) => {
               const limitPercent = getLimitPercent(card.faturaAtual || 0, Number(card.limit_amount) || 0)
               const limitColor = getLimitColor(limitPercent)
               const available = (Number(card.limit_amount) || 0) - (card.faturaAtual || 0)
               const isNearLimit = limitPercent >= 90
-              const brandLabel = getBrandLabel(card.brand)
               const cardBgColor = card.color || '#334155'
 
               return (
                 <div
                   key={card.id}
                   onClick={() => router.push(`/cards/details?id=${card.id}`)}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer animate-in fade-in slide-in-from-bottom-4 transition-colors active:scale-[0.98]"
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3 cursor-pointer animate-in fade-in slide-in-from-bottom-4 transition-all active:scale-[0.98] hover:shadow-md"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  {/* ... card item (mesma UI que você já tem) ... */}
+                  {/* DESIGN PREMIUM DO CARTÃO FÍSICO */}
+                  <div
+                    className="relative w-full rounded-[20px] p-5 overflow-hidden mb-4 shadow-sm"
+                    style={{ background: `linear-gradient(135deg, ${cardBgColor}ee, ${cardBgColor})`, color: '#fff' }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-40 pointer-events-none" />
+                    <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+                    
+                    <div className="relative z-10 flex justify-between items-start mb-8">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-7 bg-yellow-200/90 rounded-[6px] border border-yellow-400/50 flex flex-col justify-evenly px-1">
+                           <div className="w-full h-[1px] bg-yellow-500/40" />
+                           <div className="w-full h-[1px] bg-yellow-500/40" />
+                        </div>
+                        <svg className="w-5 h-5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M8.5 4a23.4 23.4 0 0 1 0 16M12.5 5.5a18.4 18.4 0 0 1 0 13M16.5 7a13.4 13.4 0 0 1 0 10M20.5 8.5a8.4 8.4 0 0 1 0 7"/></svg>
+                      </div>
+                      <div className="text-white/90">
+                        {getBrandLogo(card.flag || card.brand)}
+                      </div>
+                    </div>
+
+                    <div className="relative z-10 flex justify-between items-end">
+                      <div>
+                        <p className="text-[10px] font-medium text-white/60 uppercase tracking-widest mb-1">{card.institution || card.name}</p>
+                        <p className="font-mono text-[16px] tracking-[0.2em] text-white/90 font-medium">
+                          •••• •••• •••• {card.last_four || '0000'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* INFORMAÇÕES FINANCEIRAS */}
+                  <div className="px-2">
+                    <div className="flex justify-between items-end mb-2.5">
+                      <div>
+                        <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Fatura Atual</p>
+                        <p className="text-[18px] font-bold text-gray-900 dark:text-gray-100 leading-tight mt-0.5">
+                          {formatCurrency(card.faturaAtual)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Limite Disp.</p>
+                        <p className={`text-[14px] font-semibold mt-0.5 ${available > 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-500'}`}>
+                          {formatCurrency(available)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-gray-100 dark:bg-slate-700/50 rounded-full h-2.5 overflow-hidden mb-1.5">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${limitColor.bar}`}
+                        style={{ width: `${limitPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-[11px] font-medium">
+                      <span className="text-gray-400 dark:text-gray-500">Vence dia {card.due_day}</span>
+                      <span className={limitColor.text}>{isNearLimit ? 'Próximo ao limite' : `${limitPercent.toFixed(0)}% utilizado`}</span>
+                    </div>
+                  </div>
                 </div>
               )
             })}
