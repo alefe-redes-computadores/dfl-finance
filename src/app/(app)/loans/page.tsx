@@ -2,8 +2,9 @@
 
 import { useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
-  ArrowUpDown, Search, Plus, X, ChevronDown, Landmark, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, HandCoins,ChevronLeft,  ArrowLeftRight
+  ArrowUpDown, Search, Plus, X, ChevronDown, Landmark, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, HandCoins, ChevronLeft, ArrowLeftRight
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -290,26 +291,26 @@ export default function LoansPage() {
         )}
       </div>
 
-      {deleteModal && (
-        <div className="fixed inset-0 z-[600] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteModal(null)}>
+      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {deleteModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
             <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
               <Trash2 size={28} className="text-red-500" />
             </div>
             <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">Excluir Empréstimo</h3>
-            <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
-              Tem certeza que deseja excluir este empréstimo e todos os seus pagamentos?
-            </p>
+            <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">Tem certeza que deseja excluir este empréstimo e todos os seus pagamentos?</p>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setDeleteModal(null)} className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-95">
+              <button type="button" onClick={() => setDeleteModal(null)} className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]">
                 Cancelar
               </button>
-              <button type="button" onClick={() => { vibrate([50]); handleDelete(); }} className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-95">
+              <button type="button" onClick={() => { vibrate([50]); handleDelete(); }} className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]">
                 Sim, Excluir
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
