@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
+import { createPortal } from "react-dom"
 import {
   ArrowLeft,
   Save,
@@ -20,11 +20,12 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useFinancingById } from "@/hooks/useFinancingById" // ✅ NOVO HOOK
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
+import Skeleton from '@/components/Skeleton'
 
 export default function NewFinancingPage() {
   const router = useRouter()
@@ -38,9 +39,12 @@ export default function NewFinancingPage() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: financing, loading, notFound } = useFinancingById(editId)
+
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [initialized, setInitialized] = useState(false) // ✅ ADICIONADO
+  const [initialized, setInitialized] = useState(!editId)
   const touchStartY = useRef(0)
 
   const [description, setDescription] = useState("")
@@ -56,36 +60,79 @@ export default function NewFinancingPage() {
   const [notes, setNotes] = useState("")
   const [status, setStatus] = useState("active")
 
-  const { data: localFinancings } = useLocalData({
-    table: 'financings' as any,
-    filters: { context: effectiveContext },
-  })
-
-  const financingData = localFinancings?.find((f: any) => f.id === editId) as any
-
-  // ✅ CORRIGIDO: useEffect com initialized
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
   useEffect(() => {
-    if (editId && financingData && !initialized) {
-      setDescription(financingData.description || "")
-      const total = Number(financingData.total_amount) || 0
+    if (editId && financing && !initialized) {
+      setDescription(financing.description || "")
+      const total = Number(financing.total_amount) || 0
       setTotalAmountNum(total)
-      setInstallmentsCount(financingData.installments_count ? String(financingData.installments_count) : "")
-      setInstallmentAmountNum(Number(financingData.installment_amount) || 0)
-      setInterestRate(financingData.interest_rate ? String(financingData.interest_rate) : "")
-      setBank(financingData.bank || "")
-      setAssetType(financingData.asset_type || "other")
-      setAsset(financingData.asset || "")
-      setStartDate(financingData.start_date ? financingData.start_date.split("T")[0] : "")
-      setFirstDueDate(financingData.first_due_date ? financingData.first_due_date.split("T")[0] : "")
-      setNotes(financingData.notes || "")
-      setStatus(financingData.status || "active")
+      setInstallmentsCount(financing.installments_count ? String(financing.installments_count) : "")
+      setInstallmentAmountNum(Number(financing.installment_amount) || 0)
+      setInterestRate(financing.interest_rate ? String(financing.interest_rate) : "")
+      setBank(financing.bank || "")
+      setAssetType(financing.asset_type || "other")
+      setAsset(financing.asset || "")
+      setStartDate(financing.start_date ? financing.start_date.split("T")[0] : "")
+      setFirstDueDate(financing.first_due_date ? financing.first_due_date.split("T")[0] : "")
+      setNotes(financing.notes || "")
+      setStatus(financing.status || "active")
       setInitialized(true)
     }
     
     if (!editId && !initialized) {
       setInitialized(true)
     }
-  }, [editId, financingData, initialized])
+  }, [editId, financing, initialized])
+
+  // ✅ TRATAMENTO DE LOADING
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (editId && notFound) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-950 items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <Percent size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Financiamento não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+        <button
+          onClick={() => router.push('/financings')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (!initialized) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     if (totalAmountNum > 0 && installmentsCount && parseInt(installmentsCount) > 0) {
@@ -186,16 +233,6 @@ export default function NewFinancingPage() {
     "text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block"
   const inputClass =
     "w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
-
-  if (!initialized) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={5} />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div
