@@ -23,6 +23,8 @@ import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useCardById } from '@/hooks/useCardById'
+import { useCardTransactions } from '@/hooks/useCardTransactions'
 import { db, addToSyncQueue } from '@/lib/db'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -145,27 +147,18 @@ function CardDetailContent() {
     )
   }
 
-  const [card, setCard] = useState<any>(null)
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [totalFatura, setTotalFatura] = useState(0)
-  const [currentMonth, setCurrentMonth] = useState(new Date())
   const [showPayModal, setShowPayModal] = useState(false)
   const [paying, setPaying] = useState(false)
 
-  const { data: localCards, reload: reloadCards } = useLocalData({
-    table: 'credit_cards' as any,
-    filters: { id: id as string },
-  })
+  // 🔥 NOVOS HOOKS REATIVOS
+  const { data: card, loading, notFound } = useCardById(id)
+  const { data: allTransactions } = useCardTransactions(id)
 
-  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { credit_card_id: id as string },
-  })
-
-  const { data: localAccounts, reload: reloadAccounts } = useLocalData({
+  // Ainda precisamos de contas para o modal de pagamento
+  const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
   })
@@ -173,6 +166,8 @@ function CardDetailContent() {
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
+
+  // 🔥 REMOVIDO loadData e reloads
 
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
@@ -187,46 +182,6 @@ function CardDetailContent() {
     isPulling.current = false
   }, [])
 
-  const loadData = useCallback(async () => {
-    if (!id || !user?.id) return
-
-    setLoading(true)
-    setLoadingPulse(true)
-
-    try {
-      await Promise.all([reloadCards(), reloadTransactions(), reloadAccounts()])
-
-      const cardData = (localCards || [])[0] as any
-      if (cardData) setCard(cardData)
-
-      const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
-
-      const monthTxs = (localTransactions || []).filter(
-        (t: any) => t.date >= start && t.date <= end
-      )
-
-      setTransactions(monthTxs)
-      setTotalFatura(
-        monthTxs.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-      )
-    } catch (err) {
-      console.error('Erro ao carregar dados:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [
-    id,
-    user?.id,
-    currentMonth,
-    localCards,
-    localTransactions,
-    reloadCards,
-    reloadTransactions,
-    reloadAccounts,
-  ])
-
   const handleTouchMove = useCallback(
     (e: TouchEvent) => {
       if (!isPulling.current || refreshing) return
@@ -237,10 +192,10 @@ function CardDetailContent() {
         setRefreshing(true)
         isPulling.current = false
         vibrate([10])
-        loadData().finally(() => setRefreshing(false))
+        setTimeout(() => setRefreshing(false), 600)
       }
     },
-    [refreshing, vibrate, loadData]
+    [refreshing, vibrate]
   )
 
   useEffect(() => {
@@ -258,9 +213,19 @@ function CardDetailContent() {
     }
   }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  // Filtra transações do mês atual
+  const start = useMemo(() => format(startOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
+  const end = useMemo(() => format(endOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
+
+  const transactions = useMemo(() => {
+    return (allTransactions || [])
+      .filter((t: any) => t.date >= start && t.date <= end)
+      .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
+  }, [allTransactions, start, end])
+
+  const totalFatura = useMemo(() => {
+    return transactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+  }, [transactions])
 
   const limitPercent = useMemo(
     () => getLimitPercent(totalFatura, Number(card?.limit_amount) || 0),
@@ -275,9 +240,7 @@ function CardDetailContent() {
   )
 
   const isNearLimit = limitPercent >= 90
-
   const brandLabel = useMemo(() => getBrandLabel(card?.brand || null), [card?.brand])
-
   const monthLabel = useMemo(
     () => format(currentMonth, 'MMMM yyyy', { locale: ptBR }),
     [currentMonth]
@@ -299,10 +262,7 @@ function CardDetailContent() {
         return
       }
 
-      const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd')
-      const allTxs = (localTransactions || []) as any[]
-      const cardTxs = allTxs.filter((t: any) => t.date >= start && t.date <= end)
+      const cardTxs = transactions
 
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
         const freshAccount = await db.table('accounts').get(targetAccount.id)
@@ -352,7 +312,6 @@ function CardDetailContent() {
       success()
       showToast('✅ Fatura paga com sucesso!', 'success')
       setShowPayModal(false)
-      loadData()
     } catch (err: any) {
       hapticError()
       showToast(`Erro ao pagar: ${err.message}`, 'error')
@@ -361,7 +320,8 @@ function CardDetailContent() {
     }
   }
 
-  if (loading && !card) {
+  // 🔥 Estados de carregamento
+  if (loading) {
     return (
       <div className="mx-auto min-h-screen max-w-md bg-gray-50 pb-20 font-sans transition-colors duration-300 dark:bg-slate-900">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/90 p-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
@@ -374,7 +334,26 @@ function CardDetailContent() {
     )
   }
 
-  if (!card) return null
+  if (notFound || !card) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
+            <X size={32} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Cartão não encontrado</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">O cartão que você procura não existe ou foi removido.</p>
+          <button
+            onClick={() => router.back()}
+            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+          >
+            <ChevronLeft size={18} />
+            Voltar
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -575,155 +554,155 @@ function CardDetailContent() {
           </div>
 
           {transactions.length === 0 ? (
-                <div className="py-8 text-center">
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-slate-700/50">
-                    <CreditCard size={20} className="text-gray-400" />
-                  </div>
-                  <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500">
-                    Nenhuma transação neste período.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {transactions.map((tx: any) => {
-                    const isPending = tx.status === 'pending'
-
-                    return (
-                      <button
-                        key={tx.id}
-                        onClick={() => {
-                          vibrate([5])
-                          router.push(`/transactions/details?id=${tx.id}`)
-                        }}
-                        className={`flex w-full items-center justify-between rounded-[20px] border px-3.5 py-3.5 text-left transition-all active:scale-[0.98] ${
-                          isPending
-                            ? 'border-orange-100 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/10'
-                            : 'border-transparent bg-gray-50/70 dark:bg-slate-700/30'
-                        }`}
-                      >
-                        <div className="flex min-w-0 flex-1 items-center gap-3.5">
-                          <div
-                            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] ${
-                              isPending
-                                ? 'bg-orange-100 dark:bg-orange-900/30'
-                                : 'bg-emerald-50 dark:bg-emerald-900/30'
-                            }`}
-                          >
-                            {isPending ? (
-                              <Clock size={18} className="text-orange-500" />
-                            ) : (
-                              <Check size={18} className="text-emerald-500" />
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                              {tx.description || tx.categories?.name || 'Compra'}
-                            </p>
-                            <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                              {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
-                            </p>
-                          </div>
-                        </div>
-
-                        <p className="ml-3 flex-shrink-0 text-[15px] font-black text-red-500">
-                          - {formatCurrency(Number(tx.amount) || 0)}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+            <div className="py-8 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-slate-700/50">
+                <CreditCard size={20} className="text-gray-400" />
+              </div>
+              <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500">
+                Nenhuma transação neste período.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {transactions.map((tx: any) => {
+                const isPending = tx.status === 'pending'
 
-          {showPayModal && createPortal(
-            <div
-              className="fixed inset-0 z-[600] flex items-end justify-center"
-              onClick={() => setShowPayModal(false)}
-            >
-              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-
-              <div
-                className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
-
-                <div className="mb-6 flex items-center justify-between">
-                  <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
-                    Pagar fatura
-                  </h3>
-
+                return (
                   <button
+                    key={tx.id}
                     onClick={() => {
                       vibrate([5])
-                      setShowPayModal(false)
+                      router.push(`/transactions/details?id=${tx.id}`)
                     }}
-                    className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700"
+                    className={`flex w-full items-center justify-between rounded-[20px] border px-3.5 py-3.5 text-left transition-all active:scale-[0.98] ${
+                      isPending
+                        ? 'border-orange-100 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-900/10'
+                        : 'border-transparent bg-gray-50/70 dark:bg-slate-700/30'
+                    }`}
                   >
-                    <X size={20} />
+                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                      <div
+                        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] ${
+                          isPending
+                            ? 'bg-orange-100 dark:bg-orange-900/30'
+                            : 'bg-emerald-50 dark:bg-emerald-900/30'
+                        }`}
+                      >
+                        {isPending ? (
+                          <Clock size={18} className="text-orange-500" />
+                        ) : (
+                          <Check size={18} className="text-emerald-500" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                          {tx.description || tx.categories?.name || 'Compra'}
+                        </p>
+                        <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
+                          {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="ml-3 flex-shrink-0 text-[15px] font-black text-red-500">
+                      - {formatCurrency(Number(tx.amount) || 0)}
+                    </p>
                   </button>
-                </div>
-
-                <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-5 dark:border-slate-700/50 dark:bg-slate-700/40">
-                  <div className="mb-3 flex items-center justify-between gap-4">
-                    <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                      Cartão
-                    </span>
-                    <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                      {card.name}
-                    </span>
-                  </div>
-
-                  <div className="mb-3 flex items-center justify-between gap-4">
-                    <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                      Vencimento
-                    </span>
-                    <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                      Dia {card.due_day}
-                    </span>
-                  </div>
-
-                  <div className="my-3 h-px w-full bg-gray-200 dark:bg-slate-600" />
-
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
-                      Valor da fatura
-                    </span>
-                    <span className="text-[22px] font-black tracking-tight text-red-500">
-                      {formatCurrency(totalFatura)}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="mb-6 px-2 text-center text-[13px] font-medium leading-relaxed text-gray-500 dark:text-gray-400">
-                  O valor será debitado da sua conta de pagamento padrão e as transações do
-                  cartão passarão a afetar seu saldo principal.
-                </p>
-
-                <button
-                  onClick={() => {
-                    vibrate([10, 50])
-                    handlePayFatura()
-                  }}
-                  disabled={paying}
-                  className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98] disabled:opacity-50 hover:bg-teal-700"
-                >
-                  {paying ? (
-                    <Loader2 size={22} className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 size={22} />
-                  )}
-                  {paying ? 'Processando...' : 'Confirmar pagamento'}
-                </button>
-              </div>
-            </div>,
-            document.body
+                )
+              })}
+            </div>
           )}
         </div>
-      )
-    }
+      </div>
+
+      {showPayModal && createPortal(
+        <div
+          className="fixed inset-0 z-[600] flex items-end justify-center"
+          onClick={() => setShowPayModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+
+          <div
+            className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
+                Pagar fatura
+              </h3>
+
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  setShowPayModal(false)
+                }}
+                className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-5 dark:border-slate-700/50 dark:bg-slate-700/40">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Cartão
+                </span>
+                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                  {card.name}
+                </span>
+              </div>
+
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                  Vencimento
+                </span>
+                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
+                  Dia {card.due_day}
+                </span>
+              </div>
+
+              <div className="my-3 h-px w-full bg-gray-200 dark:bg-slate-600" />
+
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                  Valor da fatura
+                </span>
+                <span className="text-[22px] font-black tracking-tight text-red-500">
+                  {formatCurrency(totalFatura)}
+                </span>
+              </div>
+            </div>
+
+            <p className="mb-6 px-2 text-center text-[13px] font-medium leading-relaxed text-gray-500 dark:text-gray-400">
+              O valor será debitado da sua conta de pagamento padrão e as transações do
+              cartão passarão a afetar seu saldo principal.
+            </p>
+
+            <button
+              onClick={() => {
+                vibrate([10, 50])
+                handlePayFatura()
+              }}
+              disabled={paying}
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-all active:scale-[0.98] disabled:opacity-50 hover:bg-teal-700"
+            >
+              {paying ? (
+                <Loader2 size={22} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={22} />
+              )}
+              {paying ? 'Processando...' : 'Confirmar pagamento'}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
 
 export default function CardDetailPage() {
   return (
