@@ -252,8 +252,39 @@ function DebtDetailContent() {
 
   const debtId = searchParams.get('id') as string
 
-  // 🔥 USANDO O NOVO HOOK REATIVO POR ID
-  const { debt, loading: debtLoading } = useDebtById(debtId)
+  // ✅ USANDO O HOOK COM isLoading
+  const { debt, isLoading } = useDebtById(debtId)
+
+  // ========== ESTADOS DE CARREGAMENTO ==========
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ========== SÓ MOSTRA "NÃO ENCONTRADO" SE A BUSCA TERMINOU ==========
+  if (!debt) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-slate-900">
+        <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-4">
+          <AlertTriangle size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Registro não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">A dívida que você procura não existe ou foi removida.</p>
+        <button
+          onClick={() => router.back()}
+          className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-[20px] font-bold hover:bg-teal-700 transition-colors active:scale-[0.98]"
+        >
+          Voltar
+        </button>
+      </div>
+    )
+  }
 
   const {
     data: localTransactions,
@@ -271,7 +302,6 @@ function DebtDetailContent() {
     filters: { context: debt?.context || 'dfl' },
   })
 
-  // A dívida já vem do useDebtById, não precisa mais do useMemo com localDebt
   const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
   const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
 
@@ -315,7 +345,7 @@ function DebtDetailContent() {
 
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
-      if (window.scrollY > 10 || debtLoading) return
+      if (window.scrollY > 10 || isLoading) return
       pullStartY.current = e.touches[0].clientY
       isPulling.current = true
     }
@@ -348,14 +378,14 @@ function DebtDetailContent() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [debtLoading, refreshing, loadData, vibrate])
+  }, [isLoading, refreshing, loadData, vibrate])
 
   // 🔥 REDIRECIONAMENTO CORRIGIDO: usa debt do hook
   useEffect(() => {
-    if (!debtLoading && !debt && debtId) {
+    if (!isLoading && !debt && debtId) {
       router.replace('/debts')
     }
-  }, [debtLoading, debt, debtId, router])
+  }, [isLoading, debt, debtId, router])
 
   useEffect(() => {
     if (!debt) return
@@ -580,39 +610,6 @@ function DebtDetailContent() {
     window.open(url, '_blank')
     setShowWhatsAppModal(false)
   }
-
-  if (debtLoading) {
-    return (
-      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors dark:bg-slate-900">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
-          <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
-        </div>
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={4} />
-        </div>
-      </div>
-    )
-  }
-
-  if (!debt) {
-    return (
-      <div className="flex h-[100dvh] flex-col bg-gray-50 dark:bg-slate-900">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
-          <button
-            onClick={() => router.back()}
-            className="rounded-full bg-gray-100 p-2 dark:bg-slate-800"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <h1 className="mt-4 text-lg font-black text-gray-900 dark:text-white">
-            Registro não encontrado
-          </h1>
-        </div>
-      </div>
-    )
-  }
-
-  const IconComp = getDynamicIcon(debt.icon || 'user')
 
   return (
     <div
