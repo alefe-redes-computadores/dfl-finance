@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useEffect, useState, Suspense, useMemo, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,28 +17,17 @@ import {
   Loader2,
   X,
   Wallet,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useContext_ } from '@/components/ContextToggle'
-import { db, addToSyncQueue } from '@/lib/db'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
-const PREDEFINED_COLORS = [
-  '#2a9d8f',
-  '#e76f51',
-  '#264653',
-  '#e9c46a',
-  '#1d3557',
-  '#e63946',
-  '#8338ec',
-  '#ffb703',
-  '#3a0ca3',
-  '#000000',
-  '#ffffff',
-  '#636e72',
-]
-
+const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
 
 function lightTap() {
@@ -50,11 +39,14 @@ function safeNum(val: any): number {
   return Number.isFinite(n) ? n : 0
 }
 
-export default function NewCardPage() {
+function NewCardContent() {
   const { user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit') // ✅ usa "edit" para consistência
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
+  const { safeUpdate, safeDelete } = useSafeDb()
   const { effectiveContext } = useContext_()
 
   const [showColorPicker, setShowColorPicker] = useState(false)
@@ -70,15 +62,46 @@ export default function NewCardPage() {
   const [color, setColor] = useState(PREDEFINED_COLORS[0])
   const [limitAmount, setLimitAmount] = useState('0,00')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   const [showAccountModal, setShowAccountModal] = useState(false)
+  const [showDeleteSheet, setShowDeleteSheet] = useState(false)
 
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
-    filters: { context: effectiveContext },
+    filters: { context: effectiveContext || 'dfl' },
+  })
+  const accounts = localAccounts || []
+
+  const { data: localCards, loading: cardsLoading } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { id: editId as string },
   })
 
-  const accounts = localAccounts || []
+  // ✅ CORRIGIDO: useEffect com verificação de edição e initialized
+  useEffect(() => {
+    // Se não houver ID na URL, não tenta carregar nada, apenas inicializa
+    if (!editId) {
+      setInitialized(true)
+      return
+    }
+
+    if (!cardsLoading && !initialized && localCards?.length > 0) {
+      const cardData = localCards[0] as any
+      setName(cardData.name || '')
+      setFlag(cardData.flag || '')
+      setInstitution(cardData.institution || '')
+      setLastFour(cardData.last_four || '')
+      setClosingDay(String(cardData.closing_day || ''))
+      setDueDay(String(cardData.due_day || ''))
+      setPaymentAccountId(cardData.payment_account_id || '')
+      setColor(cardData.color || PREDEFINED_COLORS[0])
+      const limit = safeNum(cardData.limit_amount)
+      setLimitAmount(limit.toFixed(2).replace('.', ','))
+      setInitialized(true)
+    }
+  }, [cardsLoading, localCards, initialized, editId])
 
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/D/g, '')
@@ -94,7 +117,7 @@ export default function NewCardPage() {
     }
   }
 
-  async function handleSave() {
+  const handleSave = async () => {
     if (!(name || '').trim()) {
       showToast('Por favor, informe o nome do cartão.', 'warning')
       errorHaptic()
@@ -109,11 +132,7 @@ export default function NewCardPage() {
 
     setSaving(true)
 
-    const cardId = crypto.randomUUID()
     const payload = {
-      id: cardId,
-      user_id: user.id,
-      context: effectiveContext,
       name: name.trim(),
       flag: flag || null,
       institution: institution.trim() || null,
@@ -123,27 +142,68 @@ export default function NewCardPage() {
       payment_account_id: paymentAccountId || null,
       color,
       limit_amount: safeNum(limitAmount.replace(/./g, '').replace(',', '.')),
-      is_archived: false,
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      sync_status: 'pending',
-      sync_attempts: 0,
+      context: effectiveContext,
+      user_id: user.id,
     }
 
     try {
-      await db.transaction('rw', db.credit_cards, db.syncQueue, async () => {
-        await db.table('credit_cards').add(payload)
-        await addToSyncQueue(user.id, 'credit_cards', 'create', cardId, payload)
-      })
+      let result
 
-      showToast('Cartão criado com sucesso!', 'success')
-      success()
+      if (editId) {
+        // ✅ EDIÇÃO: atualiza cartão existente
+        result = await safeUpdate('credit_cards', editId, { ...payload, id: editId })
+        if (result.success) {
+          success()
+          showToast('✅ Cartão atualizado com sucesso!', 'success')
+        } else {
+          throw new Error(result.error || 'Erro ao atualizar cartão')
+        }
+      } else {
+        // ✅ CRIAÇÃO: adiciona novo cartão
+        const newId = crypto.randomUUID()
+        const newPayload = {
+          ...payload,
+          id: newId,
+          is_archived: false,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+        result = await safeAdd('credit_cards', newPayload)
+        if (result.success) {
+          success()
+          showToast('✅ Cartão criado com sucesso!', 'success')
+        } else {
+          throw new Error(result.error || 'Erro ao criar cartão')
+        }
+      }
+
       router.push('/cards')
     } catch (error: any) {
-      showToast(`Erro ao salvar: ${error.message}`, 'error')
+      showToast(`❌ ${error.message}`, 'error')
       errorHaptic()
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!editId) return
+    setDeleting(true)
+    try {
+      const result = await safeDelete('credit_cards', editId)
+      if (!result.success) throw new Error(result.error)
+
+      showToast('Cartão excluído!', 'info')
+      success()
+      setShowDeleteSheet(false)
+      router.push('/cards')
+    } catch (error: any) {
+      showToast(`Erro ao excluir: ${error.message}`, 'error')
+      errorHaptic()
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -193,6 +253,28 @@ export default function NewCardPage() {
 
   const selectedAccount = accounts.find((a: any) => a.id === paymentAccountId)
 
+  if (cardsLoading && !initialized && editId) {
+    return (
+      <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="max-w-md mx-auto px-4 pt-6 pb-24 animate-pulse">
+          <div
+            className="rounded-[32px] h-[190px] mb-4"
+            style={{ background: 'linear-gradient(180deg, #d9dee3 0%, #cfd5db 100%)' }}
+            aria-busy="true"
+          />
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-900 rounded-[28px] p-4 border border-gray-100 dark:border-slate-800">
+              <div className="h-4 w-28 rounded-full bg-gray-200 dark:bg-slate-700 mb-4" />
+              <div className="h-12 rounded-[20px] bg-gray-100 dark:bg-slate-800 mb-3" />
+              <div className="h-20 rounded-[20px] bg-gray-100 dark:bg-slate-800" />
+            </div>
+            <div className="h-14 rounded-[22px] bg-gray-200 dark:bg-slate-800" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f5f7f8] dark:bg-slate-950 text-gray-900 dark:text-white pb-32 transition-colors duration-300">
       <div
@@ -213,12 +295,27 @@ export default function NewCardPage() {
             >
               <ChevronLeft size={22} />
             </button>
+
+            {editId && (
+              <button
+                onClick={() => {
+                  lightTap()
+                  setShowDeleteSheet(true)
+                }}
+                disabled={deleting}
+                className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center text-white/85 active:scale-[0.98] transition-all disabled:opacity-60"
+              >
+                {deleting ? <Loader2 size={20} className="animate-spin" /> : <Trash2 size={19} />}
+              </button>
+            )}
           </div>
 
           <div className="rounded-[30px] bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.14)] px-5 pt-5 pb-4">
             <div className="flex items-start justify-between gap-4 mb-7">
               <div className="min-w-0 flex-1">
-                <p className="text-white/70 text-[12px] font-medium mb-2">Novo cartão</p>
+                <p className="text-white/70 text-[12px] font-medium mb-2">
+                  {editId ? 'Editar cartão' : 'Novo cartão'}
+                </p>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -246,7 +343,7 @@ export default function NewCardPage() {
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">Dados principais</h2>
             <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">
-              Defina as informações básicas do cartão.
+              {editId ? 'Atualize as informações básicas do cartão.' : 'Defina as informações básicas do cartão.'}
             </p>
           </div>
 
@@ -459,7 +556,7 @@ export default function NewCardPage() {
           className="w-full h-14 rounded-[22px] bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-[0_12px_30px_rgba(5,150,105,0.28)] transition-all active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {saving ? <Loader2 className="animate-spin" size={22} /> : <Check size={22} />}
-          <span>{saving ? 'Salvando...' : 'Salvar cartão'}</span>
+          <span>{saving ? 'Salvando...' : editId ? 'Salvar alterações' : 'Salvar cartão'}</span>
         </button>
       </div>
 
@@ -553,7 +650,8 @@ export default function NewCardPage() {
         </div>
       )}
 
-      {showColorPicker && (
+      {/* ✅ COLOR PICKER COM PORTAL */}
+      {showColorPicker && createPortal(
         <div
           className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end justify-center"
           onClick={() => setShowColorPicker(false)}
@@ -616,8 +714,64 @@ export default function NewCardPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ✅ DELETE SHEET COM PORTAL */}
+      {showDeleteSheet && createPortal(
+        <div
+          className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => !deleting && setShowDeleteSheet(false)}
+        >
+          <div
+            className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl w-full max-w-lg rounded-t-[32px] p-6 pb-8 animate-in slide-in-from-bottom-8 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto mb-6" />
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                <AlertTriangle size={26} className="text-red-500" />
+              </div>
+              <h3 className="font-black text-lg text-slate-800 dark:text-slate-100 mb-1">Excluir cartão?</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-[260px]">
+                Essa ação não pode ser desfeita. O cartão será removido permanentemente.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteSheet(false)}
+                disabled={deleting}
+                className="flex-1 py-3.5 rounded-[24px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-3.5 rounded-[24px] bg-red-500 hover:bg-red-600 text-white font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
+  )
+}
+
+export default function NewCardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] dark:bg-slate-950">
+        <Loader2 className="animate-spin text-teal-700" size={40} />
+      </div>
+    }>
+      <NewCardContent />
+    </Suspense>
   )
 }
