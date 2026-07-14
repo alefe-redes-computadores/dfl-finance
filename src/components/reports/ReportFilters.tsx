@@ -139,18 +139,43 @@ export default function ReportFilters({ onChange, initialPreset = 'thisMonth', c
     }
   }
 
+  // 🔥 SUBSTITUÍDO: useEffect com dependências corretas
   useEffect(() => {
-    if (useCustom && customStart && customEnd) {
-      emitChange(customStart, customEnd, 'custom')
-    } else if (!useCustom) {
-      const p = presets[preset]
-      emitChange(p.start, p.end, preset)
+    if (useCustom) {
+      if (customStart && customEnd) {
+        emitChange(customStart, customEnd, 'custom')
+      }
+      return
     }
-  }, [selectedTags, selectedAccounts, selectedCreditCards])
 
+    const p = presets[preset]
+    if (!p) return
+    emitChange(p.start, p.end, preset)
+  }, [
+    selectedTags,
+    selectedAccounts,
+    selectedCreditCards,
+    useCustom,
+    customStart,
+    customEnd,
+    preset,
+    context,
+  ])
+
+  // 🔥 SUBSTITUÍDO: useEffect inicial com inicialização explícita
   useEffect(() => {
-    applyPreset(preset)
-  }, [])
+    const p = presets[initialPreset] || presets.thisMonth
+    setPreset(initialPreset in presets ? initialPreset : 'thisMonth')
+    setUseCustom(false)
+    onChange({
+      context,
+      dateRange: { start: p.start, end: p.end },
+      preset: initialPreset in presets ? initialPreset : 'thisMonth',
+      tags: [],
+      accounts: [],
+      creditCards: [],
+    })
+  }, [initialPreset, context, onChange])
 
   const hasActiveFilters = selectedTags.length > 0 || selectedAccounts.length > 0 || selectedCreditCards.length > 0
 
@@ -163,7 +188,10 @@ export default function ReportFilters({ onChange, initialPreset = 'thisMonth', c
             <span>Período</span>
           </div>
           <button
-            onClick={() => { vibrate([5]); setUseCustom(!useCustom); }}
+            onClick={() => {
+              vibrate([5])
+              setUseCustom(prev => !prev)
+            }}
             className="text-[12px] text-teal-600 dark:text-teal-400 font-bold active:scale-95 transition-transform"
           >
             {useCustom ? 'Usar predefinição' : 'Personalizado'}
