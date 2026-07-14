@@ -9,10 +9,13 @@ import {
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useBudgetById } from '@/hooks/useBudgetById' // ✅ NOVO HOOK
+import { useBudgetTransactions } from '@/hooks/useBudgetTransactions' // ✅ NOVO HOOK
 import { useLocalData } from '@/hooks/useLocalData'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import Skeleton from '@/components/Skeleton'
 
 const BudgetDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6">
@@ -69,122 +72,80 @@ function BudgetDetailContent() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [projection, setProjection] = useState('')
 
-  const { data: localBudgets, reload: reloadBudgets } = useLocalData({
-    table: 'budgets' as any,
-    filters: { id: id as string },
-  })
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(id)
 
-  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context },
-  })
+  // ✅ HOOK DE RELACIONAMENTO (transações do orçamento)
+  const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(id)
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      vibrate([10])
-      loadData().finally(() => setRefreshing(false))
-    }
-  }
-
-  const handleTouchEnd = () => {
-    isPulling.current = false
-  }
+  // ✅ REMOVIDO pull-to-refresh manual (hooks já são reativos)
 
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing])
-
-  const loadData = useCallback(async () => {
     if (!id || !user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
 
-    try {
-      await Promise.all([reloadBudgets(), reloadTransactions()])
+    const loadData = () => {
+      setLoading(true)
+      setLoadingPulse(true)
 
-      const budgetData = (localBudgets || [])[0] as any
-      if (!budgetData) {
-        router.push('/budgets')
-        return
-      }
-
-      setBudget(budgetData)
-
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-      const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
-
-      let filteredTxs = (localTransactions || []).filter(
-        (tx: any) => tx.date >= start && tx.date <= end && tx.status === 'done'
-      )
-
-      if (budgetData.category_id) {
-        filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
-      }
-
-      const totalSpent = filteredTxs
-        .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
-        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-
-      setTransactions(filteredTxs)
-      setSpent(totalSpent)
-
-      const remaining = Number(budgetData.amount) - totalSpent
-      const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
-
-      if (dailyAverage > 0 && remaining > 0) {
-        const projectedDays = Math.floor(remaining / dailyAverage)
-        setDaysLeft(projectedDays)
-
-        if (projectedDays <= 3) {
-          setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`)
-        } else if (projectedDays <= 7) {
-          setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`)
-        } else {
-          setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`)
+      try {
+        if (!budgetData) {
+          router.push('/budgets')
+          return
         }
-      } else if (remaining <= 0) {
-        setDaysLeft(0)
-        setProjection('🔴 Orçamento estourado!')
-      } else {
-        setProjection('✅ Nenhum gasto registrado ainda.')
-      }
-    } catch (err) {
-      console.error('Erro ao carregar orçamento:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [id, user, currentDate, localBudgets, localTransactions, router, reloadBudgets, reloadTransactions])
 
-  useEffect(() => {
+        setBudget(budgetData)
+
+        const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+        const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+        const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
+
+        let filteredTxs = (budgetTransactions || []).filter(
+          (tx: any) => tx.date >= start && tx.date <= end && tx.status === 'done'
+        )
+
+        if (budgetData.category_id) {
+          filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
+        }
+
+        const totalSpent = filteredTxs
+          .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
+          .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
+
+        setTransactions(filteredTxs)
+        setSpent(totalSpent)
+
+        const remaining = Number(budgetData.amount) - totalSpent
+        const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
+
+        if (dailyAverage > 0 && remaining > 0) {
+          const projectedDays = Math.floor(remaining / dailyAverage)
+          setDaysLeft(projectedDays)
+
+          if (projectedDays <= 3) {
+            setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`)
+          } else if (projectedDays <= 7) {
+            setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`)
+          } else {
+            setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`)
+          }
+        } else if (remaining <= 0) {
+          setDaysLeft(0)
+          setProjection('🔴 Orçamento estourado!')
+        } else {
+          setProjection('✅ Nenhum gasto registrado ainda.')
+        }
+      } catch (err) {
+        console.error('Erro ao carregar orçamento:', err)
+      } finally {
+        setLoading(false)
+        setLoadingPulse(false)
+      }
+    }
+
     loadData()
-  }, [loadData])
+  }, [id, user, currentDate, budgetData, budgetTransactions, router])
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
@@ -192,7 +153,6 @@ function BudgetDetailContent() {
       maximumFractionDigits: 2,
     })}`
 
-  // 🔥 CORRIGIDO: regex com (\?|$) em vez de (?|$)
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -200,7 +160,8 @@ function BudgetDetailContent() {
     return <Paperclip size={12} className="shrink-0 text-slate-400" />
   }
 
-  if (loading) {
+  // ✅ TRATAMENTO DE LOADING
+  if (budgetLoading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 pb-24 font-sans transition-colors duration-300">
         <div className="flex items-center justify-between px-4 pt-6 mb-2">
@@ -209,6 +170,27 @@ function BudgetDetailContent() {
           <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-2xl animate-pulse" />
         </div>
         <BudgetDetailSkeleton />
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (notFound) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <Tag size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Orçamento não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O orçamento que você está tentando acessar pode ter sido excluído ou você não tem permissão.
+        </p>
+        <button
+          onClick={() => router.push('/budgets')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
       </div>
     )
   }
@@ -442,7 +424,13 @@ function BudgetDetailContent() {
           </p>
         </div>
 
-        {transactions.length === 0 ? (
+        {txLoading ? (
+          <div className="py-10 px-5 text-center">
+            <div className="flex justify-center">
+              <RefreshCw size={24} className="animate-spin text-teal-500" />
+            </div>
+          </div>
+        ) : transactions.length === 0 ? (
           <div className="py-10 px-5 text-center">
             <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
               <Clock size={20} className="text-gray-400 dark:text-gray-500" />
