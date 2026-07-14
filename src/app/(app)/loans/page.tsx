@@ -2,19 +2,20 @@
 
 import { useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
+import { createPortal } from "react-dom"
 import {
   ArrowUpDown, Search, Plus, X, ChevronDown, Landmark, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, HandCoins, ChevronLeft, ArrowLeftRight
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useLoansList } from "@/hooks/useLoansList" // ✅ NOVO HOOK
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { useLocalData } from '@/hooks/useLocalData'
 
 type Payment = { id: string, loan_id: string, amount: number, date: string }
 
@@ -41,11 +42,10 @@ export default function LoansPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: loans, loading, reload } = useLocalData({ 
-    table: 'loans' as any, 
-    filters: { context: effectiveContext } 
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: loans, loading } = useLoansList(effectiveContext)
   
+  // ✅ PAGAMENTOS ainda vêm via useLocalData para agrupamento
   const { data: allPayments } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext, type: 'loan_payment' } 
@@ -76,24 +76,14 @@ export default function LoansPage() {
       success()
       showToast("✅ Empréstimo excluído com sucesso!", "success")
       setDeleteModal(null)
-      reload()
+      // ✅ NÃO PRECISA MAIS reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro ao excluir empréstimo: ${err.message}`, "error")
     }
   }
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        vibrate([10])
-        reload().finally(() => setTimeout(() => setRefreshing(false), 600))
-      }
-    }
-  }, [refreshing, reload, vibrate])
+  // ✅ REMOVIDO pull-to-refresh manual (useLoansList já é reativo)
 
   const filteredLoans = (loans || []).filter((loan: any) => {
     if (!search) return true
@@ -124,18 +114,9 @@ export default function LoansPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-      {(loadingPulse || loading || pendingCount > 0) && (
+      {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-        </div>
-      )}
-
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
-          </div>
         </div>
       )}
 
@@ -203,7 +184,7 @@ export default function LoansPage() {
         )}
       </div>
 
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="flex-1 overflow-y-auto px-4 pt-4 pb-24 custom-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pt-4 pb-24 custom-scrollbar">
         {loading ? (
           <div className="space-y-4">
              <Skeleton count={3} height="130px" borderRadius="28px" />
@@ -291,7 +272,7 @@ export default function LoansPage() {
         )}
       </div>
 
-      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {/* MODAL DE EXCLUSÃO COM PORTAL */}
       {deleteModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteModal(null)}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
