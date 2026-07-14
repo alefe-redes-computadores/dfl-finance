@@ -259,7 +259,7 @@ export interface LocalSyncQueue {
 }
 
 // ============================================================
-// BANCO DE DADOS ATUALIZADO (v4)
+// BANCO DE DADOS ATUALIZADO (v5)
 // ============================================================
 class DFLDatabase extends Dexie {
   transactions!: Table<LocalTransaction, string>
@@ -283,9 +283,9 @@ class DFLDatabase extends Dexie {
   constructor() {
     super('DFLFinanceDB')
 
-    this.version(4).stores({
+    this.version(5).stores({
       transactions:
-        'id, user_id, context, date, status, sync_status, account_id, category_id, debt_id, credit_card_id, created_at, updated_at, [user_id+debt_id], [user_id+context], [user_id+date], [user_id+status]',
+        'id, user_id, context, date, status, sync_status, account_id, category_id, debt_id, credit_card_id, created_at, updated_at, [user_id+debt_id], [user_id+context], [user_id+date], [user_id+status], [user_id+account_id], [user_id+credit_card_id]',
       accounts:
         'id, user_id, context, sync_status, is_archived, created_at, updated_at, [user_id+context]',
       categories:
