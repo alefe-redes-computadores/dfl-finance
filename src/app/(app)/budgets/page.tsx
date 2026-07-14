@@ -1,25 +1,23 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, Plus, Loader2, RefreshCw, 
-  AlertTriangle, CheckCircle, Clock, Tag, MoreHorizontal,
-  Eye, EyeOff, Settings2, Check
+  ChevronLeft, Plus,
+  Tag, MoreHorizontal,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
-import { useBudgetsList } from '@/hooks/useBudgetsList' // ✅ NOVO HOOK
+import { useBudgetsList } from '@/hooks/useBudgetsList'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
-// 🔥 SKELETON ATUALIZADO
 const BudgetsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
     {[1, 2, 3].map((i) => (
@@ -52,49 +50,35 @@ const BudgetsSkeleton = () => (
 function BudgetsContent() {
   const { user } = useAuth()
   const router = useRouter()
-  const { context, effectiveContext } = useContext_()
+  const { effectiveContext } = useContext_()
   const { showToast } = useToast()
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  const { safeDelete, safeUpdate } = useSafeDb()
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
-  
-  const [loading, setLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  // ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: localBudgets, loading: budgetsLoading } = useBudgetsList(effectiveContext)
 
-  // ✅ TRANSAÇÕES ainda vêm via useLocalData para calcular gastos
   const { data: localTransactions, loading: txLoading } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef(0)
-  const isPulling = useRef(false)
-
-  // ✅ REMOVIDO pull-to-refresh manual (useBudgetsList já é reativo)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    // ... event listeners removidos (não precisam mais)
-  }, [])
 
   useEffect(() => {
     if (user?.id) {
-      setLoading(false)
+      setIsAuthLoading(false)
     }
-  }, [user?.id, budgetsLoading, txLoading])
+  }, [user?.id])
 
   const monthStart = format(currentMonth, 'yyyy-MM-01')
   const monthEnd = format(currentMonth, 'yyyy-MM-31')
 
   const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
     const spent = (localTransactions || [])
-      .filter((tx: any) => 
+      .filter((tx: any) =>
         tx.category_id === budget.category_id &&
         (tx.type === 'expense' || tx.type === 'sangria') &&
         tx.status === 'done' &&
@@ -120,11 +104,10 @@ function BudgetsContent() {
     try {
       await db.transaction('rw', db.budgets, db.syncQueue, async () => {
         const result = await safeDelete('budgets', id)
-        if (!result.success) throw new Error(result.error)
+        if (!result.success) throw new Error(result.error || 'Erro desconhecido')
       })
       hapticSuccess()
       showToast('✅ Orçamento excluído!', 'success')
-      // ✅ NÃO PRECISA loadData() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       hapticError()
       showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
@@ -135,17 +118,16 @@ function BudgetsContent() {
     if (!user) return
     try {
       const newStatus = budget.status === 'active' ? 'inactive' : 'active'
-      const payload = { 
+      const payload = {
         status: newStatus,
         updated_at: new Date().toISOString()
       }
       await db.transaction('rw', db.budgets, db.syncQueue, async () => {
         const result = await safeUpdate('budgets', budget.id, payload)
-        if (!result.success) throw new Error(result.error)
+        if (!result.success) throw new Error(result.error || 'Erro desconhecido')
       })
       vibrate([20])
       showToast(`✅ Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
-      // ✅ NÃO PRECISA loadData() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       hapticError()
       showToast(`❌ Erro: ${err.message}`, 'error')
@@ -154,14 +136,15 @@ function BudgetsContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const loading = budgetsLoading || txLoading
+  // ✅ Renomeado para não conflitar com propriedades locais
+  const isDataLoading = budgetsLoading || txLoading || isAuthLoading
 
   return (
     <div
       ref={containerRef}
       className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
     >
-      {loading && (
+      {isDataLoading && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
@@ -226,7 +209,7 @@ function BudgetsContent() {
       </div>
 
       <div className="pt-3">
-        {loading ? (
+        {isDataLoading ? (
           <BudgetsSkeleton />
         ) : budgetsWithSpent.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
@@ -348,7 +331,7 @@ export default function BudgetsPage() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
   if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
-  
+
   return (
     <ContextProvider>
       <BudgetsContent />
