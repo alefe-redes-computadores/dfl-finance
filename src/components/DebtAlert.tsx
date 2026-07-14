@@ -11,11 +11,18 @@ interface DebtAlertProps {
 }
 
 export default function DebtAlert({ personName, amount = 0, dueDate, debtId }: DebtAlertProps) {
-  const today = new Date()
-  const parsedDate = dueDate ? parseISO(dueDate) : null
-  const due = parsedDate && isValid(parsedDate) ? parsedDate : null
+  if (!dueDate || amount <= 0) return null
 
-  if (!due || amount <= 0) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const parsedDate = parseISO(dueDate)
+  const due = isValid(parsedDate) ? parsedDate : null
+  if (due) {
+    due.setHours(0, 0, 0, 0)
+  }
+
+  if (!due) return null
 
   const daysLate = differenceInDays(today, due)
   const isOverdue = daysLate > 0
