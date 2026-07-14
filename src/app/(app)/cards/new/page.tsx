@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createPortal } from 'react-dom' // ✅ ADICIONADO
+import { createPortal } from 'react-dom'
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,6 +26,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { safeAdd } from '@/lib/safeDb'
 
 const PREDEFINED_COLORS = ['#2a9d8f', '#e76f51', '#264653', '#e9c46a', '#1d3557', '#e63946', '#8338ec', '#ffb703', '#3a0ca3', '#000000', '#ffffff', '#636e72']
 const FLAGS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard']
@@ -43,7 +44,7 @@ function NewCardContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get('edit') // ✅ usa "edit" para consistência
+  const editId = searchParams.get('edit')
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { safeUpdate, safeDelete } = useSafeDb()
@@ -79,9 +80,7 @@ function NewCardContent() {
     filters: { id: editId as string },
   })
 
-  // ✅ CORRIGIDO: useEffect com verificação de edição e initialized
   useEffect(() => {
-    // Se não houver ID na URL, não tenta carregar nada, apenas inicializa
     if (!editId) {
       setInitialized(true)
       return
@@ -104,14 +103,14 @@ function NewCardContent() {
   }, [cardsLoading, localCards, initialized, editId])
 
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/D/g, '')
+    let value = e.target.value.replace(/\D/g, '')
     if (value === '') value = '0'
     const formatted = (safeNum(value) / 100).toFixed(2).replace('.', ',')
     setLimitAmount(formatted)
   }
 
   const handleDayChange = (val: string, setter: (v: string) => void) => {
-    const numeric = val.replace(/D/g, '')
+    const numeric = val.replace(/\D/g, '')
     if (numeric === '' || (Number(numeric) >= 1 && Number(numeric) <= 31)) {
       setter(numeric)
     }
@@ -141,7 +140,7 @@ function NewCardContent() {
       due_day: dueDay ? parseInt(dueDay) : 10,
       payment_account_id: paymentAccountId || null,
       color,
-      limit_amount: safeNum(limitAmount.replace(/./g, '').replace(',', '.')),
+      limit_amount: safeNum(limitAmount.replace(/\./g, '').replace(',', '.')),
       updated_at: new Date().toISOString(),
       context: effectiveContext,
       user_id: user.id,
@@ -151,7 +150,6 @@ function NewCardContent() {
       let result
 
       if (editId) {
-        // ✅ EDIÇÃO: atualiza cartão existente
         result = await safeUpdate('credit_cards', editId, { ...payload, id: editId })
         if (result.success) {
           success()
@@ -160,7 +158,6 @@ function NewCardContent() {
           throw new Error(result.error || 'Erro ao atualizar cartão')
         }
       } else {
-        // ✅ CRIAÇÃO: adiciona novo cartão
         const newId = crypto.randomUUID()
         const newPayload = {
           ...payload,
@@ -396,7 +393,7 @@ function NewCardContent() {
                 </div>
                 <input
                   value={lastFour}
-                  onChange={(e) => setLastFour(e.target.value.replace(/D/g, '').slice(0, 4))}
+                  onChange={(e) => setLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="0000"
                   className="w-full bg-transparent outline-none text-[14px] font-bold text-gray-900 dark:text-gray-100"
                 />
@@ -456,6 +453,7 @@ function NewCardContent() {
 
           <div className="space-y-3">
             <button
+              type="button"
               onClick={() => {
                 lightTap()
                 setShowAccountModal(true)
@@ -511,6 +509,7 @@ function NewCardContent() {
           <div className="flex flex-wrap gap-3">
             {PREDEFINED_COLORS.slice(0, 8).map((c) => (
               <button
+                type="button"
                 key={c}
                 onClick={() => {
                   lightTap()
@@ -530,6 +529,7 @@ function NewCardContent() {
             ))}
 
             <button
+              type="button"
               onClick={() => {
                 lightTap()
                 setTempColor(color)
@@ -560,9 +560,9 @@ function NewCardContent() {
         </button>
       </div>
 
-      {showAccountModal && (
+      {showAccountModal && createPortal(
         <div
-          className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setShowAccountModal(false)}
         >
           <div
@@ -571,9 +571,10 @@ function NewCardContent() {
           >
             <div className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto mb-4" />
 
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/95 dark:bg-slate-900/95 py-2">
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/95 dark:bg-slate-900/95 py-2 z-10">
               <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Conta para pagamento</h3>
               <button
+                type="button"
                 onClick={() => setShowAccountModal(false)}
                 className="text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 p-2 rounded-full transition-all active:scale-[0.98]"
               >
@@ -583,6 +584,7 @@ function NewCardContent() {
 
             <div className="space-y-2">
               <button
+                type="button"
                 onClick={() => {
                   lightTap()
                   setPaymentAccountId('')
@@ -612,6 +614,7 @@ function NewCardContent() {
 
                 return (
                   <button
+                    type="button"
                     key={acc.id}
                     onClick={() => {
                       lightTap()
@@ -647,10 +650,10 @@ function NewCardContent() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* ✅ COLOR PICKER COM PORTAL */}
       {showColorPicker && createPortal(
         <div
           className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end justify-center"
@@ -666,6 +669,7 @@ function NewCardContent() {
             <div className="grid grid-cols-4 gap-4 mb-6">
               {PREDEFINED_COLORS.map((c) => (
                 <button
+                  type="button"
                   key={c}
                   onClick={() => {
                     lightTap()
@@ -696,6 +700,7 @@ function NewCardContent() {
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowColorPicker(false)}
                 className="flex-1 py-3.5 rounded-[24px] bg-white/10 text-white font-bold text-sm transition-all active:scale-[0.98]"
               >
@@ -703,6 +708,7 @@ function NewCardContent() {
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   lightTap()
                   setColor(tempColor)
@@ -718,10 +724,9 @@ function NewCardContent() {
         document.body
       )}
 
-      {/* ✅ DELETE SHEET COM PORTAL */}
       {showDeleteSheet && createPortal(
         <div
-          className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => !deleting && setShowDeleteSheet(false)}
         >
           <div
@@ -741,6 +746,7 @@ function NewCardContent() {
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowDeleteSheet(false)}
                 disabled={deleting}
                 className="flex-1 py-3.5 rounded-[24px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
@@ -748,6 +754,7 @@ function NewCardContent() {
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={deleting}
                 className="flex-1 py-3.5 rounded-[24px] bg-red-500 hover:bg-red-600 text-white font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
