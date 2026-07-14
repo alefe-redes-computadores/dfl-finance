@@ -1,4 +1,3 @@
-// src/lib/db.ts
 import Dexie, { Table } from 'dexie'
 
 // ============================================================
@@ -70,9 +69,6 @@ export interface LocalDebt {
   sync_status: 'synced' | 'pending' | 'failed'
 }
 
-// ============================================================
-// NOVAS TABELAS
-// ============================================================
 export interface LocalLoan {
   id: string
   user_id: string
@@ -213,7 +209,6 @@ export interface LocalNotification {
   sync_status: 'synced' | 'pending' | 'failed'
 }
 
-// 🆕 NOVAS TABELAS PARA O CHAT
 export interface LocalChatMessage {
   id: string
   user_id: string
@@ -238,7 +233,23 @@ export interface LocalChatSession {
 export interface LocalSyncQueue {
   id: string
   user_id: string
-  table: 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications' | 'chat_history' | 'chat_sessions'
+  table:
+    | 'transactions'
+    | 'accounts'
+    | 'categories'
+    | 'debts'
+    | 'loans'
+    | 'financings'
+    | 'subscriptions'
+    | 'tags'
+    | 'contacts'
+    | 'budgets'
+    | 'goals'
+    | 'credit_cards'
+    | 'credit_invoices'
+    | 'notifications'
+    | 'chat_history'
+    | 'chat_sessions'
   operation: 'create' | 'update' | 'delete'
   record_id: string
   data: any
@@ -248,7 +259,7 @@ export interface LocalSyncQueue {
 }
 
 // ============================================================
-// BANCO DE DADOS ATUALIZADO (v3)
+// BANCO DE DADOS ATUALIZADO (v4)
 // ============================================================
 class DFLDatabase extends Dexie {
   transactions!: Table<LocalTransaction, string>
@@ -272,24 +283,41 @@ class DFLDatabase extends Dexie {
   constructor() {
     super('DFLFinanceDB')
 
-    this.version(3).stores({
-      transactions: 'id, user_id, context, date, status, sync_status, account_id, category_id',
-      accounts: 'id, user_id, context, sync_status',
-      categories: 'id, user_id, context, type, sync_status',
-      debts: 'id, user_id, context, status, sync_status',
-      loans: 'id, user_id, context, status, sync_status',
-      financings: 'id, user_id, context, status, sync_status',
-      subscriptions: 'id, user_id, context, status, sync_status',
-      tags: 'id, user_id, context, sync_status',
-      contacts: 'id, user_id, context, type, sync_status',
-      budgets: 'id, user_id, context, sync_status',
-      goals: 'id, user_id, context, status, sync_status',
-      credit_cards: 'id, user_id, context, is_archived, sync_status',
-      credit_invoices: 'id, user_id, credit_card_id, status, sync_status',
-      notifications: 'id, user_id, read, sync_status',
-      chat_history: 'id, user_id, session_id, created_at, sync_status',
-      chat_sessions: 'id, user_id, status, sync_status',
-      syncQueue: 'id, user_id, table, operation, record_id, created_at',
+    this.version(4).stores({
+      transactions:
+        'id, user_id, context, date, status, sync_status, account_id, category_id, debt_id, credit_card_id, created_at, updated_at, [user_id+debt_id], [user_id+context], [user_id+date], [user_id+status]',
+      accounts:
+        'id, user_id, context, sync_status, is_archived, created_at, updated_at, [user_id+context]',
+      categories:
+        'id, user_id, context, type, sync_status, is_archived, created_at, updated_at, [user_id+context], [user_id+type]',
+      debts:
+        'id, user_id, context, status, sync_status, due_date, created_at, updated_at, [user_id+context], [user_id+status], [user_id+updated_at], [user_id+due_date]',
+      loans:
+        'id, user_id, context, status, sync_status, due_date, created_at, updated_at, [user_id+context], [user_id+status]',
+      financings:
+        'id, user_id, context, status, sync_status, next_due_date, created_at, updated_at, [user_id+context], [user_id+status]',
+      subscriptions:
+        'id, user_id, context, status, sync_status, due_day, created_at, updated_at, [user_id+context], [user_id+status]',
+      tags:
+        'id, user_id, context, sync_status, created_at, updated_at, [user_id+context]',
+      contacts:
+        'id, user_id, context, type, sync_status, created_at, updated_at, [user_id+context], [user_id+type]',
+      budgets:
+        'id, user_id, context, sync_status, category_id, created_at, updated_at, [user_id+context]',
+      goals:
+        'id, user_id, context, status, sync_status, deadline, created_at, updated_at, [user_id+context], [user_id+status]',
+      credit_cards:
+        'id, user_id, context, is_archived, sync_status, created_at, updated_at, [user_id+context]',
+      credit_invoices:
+        'id, user_id, context, credit_card_id, status, sync_status, due_date, closing_date, created_at, updated_at, [user_id+credit_card_id], [user_id+status]',
+      notifications:
+        'id, user_id, read, sync_status, created_at, [user_id+read]',
+      chat_history:
+        'id, user_id, session_id, created_at, sync_status, [user_id+session_id]',
+      chat_sessions:
+        'id, user_id, status, sync_status, created_at, updated_at, [user_id+status]',
+      syncQueue:
+        'id, user_id, table, operation, record_id, created_at, [user_id+table], [user_id+created_at]',
     })
   }
 }
@@ -300,23 +328,45 @@ export const db = new DFLDatabase()
 // FUNÇÕES AUXILIARES
 // ============================================================
 export async function clearAllLocalData() {
-  await db.transactions.clear()
-  await db.accounts.clear()
-  await db.categories.clear()
-  await db.debts.clear()
-  await db.loans.clear()
-  await db.financings.clear()
-  await db.subscriptions.clear()
-  await db.tags.clear()
-  await db.contacts.clear()
-  await db.budgets.clear()
-  await db.goals.clear()
-  await db.credit_cards.clear()
-  await db.credit_invoices.clear()
-  await db.notifications.clear()
-  await db.chat_history.clear()
-  await db.chat_sessions.clear()
-  await db.syncQueue.clear()
+  await db.transaction(
+    'rw',
+    db.transactions,
+    db.accounts,
+    db.categories,
+    db.debts,
+    db.loans,
+    db.financings,
+    db.subscriptions,
+    db.tags,
+    db.contacts,
+    db.budgets,
+    db.goals,
+    db.credit_cards,
+    db.credit_invoices,
+    db.notifications,
+    db.chat_history,
+    db.chat_sessions,
+    db.syncQueue,
+    async () => {
+      await db.transactions.clear()
+      await db.accounts.clear()
+      await db.categories.clear()
+      await db.debts.clear()
+      await db.loans.clear()
+      await db.financings.clear()
+      await db.subscriptions.clear()
+      await db.tags.clear()
+      await db.contacts.clear()
+      await db.budgets.clear()
+      await db.goals.clear()
+      await db.credit_cards.clear()
+      await db.credit_invoices.clear()
+      await db.notifications.clear()
+      await db.chat_history.clear()
+      await db.chat_sessions.clear()
+      await db.syncQueue.clear()
+    }
+  )
 }
 
 export async function getPendingSyncItems(userId: string) {
