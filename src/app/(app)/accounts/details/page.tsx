@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ import adicionado
+import { createPortal } from "react-dom"
 import {
   ArrowLeft, Trash2, RefreshCw, Pencil, Wallet, Building2, CreditCard,
   PiggyBank, ChevronDown, ArrowUpCircle, ArrowDownCircle, Loader2, ArrowRightLeft, X
@@ -10,7 +10,8 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
-import { useLocalSync } from "@/hooks/useLocalSync"
+import { useAccountById } from "@/hooks/useAccountById"
+import { useAccountTransactions } from "@/hooks/useAccountTransactions"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
@@ -51,7 +52,7 @@ function AccountDetailContent() {
   const { context } = useContext_()
   const { user } = useAuth()
 
-  // ✅ VALIDAÇÃO DE ID: se não houver ID, mostra erro e botão para voltar
+  // Validação de ID
   if (!accountId) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
@@ -87,18 +88,15 @@ function AccountDetailContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: localAccounts, loading, reload } = useLocalData({
+  // 🔥 NOVOS HOOKS REATIVOS
+  const { data: accountData, loading, notFound } = useAccountById(accountId)
+  const { data: transactions } = useAccountTransactions(accountId)
+
+  // Ainda precisamos de contas para o modal de transferência (lista de contas destino)
+  const { data: allAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
   })
-
-  const { data: allTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context, account_id: accountId },
-  })
-
-  const accountData = (localAccounts || []).find((a: any) => a.id === accountId) as any
-  const transactions = allTransactions || []
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -156,7 +154,6 @@ function AccountDetailContent() {
       setShowAdjustModal(false)
       setAdjustAmount("")
       setAdjustNotes("")
-      reload()
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ ${err?.message || "Erro ao ajustar saldo"}`, "error")
@@ -249,7 +246,6 @@ function AccountDetailContent() {
       setTransferAmount("")
       setTransferToAccount("")
       setTransferNotes("")
-      reload()
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ ${err?.message || "Erro ao transferir"}`, "error")
@@ -286,12 +282,14 @@ function AccountDetailContent() {
       if (deltaY > 60 && !refreshing) {
         setRefreshing(true)
         vibrate([10])
-        reload()
+        // 🔥 Apenas recarrega a lista de contas para o modal de transferência
+        // Como accountData e transactions são reativos, não precisamos recarregá-los
         setTimeout(() => setRefreshing(false), 600)
       }
     }
-  }, [refreshing, reload, vibrate])
+  }, [refreshing, vibrate])
 
+  // 🔥 Estados de carregamento
   if (loading) {
     return (
       <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
@@ -305,19 +303,22 @@ function AccountDetailContent() {
     )
   }
 
-  if (!accountData) {
+  if (notFound || !accountData) {
     return (
-      <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
+            <X size={32} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Conta não encontrada</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A conta que você procura não existe ou foi removida.</p>
           <button
             onClick={() => router.back()}
-            className="rounded-full bg-gray-100 p-2 dark:bg-slate-800"
+            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} />
+            Voltar
           </button>
-          <h1 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">
-            Conta não encontrada
-          </h1>
         </div>
       </div>
     )
@@ -325,7 +326,7 @@ function AccountDetailContent() {
 
   const Icon = ACCOUNT_ICONS[accountData.type] || Wallet
 
-  const sortedTransactions = [...transactions].sort(
+  const sortedTransactions = [...(transactions || [])].sort(
     (a: any, b: any) =>
       new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
   )
@@ -379,7 +380,6 @@ function AccountDetailContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                // ✅ ROTA CORRETA COM ?edit=
                 router.push(`/accounts/new?edit=${accountId}`)
               }}
               className="rounded-full border border-gray-200 bg-white p-2.5 text-gray-700 transition-all active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
@@ -559,7 +559,7 @@ function AccountDetailContent() {
         </div>
       </div>
 
-      {/* ✅ MODAL AJUSTAR SALDO USANDO PORTAL */}
+      {/* MODAL AJUSTAR SALDO */}
       {showAdjustModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center"
@@ -641,7 +641,7 @@ function AccountDetailContent() {
         document.body
       )}
 
-      {/* ✅ MODAL TRANSFERIR USANDO PORTAL */}
+      {/* MODAL TRANSFERIR */}
       {showTransferModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center"
@@ -712,7 +712,7 @@ function AccountDetailContent() {
                     <option value="" disabled>
                       Selecione uma conta...
                     </option>
-                    {(localAccounts || [])
+                    {(allAccounts || [])
                       .filter((a: any) => a.id !== accountId)
                       .map((a: any) => (
                         <option key={a.id} value={a.id}>
