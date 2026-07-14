@@ -1,24 +1,23 @@
 // src/lib/safeDb.ts
 
-import { db } from './db'
-import { addToSyncQueue } from './db'
+import { db, addToSyncQueue } from './db'
 
-type TableName = 
-  | 'transactions' 
-  | 'accounts' 
-  | 'categories' 
-  | 'debts' 
-  | 'loans' 
-  | 'financings' 
-  | 'subscriptions' 
-  | 'tags' 
-  | 'contacts' 
-  | 'budgets' 
-  | 'goals' 
-  | 'credit_cards' 
-  | 'credit_invoices' 
-  | 'notifications' 
-  | 'chat_history' 
+type TableName =
+  | 'transactions'
+  | 'accounts'
+  | 'categories'
+  | 'debts'
+  | 'loans'
+  | 'financings'
+  | 'subscriptions'
+  | 'tags'
+  | 'contacts'
+  | 'budgets'
+  | 'goals'
+  | 'credit_cards'
+  | 'credit_invoices'
+  | 'notifications'
+  | 'chat_history'
   | 'chat_sessions'
 
 interface SafeResult<T = any> {
@@ -31,73 +30,65 @@ interface SafeResult<T = any> {
   id?: string
 }
 
-/**
- * 🔥 LOG DE OPERAÇÕES
- */
 function logOperation(operation: string, table: string, id: string | undefined, result: any) {
   const timestamp = new Date().toISOString()
   console.log(`[${timestamp}] 📝 ${operation} ${table}${id ? ` id:${id}` : ''} => ${result.success ? '✅' : '❌'}`)
-  
+
   if (!result.success) {
     console.error(`❌ Falha em ${operation} ${table}:`, result.error)
   }
-  
+
   return result
 }
 
-/**
- * 🔥 CAMADA 1: ADD SEGURO
- * Verifica se o ID existe antes de adicionar
- */
 export async function safeAdd<T extends Record<string, any>>(
   table: TableName,
   data: T,
   userId: string
 ): Promise<SafeResult<T>> {
   try {
-    // Verifica se já existe um registro com esse ID
-    if (data.id) {
-      const existing = await db.table(table).get(data.id)
-      if (existing) {
-        return {
-          success: false,
-          error: `Já existe um registro com ID ${data.id} em ${table}`,
-          operation: 'add',
-          table,
-          id: data.id
-        }
-      }
+    const recordId = data.id ?? crypto.randomUUID()
+
+    const existing = await db.table(table).get(recordId)
+    if (existing) {
+      return logOperation('add', table, recordId, {
+        success: false,
+        error: `Já existe um registro com ID ${recordId} em ${table}`,
+        operation: 'add' as const,
+        table,
+        id: recordId,
+      })
     }
 
-    // Adiciona ao IndexedDB
-    const id = await db.table(table).add(data)
-    
-    // 🔥 Enfileira para sincronização
-    await addToSyncQueue(userId, table, 'create', id as string, data)
-    
-    const result = {
+    const finalRecord = {
+      ...data,
+      id: recordId,
+      user_id: data.user_id ?? userId,
+      created_at: data.created_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending',
+    }
+
+    await db.table(table).add(finalRecord)
+    await addToSyncQueue(userId, table, 'create', recordId, finalRecord)
+
+    return logOperation('add', table, recordId, {
       success: true,
-      data: { ...data, id },
+      data: finalRecord,
       operation: 'add' as const,
       table,
-      id: id as string
-    }
-    
-    return logOperation('add', table, id as string, result)
+      id: recordId,
+    })
   } catch (error: any) {
     return logOperation('add', table, undefined, {
       success: false,
-      error: error.message || 'Erro ao adicionar',
+      error: error?.message || 'Erro ao adicionar',
       operation: 'add' as const,
-      table
+      table,
     })
   }
 }
 
-/**
- * 🔥 CAMADA 2: UPDATE SEGURO
- * Verifica se o registro existe antes de atualizar
- */
 export async function safeUpdate(
   table: TableName,
   id: string,
@@ -105,98 +96,87 @@ export async function safeUpdate(
   userId: string
 ): Promise<SafeResult> {
   try {
-    // 🔥 VALIDAÇÃO: Verifica se o registro existe
     const existing = await db.table(table).get(id)
+
     if (!existing) {
       return logOperation('update', table, id, {
         success: false,
         error: `Registro não encontrado em ${table} com ID ${id}`,
         operation: 'update' as const,
         table,
-        id
-      })
-    }
-
-    // Atualiza no IndexedDB
-    const affected = await db.table(table).update(id, data)
-    
-    if (affected === 0) {
-      return logOperation('update', table, id, {
-        success: false,
-        error: `Nenhuma linha afetada ao atualizar ${table} com ID ${id}`,
-        operation: 'update' as const,
-        table,
         id,
-        affected: 0
       })
     }
 
-    // 🔥 CORRIGIDO: Enfileira para sincronização COM O ID INCLUÍDO NO PAYLOAD
-    await addToSyncQueue(userId, table, 'update', id, { ...data, id })
-    
-    const result = {
+    const finalRecord = {
+      ...existing,
+      ...data,
+      id,
+      user_id: existing.user_id ?? userId,
+      updated_at: new Date().toISOString(),
+      sync_status: 'pending',
+    }
+
+    await db.table(table).put(finalRecord)
+    await addToSyncQueue(userId, table, 'update', id, finalRecord)
+
+    return logOperation('update', table, id, {
       success: true,
+      data: finalRecord,
       operation: 'update' as const,
       table,
       id,
-      affected
-    }
-    
-    return logOperation('update', table, id, result)
+      affected: 1,
+    })
   } catch (error: any) {
     return logOperation('update', table, id, {
       success: false,
-      error: error.message || 'Erro ao atualizar',
+      error: error?.message || 'Erro ao atualizar',
       operation: 'update' as const,
       table,
-      id
+      id,
     })
   }
 }
 
-/**
- * 🔥 CAMADA 3: DELETE SEGURO
- * Verifica se o registro existe antes de deletar
- */
 export async function safeDelete(
   table: TableName,
   id: string,
   userId: string
 ): Promise<SafeResult> {
   try {
-    // 🔥 VALIDAÇÃO: Verifica se o registro existe
     const existing = await db.table(table).get(id)
+
     if (!existing) {
       return logOperation('delete', table, id, {
         success: false,
         error: `Registro não encontrado em ${table} com ID ${id}`,
         operation: 'delete' as const,
         table,
-        id
+        id,
       })
     }
 
-    // Deleta do IndexedDB
     await db.table(table).delete(id)
-    
-    // Enfileira para sincronização
-    await addToSyncQueue(userId, table, 'delete', id, { id })
-    
-    const result = {
+    await addToSyncQueue(userId, table, 'delete', id, {
+      id,
+      user_id: existing.user_id ?? userId,
+      deleted_at: new Date().toISOString(),
+    })
+
+    return logOperation('delete', table, id, {
       success: true,
       operation: 'delete' as const,
       table,
-      id
-    }
-    
-    return logOperation('delete', table, id, result)
+      id,
+    })
   } catch (error: any) {
     return logOperation('delete', table, id, {
       success: false,
-      error: error.message || 'Erro ao deletar',
+      error: error?.message || 'Erro ao deletar',
       operation: 'delete' as const,
       table,
-      id
+      id,
     })
   }
 }
