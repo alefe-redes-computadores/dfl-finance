@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft,
@@ -392,6 +393,7 @@ function CardDetailContent() {
         <button
           onClick={() => {
             vibrate([5])
+            // ✅ CORRIGIDO: usa ?edit= para consistência
             router.push(`/cards/new?edit=${card.id}`)
           }}
           className="rounded-full p-2 -mr-2 text-teal-700 active:scale-95 dark:text-teal-400"
@@ -615,7 +617,8 @@ function CardDetailContent() {
         </div>
       </div>
 
-      {showPayModal && (
+      {/* ✅ MODAL PAY FATURA COM PORTAL */}
+      {showPayModal && createPortal(
         <div
           className="fixed inset-0 z-[600] flex items-end justify-center"
           onClick={() => setShowPayModal(false)}
@@ -696,7 +699,8 @@ function CardDetailContent() {
               {paying ? 'Processando...' : 'Confirmar pagamento'}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
