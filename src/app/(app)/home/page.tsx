@@ -30,6 +30,7 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useDebtsList } from '@/hooks/useDebtsList'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
   safeNumber,
@@ -125,11 +126,10 @@ function HomeContent() {
     table: 'accounts' as any, 
     filters: { context: effectiveContext }
   })
-  // 🔥 ADICIONADO: reloadDebts para forçar atualização dos alertas
-  const { data: rawDebts, loading: debtsLoading, reload: reloadDebts } = useLocalData({ 
-    table: 'debts' as any, 
-    filters: { context: effectiveContext }
-  })
+
+  // 🔥 TROCADO: agora usa useDebtsList em vez de useLocalData para dívidas
+  const { data: rawDebts, loading: debtsLoading } = useDebtsList(effectiveContext)
+
   const { data: rawFinancings, loading: finLoading } = useLocalData({ 
     table: 'financings' as any, 
     filters: { context: effectiveContext, status: 'active' }
@@ -277,7 +277,7 @@ function HomeContent() {
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
-  // ========== DÍVIDAS ==========
+  // ========== DÍVIDAS (agora usando useDebtsList) ==========
   const debtsList = useMemo(() => {
     const allDebts = localDebts.map((debt: any) => {
       const payments = localTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
@@ -425,8 +425,8 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-      // 🔥 ADICIONADO: recarrega também as dívidas para atualizar alertas
-      await Promise.all([reloadTxs(), reloadDebts()])
+      // 🔥 REMOVIDO reloadDebts, pois useDebtsList é reativo
+      await reloadTxs()
       setRefreshing(false)
     }
   }
@@ -446,20 +446,8 @@ function HomeContent() {
     }
   }, [isDataLoading, refreshing])
 
-  // ========== ATUALIZAÇÃO PERIÓDICA DOS ALERTAS ==========
-  // 🔥 ADICIONADO: recarrega dívidas a cada 30 segundos para manter alertas atualizados
-  useEffect(() => {
-    if (!user?.id) return
-
-    const interval = setInterval(() => {
-      // Só recarrega se não estiver em loading para evitar loops
-      if (!isDataLoading) {
-        reloadDebts()
-      }
-    }, 30000) // 30 segundos
-
-    return () => clearInterval(interval)
-  }, [user?.id, isDataLoading, reloadDebts])
+  // ========== ATUALIZAÇÃO PERIÓDICA DOS ALERTAS REMOVIDA ==========
+  // 🔥 REMOVIDO: não é mais necessário porque useDebtsList é reativo
 
   // ========== PERSONALIZAÇÃO ==========
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
