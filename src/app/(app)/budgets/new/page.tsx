@@ -15,6 +15,7 @@ import {
   Sparkles,
   CalendarRange
 } from 'lucide-react'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
@@ -460,9 +461,10 @@ function NewBudgetContent() {
         </div>
       </div>
 
-      {showCatModal && (
+      {/* ✅ MODAL DE CATEGORIA COM PORTAL */}
+      {showCatModal && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setShowCatModal(false)}
         >
           <div
@@ -472,7 +474,7 @@ function NewBudgetContent() {
             <div className="px-5 pt-4 pb-5">
               <div className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto mb-4" />
 
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl py-2">
+              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl py-2 z-10">
                 <div>
                   <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em]">
                     Seleção
@@ -557,9 +559,11 @@ function NewBudgetContent() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
+      {/* IconPicker (já deve ter Portal interno) */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
