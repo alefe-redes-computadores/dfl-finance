@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import {
   Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2,
   ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, Clock, ChevronDown,
-  Check, Image as ImageIcon, Paperclip, CheckCircle, X, SortDesc, SortAsc
+  Check, Image as ImageIcon, Paperclip, CheckCircle, X, SortDesc, SortAsc,
+  Filter
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -29,10 +30,11 @@ interface AdvFilters {
   sortBy: 'date' | 'amount' | 'category';
   sortOrder: 'asc' | 'desc';
   searchNotes: boolean;
+  status: 'all' | 'done' | 'pending';
 }
 
 const defaultAdvFilters: AdvFilters = {
-  accountId: '', categoryId: '', minAmount: '', maxAmount: '', sortBy: 'date', sortOrder: 'desc', searchNotes: false
+  accountId: '', categoryId: '', minAmount: '', maxAmount: '', sortBy: 'date', sortOrder: 'desc', searchNotes: false, status: 'all'
 }
 
 const safeNum = (val: any) => {
@@ -96,7 +98,6 @@ const TransactionsSkeleton = () => (
   </div>
 )
 
-// 🔥 MODAL DE EXPORTAÇÃO
 function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exporting' | 'success', onClose: () => void }) {
   if (status === 'idle') return null;
 
@@ -128,7 +129,6 @@ function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exportin
   )
 }
 
-// 🔥 PendingCard REFORMULADO - mais compacto e coerente
 function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -182,7 +182,6 @@ function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
   )
 }
 
-// 🔥 TransactionItem REFORMULADO - mais denso e escaneável
 function TransactionItem({ transaction, index, totalItems }: { transaction: any; index: number; totalItems: number }) {
   const router = useRouter()
 
@@ -288,8 +287,7 @@ export default function TransactionsPage() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [advFilters, setAdvFilters] = useState<AdvFilters>(defaultAdvFilters)
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
-
-  const [tempFilters, setTempFilters] = useState<AdvFilters>(defaultAdvFilters) // Para o modal
+  const [tempFilters, setTempFilters] = useState<AdvFilters>(defaultAdvFilters)
 
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -328,24 +326,20 @@ export default function TransactionsPage() {
     }
   })
 
-  // A LÓGICA MESTRA DE FILTRAGEM E ORDENAÇÃO
   const filtered = transactionsWithJoin.filter((t: any) => {
-    // 1. Mês atual
     if (t.date < startMonth || t.date > endMonth) return false
 
-    // 2. Filtro Rápido (Pílulas)
     if (quickFilter === 'income' && t.type !== 'income') return false
     if (quickFilter === 'expense' && t.type !== 'expense' && t.type !== 'sangria') return false
     if (quickFilter === 'transfer' && t.type !== 'transfer') return false
     if (quickFilter === 'pending' && t.status !== 'pending') return false
 
-    // 3. Filtros Avançados
+    if (advFilters.status !== 'all' && t.status !== advFilters.status) return false
     if (advFilters.accountId && t.account_id !== advFilters.accountId) return false
     if (advFilters.categoryId && t.category_id !== advFilters.categoryId) return false
     if (advFilters.minAmount && safeNum(t.amount) < safeNum(advFilters.minAmount)) return false
     if (advFilters.maxAmount && safeNum(t.amount) > safeNum(advFilters.maxAmount)) return false
 
-    // 4. Busca
     if (search) {
       const term = search.toLowerCase()
       const desc = String(t.description || '').toLowerCase()
@@ -366,7 +360,7 @@ export default function TransactionsPage() {
       const timeA = new Date(a.created_at || a.date || 0).getTime();
       const timeB = new Date(b.created_at || b.date || 0).getTime();
       if (timeA === timeB) return 0;
-      return (timeA > timeB ? 1 : -1) * orderMult; // Data: desc = mais recente primeiro
+      return (timeA > timeB ? 1 : -1) * orderMult;
     }
     if (advFilters.sortBy === 'amount') {
       return (safeNum(a.amount) - safeNum(b.amount)) * orderMult;
@@ -381,13 +375,9 @@ export default function TransactionsPage() {
 
   const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
   const doneTxs = filtered.filter((t: any) => t.status === 'done')
-
-  // Se o filtro rápido for 'pending', não mostramos o bloco agrupado, pois ele já tá na lista principal
   const displayTxs = filtered;
-
   const grouped = groupByDate(displayTxs)
 
-  // Ordenação das chaves de data (sempre do mais recente para o mais antigo se a ordem da data for desc)
   const sortedDates = Object.keys(grouped).sort((a, b) => {
     return advFilters.sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(a);
   })
@@ -438,12 +428,11 @@ export default function TransactionsPage() {
     setShowFilterDrawer(false)
   }
 
-  const hasAdvancedFilters = advFilters.accountId || advFilters.categoryId || advFilters.minAmount || advFilters.maxAmount || advFilters.sortBy !== 'date' || advFilters.sortOrder !== 'desc' || advFilters.searchNotes;
+  const hasAdvancedFilters = advFilters.accountId || advFilters.categoryId || advFilters.minAmount || advFilters.maxAmount || advFilters.sortBy !== 'date' || advFilters.sortOrder !== 'desc' || advFilters.searchNotes || advFilters.status !== 'all';
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
 
-      {/* Indicador de Sincronização Sutil */}
       {loadingPulse && (
         <div className="fixed top-6 right-6 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
@@ -452,7 +441,6 @@ export default function TransactionsPage() {
 
       <ExportFeedbackOverlay status={exportStatus} onClose={() => setExportStatus('idle')} />
 
-      {/* 🔥 HEADER REFORMULADO - mais compacto e integrado */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -551,7 +539,7 @@ export default function TransactionsPage() {
                   : 'bg-gray-50/80 dark:bg-slate-900/40 border-gray-200/70 dark:border-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800'
               }`}
             >
-              <SlidersHorizontal size={18} />
+              <Filter size={18} />
               {hasAdvancedFilters && (
                 <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white dark:border-slate-900" />
               )}
@@ -630,74 +618,108 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* 🔥 GAVETA DE FILTROS AVANÇADOS - visual alinhado ao novo padrão */}
+      {/* 🔥 GAVETA DE FILTROS AVANÇADOS - RECONSTRUÍDA PARA NUNCA BUGAR LÁ EMBAIXO */}
       {showFilterDrawer && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowFilterDrawer(false)}>
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[85vh] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
+          {/* Fundo que fecha ao clicar */}
+          <div className="absolute inset-0" onClick={() => setShowFilterDrawer(false)} />
 
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
-
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-xl text-gray-800 dark:text-gray-100">Filtros Avançados</h3>
-              <button type="button" onClick={() => setShowFilterDrawer(false)} className="text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 p-2 rounded-full transition-colors">
-                <X size={20} />
-              </button>
+          {/* Container do Modal */}
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[90vh]">
+            
+            {/* Handle & Header Fixos no Topo */}
+            <div className="shrink-0 px-6 pt-4 pb-4 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[32px]">
+              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-[20px] font-bold text-gray-900 dark:text-white">Filtros</h2>
+                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-1">Refine a análise exibida</p>
+                </div>
+                <button onClick={() => setShowFilterDrawer(false)} className="p-2 -mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  <X size={22} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-5 pr-2 custom-scrollbar">
+            {/* Conteúdo com Scroll Independente */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-20 custom-scrollbar">
+              
+              {/* Status */}
+              <div>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Status</label>
+                <div className="flex bg-gray-50 dark:bg-slate-800 p-1 rounded-[16px] border border-gray-100 dark:border-slate-700">
+                  {[
+                    { key: 'all', label: 'Todos' },
+                    { key: 'done', label: 'Efetivados' },
+                    { key: 'pending', label: 'Pendentes' }
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setTempFilters({ ...tempFilters, status: opt.key as any })}
+                      className={`flex-1 py-2.5 text-[13px] font-bold rounded-[12px] transition-all ${
+                        tempFilters.status === opt.key
+                          ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Conta */}
               <div>
-                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">Conta</label>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Conta</label>
                 <div className="relative">
                   <select
                     value={tempFilters.accountId}
                     onChange={(e) => setTempFilters({ ...tempFilters, accountId: e.target.value })}
-                    className="w-full bg-gray-50 dark:bg-slate-700/50 border border-gray-200/70 dark:border-slate-600 rounded-[16px] p-3 text-[14px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/25 outline-none"
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as contas</option>
                     {(localAccounts || []).map((acc: any) => (
                       <option key={acc.id} value={acc.id}>{acc.name}</option>
                     ))}
                   </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
               {/* Categoria */}
               <div>
-                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">Categoria</label>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Categoria</label>
                 <div className="relative">
                   <select
                     value={tempFilters.categoryId}
                     onChange={(e) => setTempFilters({ ...tempFilters, categoryId: e.target.value })}
-                    className="w-full bg-gray-50 dark:bg-slate-700/50 border border-gray-200/70 dark:border-slate-600 rounded-[16px] p-3 text-[14px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/25 outline-none"
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as categorias</option>
                     {(localCategories || []).map((cat: any) => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
               {/* Faixa de Valor */}
               <div>
-                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">Faixa de Valor</label>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Faixa de Valor</label>
                 <div className="flex gap-3">
-                  <div className="flex-1 bg-gray-50 dark:bg-slate-700/50 border border-gray-200/70 dark:border-slate-600 rounded-[16px] p-3 flex flex-col focus-within:ring-2 focus-within:ring-teal-500/25">
-                    <span className="text-[11px] text-gray-400 font-medium mb-1">Mínimo</span>
+                  <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
+                    <span className="text-[11px] text-gray-400 font-semibold mb-1 block">Mínimo</span>
                     <div className="flex items-center">
-                      <span className="text-[14px] text-gray-400 font-medium mr-1">R$</span>
-                      <input type="number" placeholder="0,00" value={tempFilters.minAmount} onChange={(e) => setTempFilters({ ...tempFilters, minAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-semibold outline-none text-gray-800 dark:text-gray-200" />
+                      <span className="text-[14px] text-gray-400 font-semibold mr-1.5">R$</span>
+                      <input type="number" placeholder="0,00" value={tempFilters.minAmount} onChange={(e) => setTempFilters({ ...tempFilters, minAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
                     </div>
                   </div>
-                  <div className="flex-1 bg-gray-50 dark:bg-slate-700/50 border border-gray-200/70 dark:border-slate-600 rounded-[16px] p-3 flex flex-col focus-within:ring-2 focus-within:ring-teal-500/25">
-                    <span className="text-[11px] text-gray-400 font-medium mb-1">Máximo</span>
+                  <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
+                    <span className="text-[11px] text-gray-400 font-semibold mb-1 block">Máximo</span>
                     <div className="flex items-center">
-                      <span className="text-[14px] text-gray-400 font-medium mr-1">R$</span>
-                      <input type="number" placeholder="0,00" value={tempFilters.maxAmount} onChange={(e) => setTempFilters({ ...tempFilters, maxAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-semibold outline-none text-gray-800 dark:text-gray-200" />
+                      <span className="text-[14px] text-gray-400 font-semibold mr-1.5">R$</span>
+                      <input type="number" placeholder="0,00" value={tempFilters.maxAmount} onChange={(e) => setTempFilters({ ...tempFilters, maxAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
                     </div>
                   </div>
                 </div>
@@ -705,7 +727,7 @@ export default function TransactionsPage() {
 
               {/* Ordenação */}
               <div>
-                <label className="text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-2 block">Ordenar por</label>
+                <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Ordenar por</label>
                 <div className="flex flex-wrap gap-2">
                   {[
                     { key: 'date', label: 'Data' },
@@ -715,18 +737,22 @@ export default function TransactionsPage() {
                     <button
                       key={o.key} type="button"
                       onClick={() => setTempFilters({ ...tempFilters, sortBy: o.key as any })}
-                      className={`px-3.5 py-2 rounded-[12px] text-[13px] font-semibold transition-all ${tempFilters.sortBy === o.key ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 ring-1 ring-teal-500' : 'bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-slate-600'}`}
+                      className={`px-4 py-2.5 rounded-[14px] text-[13px] font-bold transition-all ${
+                        tempFilters.sortBy === o.key 
+                          ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 ring-1 ring-teal-500/50' 
+                          : 'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-slate-700'
+                      }`}
                     >
                       {o.label}
                     </button>
                   ))}
 
-                  <div className="w-[1px] h-6 bg-gray-200 dark:bg-slate-600 my-auto mx-1" />
+                  <div className="w-[1px] h-6 bg-gray-200 dark:bg-slate-700 my-auto mx-1" />
 
                   <button
                     type="button"
                     onClick={() => setTempFilters({ ...tempFilters, sortOrder: tempFilters.sortOrder === 'asc' ? 'desc' : 'asc' })}
-                    className="px-3.5 py-2 rounded-[12px] bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-slate-600 text-[13px] font-semibold flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+                    className="px-4 py-2.5 rounded-[14px] bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-slate-700 text-[13px] font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors"
                   >
                     {tempFilters.sortOrder === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />}
                     <span className="whitespace-nowrap">{tempFilters.sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}</span>
@@ -735,12 +761,15 @@ export default function TransactionsPage() {
               </div>
 
               {/* Busca em Observações */}
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[16px] p-3 border border-gray-200/70 dark:border-slate-600">
-                <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">Buscar nas observações</span>
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">Buscar nas observações</p>
+                  <p className="text-[12px] text-gray-400 mt-0.5">Incluir descrições detalhadas na busca</p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setTempFilters({ ...tempFilters, searchNotes: !tempFilters.searchNotes })}
-                  className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${tempFilters.searchNotes ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`w-12 h-7 rounded-full relative transition-colors shadow-inner shrink-0 ${tempFilters.searchNotes ? 'bg-teal-600' : 'bg-gray-200 dark:bg-slate-700'}`}
                 >
                   <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${tempFilters.searchNotes ? 'right-1' : 'left-1'}`} />
                 </button>
@@ -748,10 +777,26 @@ export default function TransactionsPage() {
 
             </div>
 
-            <div className="pt-4 mt-3 border-t border-gray-200/70 dark:border-slate-700 flex gap-3 pb-4">
-              <button type="button" onClick={resetAdvancedFilters} className="flex-1 py-3 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-[20px] font-semibold active:scale-95 transition-all text-[15px]">Limpar</button>
-              <button type="button" onClick={applyAdvancedFilters} className="flex-[2] py-3 bg-teal-600 text-white rounded-[20px] font-semibold shadow-lg shadow-teal-600/20 hover:bg-teal-700 active:scale-95 transition-all text-[15px]">Aplicar Filtros</button>
+            {/* Footer Fixo com Botões (Sempre visível) */}
+            <div className="shrink-0 px-6 py-4 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60 rounded-b-[32px] mb-2">
+              <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={resetAdvancedFilters} 
+                  className="w-1/3 py-4 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-[20px] font-bold active:scale-[0.98] transition-all text-[15px]"
+                >
+                  Limpar
+                </button>
+                <button 
+                  type="button" 
+                  onClick={applyAdvancedFilters} 
+                  className="w-2/3 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 active:scale-[0.98] transition-all text-[15px]"
+                >
+                  Aplicar filtros
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
       )}
