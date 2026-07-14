@@ -8,18 +8,14 @@ export function useAccountById(id?: string | null) {
   const { user } = useAuth()
 
   const data = useLiveQuery(async () => {
-    // ✅ VERIFICA SE ESTÁ NO CLIENTE E SE O DB EXISTE
-    if (typeof window === 'undefined' || !db) return null
     if (!user?.id || !id) return null
 
-    try {
-      const found = await db.accounts.get(id)
-      if (!found || found.user_id !== user.id) return null
-      return found
-    } catch (err) {
-      console.error('useAccountById error:', err)
-      return null
-    }
+    const found = await db.accounts.get(id)
+
+    if (!found) return null
+    if (found.user_id !== user.id) return null
+
+    return found
   }, [user?.id, id])
 
   return {
