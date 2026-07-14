@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Edit2, Trash2, AlertTriangle, CheckCircle, Plus, RefreshCw,
@@ -381,8 +382,9 @@ function GoalDetailContent() {
         </section>
       </div>
 
-      {showContributionModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowContributionModal(false)}>
+      {/* ✅ MODAL DE CONTRIBUIÇÃO COM PORTAL */}
+      {showContributionModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowContributionModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
             className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300"
@@ -443,7 +445,8 @@ function GoalDetailContent() {
               Confirmar Contribuição
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
