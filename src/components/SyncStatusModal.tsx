@@ -152,7 +152,7 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
 
         {isAdmin && (
           <Link
-            href="/admin"
+            href="/admin/sync"
             onClick={onClose}
             className="mt-4 w-full flex items-center justify-center gap-2.5 px-4 py-3.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border border-purple-200 dark:border-purple-800/30 rounded-2xl transition-all group active:scale-[0.97]"
           >
