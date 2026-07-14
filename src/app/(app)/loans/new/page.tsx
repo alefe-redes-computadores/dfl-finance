@@ -8,12 +8,12 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useLoanById } from '@/hooks/useLoanById' // ✅ NOVO HOOK
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
-import Skeleton from '@/components/Skeleton' // ✅ ADICIONADO
+import Skeleton from '@/components/Skeleton'
 
 function NewLoanContent() {
   const router = useRouter()
@@ -27,7 +27,9 @@ function NewLoanContent() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  // ✅ ADICIONADO: initialized
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: loanData, loading, notFound } = useLoanById(editId)
+
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
 
@@ -41,14 +43,7 @@ function NewLoanContent() {
   const [notes, setNotes] = useState("")
   const [status, setStatus] = useState("active")
 
-  const { data: localLoans } = useLocalData({
-    table: 'loans' as any,
-    filters: { context: effectiveContext },
-  })
-
-  const loanData = localLoans?.find((l: any) => l.id === editId) as any
-
-  // ✅ CORRIGIDO: useEffect com initialized
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
   useEffect(() => {
     if (editId && loanData && !initialized) {
       setDescription(loanData.description || "")
@@ -67,6 +62,56 @@ function NewLoanContent() {
       setInitialized(true)
     }
   }, [editId, loanData, initialized])
+
+  // ✅ TRATAMENTO DE LOADING
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (editId && notFound) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <HandCoins size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Empréstimo não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O empréstimo que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+        <button
+          onClick={() => router.push('/loans')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (!initialized) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   const handleSave = async () => {
     if (!description.trim()) {
@@ -117,9 +162,6 @@ function NewLoanContent() {
       success()
       showToast(editId ? "✅ Empréstimo atualizado!" : "✅ Empréstimo registrado!", "success")
       
-      // ✅ Força recarga da lista para evitar flicker ao voltar
-      // (opcional: se tiver acesso ao reload da listagem, pode chamar aqui)
-      
       router.back()
     } catch (err: any) {
       errorHaptic()
@@ -152,17 +194,6 @@ function NewLoanContent() {
   const fieldShell = "rounded-[22px] border border-black/5 dark:border-white/10 bg-white dark:bg-slate-900 shadow-[0_6px_24px_rgba(15,23,42,0.04)] dark:shadow-none"
   const labelClass = "text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500"
   const inputClass = "w-full bg-transparent outline-none text-[15px] font-semibold text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-
-  // ✅ ADICIONADO: tela de skeleton durante carregamento
-  if (!initialized) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
