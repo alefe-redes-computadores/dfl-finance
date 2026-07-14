@@ -13,10 +13,11 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useContactById } from "@/hooks/useContactById" // ✅ NOVO HOOK
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from "@/hooks/useSafeDb"
+import Skeleton from "@/components/Skeleton"
 
 function lightTap() {
   if (typeof window !== "undefined" && navigator.vibrate) navigator.vibrate(10)
@@ -70,6 +71,10 @@ export default function NewContactPage() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === "personal_only" ? "personal" : context
 
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: contact, loading, notFound } = useContactById(editId)
+
+  const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
   const [showDeleteSheet, setShowDeleteSheet] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -87,32 +92,78 @@ export default function NewContactPage() {
   const [zipCode, setZipCode] = useState("")
   const [notes, setNotes] = useState("")
 
-  const { data: localContacts } = useLocalData({
-    table: "contacts" as any,
-    filters: { context: effectiveContext },
-  })
-
-  const contactData = useMemo(
-    () => (localContacts || []).find((c: any) => c.id === editId) as any,
-    [localContacts, editId]
-  )
-
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
   useEffect(() => {
-    if (contactData) {
-      setName(contactData.name || "")
-      setType(contactData.type || "individual")
-      setEmail(contactData.email || "")
-      setPhone(contactData.phone || "")
-      setDocument(contactData.document || "")
-      setCompany(contactData.company || "")
-      setPosition(contactData.position || "")
-      setAddress(contactData.address || "")
-      setCity(contactData.city || "")
-      setState(contactData.state || "")
-      setZipCode(contactData.zip_code || "")
-      setNotes(contactData.notes || "")
+    if (editId && contact && !initialized) {
+      setName(contact.name || "")
+      setType(contact.type || "individual")
+      setEmail(contact.email || "")
+      setPhone(contact.phone || "")
+      setDocument(contact.document || "")
+      setCompany(contact.company || "")
+      setPosition(contact.position || "")
+      setAddress(contact.address || "")
+      setCity(contact.city || "")
+      setState(contact.state || "")
+      setZipCode(contact.zip_code || "")
+      setNotes(contact.notes || "")
+      setInitialized(true)
     }
-  }, [contactData])
+    
+    if (!editId && !initialized) {
+      setInitialized(true)
+    }
+  }, [editId, contact, initialized])
+
+  // ✅ TRATAMENTO DE LOADING
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+        <div className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+          <div className="flex items-center justify-between">
+            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
+            <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (editId && notFound) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <User size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Contato não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O contato que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+        <button
+          onClick={() => router.push('/contacts')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (!initialized) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   const handleSave = async () => {
     if (!(name || "").trim()) {
