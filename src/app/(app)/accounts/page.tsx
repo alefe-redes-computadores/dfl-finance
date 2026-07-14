@@ -14,6 +14,7 @@ import {
   PiggyBank,
   Trash2,
   ChevronRight,
+  ChevronLeft, // ✅ ADICIONADO
   Landmark,
   Briefcase
 } from "lucide-react"
@@ -140,17 +141,27 @@ function AccountsContent() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* 🔥 HEADER UNIFICADO COM BOTÃO DE VOLTAR */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="min-w-0">
-              <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                Contas
-              </h1>
-              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
-              </p>
+            <div className="flex items-center gap-2 min-w-0">
+              {/* ✅ ADICIONADO: Botão Voltar Padronizado */}
+              <button
+                onClick={() => { vibrate([5]); router.push('/more'); }}
+                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="min-w-0">
+                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Contas
+                </h1>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -214,7 +225,7 @@ function AccountsContent() {
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
       >
-        {/* 🔥 CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
+        {/* CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
         {!loading && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div className="flex items-start justify-between gap-3">
@@ -237,7 +248,7 @@ function AccountsContent() {
           </div>
         )}
 
-        {/* 🔥 FILTROS RÁPIDOS - MAIS COMPACTOS */}
+        {/* FILTROS RÁPIDOS - MAIS COMPACTOS */}
         {!loading && accounts?.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
