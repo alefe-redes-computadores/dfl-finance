@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
   Search,
   Plus,
@@ -140,7 +140,7 @@ function AccountsContent() {
         </div>
       )}
 
-      {/* HEADER UNIFICADO */}
+      {/* 🔥 HEADER UNIFICADO */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -214,7 +214,7 @@ function AccountsContent() {
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
       >
-        {/* CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
+        {/* 🔥 CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
         {!loading && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div className="flex items-start justify-between gap-3">
@@ -237,7 +237,7 @@ function AccountsContent() {
           </div>
         )}
 
-        {/* FILTROS RÁPIDOS - MAIS COMPACTOS */}
+        {/* 🔥 FILTROS RÁPIDOS - MAIS COMPACTOS */}
         {!loading && accounts?.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
@@ -348,7 +348,7 @@ function AccountsContent() {
         )}
       </div>
 
-      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {/* MODAL DE EXCLUSÃO COM PORTAL */}
       {deleteModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
@@ -388,8 +388,8 @@ function AccountsContent() {
         document.body
       )}
     </div>
-  ) // ✅ FECHA A DIV PRINCIPAL DO AccountsContent
-} // ✅ FECHA A FUNCTION AccountsContent
+  )
+}
 
 export default function AccountsPage() {
   const [isClient, setIsClient] = useState(false)
