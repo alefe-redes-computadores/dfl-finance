@@ -56,6 +56,7 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import { useToast } from '@/contexts/ToastContext'
 
 import { exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService'
+import { createPortal } from 'react-dom' // 🔥 IMPORT ADICIONADO
 
 // 🔥 SKELETON ATUALIZADO
 const AnalysisSkeleton = () => (
@@ -1006,14 +1007,14 @@ function AnalysisContent() {
         </div>
       )}
 
-            {/* 🔥 DRAWER DE FILTROS AVANÇADOS - FIXA NO RODAPÉ E RESPONSIVA */}
-      {showFilterDrawer && (
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
+      {/* 🔥 DRAWER DE FILTROS AVANÇADOS - USANDO PORTAL */}
+      {showFilterDrawer && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
           {/* Fundo que fecha ao clicar */}
           <div className="absolute inset-0" onClick={() => setShowFilterDrawer(false)} />
 
           {/* Container do Modal */}
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[85dvh] sm:max-h-[85vh]">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[85dvh]">
             
             {/* Handle & Header Fixos no Topo */}
             <div className="shrink-0 px-6 pt-4 pb-4 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[32px]">
@@ -1066,7 +1067,7 @@ function AnalysisContent() {
               </div>
             </div>
 
-            {/* Footer Fixo com Botões - Adicionado pb-8 para segurança */}
+            {/* Footer Fixo com Botões */}
             <div className="shrink-0 px-6 pt-4 pb-8 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60">
               <div className="flex gap-3">
                 <button 
@@ -1087,8 +1088,12 @@ function AnalysisContent() {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+    </div>
+  )
+}
 
 export default function AnalysisPage() {
   const [isClient, setIsClient] = useState(false)
