@@ -1,12 +1,11 @@
-'use client'  // ✅ ÚNICO 'use client' - NO TOPO!
+'use client'
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
 import { ArrowLeft, Save, RefreshCw, Loader2 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useSubscriptionById } from "@/hooks/useSubscriptionById"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { db, addToSyncQueue } from '@/lib/db'
@@ -34,7 +33,8 @@ function NewSubscriptionContent() {
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  // ✅ ADICIONADO: initialized
+  const { data: subscription, loading, notFound } = useSubscriptionById(editId)
+
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
 
@@ -47,32 +47,59 @@ function NewSubscriptionContent() {
   const [notes, setNotes] = useState("")
   const [status, setStatus] = useState("active")
 
-  const { data: localSubscriptions } = useLocalData({
-    table: 'subscriptions' as any,
-    filters: { context: effectiveContext },
-  })
-
-  const subscriptionData = localSubscriptions?.find((s: any) => s.id === editId) as any
-
-  // ✅ CORRIGIDO: useEffect com initialized
   useEffect(() => {
-    if (editId && subscriptionData && !initialized) {
-      setName(subscriptionData.name || "")
-      const val = Number(subscriptionData.amount) || 0
-      setAmountNum(val)
-      setBillingCycle(subscriptionData.billing_cycle || "monthly")
-      setCategory(subscriptionData.category || "")
-      setNextDueDate(subscriptionData.next_due_date ? subscriptionData.next_due_date.split("T")[0] : "")
-      setPaymentMethod(subscriptionData.payment_method || "")
-      setNotes(subscriptionData.notes || "")
-      setStatus(subscriptionData.status || "active")
+    if (editId && subscription && !initialized) {
+      setName(subscription.name || "")
+      setAmountNum(Number(subscription.amount) || 0)
+      setBillingCycle(subscription.billing_cycle || "monthly")
+      setCategory(subscription.category || "")
+      setNextDueDate(subscription.next_due_date ? subscription.next_due_date.split("T")[0] : "")
+      setPaymentMethod(subscription.payment_method || "")
+      setNotes(subscription.notes || "")
+      setStatus(subscription.status || "active")
       setInitialized(true)
     }
-    
+
     if (!editId && !initialized) {
       setInitialized(true)
     }
-  }, [editId, subscriptionData, initialized])
+  }, [editId, subscription, initialized])
+
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  if (editId && notFound) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
+        <p className="text-gray-600 dark:text-gray-400 text-center">
+          Assinatura não encontrada.
+        </p>
+        <button
+          onClick={() => router.push('/subscriptions')}
+          className="mt-4 px-6 py-3 bg-teal-600 text-white rounded-full font-semibold"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  if (!initialized) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -80,13 +107,21 @@ function NewSubscriptionContent() {
       showToast("⚠️ Preencha o nome da assinatura", "warning")
       return
     }
+
     if (amountNum <= 0) {
       errorHaptic()
       showToast("⚠️ Informe um valor válido", "warning")
       return
     }
 
+    if (!user?.id) {
+      errorHaptic()
+      showToast("⚠️ Usuário não autenticado", "warning")
+      return
+    }
+
     setSaving(true)
+
     try {
       const payload = {
         name: name.trim(),
@@ -103,20 +138,26 @@ function NewSubscriptionContent() {
 
       await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
         if (editId) {
-          await db.table('subscriptions').update(editId, payload)
-          await addToSyncQueue(user!.id, 'subscriptions', 'update', editId, payload)
+          const updated = await db.table('subscriptions').update(editId, payload)
+
+          if (!updated) {
+            throw new Error('Assinatura não encontrada para atualização.')
+          }
+
+          await addToSyncQueue(user.id, 'subscriptions', 'update', editId, payload)
         } else {
           const id = crypto.randomUUID()
           const fullPayload = {
             id,
-            user_id: user!.id,
+            user_id: user.id,
             ...payload,
             created_at: new Date().toISOString(),
             sync_status: 'pending',
             sync_attempts: 0,
           }
+
           await db.table('subscriptions').add(fullPayload)
-          await addToSyncQueue(user!.id, 'subscriptions', 'create', id, fullPayload)
+          await addToSyncQueue(user.id, 'subscriptions', 'create', id, fullPayload)
         }
       })
 
@@ -137,21 +178,8 @@ function NewSubscriptionContent() {
   const primaryHover = isPersonal ? "hover:bg-emerald-700" : "hover:bg-teal-700"
   const shadowColor = isPersonal ? "shadow-emerald-600/25" : "shadow-teal-600/25"
 
-  // ✅ ADICIONADO: tela de skeleton durante carregamento
-  if (!initialized) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-      
-      {/* HEADER */}
       <div className="sticky top-0 z-30 bg-[#f6f7f8]/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <button
@@ -175,8 +203,6 @@ function NewSubscriptionContent() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pt-5 pb-32 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-
-        {/* HERO: Nome + Valor */}
         <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 shadow-[0_6px_24px_rgba(15,23,42,0.05)] dark:shadow-none p-5">
           <div className="space-y-5">
             <div>
@@ -210,7 +236,6 @@ function NewSubscriptionContent() {
           </div>
         </section>
 
-        {/* CICLO + VENCIMENTO */}
         <section className="grid grid-cols-2 gap-3">
           <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
             <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
@@ -242,7 +267,6 @@ function NewSubscriptionContent() {
           </div>
         </section>
 
-        {/* CATEGORIA */}
         <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
           <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-3 block">
             Categoria
@@ -264,7 +288,6 @@ function NewSubscriptionContent() {
           </div>
         </section>
 
-        {/* PAGAMENTO + STATUS */}
         <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none space-y-4">
           <div>
             <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
@@ -312,7 +335,6 @@ function NewSubscriptionContent() {
           </div>
         </section>
 
-        {/* OBSERVAÇÕES */}
         <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
           <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
             Observações
@@ -327,7 +349,6 @@ function NewSubscriptionContent() {
         </section>
       </div>
 
-      {/* BOTÃO SALVAR */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#f6f7f8] dark:from-slate-950 via-[#f6f7f8]/90 dark:via-slate-950/90 to-transparent z-20">
         <button
           onClick={() => { vibrate([10, 50]); handleSave() }}
