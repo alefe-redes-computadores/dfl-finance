@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -13,13 +13,15 @@ import {
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import { useTransactionsList } from '@/hooks/useTransactionsList'
+import { useLocalSync } from '@/hooks/useLocalSync'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
-import { createPortal } from 'react-dom' // 🔥 IMPORT ADICIONADO
+import { createPortal } from 'react-dom'
 
 type QuickFilter = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
 
@@ -284,6 +286,7 @@ export default function TransactionsPage() {
   const router = useRouter()
   const { effectiveContext } = useContext_()
   const { showToast } = useToast()
+  const { pendingCount } = useLocalSync()
 
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [advFilters, setAdvFilters] = useState<AdvFilters>(defaultAdvFilters)
@@ -302,11 +305,10 @@ export default function TransactionsPage() {
   const startMonth = format(startOfMonth(currentDate), 'yyyy-MM-dd')
   const endMonth = format(endOfMonth(currentDate), 'yyyy-MM-dd')
 
-  const { data: localTransactions, loading, syncing, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: transactions, loading } = useTransactionsList(effectiveContext)
 
+  // ✅ CATEGORIAS E CONTAS (useLocalData mantido para joins)
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext },
@@ -317,16 +319,20 @@ export default function TransactionsPage() {
     filters: { context: effectiveContext },
   })
 
-  const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-    const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-    const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
-    return {
-      ...tx,
-      categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-      accounts: account ? { name: account.name, color: account.color } : null,
-    }
-  })
+  // ✅ useMemo para consolidar dados
+  const transactionsWithJoin = useMemo(() => {
+    return (transactions || []).map((tx: any) => {
+      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
+      const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
+      return {
+        ...tx,
+        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
+        accounts: account ? { name: account.name, color: account.color } : null,
+      }
+    })
+  }, [transactions, localCategories, localAccounts])
 
+  // ✅ FILTROS
   const filtered = transactionsWithJoin.filter((t: any) => {
     if (t.date < startMonth || t.date > endMonth) return false
 
@@ -383,13 +389,11 @@ export default function TransactionsPage() {
     return advFilters.sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(a);
   })
 
-  useEffect(() => {
-    if (user?.id && effectiveContext) reloadTransactions()
-  }, [user?.id, effectiveContext, currentDate, reloadTransactions])
+  // ✅ REMOVIDO useEffect com reload
 
   useEffect(() => {
-    setLoadingPulse(loading || syncing)
-  }, [loading, syncing])
+    setLoadingPulse(loading)
+  }, [loading])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -434,7 +438,7 @@ export default function TransactionsPage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
 
-      {loadingPulse && (
+      {(loading || pendingCount > 0) && (
         <div className="fixed top-6 right-6 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
         </div>
@@ -619,16 +623,12 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* 🔥 GAVETA DE FILTROS AVANÇADOS USANDO PORTAL PARA FICAR SOBRE TUDO */}
       {showFilterDrawer && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
-          {/* Fundo que fecha ao clicar */}
           <div className="absolute inset-0" onClick={() => setShowFilterDrawer(false)} />
 
-          {/* Container do Modal */}
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[85dvh]">
             
-            {/* Handle & Header Fixos no Topo */}
             <div className="shrink-0 px-6 pt-4 pb-4 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[32px]">
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
               <div className="flex items-start justify-between">
@@ -642,10 +642,8 @@ export default function TransactionsPage() {
               </div>
             </div>
 
-            {/* Conteúdo com Scroll Independente */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-6 custom-scrollbar">
               
-              {/* Status */}
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Status</label>
                 <div className="flex bg-gray-50 dark:bg-slate-800 p-1 rounded-[16px] border border-gray-100 dark:border-slate-700">
@@ -669,7 +667,6 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Conta */}
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Conta</label>
                 <div className="relative">
@@ -687,7 +684,6 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Categoria */}
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Categoria</label>
                 <div className="relative">
@@ -705,7 +701,6 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Faixa de Valor */}
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Faixa de Valor</label>
                 <div className="flex gap-3">
@@ -726,7 +721,6 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Ordenação */}
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Ordenar por</label>
                 <div className="flex flex-wrap gap-2">
@@ -761,7 +755,6 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Busca em Observações */}
               <div className="flex items-center justify-between mt-2">
                 <div>
                   <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200">Buscar nas observações</p>
@@ -778,7 +771,6 @@ export default function TransactionsPage() {
 
             </div>
 
-            {/* Footer Fixo com Botões (Sempre visível) */}
             <div className="shrink-0 px-6 pt-4 pb-8 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60">
               <div className="flex gap-3">
                 <button 
