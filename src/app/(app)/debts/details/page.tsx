@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createPortal } from 'react-dom' // ✅ ADICIONADO
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft,
@@ -106,6 +107,7 @@ function InfoRow({
   )
 }
 
+// ✅ AppBottomSheet CORRIGIDO com createPortal
 function AppBottomSheet({
   open,
   onClose,
@@ -121,7 +123,7 @@ function AppBottomSheet({
 }) {
   if (!open) return null
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 flex items-end justify-center"
       style={{ zIndex }}
@@ -133,7 +135,7 @@ function AppBottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+        className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800 pb-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
@@ -151,7 +153,8 @@ function AppBottomSheet({
 
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
