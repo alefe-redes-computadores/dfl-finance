@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { useIsAdmin } from '@/hooks/useAdmin'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { RefreshCw, Wifi, WifiOff, X, Shield } from 'lucide-react'
 
@@ -14,8 +13,7 @@ interface SyncStatusModalProps {
 
 export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProps) {
   const localSync = useLocalSync()
-  const { isAdmin } = useIsAdmin() || { isAdmin: false }
-
+  
   const pendingCount = Number(localSync?.pendingCount ?? 0)
   const isSyncing = Boolean(localSync?.isSyncing)
   const forceSync = localSync?.forceSync
@@ -23,9 +21,11 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
   const syncStatus = localSync?.syncStatus
 
   const [mounted, setMounted] = useState(false)
+  const [isDevMode, setIsDevMode] = useState(false)
 
   useEffect(() => {
     setMounted(true)
+    setIsDevMode(localStorage.getItem('devMode') === 'true')
   }, [])
 
   useEffect(() => {
@@ -150,7 +150,7 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
           Fechar
         </button>
 
-        {isAdmin && (
+        {isDevMode && (
           <Link
             href="/admin/sync"
             onClick={onClose}
