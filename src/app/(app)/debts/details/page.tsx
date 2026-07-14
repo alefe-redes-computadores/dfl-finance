@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createPortal } from 'react-dom' // ✅ ADICIONADO
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft,
@@ -107,7 +107,6 @@ function InfoRow({
   )
 }
 
-// ✅ AppBottomSheet CORRIGIDO com createPortal
 function AppBottomSheet({
   open,
   onClose,
@@ -351,6 +350,13 @@ function DebtDetailContent() {
       container.removeEventListener('touchend', handleTouchEnd)
     }
   }, [debtLoading, refreshing, loadData, vibrate])
+
+  // 🔥 CORREÇÃO: Evita loop de navegação usando replace e dependências corretas
+  useEffect(() => {
+    if (!debtLoading && !debt && debtId) {
+      router.replace('/debts')
+    }
+  }, [debtLoading, debt, debtId, router])
 
   useEffect(() => {
     if (!debt) return
