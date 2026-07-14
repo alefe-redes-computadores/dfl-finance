@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -39,6 +39,7 @@ export function useLocalData<T = any>({
   orderDir = 'desc',
 }: UseLocalDataProps) {
   const { user } = useAuth()
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const filtersKey = useMemo(() => JSON.stringify(filters || {}), [filters])
 
@@ -65,7 +66,7 @@ export function useLocalData<T = any>({
         const valA = a?.[orderBy]
         const valB = b?.[orderBy]
 
-        if (orderBy === 'date' || orderBy === 'created_at' || orderBy === 'updated_at' || orderBy === 'due_date') {
+        if (['date', 'created_at', 'updated_at', 'due_date'].includes(orderBy)) {
           const timeA = valA ? new Date(valA).getTime() : 0
           const timeB = valB ? new Date(valB).getTime() : 0
           return orderDir === 'desc' ? timeB - timeA : timeA - timeB
@@ -86,12 +87,16 @@ export function useLocalData<T = any>({
     }
 
     return results as T[]
-  }, [user?.id, table, filtersKey, limit, orderBy, orderDir])
+  }, [user?.id, table, filtersKey, limit, orderBy, orderDir, refreshKey])
+
+  const reload = useCallback(async () => {
+    setRefreshKey((k) => k + 1)
+  }, [])
 
   return {
     data: data ?? [],
     loading: data === undefined,
     syncing: false,
-    reload: async () => {},
+    reload,
   }
 }
