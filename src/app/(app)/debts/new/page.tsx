@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -28,13 +28,14 @@ function NewDebtContent() {
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { safeAdd, safeUpdate } = useSafeDb()
 
-  const editId = searchParams.get('edit')
+  const rawEditId = searchParams?.get('edit')
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
-  const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
 
+  // ESTADOS DO FORMULÁRIO (Inicializados com segurança para evitar NaN)
   const [personName, setPersonName] = useState('')
-  const [amountNum, setAmountNum] = useState(0)
+  const [amountNum, setAmountNum] = useState<number>(0)
   const [dueDate, setDueDate] = useState('')
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -47,6 +48,7 @@ function NewDebtContent() {
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
+  // HOOKS REATIVOS (Leitura Estrita)
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
@@ -57,19 +59,17 @@ function NewDebtContent() {
     filters: { context },
   })
 
-  const {
-    debt: localDebt,
-    loading: debtLoading,
-    notFound: debtNotFound,
-  } = useDebtById(editId)
+  // Usa o hook por ID para edição
+  const { debt: localDebt, loading: debtLoading, notFound: debtNotFound } = useDebtById(editId)
 
+  // Efeito de "Hidratação" do Formulário
   useEffect(() => {
-    if (!editId && !initialized) {
-      setInitialized(true)
+    // Se não for modo edição, apenas ajusta o contexto atual
+    if (!editId) {
+      setDebtContext(context as 'dfl' | 'personal')
       return
     }
 
-    if (!editId) return
     if (debtLoading) return
 
     if (debtNotFound) {
@@ -78,49 +78,44 @@ function NewDebtContent() {
       return
     }
 
-    if (localDebt && !initialized) {
+    // Hidratação segura
+    if (localDebt) {
       setPersonName(localDebt.person_name || '')
-      setAmountNum(Number(localDebt.total_amount) || 0)
+      // Garante que é um número válido ou zero (Evita o NaN)
+      const parsedAmount = Number(localDebt.total_amount)
+      setAmountNum(isNaN(parsedAmount) ? 0 : parsedAmount)
+      
       setDueDate(localDebt.due_date || '')
       setDescription(localDebt.description || '')
       setCategoryId(localDebt.category_id || '')
       setAccountId(localDebt.account_id || '')
       setColor(localDebt.color || '#14b8a6')
       setIcon(localDebt.icon ? localDebt.icon.charAt(0).toUpperCase() + localDebt.icon.slice(1) : 'User')
-      setDebtContext(localDebt.context || 'dfl')
-      setInitialized(true)
+      setDebtContext((localDebt.context as 'dfl' | 'personal') || 'dfl')
     }
-  }, [
-    editId,
-    localDebt,
-    debtLoading,
-    debtNotFound,
-    initialized,
-    router,
-    showToast,
-  ])
+  }, [editId, debtLoading, debtNotFound, localDebt, context, router, showToast])
 
   const handleSave = async () => {
-    if (!user?.id || !personName.trim() || amountNum <= 0) {
+    if (!user?.id || !personName.trim() || amountNum <= 0 || isNaN(amountNum)) {
       errorHaptic()
-      showToast('⚠️ Preencha nome e valor.', 'warning')
+      showToast('⚠️ Preencha nome e um valor válido.', 'warning')
       return
     }
 
     setSaving(true)
 
     const now = new Date().toISOString()
+    const finalAmount = Number(amountNum) // Garantia extra antes de salvar
 
     const payload = {
       person_name: personName.trim(),
-      total_amount: amountNum,
+      total_amount: finalAmount,
       due_date: dueDate || null,
       description: description || null,
       category_id: categoryId || null,
       account_id: accountId || null,
       color,
       icon: icon.toLowerCase(),
-      status: 'pending',
       context: debtContext,
       updated_at: now,
     }
@@ -133,7 +128,6 @@ function NewDebtContent() {
             throw new Error(result.error || 'Falha ao atualizar débito')
           }
         })
-
         success()
         showToast('✅ Empréstimo atualizado!', 'success')
       } else {
@@ -143,6 +137,7 @@ function NewDebtContent() {
           id,
           user_id: user.id,
           ...payload,
+          status: 'pending',
           paid_amount: 0,
           created_at: now,
           sync_status: 'pending',
@@ -155,7 +150,6 @@ function NewDebtContent() {
             throw new Error(result.error || 'Falha ao criar débito')
           }
         })
-
         success()
         showToast('✅ Empréstimo registrado!', 'success')
       }
@@ -169,15 +163,8 @@ function NewDebtContent() {
     }
   }
 
-  if (editId && (debtLoading || !initialized)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
-        <Loader2 className="animate-spin text-teal-600" size={40} />
-      </div>
-    )
-  }
-
-  if (!editId && !initialized) {
+  // Render condicional para proteger a tela durante o carregamento de edição
+  if (editId && debtLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
         <Loader2 className="animate-spin text-teal-600" size={40} />
@@ -192,6 +179,10 @@ function NewDebtContent() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-32 pt-4">
+        {/* ... Restante do JSX do formulário (mantido inalterado pois a UI está correta) ... */}
+        {/* Adicionei apenas proteção extra no onChange do MoneyInput */}
+        
+        {/* Cabeçalho */}
         <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-gray-100/80 bg-gray-50/90 px-4 py-3 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-900/90">
           <div className="flex items-center justify-between">
             <button
@@ -204,11 +195,9 @@ function NewDebtContent() {
             >
               <ChevronLeft size={24} />
             </button>
-
             <h2 className="text-[17px] font-bold tracking-tight text-gray-800 dark:text-gray-100">
               {editId ? 'Editar Empréstimo' : 'Novo Empréstimo'}
             </h2>
-
             <div className="h-10 w-10" />
           </div>
         </header>
@@ -218,7 +207,6 @@ function NewDebtContent() {
             <label className="mb-3 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
               Contexto
             </label>
-
             <div className="grid grid-cols-2 gap-2 rounded-full bg-gray-100 p-1 dark:bg-slate-700/50">
               {CONTEXTS.map((c) => (
                 <button
@@ -264,7 +252,10 @@ function NewDebtContent() {
               <span className="text-[16px] font-semibold text-gray-400">R$</span>
               <MoneyInput
                 value={amountNum}
-                onChange={(num) => setAmountNum(num)}
+                onChange={(num) => {
+                  // Garante que NaN nunca entre no estado
+                  setAmountNum(isNaN(num) ? 0 : num) 
+                }}
                 placeholder="0,00"
                 className="w-full bg-transparent text-[28px] font-bold tracking-tight text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
               />
