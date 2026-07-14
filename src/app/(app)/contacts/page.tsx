@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import { createPortal } from "react-dom" // ✅ ADICIONADO
 import {
   Search, Plus, X, RefreshCw, Trash2, User, Building2, Mail, Phone, ChevronRight, ChevronLeft
 } from "lucide-react"
@@ -129,7 +130,7 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -351,15 +352,14 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {/* 🔥 MODAL DE EXCLUSÃO ATUALIZADO */}
-      {deleteModal && (
+      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {deleteModal && createPortal(
         <div
-          className="fixed inset-0 z-[600] flex items-end justify-center"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setDeleteModal(null)}
         >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
-            className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300"
+            className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
@@ -369,22 +369,23 @@ export default function ContactsPage() {
             <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center px-4 font-medium">
               As transações vinculadas continuarão existindo sem contato associado.
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-3 pb-safe">
               <button
                 onClick={() => setDeleteModal(null)}
-                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 transition-colors active:scale-[0.98]"
+                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] active:scale-[0.98]"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+                className="flex-1 py-4 rounded-[20px] bg-red-500 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 active:scale-[0.98]"
               >
                 Excluir
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
