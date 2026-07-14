@@ -15,14 +15,16 @@ import {
   Sparkles,
   CalendarRange
 } from 'lucide-react'
-import { createPortal } from 'react-dom' // ✅ ADICIONADO
+import { createPortal } from 'react-dom'
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useBudgetById } from '@/hooks/useBudgetById' // ✅ NOVO HOOK
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import Skeleton from '@/components/Skeleton'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -45,8 +47,11 @@ function NewBudgetContent() {
   const { safeAdd, safeUpdate } = useSafeDb()
   const editId = searchParams.get('edit')
 
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(editId)
+
   const [saving, setSaving] = useState(false)
-  const [initialized, setInitialized] = useState(false)
+  const [initialized, setInitialized] = useState(!editId)
 
   const [name, setName] = useState('')
   const [amountNum, setAmountNum] = useState(0)
@@ -60,43 +65,85 @@ function NewBudgetContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
+  // ✅ CATEGORIAS ainda vêm via useLocalData (dados auxiliares)
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense', parent_id: null },
   })
   const categories = localCategories || []
 
-  const { data: localBudget, loading: budgetLoading } = useLocalData({
-    table: 'budgets' as any,
-    filters: { id: editId || '' },
-  })
-
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
   useEffect(() => {
-    if (!editId) {
-      setInitialized(true)
-      return
-    }
-
-    if (!budgetLoading && !initialized && localBudget && localBudget.length > 0) {
-      const data = localBudget[0] as any
-
-      setName(data.name || '')
-      const numValue = safeNum(data.amount)
+    if (editId && budgetData && !initialized) {
+      setName(budgetData.name || '')
+      const numValue = safeNum(budgetData.amount)
       setAmountNum(numValue)
       setAmountFormatted(numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
-      setCategoryId(data.category_id || '')
-      setColor(data.color || '#14b8a6')
-      setPeriod(data.period || 'monthly')
-      setAccumulate(!!data.accumulate)
+      setCategoryId(budgetData.category_id || '')
+      setColor(budgetData.color || '#14b8a6')
+      setPeriod(budgetData.period || 'monthly')
+      setAccumulate(!!budgetData.accumulate)
 
-      if (data.icon) {
-        const iconName = data.icon.charAt(0).toUpperCase() + data.icon.slice(1)
+      if (budgetData.icon) {
+        const iconName = budgetData.icon.charAt(0).toUpperCase() + budgetData.icon.slice(1)
         setIcon(iconName)
       }
 
       setInitialized(true)
     }
-  }, [editId, budgetLoading, localBudget, initialized])
+    
+    if (!editId && !initialized) {
+      setInitialized(true)
+    }
+  }, [editId, budgetData, initialized])
+
+  // ✅ TRATAMENTO DE LOADING
+  if (editId && budgetLoading) {
+    return (
+      <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
+        <div className="max-w-md mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div className="w-11 h-11 rounded-2xl bg-gray-200 dark:bg-slate-700 animate-pulse" />
+            <div className="h-5 w-36 rounded-full bg-gray-200 dark:bg-slate-700 animate-pulse" />
+            <div className="w-11 h-11 rounded-2xl bg-gray-200 dark:bg-slate-700 animate-pulse" />
+          </div>
+          <Skeleton count={5} />
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (editId && notFound) {
+    return (
+      <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <Tag size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Orçamento não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O orçamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+        <button
+          onClick={() => router.push('/budgets')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (!initialized) {
+    return (
+      <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
+        <div className="max-w-md mx-auto">
+          <Skeleton count={5} />
+        </div>
+      </div>
+    )
+  }
 
   const handleSave = async () => {
     if (!user?.id || !(name || '').trim() || amountNum <= 0) {
@@ -151,28 +198,6 @@ function NewBudgetContent() {
     } finally {
       setSaving(false)
     }
-  }
-
-  if (!initialized) {
-    return (
-      <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
-        <div className="max-w-md mx-auto animate-pulse">
-          <div className="flex items-center justify-between mb-6">
-            <div className="w-11 h-11 rounded-2xl bg-gray-200 dark:bg-slate-700" />
-            <div className="h-5 w-36 rounded-full bg-gray-200 dark:bg-slate-700" />
-            <div className="w-11 h-11 rounded-2xl bg-gray-200 dark:bg-slate-700" />
-          </div>
-
-          <div className="space-y-4">
-            <div className="h-28 rounded-[28px] bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/60" />
-            <div className="h-24 rounded-[28px] bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/60" />
-            <div className="h-16 rounded-[24px] bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/60" />
-            <div className="h-16 rounded-[24px] bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/60" />
-            <div className="h-32 rounded-[28px] bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700/60" />
-          </div>
-        </div>
-      </div>
-    )
   }
 
   const selectedCat = categories.find((c: any) => c.id === categoryId)
@@ -461,7 +486,7 @@ function NewBudgetContent() {
         </div>
       </div>
 
-      {/* ✅ MODAL DE CATEGORIA COM PORTAL */}
+      {/* MODAL DE CATEGORIA COM PORTAL */}
       {showCatModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
