@@ -1,3 +1,4 @@
+// src/hooks/useAccountTransactions.ts
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -8,14 +9,20 @@ export function useAccountTransactions(accountId?: string | null) {
   const { user } = useAuth()
 
   const data = useLiveQuery(async () => {
+    // ✅ VERIFICAÇÃO DE SEGURANÇA
     if (!user?.id || !accountId) return []
-    if (!db || !db.transactions) return [] // ✅ Segurança extra
+    if (!db || typeof db.transactions === 'undefined') return []
 
-    return await db.transactions
-      .where('account_id')
-      .equals(accountId)
-      .and(tx => tx.user_id === user.id)
-      .toArray()
+    try {
+      return await db.transactions
+        .where('account_id')
+        .equals(accountId)
+        .and(tx => tx.user_id === user.id)
+        .toArray()
+    } catch (err) {
+      console.error('useAccountTransactions error:', err)
+      return []
+    }
   }, [user?.id, accountId])
 
   return {
