@@ -67,7 +67,7 @@ function MenuItem({
   return <button type="button" className="w-full text-left" onClick={handleClick}>{content}</button>
 }
 
-// 🔥 MODAL DE PERFIL (NOVO COM PORTAL)
+// 🔥 MODAL DE PERFIL
 function ProfileEditModal({ isOpen, onClose, name, setName, isGoogleLogin, onSave, saving }: any) {
   if (!isOpen) return null
   return createPortal(
@@ -112,6 +112,10 @@ function ProfileEditModal({ isOpen, onClose, name, setName, isGoogleLogin, onSav
 // 🔥 MODAL DE CONFIGURAÇÕES RÁPIDAS (COM PORTAL)
 function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notificationsEnabled, toggleNotifications, appMode, toggleAppMode }: any) {
   if (!isOpen) return null
+
+  // Lê o estado atual do Modo Desenvolvedor
+  const isDevMode = typeof window !== 'undefined' && localStorage.getItem('devMode') === 'true'
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
@@ -125,6 +129,7 @@ function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notifications
           <button onClick={onClose} className="text-gray-400 dark:text-gray-500 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={20} /></button>
         </div>
         <div className="space-y-3">
+          {/* Tema Escuro */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
@@ -139,6 +144,8 @@ function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notifications
               <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
+
+          {/* Notificações */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
@@ -153,6 +160,8 @@ function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notifications
               <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
+
+          {/* Gestão de Empresas */}
           <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
@@ -167,6 +176,30 @@ function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notifications
               <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${appMode === 'full' ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
+
+          {/* 🔥 ADICIONADO: Modo Desenvolvedor */}
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
+                <Bot size={20} className="text-purple-500" />
+              </div>
+              <div>
+                <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Modo Desenvolvedor</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Painel Admin</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const current = localStorage.getItem('devMode') === 'true'
+                localStorage.setItem('devMode', String(!current))
+                onClose() // Fecha o modal para aplicar
+                window.location.reload() // Recarrega para mostrar o item
+              }}
+              className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${isDevMode ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+            >
+              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${isDevMode ? 'right-1' : 'left-1'}`} />
+            </button>
+          </div>
         </div>
       </div>
     </div>,
@@ -174,7 +207,7 @@ function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notifications
   )
 }
 
-// 🔥 MODAL DE EXPORTAÇÃO (COM PORTAL)
+// 🔥 MODAL DE EXPORTAÇÃO
 function ExportModal({ isOpen, onClose, exporting, exportRange, setExportRange, exportContext, setExportContext, appMode, handleExport }: any) {
   if (!isOpen) return null
   return createPortal(
@@ -387,6 +420,9 @@ export default function MorePage() {
     }
   }
 
+  // Verifica se o modo desenvolvedor está ativo
+  const isDevMode = typeof window !== 'undefined' && localStorage.getItem('devMode') === 'true'
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300">
       {loadingPulse && (
@@ -414,7 +450,7 @@ export default function MorePage() {
         </div>, document.body
       )}
 
-      {/* Renderizando Modais criados acima */}
+      {/* Renderizando Modais */}
       {isClient && (
         <>
           <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} exporting={exporting} exportRange={exportRange} setExportRange={setExportRange} exportContext={exportContext} setExportContext={setExportContext} appMode={appMode} handleExport={handleExport} />
@@ -423,7 +459,7 @@ export default function MorePage() {
         </>
       )}
 
-      {/* 🔥 PERFIL UNIFICADO E BANNER PRO */}
+      {/* PERFIL UNIFICADO E BANNER PRO */}
       <div className="px-4 pt-4 mb-5">
         {profileLoading ? (
           <div className="bg-white dark:bg-slate-800 p-4 rounded-[24px] flex items-center gap-4 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse">
@@ -448,7 +484,6 @@ export default function MorePage() {
               <p className="text-[12px] text-gray-400 dark:text-gray-500 truncate">{user?.email}</p>
             </div>
 
-            {/* BOTÃO DE LÁPIS (EDITAR PERFIL) */}
             <button
               type="button"
               onClick={() => setShowProfileModal(true)}
@@ -478,7 +513,7 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* 🔥 BLOCOS REORGANIZADOS */}
+      {/* BLOCOS REORGANIZADOS */}
       <div className="px-4 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div>
           <SectionTitle>Minha estrutura</SectionTitle>
@@ -512,6 +547,16 @@ export default function MorePage() {
             <MenuItem iconName="file-spreadsheet" label="Importar Extrato (CSV)" href="/import-csv" colorClass="text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />
             <MenuItem iconName="bar-chart" label="Relatório Personalizado" href="/analysis" colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30" />
             <MenuItem iconName="pie-chart" label="Relatórios Avançados" href="/reports" badge="Pro" colorClass="text-fuchsia-600 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-900/30" />
+
+            {/* 🔥 ADICIONADO: Link para o Painel Admin (apenas se devMode ativado) */}
+            {isDevMode && (
+              <MenuItem
+                iconName="bot"
+                label="Painel de Admin (Dev)"
+                href="/admin/sync"
+                colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30"
+              />
+            )}
           </div>
         </div>
 
@@ -524,7 +569,7 @@ export default function MorePage() {
         </div>
       </div>
 
-      {/* 🔥 LOGOUT */}
+      {/* LOGOUT */}
       <div className="px-4 mt-6 mb-8">
         <button type="button" onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="w-full flex items-center justify-between rounded-[24px] border border-red-200/60 dark:border-red-900/40 bg-white dark:bg-slate-800 px-4 py-3.5 text-left shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-[0.98] transition-all">
           <div className="flex items-center gap-3 min-w-0">
@@ -544,7 +589,6 @@ export default function MorePage() {
         <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500">DFL Finance • v4.0.0</p>
         <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Desenvolvido com ♥ por <span className="font-semibold text-teal-600 dark:text-teal-400">Álefe Jôhsefe</span></p>
       </div>
-
     </div>
   )
 }
