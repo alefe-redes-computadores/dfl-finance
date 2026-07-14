@@ -1,18 +1,19 @@
 'use client'
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   Search, Plus, X, RefreshCw, Trash2, Tag, Pencil, Save, Hash, ChevronLeft
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useTagsList } from "@/hooks/useTagsList" // ✅ NOVO HOOK
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const COLORS = [
   "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", 
@@ -32,7 +33,6 @@ export default function TagsPage() {
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -41,27 +41,27 @@ export default function TagsPage() {
   const [tagColor, setTagColor] = useState(COLORS[0])
   const [saving, setSaving] = useState(false)
   
-  const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: tags, loading, reload } = useLocalData({
-    table: 'tags' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: tags, loading } = useTagsList(effectiveContext)
 
+  // ✅ TRANSAÇÕES para contagem
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
 
-  const transactionCountByTag = (transactions || []).reduce((acc: Record<string, number>, tx: any) => {
-    if (tx.tag_ids && Array.isArray(tx.tag_ids)) {
-      tx.tag_ids.forEach((tagId: string) => {
-        acc[tagId] = (acc[tagId] || 0) + 1
-      })
-    }
-    return acc
-  }, {})
+  const transactionCountByTag = useMemo(() => {
+    return (transactions || []).reduce((acc: Record<string, number>, tx: any) => {
+      if (tx.tag_ids && Array.isArray(tx.tag_ids)) {
+        tx.tag_ids.forEach((tagId: string) => {
+          acc[tagId] = (acc[tagId] || 0) + 1
+        })
+      }
+      return acc
+    }, {})
+  }, [transactions])
 
   const handleEdit = (tag: any) => {
     vibrate([5])
@@ -119,7 +119,7 @@ export default function TagsPage() {
       setShowForm(false)
       setEditId(null)
       setTagName("")
-      reload()
+      // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro: ${err.message}`, "error")
@@ -138,33 +138,23 @@ export default function TagsPage() {
       success()
       showToast("🗑️ Tag excluída!", "success")
       setDeleteModal(null)
-      reload()
+      // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro: ${err.message}`, "error")
     }
   }
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        vibrate([10])
-        reload().finally(() => setTimeout(() => setRefreshing(false), 600))
-      }
-    }
-  }, [refreshing, reload, vibrate])
-
-  const filteredTags = (tags || []).filter((tag: any) => {
-    if (!search) return true
-    return tag.name && tag.name.toLowerCase().includes(search.toLowerCase())
-  })
+  const filteredTags = useMemo(() => {
+    if (!search) return tags || []
+    return (tags || []).filter((tag: any) => 
+      tag.name && tag.name.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [tags, search])
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 transition-colors duration-300">
-      {(loadingPulse || loading || pendingCount > 0) && (
+      {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
@@ -179,7 +169,7 @@ export default function TagsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -246,8 +236,6 @@ export default function TagsPage() {
 
       <div
         ref={scrollRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
       >
         {loading ? (
@@ -316,7 +304,7 @@ export default function TagsPage() {
         )}
       </div>
 
-      {/* 🔥 BOTTOM SHEET - FORMULÁRIO */}
+      {/* BOTTOM SHEET - FORMULÁRIO */}
       {showForm && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowForm(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
@@ -396,7 +384,7 @@ export default function TagsPage() {
         </div>
       )}
 
-      {/* 🔥 MODAL DE EXCLUSÃO */}
+      {/* MODAL DE EXCLUSÃO */}
       {deleteModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setDeleteModal(null)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
