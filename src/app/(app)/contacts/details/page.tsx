@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createPortal } from 'react-dom' // ✅ ADICIONADO
+import { createPortal } from 'react-dom'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   ChevronLeft, Edit3, Trash2, Loader2, Phone, Mail, Building, User,
@@ -11,9 +11,12 @@ import {
 import { format } from 'date-fns'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
+import { useContactById } from '@/hooks/useContactById' // ✅ NOVO HOOK
+import { useContactTransactions } from '@/hooks/useContactTransactions' // ✅ NOVO HOOK
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import Skeleton from '@/components/Skeleton'
 
 const ContactDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6 space-y-4">
@@ -53,93 +56,44 @@ function ContactDetailContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const { data: contacts, loading: contactsLoading, reload: reloadContacts } = useLocalData({
-    table: 'contacts' as any,
-    filters: { context: effectiveContext }
-  })
+  // ✅ HOOK ESPECÍFICO POR ID
+  const { data: contact, loading: contactLoading, notFound } = useContactById(id)
 
-  const { data: allTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context: effectiveContext }
-  })
+  // ✅ HOOK DE RELACIONAMENTO (transações do contato)
+  const { data: transactions, loading: txLoading } = useContactTransactions(id)
 
+  // ✅ CATEGORIAS ainda vêm via useLocalData para joins
   const { data: categories } = useLocalData({
     table: 'categories' as any,
     filters: { context: effectiveContext }
   })
 
-  const contact = useMemo(() => {
-    return contacts?.find((c: any) => c.id === id)
-  }, [contacts, id])
-
-  const transactions = useMemo(() => {
-    if (!allTransactions || !contact) return []
-
-    return allTransactions
-      .filter((tx: any) => tx.contact_id === contact.id)
+  // ✅ CONSOLIDA TRANSAÇÕES COM CATEGORIAS
+  const transactionsWithCategories = useMemo(() => {
+    if (!transactions) return []
+    return transactions
       .map((tx: any) => {
         const category = categories?.find((c: any) => c.id === tx.category_id)
         return { ...tx, categories: category || null }
       })
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 20)
-  }, [allTransactions, contact, categories])
+  }, [transactions, categories])
 
   const totalToPay = useMemo(() => {
-    return transactions
+    return transactionsWithCategories
       .filter((t: any) => t.type === 'expense' && t.status === 'pending')
       .reduce((acc, t: any) => acc + Number(t.amount), 0)
-  }, [transactions])
+  }, [transactionsWithCategories])
 
   const totalToReceive = useMemo(() => {
-    return transactions
+    return transactionsWithCategories
       .filter((t: any) => t.type === 'income' && t.status === 'pending')
       .reduce((acc, t: any) => acc + Number(t.amount), 0)
-  }, [transactions])
+  }, [transactionsWithCategories])
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (window.scrollY > 10 || contactsLoading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }, [contactsLoading])
+  // ✅ REMOVIDO reload manual – a UI reage automaticamente via hooks
 
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      vibrate([10])
-      Promise.all([reloadContacts(), reloadTxs()]).finally(() => setRefreshing(false))
-    }
-  }, [refreshing, vibrate, reloadContacts, reloadTxs])
-
-  const handleTouchEnd = useCallback(() => {
-    isPulling.current = false
-  }, [])
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd])
-
-  useEffect(() => {
-    if (!contactsLoading && !contact) {
-      router.replace('/contacts')
-    }
-  }, [contactsLoading, contact, router])
-
-  // 🔥 CORRIGIDO: regex com (\?|$) em vez de (?|$)
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -182,13 +136,35 @@ function ContactDetailContent() {
     }
   }
 
-  if (contactsLoading && !contact) {
+  // ✅ TRATAMENTO DE LOADING
+  if (contactLoading && !contact) {
     return (
       <div className="min-h-screen bg-slate-50 pb-24 dark:bg-slate-950">
         <div className="sticky top-0 border-b border-slate-200 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
           <div className="h-10 w-10 animate-pulse rounded-[14px] bg-slate-200 dark:bg-slate-700" />
         </div>
         <ContactDetailSkeleton />
+      </div>
+    )
+  }
+
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <User size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Contato não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O contato que você está tentando acessar pode ter sido excluído ou você não tem permissão.
+        </p>
+        <button
+          onClick={() => router.push('/contacts')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
       </div>
     )
   }
@@ -360,7 +336,7 @@ function ContactDetailContent() {
               <div className="flex justify-center p-8">
                 <Loader2 size={24} className="animate-spin text-teal-500" />
               </div>
-            ) : transactions.length === 0 ? (
+            ) : transactionsWithCategories.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="text-[13px] font-medium text-slate-400 dark:text-slate-500">
                   Nenhuma transação vinculada a este contato.
@@ -368,7 +344,7 @@ function ContactDetailContent() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {transactions.map((tx: any) => {
+                {transactionsWithCategories.map((tx: any) => {
                   const isIncome = tx.type === 'income'
                   const isPending = tx.status === 'pending'
                   const TxIconComp = getDynamicIcon(tx.categories?.icon || 'tag')
@@ -433,7 +409,7 @@ function ContactDetailContent() {
         </div>
       </main>
 
-      {/* ✅ DELETE SHEET COM PORTAL */}
+      {/* DELETE SHEET COM PORTAL */}
       {showDeleteSheet && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
