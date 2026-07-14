@@ -44,7 +44,6 @@ function EditCardContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  // ✅ CORRIGIDO: usa 'edit' em vez de 'id'
   const cardId = searchParams.get('edit') as string
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
@@ -81,7 +80,6 @@ function EditCardContent() {
     filters: { id: cardId },
   })
 
-  // ✅ useEffect com initialized
   useEffect(() => {
     if (!cardsLoading && !initialized) {
       const cardData = (localCards || [])[0] as any
@@ -1467,6 +1465,15 @@ function NewCardContent() {
   )
 }
 
+// ✅ COMPONENTE ROTEADOR (Usa useSearchParams corretamente)
+function CardRouter() {
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit')
+
+  // Se editId existe, renderiza o componente de edição, senão o de criação
+  return editId ? <EditCardContent /> : <NewCardContent />
+}
+
 export default function NewCardPage() {
   return (
     <Suspense
@@ -1476,13 +1483,7 @@ export default function NewCardPage() {
         </div>
       }
     >
-      {/* ⚠️ IMPORTANTE: O componente que renderiza depende da URL */}
-      {/* Se houver ?edit=, renderiza EditCardContent, senão NewCardContent */}
-      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('edit') ? (
-        <EditCardContent />
-      ) : (
-        <NewCardContent />
-      )}
+      <CardRouter />
     </Suspense>
   )
 }
