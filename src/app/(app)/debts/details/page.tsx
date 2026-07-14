@@ -25,6 +25,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useDebtById } from '@/hooks/useDebtById'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
@@ -251,14 +252,8 @@ function DebtDetailContent() {
 
   const debtId = searchParams.get('id') as string
 
-  const {
-    data: localDebt,
-    loading: debtLoading,
-    reload: reloadDebt,
-  } = useLocalData({
-    table: 'debts' as any,
-    filters: { id: debtId },
-  })
+  // 🔥 USANDO O NOVO HOOK REATIVO POR ID
+  const { debt, loading: debtLoading } = useDebtById(debtId)
 
   const {
     data: localTransactions,
@@ -273,10 +268,10 @@ function DebtDetailContent() {
     reload: reloadAccounts,
   } = useLocalData({
     table: 'accounts' as any,
-    filters: { context: ((localDebt || [])[0] as Debt | undefined)?.context || 'dfl' },
+    filters: { context: debt?.context || 'dfl' },
   })
 
-  const debt = useMemo(() => ((localDebt || [])[0] as Debt | undefined) || null, [localDebt])
+  // A dívida já vem do useDebtById, não precisa mais do useMemo com localDebt
   const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
   const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
 
@@ -304,15 +299,19 @@ function DebtDetailContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
+  // 🔥 REMOVIDO reloadDebt do loadData, pois a dívida é reativa via useDebtById
   const loadData = useCallback(async () => {
     if (!debtId) return
     setLoadingPulse(true)
     try {
-      await Promise.all([reloadDebt(), reloadTransactions(), reloadAccounts()])
+      await Promise.all([
+        reloadTransactions(),
+        reloadAccounts(),
+      ])
     } finally {
       setLoadingPulse(false)
     }
-  }, [debtId, reloadDebt, reloadTransactions, reloadAccounts])
+  }, [debtId, reloadTransactions, reloadAccounts])
 
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
@@ -351,7 +350,7 @@ function DebtDetailContent() {
     }
   }, [debtLoading, refreshing, loadData, vibrate])
 
-  // 🔥 CORREÇÃO: Evita loop de navegação usando replace e dependências corretas
+  // 🔥 REDIRECIONAMENTO CORRIGIDO: usa debt do hook
   useEffect(() => {
     if (!debtLoading && !debt && debtId) {
       router.replace('/debts')
