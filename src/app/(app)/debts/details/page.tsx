@@ -26,6 +26,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
+import { useDebtPayments } from '@/hooks/useDebtPayments'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
@@ -253,13 +254,8 @@ function DebtDetailContent() {
 
   const { debt, loading, notFound } = useDebtById(debtId)
 
-  const {
-    data: localTransactions,
-    reload: reloadTransactions,
-  } = useLocalData({
-    table: 'transactions' as any,
-    filters: debtId ? { debt_id: debtId } : {},
-  })
+  // 🔥 TROCANDO useLocalData por useDebtPayments
+  const { data: localTransactions, loading: transactionsLoading } = useDebtPayments(debtId)
 
   const {
     data: localAccounts,
@@ -267,6 +263,8 @@ function DebtDetailContent() {
   } = useLocalData({
     table: 'accounts' as any,
     filters: { context: debt?.context || 'dfl' },
+    orderBy: 'updated_at',
+    orderDir: 'desc',
   })
 
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -314,15 +312,16 @@ function DebtDetailContent() {
   const isPulling = useRef(false)
   const hasScheduledRedirect = useRef(false)
 
+  // 🔥 SIMPLIFICADO: removido reloadTransactions
   const loadData = useCallback(async () => {
     if (!debtId) return
     setLoadingPulse(true)
     try {
-      await Promise.all([reloadTransactions(), reloadAccounts()])
+      await reloadAccounts()
     } finally {
       setLoadingPulse(false)
     }
-  }, [debtId, reloadTransactions, reloadAccounts])
+  }, [debtId, reloadAccounts])
 
   useEffect(() => {
     console.log('[DebtDetailsPage] Query param recebido', {
@@ -668,7 +667,7 @@ function DebtDetailContent() {
   }
 
   const handleSendWhatsApp = () => {
-    const number = whatsAppNumber.replace(/D/g, '')
+    const number = whatsAppNumber.replace(/\D/g, '')
 
     if (!number) {
       showToast('⚠️ Informe o número do WhatsApp.', 'warning')
