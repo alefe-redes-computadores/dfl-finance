@@ -46,6 +46,7 @@ interface Debt {
   account_id?: string | null
   phone?: string
   whatsapp?: string
+  user_id?: string
 }
 
 interface Account {
@@ -73,9 +74,7 @@ function SectionCard({
   className?: string
 }) {
   return (
-    <section
-      className={`rounded-[28px] border border-gray-100 bg-white shadow-sm dark:border-slate-700/50 dark:bg-slate-800 ${className}`}
-    >
+    <section className={`rounded-[28px] border border-gray-100 bg-white shadow-sm dark:border-slate-700/50 dark:bg-slate-800 ${className}`}>
       {children}
     </section>
   )
@@ -242,7 +241,6 @@ function PaymentHistoryItem({
 }
 
 function DebtDetailContent() {
-  // ========== TODOS OS HOOKS NO TOPO ==========
   const searchParams = useSearchParams()
   const router = useRouter()
   const { user } = useAuth()
@@ -250,16 +248,17 @@ function DebtDetailContent() {
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
-  const debtId = searchParams.get('id') as string
-  const { debt, isLoading } = useDebtById(debtId)
+  const rawDebtId = searchParams?.get('id')
+  const debtId = useMemo(() => rawDebtId?.trim() || null, [rawDebtId])
 
-  // ✅ HOOKS DE DADOS (chamados incondicionalmente)
+  const { debt, loading, notFound } = useDebtById(debtId)
+
   const {
     data: localTransactions,
     reload: reloadTransactions,
   } = useLocalData({
     table: 'transactions' as any,
-    filters: { debt_id: debtId },
+    filters: debtId ? { debt_id: debtId } : {},
   })
 
   const {
@@ -270,7 +269,6 @@ function DebtDetailContent() {
     filters: { context: debt?.context || 'dfl' },
   })
 
-  // ✅ TODOS OS STATES
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -291,7 +289,6 @@ function DebtDetailContent() {
   const [payNote, setPayNote] = useState('')
   const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
-  // ✅ TODOS OS MEMOS
   const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
   const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
 
@@ -315,25 +312,61 @@ function DebtDetailContent() {
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
+  const hasScheduledRedirect = useRef(false)
 
-  // ✅ TODOS OS CALLBACKS
   const loadData = useCallback(async () => {
     if (!debtId) return
     setLoadingPulse(true)
     try {
-      await Promise.all([
-        reloadTransactions(),
-        reloadAccounts(),
-      ])
+      await Promise.all([reloadTransactions(), reloadAccounts()])
     } finally {
       setLoadingPulse(false)
     }
   }, [debtId, reloadTransactions, reloadAccounts])
 
-  // ✅ TODOS OS EFFECTS
+  useEffect(() => {
+    console.log('[DebtDetailsPage] Query param recebido', {
+      rawDebtId,
+      normalizedDebtId: debtId,
+      search: searchParams?.toString?.() ?? '',
+      sessionUserId: user?.id ?? null,
+    })
+  }, [rawDebtId, debtId, searchParams, user?.id])
+
+  useEffect(() => {
+    console.log('[DebtDetailsPage] Estado atual', {
+      debtId,
+      loading,
+      notFound,
+      hasDebt: !!debt,
+      debtUserId: debt?.user_id ?? null,
+      sessionUserId: user?.id ?? null,
+    })
+  }, [debtId, loading, notFound, debt, user?.id])
+
+  useEffect(() => {
+    async function debugDexie() {
+      if (!debtId) return
+      try {
+        const exact = await db.debts.get(debtId)
+        console.log('[DebtDetailsPage][DEBUG] Consulta exata db.debts.get(id)', {
+          searchedId: debtId,
+          foundId: exact?.id ?? null,
+          foundUserId: exact?.user_id ?? null,
+          sessionUserId: user?.id ?? null,
+          exact,
+        })
+      } catch (err) {
+        console.error('[DebtDetailsPage][DEBUG] Erro ao consultar Dexie', err)
+      }
+    }
+
+    debugDexie()
+  }, [debtId, user?.id])
+
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
-      if (window.scrollY > 10 || isLoading) return
+      if (window.scrollY > 10 || loading) return
       pullStartY.current = e.touches[0].clientY
       isPulling.current = true
     }
@@ -366,13 +399,26 @@ function DebtDetailContent() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [isLoading, refreshing, loadData, vibrate])
+  }, [loading, refreshing, loadData, vibrate])
 
   useEffect(() => {
-    if (!isLoading && !debt && debtId) {
+    if (!debtId) return
+    if (loading) return
+    if (!notFound) return
+    if (hasScheduledRedirect.current) return
+
+    hasScheduledRedirect.current = true
+
+    console.warn('[DebtDetailsPage] Registro não encontrado após fim do loading', {
+      debtId,
+    })
+
+    const timer = setTimeout(() => {
       router.replace('/debts')
-    }
-  }, [isLoading, debt, debtId, router])
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [debtId, loading, notFound, router])
 
   useEffect(() => {
     if (!debt) return
@@ -385,28 +431,18 @@ function DebtDetailContent() {
     setWhatsAppNumber(debt.phone || debt.whatsapp || '')
   }, [debt])
 
-  // ========== SÓ DEPOIS DE TODOS OS HOOKS, OS RETORNOS CONDICIONAIS ==========
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Carregando...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!debt) {
+  if (!debtId) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-slate-900">
         <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-4">
           <AlertTriangle size={32} className="text-red-500" />
         </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Registro não encontrado</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">A dívida que você procura não existe ou foi removida.</p>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white">ID ausente</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+          Nenhum ID de dívida foi informado na URL.
+        </p>
         <button
-          onClick={() => router.back()}
+          onClick={() => router.replace('/debts')}
           className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-[20px] font-bold hover:bg-teal-700 transition-colors active:scale-[0.98]"
         >
           Voltar
@@ -415,7 +451,39 @@ function DebtDetailContent() {
     )
   }
 
-  // ========== RESTO DA LÓGICA (HANDLERS) ==========
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            Carregando registro no banco local...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (notFound || !debt) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-slate-900">
+        <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center mb-4">
+          <AlertTriangle size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Registro não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+          A dívida que você procura não existe, foi removida ou pertence a outro usuário.
+        </p>
+        <button
+          onClick={() => router.replace('/debts')}
+          className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-[20px] font-bold hover:bg-teal-700 transition-colors active:scale-[0.98]"
+        >
+          Voltar
+        </button>
+      </div>
+    )
+  }
+
   const resetPaymentForm = () => {
     setPayAmountNum(0)
     setPayNote('')
@@ -614,7 +682,6 @@ function DebtDetailContent() {
     setShowWhatsAppModal(false)
   }
 
-  // ========== RENDER ==========
   return (
     <div
       ref={containerRef}
