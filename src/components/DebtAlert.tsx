@@ -2,6 +2,7 @@
 
 import { AlertCircle, Clock } from 'lucide-react'
 import { differenceInDays, format, isValid, parseISO } from 'date-fns'
+import { useRouter } from 'next/navigation'
 
 interface DebtAlertProps {
   personName?: string
@@ -11,6 +12,8 @@ interface DebtAlertProps {
 }
 
 export default function DebtAlert({ personName, amount = 0, dueDate, debtId }: DebtAlertProps) {
+  const router = useRouter()
+
   if (!dueDate || amount <= 0) return null
 
   const today = new Date()
@@ -32,10 +35,18 @@ export default function DebtAlert({ personName, amount = 0, dueDate, debtId }: D
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+  // Navegação Local-First Estrita: Usa router.push garantindo que o ID exista
+  const handleNavigate = () => {
+    if (debtId) {
+      router.push(`/debts/details?id=${debtId}`)
+    }
+  }
+
   return (
     <div
       data-debt-id={debtId}
-      className={`rounded-2xl p-4 flex items-center gap-4 shadow-sm transition-all hover:shadow-md border ${
+      onClick={handleNavigate}
+      className={`rounded-2xl p-4 flex items-center gap-4 shadow-sm transition-all hover:shadow-md border cursor-pointer active:scale-[0.98] ${
         isOverdue
           ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20'
           : isDueSoon
