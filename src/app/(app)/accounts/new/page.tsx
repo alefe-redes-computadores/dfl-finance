@@ -6,6 +6,7 @@ import { ArrowLeft, Save, X, Wallet, Building2, CreditCard, PiggyBank, Loader2, 
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
+import { useAccountById } from "@/hooks/useAccountById"
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
@@ -48,24 +49,22 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
-  const { data: accountData, loading: accountLoading } = useLocalData({
-    table: "accounts" as any,
-    filters: { id: editId as string, context },
-  })
+  // 🔥 USANDO useAccountById PARA EDIÇÃO
+  const { data: accountData, loading: accountLoading } = useAccountById(editId)
 
+  // Preenche formulário ao carregar dados da conta (apenas se houver dados)
   useEffect(() => {
-    if (editId && accountData && accountData.length > 0) {
-      const acc = accountData[0]
+    if (accountData) {
       setFormData({
-        name: acc.name || "",
-        type: acc.type || "checking",
-        bank: acc.bank || "",
-        balance: String(acc.balance || 0),
-        color: acc.color || "#0f766e",
-        icon: acc.icon || "wallet",
+        name: accountData.name || "",
+        type: accountData.type || "checking",
+        bank: accountData.bank || "",
+        balance: String(accountData.balance || 0),
+        color: accountData.color || "#0f766e",
+        icon: accountData.icon || "wallet",
       })
     }
-  }, [editId, accountData])
+  }, [accountData])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -144,6 +143,7 @@ function AccountFormContent() {
     router.push("/accounts")
   }
 
+  // Skeleton durante carregamento da edição
   if (accountLoading && editId) {
     return (
       <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
