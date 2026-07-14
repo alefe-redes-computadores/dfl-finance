@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useCallback, useRef } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
+import { createPortal } from "react-dom"
 import {
-  ArrowUpDown, Search, Plus, X, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, Repeat, Calendar, ChevronLeft
+  ArrowUpDown, Search, Plus, X, Trash2, AlertTriangle, Clock, Repeat, Calendar, ChevronLeft
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useSubscriptionsList } from "@/hooks/useSubscriptionsList"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
@@ -19,10 +19,10 @@ import { db, addToSyncQueue } from '@/lib/db'
 export default function SubscriptionsPage() {
   const router = useRouter()
   const { showToast } = useToast()
-  const { success, error: errorHaptic } = useHapticFeedback()
+  const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  
+
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
@@ -30,17 +30,9 @@ export default function SubscriptionsPage() {
   const [showSearch, setShowSearch] = useState(false)
   const [sortBy, setSortBy] = useState("updated_at")
   const [sortOrder, setSortOrder] = useState("desc")
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
-  
-  const touchStartY = useRef(0)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: subscriptions, loading, reload } = useLocalData({
-    table: 'subscriptions' as any,
-    filters: { context: effectiveContext },
-  })
+  const { data: subscriptions, loading } = useSubscriptionsList(effectiveContext)
 
   const handleDelete = async () => {
     if (!deleteModal || !user) return
@@ -49,42 +41,44 @@ export default function SubscriptionsPage() {
         await db.table('subscriptions').delete(deleteModal)
         await addToSyncQueue(user.id, 'subscriptions', 'delete', deleteModal, null)
       })
-      
+
       showToast("Assinatura excluída com sucesso!", "success")
       success()
       setDeleteModal(null)
-      reload()
     } catch (err: any) {
       showToast(`Erro ao excluir assinatura: ${err.message}`, "error")
       errorHaptic()
     }
   }
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        reload().finally(() => setTimeout(() => setRefreshing(false), 600))
-      }
-    }
-  }, [refreshing, reload])
-
   const filteredSubscriptions = (subscriptions || []).filter((sub: any) => {
     if (!search) return true
     const s = search.toLowerCase()
-    return ((sub.name && sub.name.toLowerCase().includes(s)) || (sub.category && sub.category.toLowerCase().includes(s)) || (sub.notes && sub.notes.toLowerCase().includes(s)))
+    return (
+      (sub.name && sub.name.toLowerCase().includes(s)) ||
+      (sub.category && sub.category.toLowerCase().includes(s)) ||
+      (sub.notes && sub.notes.toLowerCase().includes(s))
+    )
   })
 
   const sortedSubscriptions = [...filteredSubscriptions].sort((a: any, b: any) => {
-    let valA = a[sortBy] || ""; let valB = b[sortBy] || ""
-    if (sortBy === "amount" || sortBy === "monthly_total") return sortOrder === "desc" ? Number(b[sortBy]) - Number(a[sortBy]) : Number(a[sortBy]) - Number(b[sortBy])
-    return sortOrder === "desc" ? String(valB).localeCompare(String(valA)) : String(valA).localeCompare(String(valB))
+    let valA = a[sortBy] || ""
+    let valB = b[sortBy] || ""
+
+    if (sortBy === "amount" || sortBy === "monthly_total") {
+      return sortOrder === "desc"
+        ? Number(b[sortBy]) - Number(a[sortBy])
+        : Number(a[sortBy]) - Number(b[sortBy])
+    }
+
+    return sortOrder === "desc"
+      ? String(valB).localeCompare(String(valA))
+      : String(valA).localeCompare(String(valB))
   })
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
-  
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+
   const formatDate = (date: string | null) => {
     if (!date) return ""
     const d = new Date(date + 'T12:00:00')
@@ -93,10 +87,14 @@ export default function SubscriptionsPage() {
 
   const getStatusInfo = (status: string) => {
     switch (status) {
-      case "active": return { label: 'Ativa', icon: Clock, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-900/30' }
-      case "cancelled": return { label: 'Cancelada', icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30' }
-      case "paused": return { label: 'Pausada', icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30' }
-      default: return { label: status, icon: Clock, color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-slate-800' }
+      case "active":
+        return { label: 'Ativa', icon: Clock, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-900/30' }
+      case "cancelled":
+        return { label: 'Cancelada', icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30' }
+      case "paused":
+        return { label: 'Pausada', icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30' }
+      default:
+        return { label: status, icon: Clock, color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-slate-800' }
     }
   }
 
@@ -125,23 +123,12 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 font-sans transition-colors duration-300">
-      
-      {(loadingPulse || loading || pendingCount > 0) && (
+      {pendingCount > 0 && (
         <div className="fixed top-6 right-6 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
         </div>
       )}
 
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-semibold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
-      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -220,13 +207,7 @@ export default function SubscriptionsPage() {
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
-      >
-        {/* CARD DE RESUMO - NEUTRO */}
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar">
         {!loading && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div className="flex items-start justify-between gap-3">
@@ -249,7 +230,6 @@ export default function SubscriptionsPage() {
           </div>
         )}
 
-        {/* FILTROS DE ORDENAÇÃO */}
         {!loading && sortedSubscriptions.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
@@ -300,7 +280,14 @@ export default function SubscriptionsPage() {
                   key={sub.id}
                   className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
                 >
-                  <div className="rounded-[18px] p-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      vibrate([5])
+                      router.push(`/subscriptions/details?id=${sub.id}`)
+                    }}
+                    className="w-full text-left rounded-[18px] p-3 active:scale-[0.99] transition-transform"
+                  >
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-start gap-3 min-w-0 flex-1">
                         <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 ${status.bg}`}>
@@ -348,22 +335,22 @@ export default function SubscriptionsPage() {
                         )}
                       </div>
                     </div>
+                  </button>
 
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
-                        className="flex-1 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 font-semibold text-[13px] transition-colors active:scale-[0.98]"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => setDeleteModal(sub.id)}
-                        className="w-10 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-colors active:scale-[0.98]"
-                        aria-label="Excluir"
-                      >
-                        <Trash2 size={15} className="mx-auto" />
-                      </button>
-                    </div>
+                  <div className="mt-3 px-3 pb-3 flex gap-2">
+                    <button
+                      onClick={() => router.push(`/subscriptions/new?edit=${sub.id}`)}
+                      className="flex-1 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 font-semibold text-[13px] transition-colors active:scale-[0.98]"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setDeleteModal(sub.id)}
+                      className="w-10 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-colors active:scale-[0.98]"
+                      aria-label="Excluir"
+                    >
+                      <Trash2 size={15} className="mx-auto" />
+                    </button>
                   </div>
                 </div>
               )
@@ -372,7 +359,6 @@ export default function SubscriptionsPage() {
         )}
       </div>
 
-      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
       {deleteModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteModal(null)}>
           <div
