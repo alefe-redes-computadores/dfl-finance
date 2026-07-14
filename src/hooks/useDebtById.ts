@@ -9,17 +9,13 @@ export function useDebtById(debtId?: string | null) {
 
   const debt = useLiveQuery(async () => {
     if (!user?.id || !debtId) return null
-
     const item = await db.debts.get(debtId)
-
-    if (!item) return null
-    if (item.user_id !== user.id) return null
-
-    return item
-  }, [user?.id, debtId], null)
+    // Retorna null se não encontrar ou se não pertencer ao usuário
+    return item?.user_id === user.id ? item : null
+  }, [user?.id, debtId])
 
   return {
     debt,
-    loading: debt === undefined,
+    isLoading: debt === undefined, // true enquanto carrega
   }
 }
