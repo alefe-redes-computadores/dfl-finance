@@ -29,9 +29,11 @@ export const safeArray = (val: any): any[] => {
   return Array.isArray(val) ? val : [];
 }
 
-// Navegação segura usando o router do Next.js
-export const safeNavigate = (router: any, path: string) => {
+// CORREÇÃO: Adicionado o terceiro parâmetro "id" opcional para a navegação funcionar na Home
+export const safeNavigate = (router: any, basePath: string, id?: string) => {
   if (router && typeof router.push === 'function') {
-    router.push(path);
+    // Se um ID foi enviado, monta a URL certa com o parâmetro. Se não, vai só para a listagem.
+    const finalPath = id ? `${basePath}?id=${encodeURIComponent(id)}` : basePath;
+    router.push(finalPath);
   }
 }
