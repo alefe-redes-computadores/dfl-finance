@@ -2,13 +2,13 @@
 
 import { useState, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { createPortal } from "react-dom" // ✅ ADICIONADO
+import { createPortal } from "react-dom"
 import {
   Search, Plus, X, RefreshCw, Trash2, User, Building2, Mail, Phone, ChevronRight, ChevronLeft
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
+import { useContactsList } from "@/hooks/useContactsList" // ✅ NOVO HOOK
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
@@ -36,11 +36,10 @@ export default function ContactsPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { data: contacts, loading, reload } = useLocalData({
-    table: 'contacts' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: contacts, loading } = useContactsList(effectiveContext)
 
+  // ✅ TRANSAÇÕES ainda vêm via useLocalData para contagem
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -85,24 +84,15 @@ export default function ContactsPage() {
       success()
       showToast("✅ Contato excluído!", "success")
       setDeleteModal(null)
-      reload()
+      // ✅ NÃO PRECISA MAIS reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro: ${err.message}`, "error")
     }
   }
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY }, [])
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (scrollRef.current && scrollRef.current.scrollTop <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        vibrate([10])
-        reload().finally(() => setTimeout(() => setRefreshing(false), 600))
-      }
-    }
-  }, [refreshing, reload, vibrate])
+  // ✅ REMOVIDO pull-to-refresh manual (useContactsList já é reativo)
+  // A UI reage automaticamente a qualquer alteração no IndexedDB
 
   const formatInitials = (name: string) => {
     if (!name) return "?"
@@ -115,18 +105,9 @@ export default function ContactsPage() {
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 transition-colors duration-300">
       
       {/* Ponto de Luz */}
-      {(loadingPulse || loading || pendingCount > 0) && (
+      {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-        </div>
-      )}
-
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-semibold text-teal-600">Atualizando...</span>
-          </div>
         </div>
       )}
 
@@ -234,8 +215,6 @@ export default function ContactsPage() {
 
       <div
         ref={scrollRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-24 custom-scrollbar"
       >
         {loading ? (
@@ -352,7 +331,7 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {/* ✅ MODAL DE EXCLUSÃO COM PORTAL */}
+      {/* MODAL DE EXCLUSÃO COM PORTAL */}
       {deleteModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
