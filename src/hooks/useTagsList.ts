@@ -1,4 +1,3 @@
-,
 // src/hooks/useTagsList.ts
 'use client'
 
