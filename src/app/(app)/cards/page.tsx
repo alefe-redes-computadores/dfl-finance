@@ -13,7 +13,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns
 import { ptBR } from 'date-fns/locale'
 import Skeleton from '@/components/Skeleton'
 
-// 🔥 SKELETON ATUALIZADO
+// SKELETON
 const CardsSkeleton = () => (
   <div className="space-y-4 animate-pulse pt-2">
     {[1, 2, 3].map((i) => (
@@ -187,7 +187,7 @@ export default function CardsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -247,7 +247,7 @@ export default function CardsPage() {
       </div>
 
       <div className="px-4 pt-3 space-y-3">
-        {/* 🔥 CARD CONSOLIDADO - NEUTRO */}
+        {/* CARD CONSOLIDADO */}
         {!loading && cardsWithInvoice.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-start justify-between gap-3">
