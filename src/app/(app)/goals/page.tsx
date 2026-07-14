@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -10,6 +10,7 @@ import { differenceInDays } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
+import { useGoalsList } from '@/hooks/useGoalsList' // ✅ NOVO HOOK
 import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
@@ -25,12 +26,11 @@ function GoalsContent() {
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  const { data: localGoals, loading: goalsLoading, reload: reloadGoals } = useLocalData({
-    table: 'goals' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: localGoals, loading: goalsLoading } = useGoalsList(effectiveContext)
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
+  // ✅ TRANSAÇÕES ainda vêm via useLocalData para calcular progresso
+  const { data: localTransactions, loading: txLoading } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
@@ -41,56 +41,29 @@ function GoalsContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY > 10 || loading) return
-    pullStartY.current = e.touches[0].clientY
-    isPulling.current = true
-  }
+  // ✅ REMOVIDO pull-to-refresh manual (useGoalsList já é reativo)
+  // Mantido apenas para compatibilidade com a UI, mas sem reload
 
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling.current || refreshing) return
-    const pullDistance = e.touches[0].clientY - pullStartY.current
-    if (pullDistance > 60) {
-      setRefreshing(true)
-      isPulling.current = false
-      vibrate([10])
-      Promise.all([reloadGoals(), reloadTransactions()]).finally(() => setRefreshing(false))
-    }
-  }
+  const goalsWithProgress = useMemo(() => {
+    return (localGoals || []).map((goal: any) => {
+      const saved = (localTransactions || [])
+        .filter((tx: any) => tx.goal_id === goal.id && tx.type === 'income' && tx.status === 'done')
+        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
 
-  const handleTouchEnd = () => { isPulling.current = false }
+      const remaining = Number(goal.target_amount) - saved
+      const percent = Number(goal.target_amount) > 0 ? (saved / Number(goal.target_amount)) * 100 : 0
+      const daysLeft = differenceInDays(new Date(goal.deadline), new Date())
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: true })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [loading, refreshing, vibrate])
-
-  const goalsWithProgress = (localGoals || []).map((goal: any) => {
-    const saved = (localTransactions || [])
-      .filter((tx: any) => tx.goal_id === goal.id && tx.type === 'income' && tx.status === 'done')
-      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-
-    const remaining = Number(goal.target_amount) - saved
-    const percent = Number(goal.target_amount) > 0 ? (saved / Number(goal.target_amount)) * 100 : 0
-    const daysLeft = differenceInDays(new Date(goal.deadline), new Date())
-
-    return {
-      ...goal,
-      saved,
-      remaining,
-      percent: Math.min(percent, 100),
-      daysLeft,
-      isCompleted: saved >= Number(goal.target_amount)
-    }
-  })
+      return {
+        ...goal,
+        saved,
+        remaining,
+        percent: Math.min(percent, 100),
+        daysLeft,
+        isCompleted: saved >= Number(goal.target_amount)
+      }
+    })
+  }, [localGoals, localTransactions])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -108,7 +81,7 @@ function GoalsContent() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
