@@ -125,7 +125,8 @@ function HomeContent() {
     table: 'accounts' as any, 
     filters: { context: effectiveContext }
   })
-  const { data: rawDebts, loading: debtsLoading } = useLocalData({ 
+  // 🔥 ADICIONADO: reloadDebts para forçar atualização dos alertas
+  const { data: rawDebts, loading: debtsLoading, reload: reloadDebts } = useLocalData({ 
     table: 'debts' as any, 
     filters: { context: effectiveContext }
   })
@@ -424,7 +425,8 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-      await reloadTxs()
+      // 🔥 ADICIONADO: recarrega também as dívidas para atualizar alertas
+      await Promise.all([reloadTxs(), reloadDebts()])
       setRefreshing(false)
     }
   }
@@ -443,6 +445,21 @@ function HomeContent() {
       container.removeEventListener('touchend', handleTouchEnd)
     }
   }, [isDataLoading, refreshing])
+
+  // ========== ATUALIZAÇÃO PERIÓDICA DOS ALERTAS ==========
+  // 🔥 ADICIONADO: recarrega dívidas a cada 30 segundos para manter alertas atualizados
+  useEffect(() => {
+    if (!user?.id) return
+
+    const interval = setInterval(() => {
+      // Só recarrega se não estiver em loading para evitar loops
+      if (!isDataLoading) {
+        reloadDebts()
+      }
+    }, 30000) // 30 segundos
+
+    return () => clearInterval(interval)
+  }, [user?.id, isDataLoading, reloadDebts])
 
   // ========== PERSONALIZAÇÃO ==========
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
