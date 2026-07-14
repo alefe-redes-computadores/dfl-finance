@@ -15,9 +15,10 @@ export default function AdminSyncPage() {
   const { isAdmin, loading } = useIsAdmin()
   const router = useRouter()
 
+  // ✅ CORRIGIDO: usa router.replace para evitar redirecionamento em loop
   useEffect(() => {
     if (!loading && !isAdmin) {
-      router.push('/')
+      router.replace('/')
     }
   }, [isAdmin, loading, router])
 
@@ -36,7 +37,7 @@ export default function AdminSyncPage() {
   return (
     <main className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900 px-4 pt-6 pb-24">
       <div className="max-w-2xl mx-auto space-y-4">
-        {/* 🔥 HEADER */}
+        {/* HEADER */}
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-5">
           <h1 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
             Painel do Administrador
@@ -46,7 +47,7 @@ export default function AdminSyncPage() {
           </p>
         </div>
 
-        {/* 🔥 COMPONENTES ADMIN */}
+        {/* COMPONENTES ADMIN */}
         <div className="space-y-4">
           <AdminStatus />
           <SyncQueueTable />
