@@ -1,15 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
-// 🔥 CORREÇÃO 1: Importamos o ContextProvider separadamente aqui
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
 
@@ -17,36 +15,42 @@ function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
-  
-  const [filter, setFilter] = useState<'active' | 'paid'>('active')
-  const [loading, setLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [debts, setDebts] = useState<any[]>([])
-  const [totalToReceiveState, setTotalToReceiveState] = useState(0)
 
-  const { data: localDebts, reload: reloadDebts } = useLocalData({
+  const [filter, setFilter] = useState<'active' | 'paid'>('active')
+  const [refreshing, setRefreshing] = useState(false)
+
+  const {
+    data: localDebts,
+    loading: debtsLoading,
+  } = useLocalData({
     table: 'debts' as any,
     filters: { context: effectiveContext },
   })
 
-  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
+  const {
+    data: localTransactions,
+    loading: transactionsLoading,
+  } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext, type: 'income' },
   })
 
-  const consolidateDebts = useCallback(() => {
+  const loading = debtsLoading || transactionsLoading || !user?.id || !context
+
+  const debts = useMemo(() => {
     if (!localDebts || !localTransactions) return []
+
     const paymentsByDebt: Record<string, number> = {}
+
     localTransactions.forEach((tx: any) => {
       if (tx.debt_id) {
         paymentsByDebt[tx.debt_id] = (paymentsByDebt[tx.debt_id] || 0) + Number(tx.amount || 0)
       }
     })
-    
+
     let filtered = localDebts
+
     if (filter === 'active') {
       filtered = localDebts.filter((d: any) => {
         const total = Number(d.total_amount) || 0
@@ -62,49 +66,31 @@ function DebtsContent() {
         return isEffectivelyPaid || d.status === 'paid'
       })
     }
-    
+
     return filtered.map((debt: any) => {
       const paid = paymentsByDebt[debt.id] || 0
       const total = Number(debt.total_amount) || 0
-      return { 
-        ...debt, 
-        paid_amount: paid, 
+
+      return {
+        ...debt,
+        paid_amount: paid,
         percent: Math.min(total > 0 ? (paid / total) * 100 : 0, 100),
-        status: total > 0 && paid >= total ? 'paid' : debt.status
+        status: total > 0 && paid >= total ? 'paid' : debt.status,
       }
     })
   }, [localDebts, localTransactions, filter])
 
-  const loadDebts = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-    try {
-      await Promise.all([reloadDebts(), reloadTransactions()])
-    } catch (err) {
-      console.error('Erro ao carregar dívidas:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [user?.id, reloadDebts, reloadTransactions])
-
-  useEffect(() => {
-    if (user?.id && context) loadDebts()
-  }, [user?.id, context, filter, loadDebts])
-
-  useEffect(() => {
-    const consolidated = consolidateDebts()
-    setDebts(consolidated)
-    const total = consolidated
+  const totalToReceiveState = useMemo(() => {
+    return debts
       .filter((d: any) => {
         const totalVal = Number(d.total_amount) || 0
         const paid = d.paid_amount || 0
         return totalVal > 0 && paid < totalVal
       })
-      .reduce((sum: number, d: any) => sum + (Number(d.total_amount) - (d.paid_amount || 0)), 0)
-    setTotalToReceiveState(total)
-  }, [localDebts, localTransactions, filter, consolidateDebts])
+      .reduce((sum: number, d: any) => {
+        return sum + (Number(d.total_amount) - (d.paid_amount || 0))
+      }, 0)
+  }, [debts])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -115,23 +101,33 @@ function DebtsContent() {
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
   }
+
   const handleTouchMove = (e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
+
     if (e.touches[0].clientY - pullStartY.current > 60) {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-      loadDebts().finally(() => setRefreshing(false))
+
+      setTimeout(() => {
+        setRefreshing(false)
+      }, 500)
     }
   }
-  const handleTouchEnd = () => { isPulling.current = false }
+
+  const handleTouchEnd = () => {
+    isPulling.current = false
+  }
 
   useEffect(() => {
     const c = containerRef.current
     if (!c) return
+
     c.addEventListener('touchstart', handleTouchStart, { passive: true })
     c.addEventListener('touchmove', handleTouchMove, { passive: true })
     c.addEventListener('touchend', handleTouchEnd, { passive: true })
+
     return () => {
       c.removeEventListener('touchstart', handleTouchStart)
       c.removeEventListener('touchmove', handleTouchMove)
@@ -139,19 +135,17 @@ function DebtsContent() {
     }
   }, [loading, refreshing, vibrate])
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
 
   return (
     <div
       ref={containerRef}
       className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans transition-colors duration-300"
     >
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-        </div>
-      )}
-
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
@@ -161,13 +155,16 @@ function DebtsContent() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
-                onClick={() => { vibrate(5); router.push('/more'); }}
+                type="button"
+                onClick={() => {
+                  vibrate(5)
+                  router.push('/more')
+                }}
                 className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
               >
                 <ChevronLeft size={20} />
@@ -184,7 +181,11 @@ function DebtsContent() {
             </div>
 
             <button
-              onClick={() => { vibrate(10); router.push('/debts/new'); }}
+              type="button"
+              onClick={() => {
+                vibrate(10)
+                router.push('/debts/new')
+              }}
               className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
             >
               <Plus size={20} />
@@ -200,7 +201,6 @@ function DebtsContent() {
       </div>
 
       <div className="px-4 pt-3">
-        {/* 🔥 CARDS DE RESUMO - NEUTROS */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
             <div className="w-10 h-10 rounded-[16px] bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mb-3">
@@ -227,11 +227,14 @@ function DebtsContent() {
           </div>
         </div>
 
-        {/* 🔥 FILTRO COMPACTO */}
         <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-1.5 mb-4">
           <div className="flex gap-1.5">
             <button
-              onClick={() => { vibrate(5); setFilter('active'); }}
+              type="button"
+              onClick={() => {
+                vibrate(5)
+                setFilter('active')
+              }}
               className={`flex-1 h-10 rounded-[18px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
                 filter === 'active'
                   ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
@@ -240,8 +243,13 @@ function DebtsContent() {
             >
               Pendentes
             </button>
+
             <button
-              onClick={() => { vibrate(5); setFilter('paid'); }}
+              type="button"
+              onClick={() => {
+                vibrate(5)
+                setFilter('paid')
+              }}
               className={`flex-1 h-10 rounded-[18px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
                 filter === 'paid'
                   ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
@@ -271,7 +279,11 @@ function DebtsContent() {
                 : 'Registre empréstimos para acompanhar quem te deve.'}
             </p>
             <button
-              onClick={() => { vibrate(10); router.push('/debts/new'); }}
+              type="button"
+              onClick={() => {
+                vibrate(10)
+                router.push('/debts/new')
+              }}
               className="bg-teal-600 text-white px-8 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
             >
               Novo empréstimo
@@ -283,14 +295,19 @@ function DebtsContent() {
               const IconComp = getDynamicIcon(debt.icon || 'user')
               const isPaid = debt.status === 'paid'
               const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
-              const daysUntilDue = debt.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
+              const daysUntilDue = debt.due_date
+                ? differenceInDays(new Date(debt.due_date), new Date())
+                : null
               const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
               const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
 
               return (
                 <div
                   key={debt.id}
-                  onClick={() => { vibrate(5); router.push(`/debts/details?id=${debt.id}`); }}
+                  onClick={() => {
+                    vibrate(5)
+                    router.push(`/debts/details?id=${encodeURIComponent(debt.id)}`)
+                  }}
                   className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer"
                 >
                   <div className="rounded-[18px] p-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all">
@@ -336,7 +353,7 @@ function DebtsContent() {
 
                     <div className="w-full bg-gray-100 dark:bg-slate-700/60 rounded-full h-2.5 overflow-hidden mb-2">
                       <div
-                        className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                        className={`h-full rounded-full transition-all duration-500 ease-out ${
                           isPaid
                             ? 'bg-emerald-500'
                             : isOverdue
@@ -350,11 +367,13 @@ function DebtsContent() {
                     </div>
 
                     <div className="flex items-center justify-between gap-3 text-[12px]">
-                      <span className={`truncate ${
-                        isOverdue
-                          ? 'text-red-500 dark:text-red-400'
-                          : 'text-gray-500 dark:text-gray-400'
-                      }`}>
+                      <span
+                        className={`truncate ${
+                          isOverdue
+                            ? 'text-red-500 dark:text-red-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
                         {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
                       </span>
 
@@ -375,11 +394,16 @@ function DebtsContent() {
 
 export default function DebtsPage() {
   const [isClient, setIsClient] = useState(false)
-  useEffect(() => setIsClient(true), [])
-  if (!isClient) return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
-  
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  if (!isClient) {
+    return <div className="min-h-screen bg-[#f8f9fa] dark:bg-slate-900" />
+  }
+
   return (
-    // 🔥 CORREÇÃO 2: Aqui usamos o ContextProvider importado lá em cima
     <ContextProvider>
       <DebtsContent />
     </ContextProvider>
