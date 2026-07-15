@@ -310,10 +310,16 @@ export default function MorePage() {
     }
   }, [user?.id, user?.user_metadata?.full_name])
 
+  // ✅ CORRIGIDO: toggleTheme com toast baseado no novo estado
   const toggleTheme = () => {
+    const currentTheme = theme
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
+    
+    // Chama a função do contexto
     toggleThemeOriginal()
-    const newTheme = theme === 'dark' ? 'light' : 'dark'
-    showToast(newTheme === 'dark' ? 'Modo escuro ativado' : 'Modo escuro desativado', 'success')
+    
+    // Força o toast baseado no novo estado (previsível)
+    showToast(newTheme === 'dark' ? '🌙 Modo escuro ativado' : '☀️ Modo claro ativado', 'success')
   }
 
   const toggleNotifications = () => {
