@@ -1,14 +1,25 @@
 'use client'
 
-import { useState, useCallback, useRef, useMemo } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
-  ArrowUpDown, Search, Plus, X, ChevronDown, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, Car, Home, Percent,
+  ArrowUpDown,
+  Search,
+  Plus,
+  X,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Car,
+  Home,
+  Percent,
+  ChevronLeft,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useFinancingsList } from "@/hooks/useFinancingsList" // ✅ NOVO HOOK
+import { useFinancingsList } from "@/hooks/useFinancingsList"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
@@ -17,7 +28,14 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useLocalData } from '@/hooks/useLocalData'
 
-type Installment = { id: string, financing_id: string, amount: number, due_date: string, paid: boolean, number: number }
+type Installment = {
+  id: string
+  financing_id: string
+  amount: number
+  due_date: string
+  paid: boolean
+  number: number
+}
 
 export default function FinancingsPage() {
   const router = useRouter()
@@ -25,171 +43,244 @@ export default function FinancingsPage() {
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { user } = useAuth()
-  
+
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
-  
+
   const { safeDelete } = useSafeDb()
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
   const [sortBy, setSortBy] = useState("updated_at")
-  const [sortOrder, setSortOrder] = useState("desc")
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const touchStartY = useRef(0)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: financings, loading } = useFinancingsList(effectiveContext)
-  
-  // ✅ PARCELAS ainda vêm via useLocalData para agrupamento
-  const { data: allInstallments } = useLocalData({ 
-    table: 'transactions' as any, 
-    filters: { context: effectiveContext, type: 'financing_installment' } 
+
+  const { data: allInstallments } = useLocalData({
+    table: 'transactions' as any,
+    filters: { context: effectiveContext, type: 'financing_installment' }
   })
 
-  const installmentsByFinancing = (allInstallments || []).reduce((acc: Record<string, Installment[]>, inst: any) => {
-    if (inst.financing_id) {
-      if (!acc[inst.financing_id]) acc[inst.financing_id] = []
-      acc[inst.financing_id].push(inst)
+  const installmentsByFinancing = (allInstallments || []).reduce(
+    (acc: Record<string, Installment[]>, inst: any) => {
+      if (inst.financing_id) {
+        if (!acc[inst.financing_id]) acc[inst.financing_id] = []
+        acc[inst.financing_id].push(inst)
+      }
+      return acc
+    },
+    {}
+  )
+
+  const handleBack = () => {
+    vibrate([5])
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back()
+      return
     }
-    return acc
-  }, {})
+    router.push("/more")
+  }
 
   const handleDelete = async () => {
     if (!deleteModal || !user) return
+
     vibrate([10, 50])
+
     try {
       const installments = installmentsByFinancing[deleteModal] || []
-      
+
       for (const inst of installments) {
         const res1 = await safeDelete('transactions', inst.id)
         if (!res1.success) throw new Error(res1.error)
       }
-      
+
       const res2 = await safeDelete('financings', deleteModal)
       if (!res2.success) throw new Error(res2.error)
 
       success()
       showToast("✅ Financiamento excluído com sucesso!", "success")
       setDeleteModal(null)
-      // ✅ NÃO PRECISA MAIS reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro ao excluir financiamento: ${err.message}`, "error")
     }
   }
 
-  // ✅ REMOVIDO pull-to-refresh manual (useFinancingsList já é reativo)
-
   const filteredFinancings = (financings || []).filter((fin: any) => {
     if (!search) return true
     const s = search.toLowerCase()
-    return ((fin.description && fin.description.toLowerCase().includes(s)) || (fin.bank && fin.bank.toLowerCase().includes(s)) || (fin.asset && fin.asset.toLowerCase().includes(s)))
+    return (
+      (fin.description && fin.description.toLowerCase().includes(s)) ||
+      (fin.bank && fin.bank.toLowerCase().includes(s)) ||
+      (fin.asset && fin.asset.toLowerCase().includes(s))
+    )
   })
 
   const sortedFinancings = [...filteredFinancings].sort((a: any, b: any) => {
-    let valA = a[sortBy] || ""; let valB = b[sortBy] || ""
-    if (sortBy === "total_amount" || sortBy === "remaining_amount") return sortOrder === "desc" ? Number(b[sortBy]) - Number(a[sortBy]) : Number(a[sortBy]) - Number(b[sortBy])
-    return sortOrder === "desc" ? String(valB).localeCompare(String(valA)) : String(valA).localeCompare(String(valB))
+    if (sortBy === "total_amount" || sortBy === "remaining_amount") {
+      return sortOrder === "desc"
+        ? Number(b[sortBy] || 0) - Number(a[sortBy] || 0)
+        : Number(a[sortBy] || 0) - Number(b[sortBy] || 0)
+    }
+
+    const valA = a[sortBy] || ""
+    const valB = b[sortBy] || ""
+
+    return sortOrder === "desc"
+      ? String(valB).localeCompare(String(valA))
+      : String(valA).localeCompare(String(valB))
   })
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL"
+    }).format(val)
+
   const formatDate = (date: string | null) => {
     if (!date) return ""
-    return new Date(date + 'T12:00:00').toLocaleDateString("pt-BR", { day: '2-digit', month: 'short', year: 'numeric' })
+    return new Date(date + 'T12:00:00').toLocaleDateString("pt-BR", {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    })
   }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "active": return <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400"><Clock size={11} /> Ativo</span>
-      case "paid": return <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 text-[11px] font-medium text-teal-600 dark:text-teal-400"><CheckCircle2 size={11} /> Quitado</span>
-      case "overdue": return <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-900/30 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400"><AlertTriangle size={11} /> Atrasado</span>
-      default: return <span className="rounded-full bg-gray-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-gray-500">{status}</span>
+      case "active":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+            <Clock size={11} /> Ativo
+          </span>
+        )
+      case "paid":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+            <CheckCircle2 size={11} /> Quitado
+          </span>
+        )
+      case "overdue":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
+            <AlertTriangle size={11} /> Atrasado
+          </span>
+        )
+      default:
+        return (
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500 dark:bg-slate-800">
+            {status}
+          </span>
+        )
     }
   }
 
   const getAssetIcon = (type: string) => {
     switch (type) {
-      case "vehicle": return <Car size={18} className="text-teal-600 dark:text-teal-400" />
-      case "property": return <Home size={18} className="text-teal-600 dark:text-teal-400" />
-      default: return <Percent size={18} className="text-teal-600 dark:text-teal-400" />
+      case "vehicle":
+        return <Car size={18} className="text-teal-600 dark:text-teal-400" />
+      case "property":
+        return <Home size={18} className="text-teal-600 dark:text-teal-400" />
+      default:
+        return <Percent size={18} className="text-teal-600 dark:text-teal-400" />
     }
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 transition-colors duration-300">
-      
-      {/* Ponto de Luz */}
+    <div className="flex h-[100dvh] flex-col bg-[#f8f9fa] transition-colors duration-300 dark:bg-slate-900">
       {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
+          <div className="h-3 w-3 animate-pulse rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
       )}
 
-      {/* HEADER UNIFICADO */}
-      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="min-w-0">
-              <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                Financiamentos
-              </h1>
-              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
-              </p>
+      <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/92">
+        <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                onClick={handleBack}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-gray-200/70 bg-gray-50 text-gray-500 transition-colors active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900/40 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50"
+                aria-label="Voltar"
+                type="button"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="min-w-0">
+                <h1 className="text-[24px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                  Financiamentos
+                </h1>
+                <p className="mt-0.5 text-[12px] text-gray-400 dark:text-gray-500">
+                  {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
+                </p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
               <button
-                onClick={() => { vibrate([5]); setShowSearch(!showSearch); }}
-                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                onClick={() => {
+                  vibrate([5])
+                  setShowSearch(!showSearch)
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-gray-200/70 bg-gray-50/80 text-gray-600 transition-colors active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900/40 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+                type="button"
               >
                 {showSearch ? <X size={18} /> : <Search size={18} />}
               </button>
 
               <button
-                onClick={() => { vibrate([10]); router.push("/financings/new"); }}
-                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+                onClick={() => {
+                  vibrate([10])
+                  router.push("/financings/new")
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-teal-600 text-white shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] hover:bg-teal-700"
+                type="button"
               >
                 <Plus size={20} />
               </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <ContextToggle />
             </div>
 
             <button
-              onClick={() => { vibrate([5]); setSortOrder(sortOrder === "desc" ? "asc" : "desc"); }}
-              className="shrink-0 h-10 px-3 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 text-gray-500 dark:text-gray-400 flex items-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] transition-transform"
+              onClick={() => {
+                vibrate([5])
+                setSortOrder(sortOrder === "desc" ? "asc" : "desc")
+              }}
+              className="h-10 shrink-0 rounded-[16px] border border-gray-200/70 bg-gray-50 px-3 text-[12px] font-semibold text-gray-500 transition-transform active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900/40 dark:text-gray-400"
+              type="button"
             >
-              <ArrowUpDown size={12} />
-              {sortOrder === 'desc' ? 'Decrescente' : 'Crescente'}
+              <span className="flex items-center gap-1.5">
+                <ArrowUpDown size={12} />
+                {sortOrder === 'desc' ? 'Decrescente' : 'Crescente'}
+              </span>
             </button>
           </div>
 
           {showSearch && (
             <div className="mb-3 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
-                <Search size={18} className="text-gray-400 shrink-0" />
+              <div className="flex items-center gap-2 rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 transition-all focus-within:ring-2 focus-within:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900">
+                <Search size={18} className="shrink-0 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Buscar financiamento..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 bg-transparent text-[14px] outline-none text-gray-800 dark:text-gray-200 placeholder-gray-400"
+                  className="flex-1 bg-transparent text-[14px] text-gray-800 outline-none placeholder-gray-400 dark:text-gray-200"
                   autoFocus
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    className="h-7 w-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-gray-600 dark:hover:bg-slate-800 dark:hover:text-gray-300"
+                    type="button"
                   >
                     <X size={14} />
                   </button>
@@ -199,20 +290,23 @@ export default function FinancingsPage() {
           )}
 
           {!loading && sortedFinancings.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
               {[
                 { key: 'updated_at', label: 'Mais recentes' },
                 { key: 'total_amount', label: 'Valor total' },
                 { key: 'start_date', label: 'Data início' },
-              ].map(f => (
+              ].map((f) => (
                 <button
                   type="button"
                   key={f.key}
-                  onClick={() => { vibrate([5]); setSortBy(f.key); }}
-                  className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                  onClick={() => {
+                    vibrate([5])
+                    setSortBy(f.key)
+                  }}
+                  className={`h-10 shrink-0 whitespace-nowrap rounded-[18px] border px-3.5 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
                     sortBy === f.key
-                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                      ? 'border-transparent bg-gray-900 text-white shadow-sm dark:bg-white dark:text-gray-900'
+                      : 'border-gray-200/70 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'
                   }`}
                 >
                   {f.label}
@@ -223,58 +317,63 @@ export default function FinancingsPage() {
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 pt-3 pb-24 custom-scrollbar"
-      >
+      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-24 pt-3">
         {loading ? (
           <div className="space-y-3">
             <Skeleton count={3} height="132px" borderRadius="24px" />
           </div>
         ) : sortedFinancings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-300">
-            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
-              <Percent size={28} className="opacity-30 text-gray-500" />
+          <div className="animate-in fade-in flex flex-col items-center justify-center py-20 duration-300">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <Percent size={28} className="text-gray-500 opacity-30" />
             </div>
             <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">
               Nenhum financiamento
             </p>
           </div>
         ) : (
-          <div className="space-y-2.5 animate-in fade-in duration-500">
+          <div className="animate-in fade-in space-y-2.5 duration-500">
             {sortedFinancings.map((fin: any) => {
               const installments = installmentsByFinancing[fin.id] || []
               const paidInstallments = installments.filter((i: Installment) => i.paid)
-              const totalPaid = paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0)
+              const totalPaid = paidInstallments.reduce(
+                (sum: number, i: Installment) => sum + (i.amount || 0),
+                0
+              )
               const remaining = (fin.total_amount || 0) - totalPaid
               const isExpanded = expandedId === fin.id
 
               return (
                 <div
                   key={fin.id}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
+                  className="rounded-[24px] border border-gray-200/70 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800"
                 >
                   <button
-                    onClick={() => { vibrate([5]); router.push(`/financings/details?id=${fin.id}`); }}
-                    className="w-full rounded-[18px] p-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+                    onClick={() => {
+                      vibrate([5])
+                      router.push(`/financings/details?id=${fin.id}`)
+                    }}
+                    className="w-full rounded-[18px] p-3 text-left transition-colors active:scale-[0.98] hover:bg-gray-50 dark:hover:bg-slate-700/50"
+                    type="button"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div className="w-10 h-10 rounded-[14px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 dark:bg-teal-900/20">
                           {getAssetIcon(fin.asset_type)}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
                             {fin.description || "Financiamento"}
                           </p>
+
                           {fin.asset && (
-                            <p className="text-[12px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                            <p className="mt-0.5 truncate text-[12px] text-gray-400 dark:text-gray-500">
                               {fin.asset}
                             </p>
                           )}
 
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
                             {getStatusBadge(fin.status)}
                             <span className="text-[12px] text-gray-400 dark:text-gray-500">
                               {formatDate(fin.start_date)}
@@ -283,12 +382,12 @@ export default function FinancingsPage() {
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 pl-2">
+                      <div className="shrink-0 pl-2 text-right">
                         <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
                           {formatCurrency(fin.total_amount || 0)}
                         </p>
                         {fin.status === "active" && (
-                          <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1">
+                          <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">
                             Falta {formatCurrency(Math.max(0, remaining))}
                           </p>
                         )}
@@ -296,8 +395,8 @@ export default function FinancingsPage() {
                     </div>
 
                     {installments.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60">
-                        <div className="flex items-center justify-between mb-2">
+                      <div className="mt-3 border-t border-gray-100 pt-3 dark:border-slate-700/60">
+                        <div className="mb-2 flex items-center justify-between">
                           <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400">
                             Parcelas {paidInstallments.length}/{installments.length}
                           </span>
@@ -306,27 +405,47 @@ export default function FinancingsPage() {
                           </span>
                         </div>
 
-                        <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                          {installments.slice(0, isExpanded ? undefined : 3).map((inst: Installment) => (
-                            <div
-                              key={inst.id}
-                              className={`rounded-[16px] px-3 py-2 flex items-center justify-between text-[12px] ${
-                                inst.paid
-                                  ? 'bg-teal-50 dark:bg-teal-900/10'
-                                  : 'bg-gray-50 dark:bg-slate-700/40'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span className={`w-2 h-2 rounded-full ${inst.paid ? "bg-teal-500" : "bg-gray-300 dark:bg-gray-600"}`} />
-                                <span className={`${inst.paid ? 'text-teal-700 dark:text-teal-400 font-medium' : 'text-gray-600 dark:text-gray-400'} truncate`}>
-                                  #{inst.number} — {formatDate(inst.due_date)}
+                        <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                          {installments
+                            .slice(0, isExpanded ? undefined : 3)
+                            .map((inst: Installment) => (
+                              <div
+                                key={inst.id}
+                                className={`flex items-center justify-between rounded-[16px] px-3 py-2 text-[12px] ${
+                                  inst.paid
+                                    ? 'bg-teal-50 dark:bg-teal-900/10'
+                                    : 'bg-gray-50 dark:bg-slate-700/40'
+                                }`}
+                              >
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                  <span
+                                    className={`h-2 w-2 rounded-full ${
+                                      inst.paid
+                                        ? "bg-teal-500"
+                                        : "bg-gray-300 dark:bg-gray-600"
+                                    }`}
+                                  />
+                                  <span
+                                    className={`truncate ${
+                                      inst.paid
+                                        ? 'font-medium text-teal-700 dark:text-teal-400'
+                                        : 'text-gray-600 dark:text-gray-400'
+                                    }`}
+                                  >
+                                    #{inst.number} — {formatDate(inst.due_date)}
+                                  </span>
+                                </div>
+                                <span
+                                  className={`shrink-0 font-semibold ${
+                                    inst.paid
+                                      ? "text-teal-600 dark:text-teal-400"
+                                      : "text-gray-500"
+                                  }`}
+                                >
+                                  {formatCurrency(inst.amount)}
                                 </span>
                               </div>
-                              <span className={`font-semibold shrink-0 ${inst.paid ? "text-teal-600 dark:text-teal-400" : "text-gray-500"}`}>
-                                {formatCurrency(inst.amount)}
-                              </span>
-                            </div>
-                          ))}
+                            ))}
                         </div>
 
                         {installments.length > 3 && (
@@ -336,26 +455,37 @@ export default function FinancingsPage() {
                               vibrate([5])
                               setExpandedId(isExpanded ? null : fin.id)
                             }}
-                            className="w-full mt-2 h-9 rounded-[16px] bg-teal-50 dark:bg-teal-900/10 text-teal-600 dark:text-teal-400 text-[12px] font-semibold active:scale-[0.98] transition-transform"
+                            className="mt-2 h-9 w-full rounded-[16px] bg-teal-50 text-[12px] font-semibold text-teal-600 transition-transform active:scale-[0.98] dark:bg-teal-900/10 dark:text-teal-400"
+                            type="button"
                           >
-                            {isExpanded ? "Recolher parcelas" : `Ver todas (${installments.length})`}
+                            {isExpanded
+                              ? "Recolher parcelas"
+                              : `Ver todas (${installments.length})`}
                           </button>
                         )}
                       </div>
                     )}
                   </button>
 
-                  <div className="px-3 pb-3 pt-1 flex gap-2">
+                  <div className="flex gap-2 px-3 pb-3 pt-1">
                     <button
-                      onClick={() => { vibrate([5]); router.push(`/financings/details?id=${fin.id}`); }}
-                      className="flex-1 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-teal-600 dark:hover:text-teal-400 text-[13px] font-semibold transition-colors active:scale-[0.98]"
+                      onClick={() => {
+                        vibrate([5])
+                        router.push(`/financings/details?id=${fin.id}`)
+                      }}
+                      className="h-10 flex-1 rounded-[16px] bg-gray-50 text-[13px] font-semibold text-gray-700 transition-colors active:scale-[0.98] hover:text-teal-600 dark:bg-slate-700 dark:text-gray-200 dark:hover:text-teal-400"
+                      type="button"
                     >
                       Ver detalhes
                     </button>
                     <button
-                      onClick={() => { vibrate([10]); setDeleteModal(fin.id); }}
-                      className="w-10 h-10 rounded-[16px] bg-gray-50 dark:bg-slate-700 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors active:scale-[0.98]"
+                      onClick={() => {
+                        vibrate([10])
+                        setDeleteModal(fin.id)
+                      }}
+                      className="h-10 w-10 rounded-[16px] bg-gray-50 text-gray-400 transition-colors active:scale-[0.98] hover:bg-red-50 hover:text-red-500 dark:bg-slate-700 dark:hover:bg-red-900/30"
                       aria-label="Excluir"
+                      type="button"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -367,45 +497,53 @@ export default function FinancingsPage() {
         )}
       </div>
 
-      {/* MODAL DE EXCLUSÃO COM PORTAL */}
-      {deleteModal && createPortal(
-        <div
-          className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
-          onClick={() => setDeleteModal(null)}
-        >
+      {deleteModal &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+            onClick={() => setDeleteModal(null)}
           >
-            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-              <Trash2 size={28} className="text-red-500" />
+            <div
+              className="w-full max-w-sm rounded-t-[32px] bg-white p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300 sm:rounded-[32px] sm:zoom-in-95 dark:bg-slate-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 shadow-inner dark:bg-red-900/30">
+                <Trash2 size={28} className="text-red-500" />
+              </div>
+
+              <h3 className="mb-2 text-center text-[20px] font-black tracking-tight text-gray-800 dark:text-gray-100">
+                Excluir Financiamento
+              </h3>
+
+              <p className="mb-8 px-4 text-center text-[14px] font-medium text-gray-500 dark:text-gray-400">
+                Tem certeza que deseja excluir este financiamento e todas as suas parcelas?
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteModal(null)}
+                  className="flex-1 rounded-[20px] bg-gray-100 py-4 text-[15px] font-bold text-gray-600 transition-colors active:scale-[0.98] hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    vibrate([50])
+                    handleDelete()
+                  }}
+                  className="flex-1 rounded-[20px] bg-red-500 py-4 text-[15px] font-bold text-white shadow-lg shadow-red-500/20 transition-all active:scale-[0.98] hover:bg-red-600"
+                >
+                  Sim, Excluir
+                </button>
+              </div>
             </div>
-            <h3 className="text-[20px] font-black text-gray-800 dark:text-gray-100 mb-2 text-center tracking-tight">
-              Excluir Financiamento
-            </h3>
-            <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center font-medium px-4">
-              Tem certeza que deseja excluir este financiamento e todas as suas parcelas?
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setDeleteModal(null)}
-                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => { vibrate([50]); handleDelete(); }}
-                className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
-              >
-                Sim, Excluir
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }
