@@ -9,7 +9,8 @@ export function useAccountById(id?: string | null) {
 
   const data = useLiveQuery(async () => {
     if (authLoading) return undefined
-    if (!user?.id || !id) return null
+    if (!id) return null
+    if (!user?.id) return null
 
     const found = await db.accounts.get(id)
 
