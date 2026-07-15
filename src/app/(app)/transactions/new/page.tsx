@@ -27,9 +27,10 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useTransactionsList } from '@/hooks/useTransactionsList' // ✅ NOVO HOOK
+import { useTransactionsList } from '@/hooks/useTransactionsList'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { db } from '@/lib/db'
+import { createPortal } from 'react-dom'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Context = 'dfl' | 'personal'
@@ -144,9 +145,6 @@ function NewTransactionContent() {
   const { data: creditCards } = useLocalData({ table: 'credit_cards' as any, filters: { context: effectiveContext, is_archived: false } })
   const { data: contacts } = useLocalData({ table: 'contacts' as any, filters: { context: effectiveContext } })
   const { data: budgets } = useLocalData({ table: 'budgets' as any, filters: { context: effectiveContext } })
-
-  // ✅ NOTA: Nova transação NÃO usa useTransactionById porque é criação
-  // Apenas os dados auxiliares vêm do banco local via useLocalData
 
   const mainCategories = useMemo(() => {
     return (localCategories || [])
@@ -468,10 +466,18 @@ function NewTransactionContent() {
     }
   }
 
+  // ✅ FUNÇÃO HANDLE SAVE CORRIGIDA (COM VALIDAÇÃO DE CONTA OBRIGATÓRIA)
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('❌ Sessão expirada.', 'error'); return }
     if (amountNum <= 0) { hapticError(); showToast('⚠️ Valor deve ser maior que zero.', 'warning'); return }
+
+    // ✅ VALIDAÇÃO: obriga conta se não houver cartão
+    if (!creditCardId && !accountId) {
+      hapticError()
+      showToast('⚠️ Selecione uma conta (ou cartão de crédito).', 'warning')
+      return
+    }
 
     setIsSubmitting(true)
     const finalDescription = desc.trim() || selectedCat?.name || 'Transação sem nome'
@@ -596,8 +602,26 @@ function NewTransactionContent() {
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
   }, [uploading, receiptUrl, receiptType])
 
+  // ✅ MODAL WRAPPER COM PORTAL
+  const ModalWrapper = ({ isOpen, onClose, title, children }: { isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }) => {
+    if (!isOpen) return null
+    return createPortal(
+      <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+        <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+            <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">{title}</h3>
+            <button onClick={onClose} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+          </div>
+          {children}
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
   return (
-    <div className="fixed inset-0 z-50 h-[100dvh] w-full bg-[#f8f9fa] dark:bg-slate-900 flex flex-col">
+    <div className="flex flex-col h-[100dvh] w-full bg-[#f8f9fa] dark:bg-slate-900">
       
       {/* HEADER */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
@@ -1110,8 +1134,8 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* CTA FIXO INFERIOR */}
-      <div className="sticky bottom-0 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 py-5">
+      {/* CTA FIXO INFERIOR - COM Z-INDEX MAIOR */}
+      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-[#f8f9fa] dark:from-slate-900 via-[#f8f9fa]/90 dark:via-slate-900/90 to-transparent px-4 py-5">
         <button
           onClick={() => { vibrate([10, 50]); handleSave() }}
           disabled={isSubmitting}
@@ -1135,15 +1159,21 @@ function NewTransactionContent() {
         </button>
       </div>
 
-      {/* MODAIS (mantidos com lógica intacta) */}
-      {showCatModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* ============================================================
+          TODOS OS MODAIS COM PORTAL E Z-INDEX CORRETO
+          ============================================================ */}
+      
+      {/* MODAL CATEGORIA */}
+      {showCatModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCatModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Selecionar categoria</h3>
-              <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
+              <div className="flex gap-2">
+                <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
+                <button onClick={() => setShowCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
+              </div>
             </div>
             <div className="space-y-2 pb-10">
               {mainCategories.map((cat: any) => {
@@ -1162,12 +1192,13 @@ function NewTransactionContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showSubCatModal && selectedParentCat && (
-        <div className="fixed inset-0 z-[610] flex items-end justify-center" onClick={() => setShowSubCatModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* MODAL SUBCATEGORIA */}
+      {showSubCatModal && selectedParentCat && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSubCatModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center gap-3 mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1176,6 +1207,7 @@ function NewTransactionContent() {
                 <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Subcategorias</h3>
                 <p className="text-[12px] text-gray-400">{selectedParentCat.name}</p>
               </div>
+              <button onClick={() => setShowSubCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
             </div>
             <div className="space-y-2 pb-6">
               {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
@@ -1194,12 +1226,13 @@ function NewTransactionContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showAccModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* MODAL CONTA */}
+      {showAccModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAccModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1222,12 +1255,13 @@ function NewTransactionContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showCardModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCardModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* MODAL CARTÃO */}
+      {showCardModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCardModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1247,12 +1281,13 @@ function NewTransactionContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showContactModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowContactModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* MODAL CONTATO */}
+      {showContactModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowContactModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1276,12 +1311,13 @@ function NewTransactionContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showTagModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowTagModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* MODAL TAGS */}
+      {showTagModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowTagModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1304,9 +1340,11 @@ function NewTransactionContent() {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
+      {/* MODAIS EXTERNOS */}
       {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
       {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
       {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
@@ -1314,10 +1352,9 @@ function NewTransactionContent() {
       {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
       <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={newCatIcon} onSelect={setNewCatIcon} />
 
-      {/* Modais de criação */}
-      {showCreateCatModal && (
-        <div className="fixed inset-0 z-[700] flex items-end justify-center" onClick={() => setShowCreateCatModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {/* MODAIS DE CRIAÇÃO */}
+      {showCreateCatModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateCatModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1340,12 +1377,12 @@ function NewTransactionContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showCreateAccModal && (
-        <div className="fixed inset-0 z-[700] flex items-end justify-center" onClick={() => setShowCreateAccModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {showCreateAccModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateAccModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1363,12 +1400,12 @@ function NewTransactionContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showCreateTagModal && (
-        <div className="fixed inset-0 z-[700] flex items-end justify-center" onClick={() => setShowCreateTagModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {showCreateTagModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateTagModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
@@ -1386,12 +1423,12 @@ function NewTransactionContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showCustomRecurrenceModal && (
-        <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCustomRecurrenceModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      {showCustomRecurrenceModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCustomRecurrenceModal(false)}>
           <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 animate-in slide-in-from-bottom-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)]" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
             <div className="flex items-center justify-between mb-6">
@@ -1412,7 +1449,8 @@ function NewTransactionContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
