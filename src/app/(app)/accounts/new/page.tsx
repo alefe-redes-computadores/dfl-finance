@@ -2,16 +2,24 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Save, X, Wallet, Building2, CreditCard, PiggyBank, Loader2, ChevronDown } from "lucide-react"
+import {
+  ArrowLeft,
+  Loader2,
+  ChevronDown,
+  Wallet,
+  Building2,
+  CreditCard,
+  PiggyBank,
+  Landmark,
+  Check
+} from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLocalData } from "@/hooks/useLocalData"
 import { useAccountById } from "@/hooks/useAccountById"
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { safeAdd, safeUpdate } from "@/lib/safeDb"
-import { db } from "@/lib/db"
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Conta Corrente", icon: Wallet },
@@ -19,7 +27,20 @@ const ACCOUNT_TYPES = [
   { value: "investment", label: "Investimento", icon: Building2 },
   { value: "credit_card", label: "Cartão de Crédito", icon: CreditCard },
   { value: "wallet", label: "Carteira", icon: Wallet },
-  { value: "other", label: "Outro", icon: Wallet },
+  { value: "other", label: "Outro", icon: Landmark },
+]
+
+const COLOR_OPTIONS = [
+  "#0f766e",
+  "#2563eb",
+  "#7c3aed",
+  "#ea580c",
+  "#dc2626",
+  "#16a34a",
+  "#d97706",
+  "#db2777",
+  "#0891b2",
+  "#4f46e5",
 ]
 
 const safeNum = (val: any): number => {
@@ -27,6 +48,14 @@ const safeNum = (val: any): number => {
   if (typeof val === "number") return isNaN(val) ? 0 : val
   const parsed = parseFloat(String(val).replace(",", ".").replace(/[^0-9.-]+/g, ""))
   return isNaN(parsed) ? 0 : parsed
+}
+
+function formatCurrencyPreview(value: string) {
+  const amount = safeNum(value)
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(amount)
 }
 
 function AccountFormContent() {
@@ -38,7 +67,6 @@ function AccountFormContent() {
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
 
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -49,10 +77,8 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
-  // 🔥 USANDO useAccountById PARA EDIÇÃO
   const { data: accountData, loading: accountLoading } = useAccountById(editId)
 
-  // Preenche formulário ao carregar dados da conta (apenas se houver dados)
   useEffect(() => {
     if (accountData) {
       setFormData({
@@ -66,13 +92,26 @@ function AccountFormContent() {
     }
   }, [accountData])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const selectedType =
+    ACCOUNT_TYPES.find((item) => item.value === formData.type) || ACCOUNT_TYPES[0]
+
+  const SelectedIcon = selectedType.icon
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  const handleSelectColor = (color: string) => {
+    vibrate([5])
+    setFormData((prev) => ({ ...prev, color }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (!user) {
       errorHaptic()
       showToast("❌ Usuário não autenticado.", "error")
@@ -101,16 +140,13 @@ function AccountFormContent() {
         updated_at: new Date().toISOString(),
       }
 
-      let result
-
       if (editId) {
-        result = await safeUpdate("accounts", editId, { ...payload, id: editId })
-        if (result.success) {
-          success()
-          showToast("✅ Conta atualizada com sucesso!", "success")
-        } else {
+        const result = await safeUpdate("accounts", editId, { ...payload, id: editId })
+        if (!result.success) {
           throw new Error(result.error || "Erro ao atualizar conta")
         }
+        success()
+        showToast("✅ Conta atualizada com sucesso!", "success")
       } else {
         const newId = crypto.randomUUID()
         const newPayload = {
@@ -120,13 +156,13 @@ function AccountFormContent() {
           sync_status: "pending",
           sync_attempts: 0,
         }
-        result = await safeAdd("accounts", newPayload)
-        if (result.success) {
-          success()
-          showToast("✅ Conta criada com sucesso!", "success")
-        } else {
+
+        const result = await safeAdd("accounts", newPayload)
+        if (!result.success) {
           throw new Error(result.error || "Erro ao criar conta")
         }
+        success()
+        showToast("✅ Conta criada com sucesso!", "success")
       }
 
       router.push("/accounts")
@@ -143,43 +179,59 @@ function AccountFormContent() {
     router.push("/accounts")
   }
 
-  // Skeleton durante carregamento da edição
   if (accountLoading && editId) {
     return (
-      <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-          <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-800" />
+      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
+        <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+            <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-700" />
+          </div>
         </div>
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={5} />
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={5} height="96px" borderRadius="24px" />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-gray-50 dark:bg-slate-950">
-      <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="flex items-center justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              onClick={handleCancel}
-              className="rounded-full p-2 -ml-2 text-gray-700 transition-transform active:scale-95 dark:text-gray-200"
+    <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] transition-colors duration-300 dark:bg-slate-950">
+      <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+        <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                onClick={handleCancel}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-gray-200/70 bg-gray-50 text-gray-500 transition-colors active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900/50 dark:text-gray-300"
+              >
+                <ArrowLeft size={20} />
+              </button>
+
+              <div className="min-w-0">
+                <h1 className="truncate text-[24px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                  {editId ? "Editar conta" : "Nova conta"}
+                </h1>
+                <p className="mt-0.5 text-[12px] text-gray-400 dark:text-gray-500">
+                  Configure nome, tipo, banco e saldo inicial
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] shadow-sm"
+              style={{ backgroundColor: formData.color }}
             >
-              <ArrowLeft size={24} />
-            </button>
-            <h1 className="truncate text-[18px] font-semibold text-gray-900 dark:text-gray-100">
-              {editId ? "Editar conta" : "Nova conta"}
-            </h1>
+              <SelectedIcon size={22} className="text-white" />
+            </div>
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex-1 px-4 pt-6 pb-28">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-          <div className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <label className="mb-2 block text-[13px] font-medium text-gray-600 dark:text-gray-300">
-              Nome da conta *
+      <form onSubmit={handleSubmit} className="flex-1 px-4 pb-28 pt-4">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+              Nome da conta
             </label>
             <input
               type="text"
@@ -187,21 +239,22 @@ function AccountFormContent() {
               value={formData.name}
               onChange={handleChange}
               placeholder="Ex: Conta corrente Nubank"
-              className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[15px] font-medium text-gray-900 outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100 dark:placeholder:text-gray-500"
+              className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200 dark:placeholder:text-gray-500"
               required
             />
           </div>
 
-          <div className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <label className="mb-2 block text-[13px] font-medium text-gray-600 dark:text-gray-300">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Tipo de conta
             </label>
+
             <div className="relative">
               <select
                 name="type"
                 value={formData.type}
                 onChange={handleChange}
-                className="w-full appearance-none rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[15px] font-medium text-gray-900 outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                className="w-full appearance-none rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-800 outline-none transition-all focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
               >
                 {ACCOUNT_TYPES.map((type) => (
                   <option key={type.value} value={type.value}>
@@ -209,14 +262,34 @@ function AccountFormContent() {
                   </option>
                 ))}
               </select>
+
               <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
                 <ChevronDown size={18} />
               </div>
             </div>
+
+            <div className="mt-4 rounded-[18px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-11 w-11 items-center justify-center rounded-[14px] shadow-sm"
+                  style={{ backgroundColor: formData.color }}
+                >
+                  <SelectedIcon size={20} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                    Pré-visualização
+                  </p>
+                  <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                    {selectedType.label}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <label className="mb-2 block text-[13px] font-medium text-gray-600 dark:text-gray-300">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Banco / Instituição
             </label>
             <input
@@ -224,59 +297,95 @@ function AccountFormContent() {
               name="bank"
               value={formData.bank}
               onChange={handleChange}
-              placeholder="Ex: Nubank, Itaú, etc."
-              className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[15px] font-medium text-gray-900 outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100 dark:placeholder:text-gray-500"
+              placeholder="Ex: Nubank, Itaú, Inter..."
+              className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200 dark:placeholder:text-gray-500"
             />
           </div>
 
-          <div className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <label className="mb-2 block text-[13px] font-medium text-gray-600 dark:text-gray-300">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Saldo inicial
             </label>
-            <div className="flex items-center gap-2">
-              <span className="text-[18px] font-medium text-gray-400">R$</span>
-              <input
-                type="number"
-                name="balance"
-                step="0.01"
-                placeholder="0,00"
-                value={formData.balance}
-                onChange={handleChange}
-                className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[18px] font-semibold text-gray-900 outline-none transition-colors focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100 dark:placeholder:text-gray-500"
-              />
+
+            <div className="rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-1 text-[12px] font-medium text-gray-400 dark:text-gray-500">
+                Valor informado
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[16px] font-semibold text-gray-400">R$</span>
+                <input
+                  type="number"
+                  name="balance"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={formData.balance}
+                  onChange={handleChange}
+                  className="w-full bg-transparent text-[20px] font-semibold text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-[16px] bg-teal-50 px-4 py-3 dark:bg-teal-950/30">
+              <p className="text-[12px] font-medium text-teal-700 dark:text-teal-300">
+                Prévia do saldo
+              </p>
+              <p className="mt-0.5 text-[16px] font-bold text-teal-700 dark:text-teal-200">
+                {formatCurrencyPreview(formData.balance)}
+              </p>
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <label className="mb-2 block text-[13px] font-medium text-gray-600 dark:text-gray-300">
-              Cor do ícone
+          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <label className="mb-3 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+              Cor da conta
             </label>
-            <input
-              type="color"
-              name="color"
-              value={formData.color}
-              onChange={handleChange}
-              className="h-12 w-full cursor-pointer rounded-[18px] border border-gray-200 bg-gray-50 p-1 outline-none dark:border-slate-700 dark:bg-slate-800"
-            />
+
+            <div className="flex flex-wrap gap-3">
+              {COLOR_OPTIONS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => handleSelectColor(color)}
+                  className={`relative h-10 w-10 rounded-full transition-transform active:scale-[0.95] ${
+                    formData.color === color
+                      ? "scale-110 ring-2 ring-gray-300 ring-offset-2 ring-offset-white dark:ring-slate-500 dark:ring-offset-slate-800"
+                      : "hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Selecionar cor ${color}`}
+                >
+                  {formData.color === color && (
+                    <Check
+                      size={16}
+                      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={handleCancel}
-              className="flex-1 rounded-[22px] bg-gray-100 py-4 text-[15px] font-semibold text-gray-700 transition-colors hover:bg-gray-200 active:scale-[0.98] dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
+              className="flex-1 rounded-[20px] bg-gray-100 py-4 text-[15px] font-bold text-gray-600 transition-colors active:scale-[0.98] dark:bg-slate-700 dark:text-gray-300"
             >
               Cancelar
             </button>
+
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-[22px] bg-teal-600 py-4 text-[15px] font-semibold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 active:scale-[0.98] disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-2 rounded-[20px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               {saving ? (
-                <Loader2 className="mx-auto animate-spin" size={22} />
+                <Loader2 size={20} className="animate-spin" />
               ) : (
-                editId ? "Atualizar" : "Criar conta"
+                <>
+                  <Check size={18} />
+                  {editId ? "Atualizar conta" : "Criar conta"}
+                </>
               )}
             </button>
           </div>
@@ -288,7 +397,7 @@ function AccountFormContent() {
 
 export default function AccountFormPage() {
   return (
-    <Suspense fallback={<Skeleton count={5} />}>
+    <Suspense fallback={<Skeleton count={5} height="96px" borderRadius="24px" />}>
       <AccountFormContent />
     </Suspense>
   )
