@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createPortal } from "react-dom"
 import {
   ArrowLeft,
   Save,
@@ -20,26 +19,44 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useFinancingById } from "@/hooks/useFinancingById" // ✅ NOVO HOOK
-import { useContext_ } from '@/components/ContextToggle'
+import { useFinancingById } from "@/hooks/useFinancingById"
+import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
-import { useSafeDb } from '@/hooks/useSafeDb'
-import MoneyInput from '@/components/MoneyInput'
-import Skeleton from '@/components/Skeleton'
+import { useSafeDb } from "@/hooks/useSafeDb"
+import MoneyInput from "@/components/MoneyInput"
+import Skeleton from "@/components/Skeleton"
+
+type FinancingStatus = "active" | "paid" | "overdue"
+type AssetType = "vehicle" | "property" | "other"
+
+const STATUS_LABEL: Record<FinancingStatus, string> = {
+  active: "Ativo",
+  paid: "Quitado",
+  overdue: "Atrasado",
+}
+
+const ASSET_LABEL: Record<AssetType, string> = {
+  vehicle: "Veículo",
+  property: "Imóvel",
+  other: "Outro",
+}
+
+const today = () => new Date().toISOString().split("T")[0]
 
 export default function NewFinancingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get("edit")
+
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { user } = useAuth()
   const { safeAdd, safeUpdate } = useSafeDb()
-
   const { context, appMode } = useContext_()
-  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  // ✅ HOOK ESPECÍFICO POR ID
+  const effectiveContext = appMode === "personal_only" ? "personal" : context
+  const contextTitle = effectiveContext === "dfl" ? "Empresa" : "Pessoal"
+
   const { data: financing, loading, notFound } = useFinancingById(editId)
 
   const [saving, setSaving] = useState(false)
@@ -50,166 +67,151 @@ export default function NewFinancingPage() {
   const [description, setDescription] = useState("")
   const [totalAmountNum, setTotalAmountNum] = useState(0)
   const [installmentsCount, setInstallmentsCount] = useState("")
-  const [installmentAmountNum, setInstallmentAmountNum] = useState(0)
   const [interestRate, setInterestRate] = useState("")
   const [bank, setBank] = useState("")
-  const [assetType, setAssetType] = useState("other")
+  const [assetType, setAssetType] = useState<AssetType>("other")
   const [asset, setAsset] = useState("")
-  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0])
+  const [startDate, setStartDate] = useState(today())
   const [firstDueDate, setFirstDueDate] = useState("")
   const [notes, setNotes] = useState("")
-  const [status, setStatus] = useState("active")
+  const [status, setStatus] = useState<FinancingStatus>("active")
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
+  const installmentsCountNum = useMemo(() => {
+    const parsed = parseInt(installmentsCount, 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+  }, [installmentsCount])
+
+  const installmentAmountNum = useMemo(() => {
+    if (totalAmountNum <= 0 || installmentsCountNum <= 0) return 0
+    return totalAmountNum / installmentsCountNum
+  }, [totalAmountNum, installmentsCountNum])
+
   useEffect(() => {
     if (editId && financing && !initialized) {
       setDescription(financing.description || "")
-      const total = Number(financing.total_amount) || 0
-      setTotalAmountNum(total)
-      setInstallmentsCount(financing.installments_count ? String(financing.installments_count) : "")
-      setInstallmentAmountNum(Number(financing.installment_amount) || 0)
-      setInterestRate(financing.interest_rate ? String(financing.interest_rate) : "")
+      setTotalAmountNum(Number(financing.total_amount) || 0)
+      setInstallmentsCount(
+        financing.installments_count ? String(financing.installments_count) : ""
+      )
+      setInterestRate(
+        financing.interest_rate ? String(financing.interest_rate) : ""
+      )
       setBank(financing.bank || "")
-      setAssetType(financing.asset_type || "other")
+      setAssetType((financing.asset_type as AssetType) || "other")
       setAsset(financing.asset || "")
-      setStartDate(financing.start_date ? financing.start_date.split("T")[0] : "")
-      setFirstDueDate(financing.first_due_date ? financing.first_due_date.split("T")[0] : "")
+      setStartDate(financing.start_date ? financing.start_date.split("T")[0] : today())
+      setFirstDueDate(
+        financing.first_due_date ? financing.first_due_date.split("T")[0] : ""
+      )
       setNotes(financing.notes || "")
-      setStatus(financing.status || "active")
+      setStatus((financing.status as FinancingStatus) || "active")
       setInitialized(true)
     }
-    
+
     if (!editId && !initialized) {
       setInitialized(true)
     }
   }, [editId, financing, initialized])
 
-  // ✅ TRATAMENTO DE LOADING
-  if (editId && loading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
-  if (editId && notFound) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-950 items-center justify-center px-4">
-        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
-          <Percent size={32} className="text-red-500" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Financiamento não encontrado</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
-          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
-        </p>
-        <button
-          onClick={() => router.push('/financings')}
-          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
-        >
-          Voltar para listagem
-        </button>
-      </div>
-    )
-  }
-
-  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
-  if (!initialized) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  useEffect(() => {
-    if (totalAmountNum > 0 && installmentsCount && parseInt(installmentsCount) > 0) {
-      const installment = totalAmountNum / parseInt(installmentsCount)
-      setInstallmentAmountNum(installment)
-    }
-  }, [totalAmountNum, installmentsCount])
-
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (window.scrollY <= 0) {
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 60 && !refreshing) {
-        setRefreshing(true)
-        vibrate([10])
-        setTimeout(() => setRefreshing(false), 600)
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (window.scrollY <= 0) {
+        const deltaY = e.touches[0].clientY - touchStartY.current
+        if (deltaY > 60 && !refreshing) {
+          setRefreshing(true)
+          vibrate([10])
+          setTimeout(() => setRefreshing(false), 600)
+        }
       }
-    }
-  }, [refreshing, vibrate])
+    },
+    [refreshing, vibrate]
+  )
 
-  const handleSave = async () => {
-    if (!description.trim()) {
+  const handleSave = useCallback(async () => {
+    if (saving) return
+
+    const trimmedDescription = description.trim()
+    const trimmedBank = bank.trim()
+    const trimmedAsset = asset.trim()
+    const trimmedNotes = notes.trim()
+    const parsedInterestRate = interestRate
+      ? parseFloat(interestRate.replace(",", "."))
+      : null
+
+    if (!user && !editId) {
+      errorHaptic()
+      showToast("❌ Usuário não autenticado", "error")
+      return
+    }
+
+    if (!trimmedDescription) {
       errorHaptic()
       showToast("⚠️ Preencha a descrição", "warning")
       return
     }
+
     if (totalAmountNum <= 0) {
       errorHaptic()
       showToast("⚠️ Informe um valor válido", "warning")
       return
     }
-    if (!installmentsCount || parseInt(installmentsCount) <= 0) {
+
+    if (installmentsCountNum <= 0) {
       errorHaptic()
       showToast("⚠️ Informe o número de parcelas", "warning")
       return
     }
 
+    if (parsedInterestRate !== null && Number.isNaN(parsedInterestRate)) {
+      errorHaptic()
+      showToast("⚠️ Informe uma taxa de juros válida", "warning")
+      return
+    }
+
     setSaving(true)
+
     try {
       const payload = {
-        description: description.trim(),
+        description: trimmedDescription,
         total_amount: totalAmountNum,
-        installments_count: parseInt(installmentsCount),
+        installments_count: installmentsCountNum,
         installment_amount: installmentAmountNum,
-        interest_rate: interestRate ? parseFloat(interestRate.replace(',', '.')) : null,
-        bank: bank.trim() || null,
+        interest_rate: parsedInterestRate,
+        bank: trimmedBank || null,
         asset_type: assetType,
-        asset: asset.trim() || null,
-        start_date: startDate || new Date().toISOString().split("T")[0],
+        asset: trimmedAsset || null,
+        start_date: startDate || today(),
         first_due_date: firstDueDate || null,
-        notes: notes.trim() || null,
+        notes: trimmedNotes || null,
         status,
         context: effectiveContext,
         updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        const res = await safeUpdate('financings', editId, payload)
+        const res = await safeUpdate("financings", editId, payload)
         if (!res.success) throw new Error(res.error)
+
         success()
         showToast("✅ Financiamento atualizado!", "success")
       } else {
-        const id = crypto.randomUUID()
         const fullPayload = {
-          id,
+          id: crypto.randomUUID(),
           user_id: user!.id,
           ...payload,
           remaining_amount: totalAmountNum,
           created_at: new Date().toISOString(),
-          sync_status: 'pending',
+          sync_status: "pending",
           sync_attempts: 0,
         }
-        const res = await safeAdd('financings', fullPayload)
+
+        const res = await safeAdd("financings", fullPayload)
         if (!res.success) throw new Error(res.error)
+
         success()
         showToast("✅ Financiamento criado!", "success")
       }
@@ -221,39 +223,117 @@ export default function NewFinancingPage() {
     } finally {
       setSaving(false)
     }
-  }
-
-  const contextTitle = effectiveContext === "dfl" ? "Empresa" : "Pessoal"
+  }, [
+    saving,
+    description,
+    bank,
+    asset,
+    notes,
+    interestRate,
+    user,
+    editId,
+    totalAmountNum,
+    installmentsCountNum,
+    installmentAmountNum,
+    assetType,
+    startDate,
+    firstDueDate,
+    status,
+    effectiveContext,
+    safeUpdate,
+    safeAdd,
+    success,
+    errorHaptic,
+    showToast,
+    router,
+  ])
 
   const sectionClass =
-    "bg-white/92 dark:bg-slate-800/92 border border-gray-100/80 dark:border-slate-700/70 rounded-[28px]"
+    "rounded-[28px] border border-gray-100/80 bg-white/92 dark:border-slate-700/70 dark:bg-slate-800/92"
   const fieldClass =
-    "rounded-[20px] bg-gray-50/90 dark:bg-slate-700/35 border border-gray-100 dark:border-slate-700/60 px-4 py-3.5"
+    "rounded-[20px] border border-gray-100 bg-gray-50/90 px-4 py-3.5 dark:border-slate-700/60 dark:bg-slate-700/35"
   const labelClass =
-    "text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block"
+    "mb-1.5 block text-[11px] font-semibold text-gray-500 dark:text-gray-400"
   const inputClass =
-    "w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+    "w-full bg-transparent text-[15px] font-semibold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
+
+  if (editId && loading) {
+    return (
+      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pt-6 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-center justify-between">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
+            <div className="h-6 w-32 animate-pulse rounded bg-gray-200 dark:bg-slate-700" />
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  if (editId && notFound) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-950">
+        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
+          <Percent size={32} className="text-red-500" />
+        </div>
+
+        <h2 className="mb-2 text-xl font-bold text-gray-800 dark:text-gray-200">
+          Financiamento não encontrado
+        </h2>
+
+        <p className="mb-6 max-w-xs text-center text-sm text-gray-500 dark:text-gray-400">
+          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+
+        <button
+          onClick={() => router.push("/financings")}
+          className="rounded-full bg-teal-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-teal-700 active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  if (!initialized) {
+    return (
+      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
-      className="flex flex-col h-[100dvh] bg-gray-50 dark:bg-slate-900 transition-colors duration-300"
+      className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
     >
       {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+        <div className="pointer-events-none fixed top-0 left-0 right-0 z-50 flex justify-center pt-6">
+          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-lg animate-in slide-in-from-top-2 duration-300 dark:bg-slate-800">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-xs font-bold text-teal-600">Atualizando...</span>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
+      <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pt-6 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => { vibrate([5]); router.back() }}
-            className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"
+            onClick={() => {
+              vibrate([5])
+              router.back()
+            }}
+            className="rounded-full p-2 -ml-2 text-gray-800 transition-transform active:scale-95 dark:text-gray-200"
+            aria-label="Voltar"
           >
             <ArrowLeft size={24} />
           </button>
@@ -271,59 +351,79 @@ export default function NewFinancingPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-5 pb-32 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="rounded-[28px] bg-gradient-to-br from-teal-600 to-teal-700 text-white p-5 shadow-[0_14px_40px_rgba(13,148,136,0.28)]">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 pt-5 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="rounded-[28px] bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-[0_14px_40px_rgba(13,148,136,0.28)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[12px] font-semibold text-teal-50/90">Resumo</p>
-              <h2 className="text-[24px] font-black mt-1 leading-none">
+              <h2 className="mt-1 text-[24px] font-black leading-none">
                 {totalAmountNum > 0
-                  ? totalAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  ? totalAmountNum.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })
                   : "R$ 0,00"}
               </h2>
             </div>
+
             <div className="rounded-[18px] bg-white/14 px-3 py-2 text-right">
-              <p className="text-[10px] font-medium text-teal-50/80">Parcela estimada</p>
+              <p className="text-[10px] font-medium text-teal-50/80">
+                Parcela estimada
+              </p>
               <p className="text-[15px] font-bold">
-                {installmentAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                {installmentAmountNum.toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: "BRL",
+                })}
               </p>
             </div>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold">
-              {installmentsCount ? `${installmentsCount} parcelas` : "Sem parcelas"}
+              {installmentsCountNum > 0
+                ? `${installmentsCountNum} parcelas`
+                : "Sem parcelas"}
             </div>
             <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold">
-              {status === "active" ? "Ativo" : status === "paid" ? "Quitado" : "Atrasado"}
+              {STATUS_LABEL[status]}
             </div>
-            <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold capitalize">
-              {assetType === "vehicle" ? "Veículo" : assetType === "property" ? "Imóvel" : "Outro"}
+            <div className="rounded-full bg-white/12 px-3 py-1.5 text-[12px] font-semibold">
+              {ASSET_LABEL[assetType]}
             </div>
           </div>
         </div>
 
         <section className={`${sectionClass} p-4`}>
           <div className="mb-4">
-            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Identificação</p>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">Informações principais do financiamento.</p>
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">
+              Identificação
+            </p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">
+              Informações principais do financiamento.
+            </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="mb-4 grid grid-cols-3 gap-2">
             {[
-              { value: "vehicle", label: "Veículo", icon: Car },
-              { value: "property", label: "Imóvel", icon: Home },
-              { value: "other", label: "Outro", icon: Percent },
+              { value: "vehicle" as AssetType, label: "Veículo", icon: Car },
+              { value: "property" as AssetType, label: "Imóvel", icon: Home },
+              { value: "other" as AssetType, label: "Outro", icon: Percent },
             ].map(({ value, label, icon: Icon }) => {
               const active = assetType === value
+
               return (
                 <button
                   key={value}
-                  onClick={() => { vibrate([5]); setAssetType(value) }}
-                  className={`rounded-[20px] px-3 py-3.5 flex flex-col items-center justify-center gap-1.5 border transition-all active:scale-95 ${
+                  type="button"
+                  onClick={() => {
+                    vibrate([5])
+                    setAssetType(value)
+                  }}
+                  className={`flex flex-col items-center justify-center gap-1.5 rounded-[20px] border px-3 py-3.5 transition-all active:scale-95 ${
                     active
-                      ? "bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-600/20"
-                      : "bg-gray-50 dark:bg-slate-700/35 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-slate-700/60"
+                      ? "border-teal-600 bg-teal-600 text-white shadow-md shadow-teal-600/20"
+                      : "border-gray-100 bg-gray-50 text-gray-600 dark:border-slate-700/60 dark:bg-slate-700/35 dark:text-gray-300"
                   }`}
                 >
                   <Icon size={18} />
@@ -341,7 +441,7 @@ export default function NewFinancingPage() {
                 placeholder="Ex: Financiamento Itaú"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-transparent text-[17px] font-bold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+                className="w-full bg-transparent text-[17px] font-bold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
                 autoFocus
               />
             </div>
@@ -349,7 +449,7 @@ export default function NewFinancingPage() {
             <div className={fieldClass}>
               <label className={labelClass}>Bem financiado</label>
               <div className="flex items-center gap-3">
-                <FileText size={16} className="text-gray-400 shrink-0" />
+                <FileText size={16} className="shrink-0 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Ex: Honda Civic 2024"
@@ -363,7 +463,7 @@ export default function NewFinancingPage() {
             <div className={fieldClass}>
               <label className={labelClass}>Banco / Financeira</label>
               <div className="flex items-center gap-3">
-                <Landmark size={16} className="text-gray-400 shrink-0" />
+                <Landmark size={16} className="shrink-0 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Ex: Banco do Brasil"
@@ -378,49 +478,63 @@ export default function NewFinancingPage() {
 
         <section className={`${sectionClass} p-4`}>
           <div className="mb-4">
-            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Valores</p>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">Total, quantidade de parcelas e cálculo automático.</p>
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">
+              Valores
+            </p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">
+              Total, quantidade de parcelas e cálculo automático.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className={`${fieldClass} min-h-[92px] flex flex-col justify-between`}>
+            <div className={`${fieldClass} flex min-h-[92px] flex-col justify-between`}>
               <label className={labelClass}>Valor total</label>
               <div className="flex items-center gap-2">
-                <Wallet size={16} className="text-gray-400 shrink-0" />
+                <Wallet size={16} className="shrink-0 text-gray-400" />
                 <span className="text-[15px] font-semibold text-gray-400">R$</span>
                 <MoneyInput
                   value={totalAmountNum}
                   onChange={(num) => setTotalAmountNum(num)}
                   placeholder="0,00"
-                  className="w-full bg-transparent text-[22px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+                  className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
                 />
               </div>
             </div>
 
-            <div className={`${fieldClass} min-h-[92px] flex flex-col justify-between`}>
+            <div className={`${fieldClass} flex min-h-[92px] flex-col justify-between`}>
               <label className={labelClass}>Número de parcelas</label>
               <div className="flex items-center gap-2">
-                <Hash size={16} className="text-gray-400 shrink-0" />
+                <Hash size={16} className="shrink-0 text-gray-400" />
                 <input
                   type="number"
+                  inputMode="numeric"
+                  min={1}
                   placeholder="Ex: 36"
                   value={installmentsCount}
                   onChange={(e) => setInstallmentsCount(e.target.value)}
-                  className="w-full bg-transparent text-[22px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500"
+                  className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="mt-3 rounded-[22px] bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/40 px-4 py-4">
+          <div className="mt-3 rounded-[22px] border border-teal-100 bg-teal-50 px-4 py-4 dark:border-teal-800/40 dark:bg-teal-900/20">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">Valor estimado por parcela</p>
-                <p className="text-[12px] text-teal-700/80 dark:text-teal-300/80 mt-0.5">Calculado automaticamente com base no total e nas parcelas.</p>
+                <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+                  Valor estimado por parcela
+                </p>
+                <p className="mt-0.5 text-[12px] text-teal-700/80 dark:text-teal-300/80">
+                  Calculado automaticamente com base no total e nas parcelas.
+                </p>
               </div>
-              <div className="text-right shrink-0">
+
+              <div className="shrink-0 text-right">
                 <p className="text-[22px] font-black text-teal-700 dark:text-teal-300">
-                  {installmentAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  {installmentAmountNum.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
                 </p>
               </div>
             </div>
@@ -429,18 +543,23 @@ export default function NewFinancingPage() {
 
         <section className={`${sectionClass} p-4`}>
           <div className="mb-4">
-            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Condições</p>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">Status atual, juros e datas de controle.</p>
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">
+              Condições
+            </p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">
+              Status atual, juros e datas de controle.
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="mb-3 grid grid-cols-2 gap-3">
             <div className={fieldClass}>
               <label className={labelClass}>Juros (% a.m.)</label>
               <div className="flex items-center gap-2">
-                <BadgePercent size={16} className="text-gray-400 shrink-0" />
+                <BadgePercent size={16} className="shrink-0 text-gray-400" />
                 <input
                   type="number"
                   step="0.01"
+                  inputMode="decimal"
                   placeholder="Ex: 1,5"
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
@@ -452,11 +571,14 @@ export default function NewFinancingPage() {
             <div className={fieldClass}>
               <label className={labelClass}>Status</label>
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-gray-400 shrink-0" />
+                <CheckCircle2 size={16} className="shrink-0 text-gray-400" />
                 <select
                   value={status}
-                  onChange={(e) => { vibrate([5]); setStatus(e.target.value) }}
-                  className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-100 outline-none appearance-none cursor-pointer"
+                  onChange={(e) => {
+                    vibrate([5])
+                    setStatus(e.target.value as FinancingStatus)
+                  }}
+                  className="w-full cursor-pointer appearance-none bg-transparent text-[15px] font-semibold text-gray-800 outline-none dark:text-gray-100"
                 >
                   <option value="active">Ativo</option>
                   <option value="paid">Quitado</option>
@@ -470,12 +592,12 @@ export default function NewFinancingPage() {
             <div className={fieldClass}>
               <label className={labelClass}>Data de início</label>
               <div className="flex items-center gap-2">
-                <CalendarDays size={16} className="text-gray-400 shrink-0" />
+                <CalendarDays size={16} className="shrink-0 text-gray-400" />
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-100 outline-none"
+                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 outline-none dark:text-gray-100"
                 />
               </div>
             </div>
@@ -483,12 +605,12 @@ export default function NewFinancingPage() {
             <div className={fieldClass}>
               <label className={labelClass}>Primeiro vencimento</label>
               <div className="flex items-center gap-2">
-                <CalendarDays size={16} className="text-gray-400 shrink-0" />
+                <CalendarDays size={16} className="shrink-0 text-gray-400" />
                 <input
                   type="date"
                   value={firstDueDate}
                   onChange={(e) => setFirstDueDate(e.target.value)}
-                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-100 outline-none"
+                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 outline-none dark:text-gray-100"
                 />
               </div>
             </div>
@@ -497,8 +619,12 @@ export default function NewFinancingPage() {
 
         <section className={`${sectionClass} p-4`}>
           <div className="mb-3">
-            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">Observações</p>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">Informações complementares para consulta futura.</p>
+            <p className="text-[13px] font-bold text-gray-800 dark:text-gray-100">
+              Observações
+            </p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">
+              Informações complementares para consulta futura.
+            </p>
           </div>
 
           <div className={fieldClass}>
@@ -507,17 +633,20 @@ export default function NewFinancingPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
-              className="w-full bg-transparent text-[15px] font-medium text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-500 resize-none"
+              className="w-full resize-none bg-transparent text-[15px] font-medium text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
             />
           </div>
         </section>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 dark:from-slate-900 via-gray-50/90 dark:via-slate-900/90 to-transparent z-20">
+      <div className="fixed right-0 bottom-0 left-0 z-20 bg-gradient-to-t from-gray-50 via-gray-50/90 to-transparent p-4 dark:from-slate-900 dark:via-slate-900/90">
         <button
-          onClick={() => { vibrate([10, 50]); handleSave() }}
+          onClick={() => {
+            vibrate([10, 50])
+            handleSave()
+          }}
           disabled={saving}
-          className="w-full max-w-md mx-auto bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
+          className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-transform hover:bg-teal-700 active:scale-[0.98] disabled:opacity-50"
         >
           {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}
           {editId ? "Atualizar Financiamento" : "Criar Financiamento"}
