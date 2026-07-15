@@ -1,6 +1,4 @@
 'use client'
-export const dynamic = 'force-dynamic'
-
 
 import { useState, useCallback, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -12,9 +10,9 @@ import {
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
+import { useLocalSync } from '@/hooks/useLocalSync'
 import { useAccountById } from "@/hooks/useAccountById"
 import { useAccountTransactions } from "@/hooks/useAccountTransactions"
-import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
@@ -55,7 +53,7 @@ function AccountDetailContent() {
   const { context } = useContext_()
   const { user } = useAuth()
 
-  // ✅ TODOS OS HOOKS PRIMEIRO (incluindo useCallback)
+  // ✅ TODOS OS HOOKS PRIMEIRO
   const { data: accountData, loading, notFound } = useAccountById(accountId)
   const { data: transactions } = useAccountTransactions(accountId)
   const { data: allAccounts } = useLocalData({
@@ -77,7 +75,7 @@ function AccountDetailContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ✅ MOVIDOS PARA O TOPO (junto com os outros hooks)
+  // ✅ useCallback MOVIDOS PARA O TOPO
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -401,6 +399,7 @@ function AccountDetailContent() {
         className="flex-1 overflow-y-auto px-4 pb-28 pt-5"
       >
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+          {/* Seção Saldo */}
           <section className="overflow-hidden rounded-[28px] border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="p-6">
               <div className="mb-5 flex items-start justify-between gap-4">
@@ -462,6 +461,7 @@ function AccountDetailContent() {
             </div>
           </section>
 
+          {/* Seção Transações Recentes */}
           <section className="rounded-[28px] border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between px-5 pb-2 pt-5">
               <div>
