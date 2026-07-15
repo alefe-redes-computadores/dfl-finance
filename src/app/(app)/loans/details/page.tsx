@@ -6,16 +6,100 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Edit3, Trash2, ArrowLeft, HandCoins, Calendar, Landmark,
-  CheckCircle2, AlertTriangle, Clock, X, RefreshCw
+  CheckCircle2, AlertTriangle, Clock, X, RefreshCw, FileText, User, CalendarDays,
+  Percent, Wallet, ReceiptText
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { useLoanById } from '@/hooks/useLoanById' // ✅ NOVO HOOK
-import { useLoanPayments } from '@/hooks/useLoanPayments' // ✅ NOVO HOOK
+import { useLoanById } from '@/hooks/useLoanById'
+import { useLoanPayments } from '@/hooks/useLoanPayments'
 import { useContext_ } from '@/components/ContextToggle'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
+
+// ============================================================
+// COMPONENTES VISUAIS (apenas estrutura, sem lógica)
+// ============================================================
+
+function SectionTitle({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="border-b border-gray-100 dark:border-slate-800 pb-3 mb-4">
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      {description && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: 'active' | 'paid' | 'overdue' }) {
+  const config = {
+    active: { bg: 'bg-blue-50 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', icon: Clock, label: 'Ativo' },
+    paid: { bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', icon: CheckCircle2, label: 'Pago' },
+    overdue: { bg: 'bg-red-50 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', icon: AlertTriangle, label: 'Atrasado' },
+  }
+  const { bg, text, icon: Icon, label } = config[status] || config.active
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${bg} ${text}`}>
+      <Icon size={12} />
+      {label}
+    </span>
+  )
+}
+
+function SummaryCard({ label, value, color = 'gray' }: { label: string; value: string; color?: 'gray' | 'green' | 'blue' }) {
+  const colorMap = {
+    gray: 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700/70 text-gray-900 dark:text-gray-100',
+    green: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+    blue: 'bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20 text-blue-700 dark:text-blue-400',
+  }
+
+  return (
+    <div className={`rounded-2xl border p-4 ${colorMap[color]}`}>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+      <p className="text-lg font-bold">{value}</p>
+    </div>
+  )
+}
+
+function DetailRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-gray-50 dark:border-slate-800/50 last:border-0">
+      <div className="flex items-center gap-2">
+        {icon && <span className="text-gray-400 dark:text-gray-500">{icon}</span>}
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</span>
+      </div>
+      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{value}</span>
+    </div>
+  )
+}
+
+function DetailText({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="pt-2">
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{value}</p>
+    </div>
+  )
+}
+
+function PaymentItem({ payment, formatCurrency, formatDate }: { payment: any; formatCurrency: (val: number) => string; formatDate: (date: string | null) => string }) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-gray-50 dark:border-slate-800/50 last:border-0">
+      <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {formatDate(payment.date)}
+        </p>
+        {payment.description && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[150px]">{payment.description}</p>
+        )}
+      </div>
+      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+        + {formatCurrency(Number(payment.amount) || 0)}
+      </span>
+    </div>
+  )
+}
 
 function ConfirmModal({
   title,
@@ -76,6 +160,42 @@ function ConfirmModal({
   )
 }
 
+// ============================================================
+// SKELETON
+// ============================================================
+
+const LoanDetailSkeleton = () => (
+  <div className="min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950">
+    <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
+      <div className="flex items-center justify-between">
+        <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+        <div className="h-6 w-40 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+        <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+      </div>
+    </div>
+    <div className="px-4 pt-6 space-y-5">
+      <div className="animate-pulse rounded-3xl bg-white dark:bg-slate-900 p-5 border border-black/5 dark:border-white/10">
+        <div className="h-4 w-24 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+        <div className="h-10 w-40 bg-gray-200 dark:bg-slate-700 rounded" />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="h-20 bg-gray-100 dark:bg-slate-800 rounded-2xl" />
+          <div className="h-20 bg-gray-100 dark:bg-slate-800 rounded-2xl" />
+        </div>
+      </div>
+      <div className="animate-pulse rounded-3xl bg-white dark:bg-slate-900 p-5 border border-black/5 dark:border-white/10">
+        <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+        <div className="h-12 bg-gray-100 dark:bg-slate-800 rounded-2xl" />
+        <div className="h-12 bg-gray-100 dark:bg-slate-800 rounded-2xl mt-3" />
+        <div className="h-12 bg-gray-100 dark:bg-slate-800 rounded-2xl mt-3" />
+      </div>
+    </div>
+  </div>
+)
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
+
 function LoanDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -86,32 +206,24 @@ function LoanDetailContent() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  // ✅ HOOK ESPECÍFICO POR ID
+  // ✅ HOOKS (mantidos exatamente iguais)
   const { data: loan, loading, notFound } = useLoanById(id)
-
-  // ✅ HOOK DE RELACIONAMENTO (pagamentos do empréstimo)
   const { data: payments, loading: paymentsLoading } = useLoanPayments(id)
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showPayConfirm, setShowPayConfirm] = useState(false)
   const [processing, setProcessing] = useState(false)
 
+  // ✅ FUNÇÕES AUXILIARES (mantidas exatamente iguais)
+  const formatCurrency = (val: number) => 
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+
+  const formatDate = (date: string | null) => 
+    date ? format(new Date(date), "dd/MM/yyyy") : "—"
+
   // ✅ TRATAMENTO DE LOADING
   if (loading) {
-    return (
-      <div className="min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950">
-        <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-            <div className="h-6 w-40 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-          </div>
-        </div>
-        <div className="px-4 pt-6">
-          <Skeleton count={4} />
-        </div>
-      </div>
-    )
+    return <LoanDetailSkeleton />
   }
 
   // ✅ TRATAMENTO DE NÃO ENCONTRADO
@@ -137,6 +249,7 @@ function LoanDetailContent() {
 
   if (!loan) return null
 
+  // ✅ CÁLCULOS (mantidos exatamente iguais)
   const isLent = loan.direction === "lent"
   const amount = Number(loan.amount) || 0
   const totalPaid = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
@@ -160,12 +273,7 @@ function LoanDetailContent() {
     shadow: "shadow-orange-500/20",
   }
 
-  const statusMap = {
-    active: { label: "Ativo", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-    paid: { label: "Pago", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-    overdue: { label: "Atrasado", color: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
-  } as const
-
+  // ✅ HANDLERS (mantidos exatamente iguais)
   const handlePay = async () => {
     setProcessing(true)
     try {
@@ -178,7 +286,6 @@ function LoanDetailContent() {
       success()
       showToast("✅ Empréstimo marcado como pago!", "success")
       setShowPayConfirm(false)
-      // ✅ NÃO PRECISA router.refresh() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro: ${err.message}`, "error")
@@ -190,11 +297,9 @@ function LoanDetailContent() {
   const handleDelete = async () => {
     setProcessing(true)
     try {
-      // Exclui pagamentos vinculados
       for (const p of (payments || [])) {
         await safeDelete('transactions', p.id)
       }
-      
       const res = await safeDelete('loans', loan.id)
       if (!res.success) throw new Error(res.error)
       success()
@@ -209,14 +314,12 @@ function LoanDetailContent() {
     }
   }
 
-  const formatCurrency = (val: number) => 
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
-
-  const formatDate = (date: string | null) => 
-    date ? format(new Date(date), "dd/MM/yyyy") : "—"
-
+  // ✅ RENDERIZAÇÃO REFATORADA
   return (
     <div className="min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950">
+      {/* ============================================================
+          BLOCO 1: HEADER STICKY
+          ============================================================ */}
       <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between gap-3">
           <button
@@ -228,12 +331,10 @@ function LoanDetailContent() {
           </button>
 
           <div className="text-center min-w-0 flex-1">
-            <h1 className="text-[18px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-              Detalhes do Empréstimo
+            <p className="text-xs font-medium text-gray-400 dark:text-gray-500">Detalhes do empréstimo</p>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+              {loan.description || 'Empréstimo'}
             </h1>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-              {loan.description}
-            </p>
           </div>
 
           <button
@@ -246,42 +347,45 @@ function LoanDetailContent() {
         </div>
       </div>
 
-      <div className="px-4 pt-6 pb-28 space-y-4">
-        <div className={`rounded-[28px] p-5 ${accent.bgSoft} border ${accent.borderSoft}`}>
-          <div className="flex items-start justify-between gap-4">
+      {/* ============================================================
+          BLOCO 2: CONTEÚDO PRINCIPAL
+          ============================================================ */}
+      <div className="px-4 pt-6 pb-28 space-y-5">
+
+        {/* Hero Card */}
+        <div className={`rounded-3xl p-5 ${accent.bgSoft} border ${accent.borderSoft}`}>
+          <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${accent.text}`}>
-                {isLent ? "Você emprestou" : "Você pegou"}
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${accent.text}`}>
+                {isLent ? 'Você emprestou' : 'Você pegou emprestado'}
               </p>
-              <h2 className="mt-2 text-[30px] font-semibold text-gray-900 dark:text-gray-100">
+              <h2 className="mt-1 text-3xl font-semibold text-gray-900 dark:text-gray-100">
                 {formatCurrency(amount)}
               </h2>
             </div>
-            <span className={`px-3 py-1 rounded-full text-[12px] font-semibold ${statusMap[status as keyof typeof statusMap]?.color ?? statusMap.active.color}`}>
-              {statusMap[status as keyof typeof statusMap]?.label ?? "Ativo"}
-            </span>
+            <StatusBadge status={status as 'active' | 'paid' | 'overdue'} />
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-[18px] bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Restante</p>
-              <p className="mt-2 text-[18px] font-semibold text-gray-900 dark:text-gray-100">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Restante</p>
+              <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {formatCurrency(remaining)}
               </p>
             </div>
-            <div className="rounded-[18px] bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Juros</p>
-              <p className="mt-2 text-[18px] font-semibold text-gray-900 dark:text-gray-100">
-                {interestRate ? `${interestRate}% a.m.` : "Sem juros"}
+            <div className="rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Juros</p>
+              <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {interestRate ? `${interestRate}% a.m.` : 'Sem juros'}
               </p>
             </div>
           </div>
 
           {payments && payments.length > 0 && (
-            <div className="mt-4 rounded-[18px] bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
+            <div className="mt-3 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Total pago</p>
-                <p className="text-[18px] font-semibold text-teal-600 dark:text-teal-400">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Total pago</p>
+                <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(totalPaid)}
                 </p>
               </div>
@@ -289,53 +393,91 @@ function LoanDetailContent() {
           )}
         </div>
 
-        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-4 space-y-4">
-          <DetailRow label="Pessoa/Empresa" value={loan.lender || "—"} />
-          <DetailRow label="Data" value={formatDate(loan.date)} />
-          <DetailRow label="Vencimento" value={formatDate(loan.due_date)} />
-          <DetailRow label="Observações" value={loan.notes || "Sem observações"} multiline />
-        </div>
+        {/* Informações */}
+        <section className="rounded-3xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-5">
+          <SectionTitle title="Informações" />
 
-        {payments && payments.length > 0 && (
-          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-4">
-            <h3 className="text-[13px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Pagamentos</h3>
-            <div className="space-y-2">
+          <div className="space-y-0">
+            <DetailRow 
+              label="Pessoa/Empresa" 
+              value={loan.lender || '—'} 
+              icon={<User size={14} />} 
+            />
+            <DetailRow 
+              label="Data" 
+              value={formatDate(loan.date)} 
+              icon={<Calendar size={14} />} 
+            />
+            <DetailRow 
+              label="Vencimento" 
+              value={formatDate(loan.due_date)} 
+              icon={<CalendarDays size={14} />} 
+            />
+          </div>
+
+          <DetailText label="Observações" value={loan.notes || 'Sem observações'} />
+        </section>
+
+        {/* Pagamentos */}
+        <section className="rounded-3xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <SectionTitle title={`Pagamentos (${payments?.length || 0})`} />
+          </div>
+
+          {paymentsLoading ? (
+            <div className="flex justify-center py-8">
+              <RefreshCw size={24} className="animate-spin text-teal-500" />
+            </div>
+          ) : !payments || payments.length === 0 ? (
+            <div className="py-8 text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                <ReceiptText size={20} className="text-gray-400 dark:text-gray-500" />
+              </div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Nenhum pagamento registrado.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50 dark:divide-slate-800/50">
               {payments.map((p: any) => (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-slate-700/50 last:border-0">
-                  <span className="text-[13px] font-medium text-gray-600 dark:text-gray-400">
-                    {formatDate(p.date)}
-                  </span>
-                  <span className="text-[13px] font-bold text-teal-600 dark:text-teal-400">
-                    {formatCurrency(Number(p.amount) || 0)}
-                  </span>
-                </div>
+                <PaymentItem 
+                  key={p.id} 
+                  payment={p} 
+                  formatCurrency={formatCurrency} 
+                  formatDate={formatDate} 
+                />
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </section>
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* Ações */}
+        <div className="space-y-3 pt-2">
           <button
             onClick={() => { vibrate([10]); setShowPayConfirm(true); }}
-            disabled={status === "paid" || remaining <= 0}
-            className={`rounded-[20px] py-4 font-semibold text-white ${accent.bg} ${accent.hover} disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]`}
+            disabled={status === 'paid' || remaining <= 0}
+            className={`w-full rounded-2xl py-4 font-semibold text-white ${accent.bg} ${accent.hover} disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-lg ${accent.shadow}`}
           >
-            {status === "paid" ? "Já pago" : remaining <= 0 ? "Quitado" : "Marcar pago"}
+            {status === 'paid' ? 'Já pago' : remaining <= 0 ? 'Quitado' : 'Marcar como pago'}
           </button>
+
           <button
             onClick={() => { vibrate([10]); setShowDeleteConfirm(true); }}
-            className="rounded-[20px] py-4 font-semibold bg-gray-900 text-white dark:bg-red-600 dark:hover:bg-red-700 transition-all active:scale-[0.98]"
+            className="w-full rounded-2xl border border-red-200 dark:border-red-900/40 py-4 font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
           >
-            Excluir
+            Excluir empréstimo
           </button>
         </div>
       </div>
 
+      {/* ============================================================
+          BLOCO 5: CONFIRM MODALS
+          ============================================================ */}
       {showPayConfirm && (
         <ConfirmModal
           title="Marcar como pago?"
           description="Essa ação vai zerar o valor restante e atualizar o status do empréstimo."
-          confirmLabel={processing ? "Processando..." : "Confirmar"}
+          confirmLabel={processing ? 'Processando...' : 'Confirmar'}
           cancelLabel="Cancelar"
           onConfirm={handlePay}
           onCancel={() => setShowPayConfirm(false)}
@@ -347,7 +489,7 @@ function LoanDetailContent() {
         <ConfirmModal
           title="Excluir empréstimo?"
           description="Essa ação não pode ser desfeita. Todos os pagamentos vinculados também serão excluídos."
-          confirmLabel={processing ? "Excluindo..." : "Excluir"}
+          confirmLabel={processing ? 'Excluindo...' : 'Excluir'}
           cancelLabel="Cancelar"
           destructive
           onConfirm={handleDelete}
@@ -359,20 +501,9 @@ function LoanDetailContent() {
   )
 }
 
-function DetailRow({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
-  return (
-    <div className={`flex ${multiline ? 'flex-col' : 'items-center justify-between'} gap-1 ${multiline ? '' : 'py-1'}`}>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">{label}</span>
-      <span className={`text-[14px] font-medium text-gray-800 dark:text-gray-200 ${multiline ? 'mt-1' : ''}`}>
-        {value}
-      </span>
-    </div>
-  )
-}
-
 export default function LoanDetailPage() {
   return (
-    <Suspense fallback={<div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950"><div className="flex-1 px-4 pt-4"><Skeleton count={4} /></div></div>}>
+    <Suspense fallback={<LoanDetailSkeleton />}>
       <LoanDetailContent />
     </Suspense>
   )
