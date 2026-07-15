@@ -5,17 +5,67 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
-  Clock, AlertTriangle, CheckCircle
+  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { useBudgetById } from '@/hooks/useBudgetById' // ✅ NOVO HOOK
-import { useBudgetTransactions } from '@/hooks/useBudgetTransactions' // ✅ NOVO HOOK
+import { useBudgetById } from '@/hooks/useBudgetById'
+import { useBudgetTransactions } from '@/hooks/useBudgetTransactions'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
+
+// ============================================================
+// COMPONENTES VISUAIS (apenas estrutura, sem lógica)
+// ============================================================
+
+function SectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="border-b border-gray-100 dark:border-slate-800 pb-3">
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      {description && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+    </div>
+  )
+}
+
+function MetricCard({ label, value, color = 'gray' }: { label: string; value: string; color?: 'gray' | 'red' | 'green' | 'orange' }) {
+  const colorMap = {
+    gray: 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700/70 text-gray-900 dark:text-gray-100',
+    red: 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20 text-red-600 dark:text-red-400',
+    green: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+    orange: 'bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20 text-orange-600 dark:text-orange-400',
+  }
+
+  return (
+    <div className={`rounded-[20px] border p-3.5 ${colorMap[color]}`}>
+      <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+      <p className="text-[15px] font-bold">{value}</p>
+    </div>
+  )
+}
+
+function StatusBadge({ status, isOverBudget, isWarning }: { status: string; isOverBudget: boolean; isWarning: boolean }) {
+  const config = isOverBudget
+    ? { bg: 'bg-red-50 dark:bg-red-500/10', border: 'border-red-200 dark:border-red-500/20', text: 'text-red-600 dark:text-red-400', icon: AlertTriangle, label: 'Orçamento estourado' }
+    : isWarning
+    ? { bg: 'bg-orange-50 dark:bg-orange-500/10', border: 'border-orange-200 dark:border-orange-500/20', text: 'text-orange-600 dark:text-orange-400', icon: AlertTriangle, label: 'Atenção ao limite' }
+    : { bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-500/20', text: 'text-emerald-600 dark:text-emerald-400', icon: CheckCircle, label: 'Dentro do limite' }
+
+  const Icon = config.icon
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold border ${config.bg} ${config.border} ${config.text}`}>
+      <Icon size={12} />
+      {config.label}
+    </span>
+  )
+}
+
+// ============================================================
+// SKELETON
+// ============================================================
 
 const BudgetDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-6">
@@ -54,6 +104,10 @@ const BudgetDetailSkeleton = () => (
   </div>
 )
 
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
+
 function BudgetDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -72,16 +126,12 @@ function BudgetDetailContent() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [projection, setProjection] = useState('')
 
-  // ✅ HOOK ESPECÍFICO POR ID
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(id)
-
-  // ✅ HOOK DE RELACIONAMENTO (transações do orçamento)
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(id)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ✅ REMOVIDO pull-to-refresh manual (hooks já são reativos)
-
+  // ✅ LÓGICA DE CARREGAMENTO (mantida exatamente igual)
   useEffect(() => {
     if (!id || !user?.id) return
 
@@ -147,6 +197,7 @@ function BudgetDetailContent() {
     loadData()
   }, [id, user, currentDate, budgetData, budgetTransactions, router])
 
+  // ✅ FUNÇÕES AUXILIARES (mantidas exatamente iguais)
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -197,6 +248,7 @@ function BudgetDetailContent() {
 
   if (!budget) return null
 
+  // ✅ CÁLCULOS (mantidos exatamente iguais)
   const remaining = Number(budget.amount) - spent
   const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
   const isOverBudget = remaining < 0
@@ -204,10 +256,11 @@ function BudgetDetailContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
+  // ✅ RENDERIZAÇÃO REFATORADA
   return (
     <div
       ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-4 pb-28 font-sans transition-colors duration-300"
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 px-4 pt-4 pb-28 font-sans transition-colors duration-300"
     >
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
@@ -224,7 +277,10 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f6f7f8]/92 dark:bg-slate-950/92 backdrop-blur-xl">
+      {/* ============================================================
+          BLOCO 1: HEADER
+          ============================================================ */}
+      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl">
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => {
@@ -233,16 +289,16 @@ function BudgetDetailContent() {
             }}
             className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-gray-800 dark:text-gray-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
           >
-            <ChevronLeft size={22} />
+            <ArrowLeft size={22} />
           </button>
 
           <div className="px-4 text-center min-w-0">
             <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em]">
               Detalhes do orçamento
             </p>
-            <h2 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 truncate">
+            <h1 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 truncate">
               {budget.name}
-            </h2>
+            </h1>
           </div>
 
           <button
@@ -256,6 +312,7 @@ function BudgetDetailContent() {
           </button>
         </div>
 
+        {/* Navegador de mês */}
         <div className="flex items-center justify-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-1.5 shadow-sm">
             <button
@@ -285,23 +342,19 @@ function BudgetDetailContent() {
         </div>
       </div>
 
+      {/* ============================================================
+          BLOCO 2: STATUS BADGE
+          ============================================================ */}
       <div className="mb-4 flex justify-center">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold border ${
-            isOverBudget
-              ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
-              : isWarning
-                ? 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20'
-                : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-          }`}
-        >
-          {isOverBudget ? <AlertTriangle size={12} /> : <CheckCircle size={12} />}
-          {isOverBudget ? 'Orçamento estourado' : isWarning ? 'Atenção ao limite' : 'Dentro do limite'}
-        </span>
+        <StatusBadge status={budget.status} isOverBudget={isOverBudget} isWarning={isWarning} />
       </div>
 
+      {/* ============================================================
+          BLOCO 3: CARD DE RESUMO COM MÉTRICAS
+          ============================================================ */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
         <div className="p-5 pb-4">
+          {/* Ícone e Nome */}
           <div className="flex items-center gap-4 mb-5">
             <div
               className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm"
@@ -311,9 +364,9 @@ function BudgetDetailContent() {
             </div>
 
             <div className="min-w-0">
-              <h3 className="text-[19px] font-bold text-gray-900 dark:text-gray-100 leading-tight">
+              <h2 className="text-[19px] font-bold text-gray-900 dark:text-gray-100 leading-tight">
                 {budget.name}
-              </h3>
+              </h2>
               <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">
                 {budget.categories?.name || 'Geral'} •{' '}
                 {budget.period === 'monthly'
@@ -325,49 +378,18 @@ function BudgetDetailContent() {
             </div>
           </div>
 
+          {/* Métricas */}
           <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="rounded-[20px] bg-gray-50 dark:bg-slate-800 p-3.5 border border-gray-100 dark:border-slate-700/70">
-              <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Orçado</p>
-              <p className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
-                {formatCurrency(Number(budget.amount))}
-              </p>
-            </div>
-
-            <div className="rounded-[20px] bg-red-50 dark:bg-red-500/10 p-3.5 border border-red-100 dark:border-red-500/20">
-              <p className="text-[11px] font-medium text-red-600/80 dark:text-red-400/80 mb-1">Gasto</p>
-              <p className="text-[15px] font-bold text-red-600 dark:text-red-400">
-                {formatCurrency(spent)}
-              </p>
-            </div>
-
-            <div
-              className={`rounded-[20px] p-3.5 border ${
-                remaining >= 0
-                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20'
-                  : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20'
-              }`}
-            >
-              <p
-                className={`text-[11px] font-medium mb-1 ${
-                  remaining >= 0
-                    ? 'text-emerald-700/80 dark:text-emerald-400/80'
-                    : 'text-red-600/80 dark:text-red-400/80'
-                }`}
-              >
-                Restante
-              </p>
-              <p
-                className={`text-[15px] font-bold ${
-                  remaining >= 0
-                    ? 'text-emerald-700 dark:text-emerald-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}
-              >
-                {formatCurrency(Math.abs(remaining))}
-              </p>
-            </div>
+            <MetricCard label="Orçado" value={formatCurrency(Number(budget.amount))} color="gray" />
+            <MetricCard label="Gasto" value={formatCurrency(spent)} color="red" />
+            <MetricCard
+              label="Restante"
+              value={formatCurrency(Math.abs(remaining))}
+              color={remaining >= 0 ? 'green' : 'red'}
+            />
           </div>
 
+          {/* Barra de Progresso */}
           <div className="mb-2">
             <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
               <div
@@ -392,6 +414,9 @@ function BudgetDetailContent() {
         </div>
       </section>
 
+      {/* ============================================================
+          BLOCO 4: PROJEÇÃO
+          ============================================================ */}
       {projection && (
         <div
           className={`rounded-[24px] p-4 mb-4 border flex items-start gap-3 ${
@@ -414,6 +439,9 @@ function BudgetDetailContent() {
         </div>
       )}
 
+      {/* ============================================================
+          BLOCO 5: TRANSAÇÕES
+          ============================================================ */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
           <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
