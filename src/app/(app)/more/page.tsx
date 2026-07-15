@@ -545,10 +545,9 @@ export default function MorePage() {
             <MenuItem iconName="check-square" label="Conciliação Inteligente" href="/conciliation" colorClass="text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30" />
             <MenuItem iconName="image" label="Importar Comprovante" href="/import" colorClass="text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30" />
             <MenuItem iconName="file-spreadsheet" label="Importar Extrato (CSV)" href="/import-csv" colorClass="text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30" />
-            <MenuItem iconName="bar-chart" label="Relatório Personalizado" href="/analysis" colorClass="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30" />
             <MenuItem iconName="pie-chart" label="Relatórios Avançados" href="/reports" badge="Pro" colorClass="text-fuchsia-600 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-900/30" />
+            {/* 🔥 REMOVIDO: Relatório Personalizado (já existe no BottomNav e tem Relatórios Avançados) */}
 
-            {/* 🔥 ADICIONADO: Link para o Painel Admin (apenas se devMode ativado) */}
             {isDevMode && (
               <MenuItem
                 iconName="bot"
