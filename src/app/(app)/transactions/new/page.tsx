@@ -662,8 +662,8 @@ function NewTransactionContent() {
         </div>
       </div>
 
-      {/* CORPO DO FORMULÁRIO */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-32">
+      {/* CORPO DO FORMULÁRIO - COM pb-40 PARA O BOTÃO FICAR VISÍVEL */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-40">
         <div className="space-y-4">
           
           {/* VALOR */}
