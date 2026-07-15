@@ -447,7 +447,7 @@ function GoalDetailContent() {
   }
 
   const handleContribAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/D/g, '')
+    const digits = e.target.value.replace(/\D/g, '')
 
     if (!digits) {
       setContribAmount('')
@@ -462,14 +462,12 @@ function GoalDetailContent() {
     )
   }
 
+  // ✅ CORRIGIDO: regex com escape do ponto e grupo válido
   const getAttachmentIcon = (url: string | null) => {
-  if (!url) return null
-  const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-  if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-  return <Paperclip size={12} className="text-gray-500 shrink-0" />
-}
-
-    return <Paperclip size={12} className="shrink-0 text-gray-500" />
+    if (!url) return null
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+    return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
   const formatCurrency = (val: number) =>
