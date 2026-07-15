@@ -13,7 +13,8 @@ import {
   Tag,
   Palette,
   Sparkles,
-  CalendarRange
+  CalendarRange,
+  ArrowLeft
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
@@ -21,7 +22,7 @@ import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { useBudgetById } from '@/hooks/useBudgetById' // ✅ NOVO HOOK
+import { useBudgetById } from '@/hooks/useBudgetById'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
@@ -37,6 +38,34 @@ function safeNum(val: any): number {
   return Number.isFinite(n) ? n : 0
 }
 
+// ============================================================
+// COMPONENTES VISUAIS (apenas estrutura, sem lógica)
+// ============================================================
+
+function SectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="border-b border-gray-100 dark:border-slate-800 pb-3">
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      {description && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+    </div>
+  )
+}
+
+function FormField({ label, children, error, helper }: { label: string; children: React.ReactNode; error?: string; helper?: string }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+      {children}
+      {helper && <p className="text-xs text-gray-500 dark:text-gray-400">{helper}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  )
+}
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
+
 function NewBudgetContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -46,8 +75,9 @@ function NewBudgetContent() {
   const { success, error: errorHaptic } = useHapticFeedback()
   const { safeAdd, safeUpdate } = useSafeDb()
   const editId = searchParams.get('edit')
+  const isEditing = Boolean(editId)
 
-  // ✅ HOOK ESPECÍFICO POR ID
+  // ✅ HOOKS (mantidos exatamente iguais)
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(editId)
 
   const [saving, setSaving] = useState(false)
@@ -65,14 +95,13 @@ function NewBudgetContent() {
   const [showCatModal, setShowCatModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // ✅ CATEGORIAS ainda vêm via useLocalData (dados auxiliares)
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense', parent_id: null },
   })
   const categories = localCategories || []
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
+  // ✅ HIDRATAÇÃO (mantida exatamente igual)
   useEffect(() => {
     if (editId && budgetData && !initialized) {
       setName(budgetData.name || '')
@@ -145,6 +174,7 @@ function NewBudgetContent() {
     )
   }
 
+  // ✅ FUNÇÃO DE SALVAR (mantida exatamente igual)
   const handleSave = async () => {
     if (!user?.id || !(name || '').trim() || amountNum <= 0) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -200,293 +230,278 @@ function NewBudgetContent() {
     }
   }
 
+  // ✅ DADOS DERIVADOS (mantidos exatamente iguais)
   const selectedCat = categories.find((c: any) => c.id === categoryId)
   const IconComp = (Icons as any)[icon] || Icons.Tag
 
+  // ✅ RENDERIZAÇÃO REFATORADA
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 pb-36 px-4 pt-4 font-sans transition-colors duration-300">
-      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f6f7f8]/92 dark:bg-slate-950/92 backdrop-blur-xl">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => {
-              lightTap()
-              router.back()
-            }}
-            className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-gray-800 dark:text-gray-200 flex items-center justify-center shadow-sm active:scale-[0.98] transition-transform"
-          >
-            <ChevronLeft size={22} />
-          </button>
-
-          <div className="text-center px-3 min-w-0">
-            <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em]">
-              {editId ? 'Editar orçamento' : 'Novo orçamento'}
+    <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 md:py-6">
+        {/* ============================================================
+            BLOCO 1: HEADER
+            ============================================================ */}
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Orçamentos</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {isEditing ? 'Editar orçamento' : 'Novo orçamento'}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {isEditing
+                ? 'Atualize os dados do orçamento sem alterar sua lógica atual.'
+                : 'Cadastre um novo orçamento com os mesmos campos e regras atuais.'}
             </p>
-            <h2 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 truncate">
-              {editId ? 'Atualizar dados' : 'Criar orçamento'}
-            </h2>
           </div>
 
           <button
-            onClick={() => {
-              lightTap()
-              handleSave()
-            }}
-            disabled={saving}
-            className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/25 active:scale-[0.98] transition-transform disabled:opacity-50"
+            type="button"
+            onClick={() => router.back()}
+            className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]"
           >
-            {saving ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} />}
+            Voltar
           </button>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.04)] overflow-hidden">
-          <div className="p-5 border-b border-gray-100 dark:border-slate-800">
-            <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em] mb-2">
-              Resumo
-            </p>
+        {/* ============================================================
+            BLOCO 2: CARD DE CONTEXTO
+            ============================================================ */}
+        <div className="mb-6 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Resumo
+              </p>
+              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                Preencha os campos do orçamento. Os cálculos, validações e salvamento permanecem iguais.
+              </p>
+            </div>
 
-            <div className="flex items-start gap-4">
-              <div
-                className="w-14 h-14 rounded-[18px] flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${color}18`, color }}
-              >
-                <IconComp size={24} />
-              </div>
-
-              <div className="min-w-0">
-                <p className="text-[18px] font-bold text-gray-900 dark:text-gray-100 leading-tight">
-                  {name?.trim() || 'Novo orçamento'}
-                </p>
-                <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">
-                  {selectedCat ? selectedCat.name : 'Todas as categorias'} •{' '}
-                  {period === 'monthly' ? 'Mensal' : period === 'biweekly' ? 'Quinzenal' : 'Semanal'}
-                </p>
-              </div>
+            <div className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              isEditing
+                ? 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+            }`}>
+              {isEditing ? 'Modo edição' : 'Novo registro'}
             </div>
           </div>
+        </div>
 
-          <div className="p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block mb-2">
-              Valor do orçamento
-            </label>
-            <div className="flex items-end gap-2">
-              <span className="text-[24px] font-medium text-gray-400 dark:text-gray-500 leading-none pb-1">
-                R$
-              </span>
-              <MoneyInput
-                value={amountNum}
-                onChange={(num, formatted) => {
-                  setAmountNum(num)
-                  setAmountFormatted(formatted)
-                }}
-                className="w-full bg-transparent outline-none text-[34px] leading-none font-bold tracking-tight text-gray-900 dark:text-gray-100"
+        {/* ============================================================
+            BLOCO 3: FORMULÁRIO
+            ============================================================ */}
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
+          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm space-y-6">
+
+            {/* SEÇÃO 1: INFORMAÇÕES PRINCIPAIS */}
+            <section className="space-y-4">
+              <SectionHeader
+                title="Informações principais"
+                description="Defina os dados centrais do orçamento."
               />
-            </div>
 
-            <div className="mt-5">
-              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block mb-2">
-                Nome
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Alimentação, Moradia..."
-                className="w-full h-12 px-4 rounded-2xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-[15px] font-medium text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
-            <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em] mb-1">
-              Personalização
-            </p>
-            <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
-              Categoria, cor e ícone
-            </h3>
-          </div>
-
-          <div className="p-3">
-            <button
-              onClick={() => {
-                lightTap()
-                setShowCatModal(true)
-              }}
-              className="w-full px-3 py-3.5 rounded-[22px] flex items-center justify-between active:scale-[0.98] transition-transform hover:bg-gray-50 dark:hover:bg-slate-800"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-[16px] bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center shrink-0">
-                  <Tag size={18} />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Nome */}
+                <div className="md:col-span-2">
+                  <FormField label="Nome do orçamento">
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Ex: Alimentação, Moradia..."
+                      className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:focus:border-teal-400"
+                    />
+                  </FormField>
                 </div>
-                <div className="text-left min-w-0">
-                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Categoria</p>
-                  <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                    {selectedCat ? selectedCat.name : 'Todas as categorias'}
-                  </p>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 shrink-0" />
-            </button>
 
-            <div className="px-3 py-3">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-11 h-11 rounded-[16px] bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center shrink-0">
-                  <Palette size={18} />
-                </div>
+                {/* Categoria */}
                 <div>
-                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Cor</p>
-                  <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                    Paleta do orçamento
-                  </p>
+                  <FormField label="Categoria">
+                    <button
+                      type="button"
+                      onClick={() => { lightTap(); setShowCatModal(true); }}
+                      className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-left text-gray-900 dark:text-gray-100 flex items-center justify-between transition hover:bg-gray-50 dark:hover:bg-slate-800 active:scale-[0.98]"
+                    >
+                      <span className="truncate">{selectedCat ? selectedCat.name : 'Todas as categorias'}</span>
+                      <ChevronRight size={16} className="text-gray-400 shrink-0" />
+                    </button>
+                  </FormField>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap gap-3">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => {
-                      lightTap()
-                      setColor(c)
-                    }}
-                    className={`w-10 h-10 rounded-full transition-all active:scale-[0.98] ${
-                      color === c
-                        ? 'scale-110 ring-2 ring-gray-300 dark:ring-slate-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
-                        : 'hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
+                {/* Valor */}
+                <div>
+                  <FormField label="Valor do orçamento" helper="Informe o valor total previsto para este orçamento.">
+                    <div className="flex items-center gap-2 h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/10 transition">
+                      <span className="text-sm font-medium text-gray-400 dark:text-gray-500">R$</span>
+                      <MoneyInput
+                        value={amountNum}
+                        onChange={(num, formatted) => {
+                          setAmountNum(num)
+                          setAmountFormatted(formatted)
+                        }}
+                        placeholder="0,00"
+                        className="w-full bg-transparent outline-none text-sm font-semibold text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+                      />
+                    </div>
+                  </FormField>
+                </div>
               </div>
-            </div>
+            </section>
 
-            <button
-              onClick={() => {
-                lightTap()
-                setShowIconModal(true)
-              }}
-              className="w-full px-3 py-3.5 rounded-[22px] flex items-center justify-between active:scale-[0.98] transition-transform hover:bg-gray-50 dark:hover:bg-slate-800"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className="w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: `${color}18`, color }}
-                >
-                  <IconComp size={18} />
+            {/* SEÇÃO 2: PERSONALIZAÇÃO */}
+            <section className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+              <SectionHeader
+                title="Personalização"
+                description="Escolha cor e ícone para identificar o orçamento."
+              />
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Cor */}
+                <div>
+                  <FormField label="Cor">
+                    <div className="flex flex-wrap gap-3 pt-1">
+                      {COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => { lightTap(); setColor(c); }}
+                          className={`w-10 h-10 rounded-full transition-all active:scale-[0.98] ${
+                            color === c
+                              ? 'scale-110 ring-2 ring-gray-300 dark:ring-slate-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
+                              : 'hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </FormField>
                 </div>
-                <div className="text-left min-w-0">
-                  <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Ícone</p>
-                  <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                    {icon}
-                  </p>
+
+                {/* Ícone */}
+                <div>
+                  <FormField label="Ícone">
+                    <button
+                      type="button"
+                      onClick={() => { lightTap(); setShowIconModal(true); }}
+                      className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-left text-gray-900 dark:text-gray-100 flex items-center justify-between transition hover:bg-gray-50 dark:hover:bg-slate-800 active:scale-[0.98]"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-xl flex items-center justify-center"
+                          style={{ backgroundColor: `${color}18`, color }}
+                        >
+                          <IconComp size={16} />
+                        </div>
+                        <span className="truncate">{icon}</span>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-400 shrink-0" />
+                    </button>
+                  </FormField>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 shrink-0" />
-            </button>
+            </section>
+
+            {/* SEÇÃO 3: CONFIGURAÇÃO */}
+            <section className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+              <SectionHeader
+                title="Configuração"
+                description="Defina a frequência e comportamento do orçamento."
+              />
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Período */}
+                <div>
+                  <FormField label="Período" helper="Como o orçamento será renovado.">
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { key: 'monthly' as const, label: 'Mensal' },
+                        { key: 'biweekly' as const, label: 'Quinzenal' },
+                        { key: 'weekly' as const, label: 'Semanal' }
+                      ].map((p) => (
+                        <button
+                          key={p.key}
+                          type="button"
+                          onClick={() => { lightTap(); setPeriod(p.key); }}
+                          className={`h-11 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
+                            period === p.key
+                              ? 'bg-teal-600 text-white shadow-sm'
+                              : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </FormField>
+                </div>
+
+                {/* Acumular saldo */}
+                <div>
+                  <FormField label="Acumular saldo" helper="O valor não gasto acumula para o mês seguinte.">
+                    <div className="flex items-center justify-between h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                          <Sparkles size={14} />
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Acumular</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => { lightTap(); setAccumulate(!accumulate); }}
+                        className={`w-12 h-7 rounded-full relative transition-all active:scale-[0.98] shrink-0 ${
+                          accumulate ? 'bg-teal-600' : 'bg-gray-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <div
+                          className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${
+                            accumulate ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </FormField>
+                </div>
+              </div>
+            </section>
+
           </div>
-        </section>
 
-        <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
-            <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em] mb-1">
-              Configuração
-            </p>
-            <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
-              Frequência e comportamento
-            </h3>
-          </div>
-
-          <div className="p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-11 h-11 rounded-[16px] bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center shrink-0">
-                <CalendarRange size={18} />
-              </div>
-              <div>
-                <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Período</p>
-                <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                  Como o orçamento será renovado
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              {[
-                { key: 'monthly' as const, label: 'Mensal' },
-                { key: 'biweekly' as const, label: 'Quinzenal' },
-                { key: 'weekly' as const, label: 'Semanal' }
-              ].map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => {
-                    lightTap()
-                    setPeriod(p.key)
-                  }}
-                  className={`h-11 rounded-full text-[12px] font-semibold transition-all active:scale-[0.98] ${
-                    period === p.key
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="rounded-[22px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 px-4 py-4 flex items-center justify-between gap-4">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 text-gray-500 dark:text-gray-400 flex items-center justify-center shrink-0">
-                  <Sparkles size={16} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                    Acumular saldo
-                  </p>
-                  <p className="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed mt-1">
-                    O valor não gasto acumula para o mês seguinte.
-                  </p>
-                </div>
-              </div>
+          {/* ============================================================
+              BLOCO 4: BARRA DE AÇÃO FIXA
+              ============================================================ */}
+          <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-4 bg-white/95 dark:bg-slate-900/95 border-t border-gray-200 dark:border-slate-700 backdrop-blur-xl">
+            <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]"
+              >
+                Cancelar
+              </button>
 
               <button
-                onClick={() => {
-                  lightTap()
-                  setAccumulate(!accumulate)
-                }}
-                className={`w-12 h-7 rounded-full relative transition-all active:scale-[0.98] shrink-0 ${
-                  accumulate ? 'bg-teal-600' : 'bg-gray-300 dark:bg-slate-600'
-                }`}
+                type="submit"
+                disabled={saving}
+                className="h-11 rounded-xl bg-teal-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                <div
-                  className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${
-                    accumulate ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                {saving
+                  ? 'Salvando...'
+                  : isEditing
+                  ? 'Salvar alterações'
+                  : 'Criar orçamento'}
               </button>
             </div>
           </div>
-        </section>
+        </form>
       </div>
 
-      <div className="fixed bottom-20 left-0 right-0 px-4 z-30">
-        <div className="max-w-md mx-auto">
-          <button
-            onClick={() => {
-              lightTap()
-              handleSave()
-            }}
-            disabled={saving}
-            className="w-full h-14 rounded-[26px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[15px] shadow-[0_14px_30px_rgba(13,148,136,0.28)] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {saving ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} />}
-            {editId ? 'Atualizar orçamento' : 'Criar orçamento'}
-          </button>
-        </div>
-      </div>
+      {/* ============================================================
+          MODAIS (mantidos exatamente iguais)
+          ============================================================ */}
 
-      {/* MODAL DE CATEGORIA COM PORTAL */}
+      {/* MODAL DE CATEGORIA */}
       {showCatModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
@@ -588,7 +603,7 @@ function NewBudgetContent() {
         document.body
       )}
 
-      {/* IconPicker (já deve ter Portal interno) */}
+      {/* IconPicker */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
