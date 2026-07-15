@@ -1,71 +1,359 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo, Suspense } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { useAuth } from '@/lib/hooks/useAuth'
-import {
-  ChevronLeft, Edit2, Trash2, AlertTriangle, CheckCircle, Plus, RefreshCw,
-  ArrowUp, ArrowDown, X, Image, Paperclip
-} from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CheckCircle,
+  ChevronLeft,
+  Edit2,
+  Image,
+  Paperclip,
+  Plus,
+  RefreshCw,
+  Target,
+  Trash2,
+  X,
+} from 'lucide-react'
+
+import { useAuth } from '@/lib/hooks/useAuth'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
-import { useGoalById } from '@/hooks/useGoalById' // ✅ NOVO HOOK
-import { useGoalTransactions } from '@/hooks/useGoalTransactions' // ✅ NOVO HOOK
+import { useGoalById } from '@/hooks/useGoalById'
+import { useGoalTransactions } from '@/hooks/useGoalTransactions'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
 
 const GoalDetailSkeleton = () => (
-  <div className="animate-pulse px-4 pt-6 space-y-4">
-    <div className="flex items-center justify-between mb-6">
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
-      <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded" />
-      <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full" />
+  <div className="animate-pulse space-y-4 px-4 pt-6">
+    <div className="mb-6 flex items-center justify-between">
+      <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-slate-700" />
+      <div className="h-5 w-32 rounded bg-gray-200 dark:bg-slate-700" />
+      <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-slate-700" />
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
-      <div className="flex items-center gap-4 mb-5">
-        <div className="w-14 h-14 rounded-[18px] bg-gray-200 dark:bg-slate-700" />
+    <div className="rounded-[28px] border border-gray-50 bg-white p-6 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
+      <div className="mb-5 flex items-center gap-4">
+        <div className="h-14 w-14 rounded-[18px] bg-gray-200 dark:bg-slate-700" />
         <div className="space-y-2">
-          <div className="h-4 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
-          <div className="h-3 w-20 bg-gray-100 dark:bg-slate-700/50 rounded" />
+          <div className="h-4 w-28 rounded bg-gray-200 dark:bg-slate-700" />
+          <div className="h-3 w-20 rounded bg-gray-100 dark:bg-slate-700/50" />
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="mb-5 grid grid-cols-3 gap-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-[16px] p-3 bg-gray-100 dark:bg-slate-700">
-            <div className="h-3 w-12 bg-gray-200 dark:bg-slate-600 rounded mx-auto mb-2" />
-            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded mx-auto" />
+          <div
+            key={i}
+            className="rounded-[16px] bg-gray-100 p-3 dark:bg-slate-700"
+          >
+            <div className="mx-auto mb-2 h-3 w-12 rounded bg-gray-200 dark:bg-slate-600" />
+            <div className="mx-auto h-5 w-16 rounded bg-gray-200 dark:bg-slate-600" />
           </div>
         ))}
       </div>
 
-      <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
-        <div className="h-full bg-gray-200 dark:bg-slate-600 rounded-full w-2/3" />
+      <div className="mb-2 h-3 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
+        <div className="h-full w-2/3 rounded-full bg-gray-200 dark:bg-slate-600" />
       </div>
-      <div className="h-3 w-16 bg-gray-200 dark:bg-slate-700 rounded ml-auto" />
+      <div className="ml-auto h-3 w-16 rounded bg-gray-200 dark:bg-slate-700" />
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
-      <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
+    <div className="rounded-[28px] border border-gray-50 bg-white p-6 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
+      <div className="mb-4 h-5 w-40 rounded bg-gray-200 dark:bg-slate-700" />
       {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 dark:border-slate-700 last:border-b-0">
-          <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-slate-700" />
+        <div
+          key={i}
+          className="flex items-center gap-3 border-b border-gray-50 py-3 last:border-b-0 dark:border-slate-700"
+        >
+          <div className="h-9 w-9 rounded-lg bg-gray-200 dark:bg-slate-700" />
           <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-slate-700 rounded" />
-            <div className="h-2.5 w-1/2 bg-gray-100 dark:bg-slate-700/50 rounded" />
+            <div className="h-3.5 w-3/4 rounded bg-gray-200 dark:bg-slate-700" />
+            <div className="h-2.5 w-1/2 rounded bg-gray-100 dark:bg-slate-700/50" />
           </div>
-          <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded" />
+          <div className="h-4 w-16 rounded bg-gray-200 dark:bg-slate-700" />
         </div>
       ))}
     </div>
   </div>
 )
+
+function SurfaceCard({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <section
+      className={`rounded-[28px] border border-black/5 bg-white/95 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-800/95 dark:shadow-none ${className}`}
+    >
+      {children}
+    </section>
+  )
+}
+
+function HeaderBar({
+  title,
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  title: string
+  onBack: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+      <div className="flex items-center justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            onClick={onBack}
+            className="rounded-full p-2 text-gray-800 transition-transform active:scale-95 dark:text-gray-200"
+            aria-label="Voltar"
+          >
+            <ChevronLeft size={24} />
+          </button>
+
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400 dark:text-gray-500">
+              Goal details
+            </p>
+            <h1 className="max-w-[180px] truncate text-[18px] font-bold text-gray-800 dark:text-gray-100">
+              {title}
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 gap-1">
+          <button
+            onClick={onEdit}
+            className="rounded-full bg-gray-50 p-2.5 text-teal-700 transition-all active:scale-95 hover:bg-teal-50 dark:bg-slate-800 dark:text-teal-400 dark:hover:bg-teal-900/30"
+            aria-label="Editar meta"
+          >
+            <Edit2 size={18} />
+          </button>
+
+          <button
+            onClick={onDelete}
+            className="rounded-full bg-red-50 p-2.5 text-red-500 transition-all active:scale-95 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20"
+            aria-label="Excluir meta"
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatusChip({
+  isCompleted,
+  isOverdue,
+  daysLeft,
+}: {
+  isCompleted: boolean
+  isOverdue: boolean
+  daysLeft: number
+}) {
+  return (
+    <div className="mb-2 flex justify-center">
+      <span
+        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold shadow-sm ${
+          isCompleted
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-900/30'
+            : isOverdue
+            ? 'border-red-200 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-900/30'
+            : 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900/30'
+        }`}
+      >
+        {isCompleted && <CheckCircle size={12} />}
+        {isOverdue && <AlertTriangle size={12} />}
+        {isCompleted ? 'Concluída' : isOverdue ? 'Atrasada' : `${daysLeft} dias restantes`}
+      </span>
+    </div>
+  )
+}
+
+function StatBlock({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string
+  value: string
+  tone?: 'neutral' | 'success' | 'warning'
+}) {
+  const toneMap = {
+    neutral:
+      'bg-gray-50 dark:bg-slate-700/40 border-gray-100 dark:border-slate-700/50 text-gray-800 dark:text-gray-200 label-gray-400 dark:label-gray-500',
+    success:
+      'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 label-emerald-600/70',
+    warning:
+      'bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20 text-orange-600 label-orange-600/70',
+  }
+
+  return (
+    <div
+      className={`rounded-[20px] border p-3.5 text-center ${
+        tone === 'success'
+          ? 'border-emerald-100 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10'
+          : tone === 'warning'
+          ? 'border-orange-100 bg-orange-50 dark:border-orange-500/20 dark:bg-orange-500/10'
+          : 'border-gray-100 bg-gray-50 dark:border-slate-700/50 dark:bg-slate-700/40'
+      }`}
+    >
+      <p
+        className={`mb-1 text-[10px] font-bold uppercase tracking-widest ${
+          tone === 'success'
+            ? 'text-emerald-600/70'
+            : tone === 'warning'
+            ? 'text-orange-600/70'
+            : 'text-gray-400 dark:text-gray-500'
+        }`}
+      >
+        {label}
+      </p>
+      <p
+        className={`text-[15px] font-black ${
+          tone === 'success'
+            ? 'text-emerald-600'
+            : tone === 'warning'
+            ? 'text-orange-600'
+            : 'text-gray-800 dark:text-gray-200'
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function ContributionModal({
+  open,
+  contribAmount,
+  contribDate,
+  contribNote,
+  contribAmountNum,
+  onClose,
+  onAmountChange,
+  onDateChange,
+  onNoteChange,
+  onConfirm,
+  vibrate,
+}: {
+  open: boolean
+  contribAmount: string
+  contribDate: string
+  contribNote: string
+  contribAmountNum: number
+  onClose: () => void
+  onAmountChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onDateChange: (value: string) => void
+  onNoteChange: (value: string) => void
+  onConfirm: () => void
+  vibrate: (pattern?: number | number[]) => void
+}) {
+  if (!open) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[99999] flex items-end justify-center"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+
+      <div
+        className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+        <div className="mb-6 flex items-center justify-between">
+          <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">
+            Registrar Contribuição
+          </h3>
+          <button
+            onClick={() => {
+              vibrate([5])
+              onClose()
+            }}
+            className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-700"
+            aria-label="Fechar modal"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="mb-6 space-y-4">
+          <div className="rounded-[20px] border border-gray-100 bg-gray-50 p-4 dark:border-slate-700/50 dark:bg-slate-700/40">
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              Valor
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-[18px] font-medium text-gray-400">R$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={contribAmount}
+                onChange={onAmountChange}
+                className="w-full bg-transparent text-[24px] font-black text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+                placeholder="0,00"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="rounded-[20px] border border-gray-100 bg-gray-50 p-4 dark:border-slate-700/50 dark:bg-slate-700/40">
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              Data
+            </label>
+            <input
+              type="date"
+              value={contribDate}
+              onChange={(e) => onDateChange(e.target.value)}
+              className="w-full bg-transparent text-[15px] font-bold text-gray-800 outline-none dark:text-gray-100"
+            />
+          </div>
+
+          <div className="rounded-[20px] border border-gray-100 bg-gray-50 p-4 dark:border-slate-700/50 dark:bg-slate-700/40">
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              Observação (Opcional)
+            </label>
+            <input
+              type="text"
+              value={contribNote}
+              onChange={(e) => onNoteChange(e.target.value)}
+              placeholder="Ex: Economia da semana"
+              className="w-full bg-transparent text-[15px] font-bold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={() => {
+            vibrate([10, 50])
+            onConfirm()
+          }}
+          disabled={contribAmountNum <= 0}
+          className="w-full rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] disabled:opacity-50 hover:bg-teal-700"
+        >
+          Confirmar Contribuição
+        </button>
+      </div>
+    </div>,
+    document.body
+  )
+}
 
 function GoalDetailContent() {
   const searchParams = useSearchParams()
@@ -78,33 +366,35 @@ function GoalDetailContent() {
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { safeDelete, safeAdd } = useSafeDb()
 
-  const [refreshing, setRefreshing] = useState(false)
+  const [refreshing] = useState(false)
   const [showContributionModal, setShowContributionModal] = useState(false)
   const [contribAmount, setContribAmount] = useState('')
   const [contribAmountNum, setContribAmountNum] = useState(0)
   const [contribDate, setContribDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [contribNote, setContribNote] = useState('')
 
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // ✅ HOOK ESPECÍFICO POR ID
   const { data: goal, loading: goalsLoading, notFound } = useGoalById(id)
-
-  // ✅ HOOK DE RELACIONAMENTO (transações da meta)
   const { data: transactions, loading: txLoading } = useGoalTransactions(id)
 
   const loading = goalsLoading || txLoading
 
-  // ✅ REMOVIDO pull-to-refresh manual (hooks já são reativos)
-
   const handleDelete = async () => {
     if (!user) return
+
     vibrate([10, 50])
-    if (!confirm('Excluir esta meta? As contribuições vinculadas não serão apagadas, apenas perderão a categoria da meta.')) return
+
+    if (
+      !confirm(
+        'Excluir esta meta? As contribuições vinculadas não serão apagadas, apenas perderão a categoria da meta.'
+      )
+    ) {
+      return
+    }
 
     try {
       const res = await safeDelete('goals', id as string)
       if (!res.success) throw new Error(res.error)
+
       success()
       showToast('🗑️ Meta excluída.', 'success')
       router.push('/goals')
@@ -123,6 +413,7 @@ function GoalDetailContent() {
 
     try {
       const txId = crypto.randomUUID()
+
       const txPayload = {
         id: txId,
         user_id: user.id,
@@ -149,7 +440,6 @@ function GoalDetailContent() {
       setContribAmount('')
       setContribAmountNum(0)
       setContribNote('')
-      // ✅ NÃO PRECISA reloadTransactions() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro ao registrar: ${err.message}`, 'error')
@@ -157,59 +447,74 @@ function GoalDetailContent() {
   }
 
   const handleContribAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '')
+    const digits = e.target.value.replace(/D/g, '')
+
     if (!digits) {
       setContribAmount('')
       setContribAmountNum(0)
       return
     }
+
     const num = parseFloat(digits) / 100
     setContribAmountNum(num)
-    setContribAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }))
+    setContribAmount(
+      num.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+    )
   }
 
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
-    return <Paperclip size={12} className="text-gray-500 shrink-0" />
+
+    const isImage = /.(jpg|jpeg|png|gif|webp|bmp|svg)(?|$)/i.test(url)
+
+    if (isImage) {
+      return <Image size={12} className="shrink-0 text-blue-500" />
+    }
+
+    return <Paperclip size={12} className="shrink-0 text-gray-500" />
   }
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
 
-  // ✅ Cálculo de progresso com useMemo
   const saved = useMemo(() => {
     return (transactions || [])
       .filter((tx: any) => tx.type === 'income' && tx.status === 'done')
       .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
   }, [transactions])
 
-  // ✅ TRATAMENTO DE LOADING
   if (loading && !goal) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-        <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 px-4 pt-6 pb-4">
-          <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+      <div className="mx-auto min-h-screen max-w-md bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pb-4 pt-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
         </div>
         <GoalDetailSkeleton />
       </div>
     )
   }
 
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
   if (notFound) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col items-center justify-center px-4">
-        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-900">
+        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
           <Target size={32} className="text-red-500" />
         </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Meta não encontrada</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+
+        <h2 className="mb-2 text-xl font-bold text-gray-800 dark:text-gray-200">
+          Meta não encontrada
+        </h2>
+
+        <p className="mb-6 max-w-xs text-center text-sm text-gray-500 dark:text-gray-400">
           A meta que você está tentando acessar pode ter sido excluída ou você não tem permissão.
         </p>
+
         <button
           onClick={() => router.push('/goals')}
-          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+          className="rounded-full bg-teal-600 px-6 py-3 font-semibold text-white transition-colors active:scale-95 hover:bg-teal-700"
         >
           Voltar para listagem
         </button>
@@ -221,104 +526,152 @@ function GoalDetailContent() {
 
   const IconComp = getDynamicIcon(goal.icon || 'target')
   const remaining = Number(goal.target_amount) - saved
-  const percent = Number(goal.target_amount) > 0 ? (saved / Number(goal.target_amount)) * 100 : 0
+  const percent =
+    Number(goal.target_amount) > 0
+      ? (saved / Number(goal.target_amount)) * 100
+      : 0
   const isCompleted = saved >= Number(goal.target_amount)
   const daysLeft = differenceInDays(new Date(goal.deadline), new Date())
   const isOverdue = daysLeft < 0 && !isCompleted
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-24 font-sans transition-colors duration-300">
+    <div className="mx-auto min-h-screen max-w-md bg-gray-50 pb-24 font-sans transition-colors duration-300 dark:bg-slate-900">
       {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.1)] rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+        <div className="pointer-events-none fixed left-0 right-0 top-0 z-50 flex justify-center pt-6">
+          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.1)] animate-in slide-in-from-top-2 duration-300 dark:bg-slate-800">
             <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-bold text-teal-600">Atualizando...</span>
+            <span className="text-[12px] font-bold text-teal-600">
+              Atualizando...
+            </span>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 shadow-sm px-4 pt-6 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => { vibrate([5]); router.back(); }} className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform">
-              <ChevronLeft size={24} />
-            </button>
-            <h1 className="text-[18px] font-bold text-gray-800 dark:text-gray-100 truncate max-w-[180px]">
-              {goal.name}
-            </h1>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            <button onClick={() => { vibrate([5]); router.push(`/goals/new?edit=${goal.id}`); }} className="p-2.5 rounded-full bg-gray-50 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/30 text-teal-700 dark:text-teal-400 active:scale-95 transition-all">
-              <Edit2 size={18} />
-            </button>
-            <button onClick={handleDelete} className="p-2.5 rounded-full bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-500 active:scale-95 transition-all">
-              <Trash2 size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <HeaderBar
+        title={goal.name}
+        onBack={() => {
+          vibrate([5])
+          router.back()
+        }}
+        onEdit={() => {
+          vibrate([5])
+          router.push(`/goals/new?edit=${goal.id}`)
+        }}
+        onDelete={handleDelete}
+      />
 
-      <div className="px-4 pt-6 space-y-4 animate-in fade-in duration-300">
-        <div className="flex justify-center mb-2">
-          <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border ${isCompleted ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800' : isOverdue ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:border-red-800' : 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:border-teal-800'}`}>
-            {isCompleted && <CheckCircle size={12} />}
-            {isOverdue && <AlertTriangle size={12} />}
-            {isCompleted ? 'Concluída' : isOverdue ? 'Atrasada' : `${daysLeft} dias restantes`}
-          </span>
-        </div>
+      <div className="space-y-4 px-4 pt-6 animate-in fade-in duration-300">
+        <StatusChip
+          isCompleted={isCompleted}
+          isOverdue={isOverdue}
+          daysLeft={daysLeft}
+        />
 
-        <section className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <div className="flex items-center gap-4 mb-6 mt-1">
-            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm shrink-0" style={{ backgroundColor: `${goal.color}15`, color: goal.color }}>
-              <IconComp size={24} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-black text-[18px] text-gray-800 dark:text-gray-100 leading-tight truncate">{goal.name}</p>
-              <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-1">
-                {goal.category ? `Meta para ${goal.category}` : 'Meta geral'}
-              </p>
-            </div>
-          </div>
+        <SurfaceCard className="overflow-hidden p-6">
+          <div
+            className="relative mb-5 overflow-hidden rounded-[24px] p-5"
+            style={{
+              background: `linear-gradient(135deg, ${goal.color}15, ${goal.color}08)`,
+            }}
+          >
+            <div className="flex items-center gap-4">
+              <div
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] shadow-sm"
+                style={{
+                  backgroundColor: `${goal.color}20`,
+                  color: goal.color,
+                }}
+              >
+                <IconComp size={24} />
+              </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="text-center bg-gray-50 dark:bg-slate-700/40 rounded-[20px] p-3.5 border border-gray-100 dark:border-slate-700/50">
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mb-1">Meta</p>
-              <p className="text-[15px] font-black text-gray-800 dark:text-gray-200">{formatCurrency(Number(goal.target_amount))}</p>
-            </div>
-            <div className={`text-center rounded-[20px] p-3.5 border ${saved > 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20' : 'bg-gray-50 dark:bg-slate-700/40 border-gray-100 dark:border-slate-700/50'}`}>
-              <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${saved > 0 ? 'text-emerald-600/70' : 'text-gray-400 dark:text-gray-500'}`}>Guardado</p>
-              <p className={`text-[15px] font-black ${saved > 0 ? 'text-emerald-600' : 'text-gray-500'}`}>{formatCurrency(saved)}</p>
-            </div>
-            <div className={`text-center rounded-[20px] p-3.5 border ${remaining > 0 ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20' : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20'}`}>
-              <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${remaining > 0 ? 'text-orange-600/70' : 'text-emerald-600/70'}`}>{remaining > 0 ? 'Falta' : 'Status'}</p>
-              <p className={`text-[15px] font-black ${remaining > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>{remaining > 0 ? formatCurrency(Math.abs(remaining)) : '✅ Completo'}</p>
+              <div className="min-w-0">
+                <p className="truncate text-[18px] font-black leading-tight text-gray-800 dark:text-gray-100">
+                  {goal.name}
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                  {goal.category ? `Meta para ${goal.category}` : 'Meta geral'}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="w-full bg-gray-100 dark:bg-slate-700/50 rounded-full h-3 overflow-hidden mb-2 shadow-inner">
+          <div className="mb-6 grid grid-cols-3 gap-3">
+            <StatBlock
+              label="Meta"
+              value={formatCurrency(Number(goal.target_amount))}
+              tone="neutral"
+            />
+            <StatBlock
+              label="Guardado"
+              value={formatCurrency(saved)}
+              tone={saved > 0 ? 'success' : 'neutral'}
+            />
+            <StatBlock
+              label={remaining > 0 ? 'Falta' : 'Status'}
+              value={
+                remaining > 0
+                  ? formatCurrency(Math.abs(remaining))
+                  : '✅ Completo'
+              }
+              tone={remaining > 0 ? 'warning' : 'success'}
+            />
+          </div>
+
+          <div className="mb-2 h-3 w-full overflow-hidden rounded-full bg-gray-100 shadow-inner dark:bg-slate-700/50">
             <div
-              className={`h-full rounded-full transition-all duration-1000 ease-out ${isCompleted ? 'bg-emerald-500' : isOverdue ? 'bg-red-500' : 'bg-teal-500'}`}
+              className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                isCompleted
+                  ? 'bg-emerald-500'
+                  : isOverdue
+                  ? 'bg-red-500'
+                  : 'bg-teal-500'
+              }`}
               style={{ width: `${Math.min(percent, 100)}%` }}
             />
           </div>
-          <p className={`text-[12px] font-bold text-right ${isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
-            {percent.toFixed(1)}% concluído
-          </p>
-        </section>
+
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
+              Prazo:{' '}
+              {goal.deadline
+                ? format(new Date(goal.deadline), "dd 'de' MMM yyyy", {
+                    locale: ptBR,
+                  })
+                : '—'}
+            </p>
+
+            <p
+              className={`text-[12px] font-bold ${
+                isOverdue ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
+              }`}
+            >
+              {percent.toFixed(1)}% concluído
+            </p>
+          </div>
+        </SurfaceCard>
 
         {!isCompleted && (
           <button
-            onClick={() => { vibrate([5]); setShowContributionModal(true); }}
-            className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[15px] shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+            onClick={() => {
+              vibrate([5])
+              setShowContributionModal(true)
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] hover:bg-teal-700"
           >
-            <Plus size={18} /> Registrar Contribuição
+            <Plus size={18} />
+            Registrar Contribuição
           </button>
         )}
 
-        <section className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100">Histórico de Contribuições</h3>
-            <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{transactions?.length || 0} lançamentos</span>
+        <SurfaceCard className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-[16px] font-bold text-gray-800 dark:text-gray-100">
+              Histórico de Contribuições
+            </h3>
+            <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
+              {transactions?.length || 0} lançamentos
+            </span>
           </div>
 
           {txLoading ? (
@@ -326,7 +679,9 @@ function GoalDetailContent() {
               <RefreshCw size={24} className="animate-spin text-teal-500" />
             </div>
           ) : !transactions || transactions.length === 0 ? (
-            <p className="text-center text-[13px] font-medium text-gray-400 py-6">Nenhuma contribuição registrada.</p>
+            <p className="py-6 text-center text-[13px] font-medium text-gray-400">
+              Nenhuma contribuição registrada.
+            </p>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-slate-700/70">
               {transactions.map((tx: any) => {
@@ -335,24 +690,44 @@ function GoalDetailContent() {
                 const attachmentIcon = getAttachmentIcon(tx.receipt_url)
 
                 return (
-                  <div key={tx.id} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-[14px] flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${
+                          isIncome
+                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-red-100 text-red-500 dark:bg-red-900/30'
+                        }`}
+                      >
                         <IconTx size={18} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="text-[14px] font-bold text-gray-800 dark:text-gray-200 truncate">
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <p className="truncate text-[14px] font-bold text-gray-800 dark:text-gray-200">
                             {tx.description || 'Contribuição'}
                           </p>
-                          {attachmentIcon && <span className="shrink-0">{attachmentIcon}</span>}
+                          {attachmentIcon && (
+                            <span className="shrink-0">{attachmentIcon}</span>
+                          )}
                         </div>
-                        <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">
-                          {format(new Date(tx.date), "dd 'de' MMM yyyy", { locale: ptBR })}
+
+                        <p className="mt-0.5 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                          {format(new Date(tx.date), "dd 'de' MMM yyyy", {
+                            locale: ptBR,
+                          })}
                         </p>
                       </div>
                     </div>
-                    <p className={`text-[15px] font-black flex-shrink-0 ${isIncome ? 'text-emerald-600' : 'text-red-500'}`}>
+
+                    <p
+                      className={`flex-shrink-0 text-[15px] font-black ${
+                        isIncome ? 'text-emerald-600' : 'text-red-500'
+                      }`}
+                    >
                       {isIncome ? '+' : '-'} {formatCurrency(Number(tx.amount) || 0)}
                     </p>
                   </div>
@@ -360,82 +735,37 @@ function GoalDetailContent() {
               })}
             </div>
           )}
-        </section>
+        </SurfaceCard>
       </div>
 
-      {/* MODAL DE CONTRIBUIÇÃO COM PORTAL */}
-      {showContributionModal && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowContributionModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div
-            className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Registrar Contribuição</h3>
-              <button onClick={() => { vibrate([5]); setShowContributionModal(false); }} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Valor</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-[18px] text-gray-400 font-medium">R$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={contribAmount}
-                    onChange={handleContribAmountChange}
-                    className="w-full bg-transparent text-[24px] font-black text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                    placeholder="0,00"
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Data</label>
-                <input
-                  type="date"
-                  value={contribDate}
-                  onChange={e => setContribDate(e.target.value)}
-                  className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-100 outline-none"
-                />
-              </div>
-
-              <div className="bg-gray-50 dark:bg-slate-700/40 border border-gray-100 dark:border-slate-700/50 rounded-[20px] p-4">
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Observação (Opcional)</label>
-                <input
-                  type="text"
-                  value={contribNote}
-                  onChange={e => setContribNote(e.target.value)}
-                  placeholder="Ex: Economia da semana"
-                  className="w-full bg-transparent text-[15px] font-bold text-gray-800 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={() => { vibrate([10, 50]); handleContribution(); }}
-              disabled={contribAmountNum <= 0}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[24px] font-bold text-[16px] disabled:opacity-50 shadow-lg shadow-teal-600/30 active:scale-[0.98] transition-transform"
-            >
-              Confirmar Contribuição
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ContributionModal
+        open={showContributionModal}
+        contribAmount={contribAmount}
+        contribDate={contribDate}
+        contribNote={contribNote}
+        contribAmountNum={contribAmountNum}
+        onClose={() => setShowContributionModal(false)}
+        onAmountChange={handleContribAmountChange}
+        onDateChange={setContribDate}
+        onNoteChange={setContribNote}
+        onConfirm={handleContribution}
+        vibrate={vibrate}
+      />
     </div>
   )
 }
 
 export default function GoalDetailPage() {
   return (
-    <Suspense fallback={<div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950"><div className="flex-1 px-4 pt-4"><Skeleton count={4} /></div></div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-[100dvh] flex-col bg-slate-50 dark:bg-slate-950">
+          <div className="flex-1 px-4 pt-4">
+            <Skeleton count={4} />
+          </div>
+        </div>
+      }
+    >
       <GoalDetailContent />
     </Suspense>
   )
