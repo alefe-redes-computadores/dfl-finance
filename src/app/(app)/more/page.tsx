@@ -109,8 +109,11 @@ function ProfileEditModal({ isOpen, onClose, name, setName, isGoogleLogin, onSav
   )
 }
 
-// 🔥 MODAL DE CONFIGURAÇÕES RÁPIDAS (COM PORTAL)
-function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notificationsEnabled, toggleNotifications, appMode, toggleAppMode }: any) {
+// 🔥 MODAL DE CONFIGURAÇÕES RÁPIDAS (COM PORTAL) - ✅ CORRIGIDO
+function QuickSettingsModal({ isOpen, onClose, notificationsEnabled, toggleNotifications, appMode, toggleAppMode }: any) {
+  // ✅ CONSUME O TEMA DIRETAMENTE DO CONTEXTO
+  const { theme, toggleTheme } = useTheme()
+  
   if (!isOpen) return null
 
   // Lê o estado atual do Modo Desenvolvedor
@@ -140,7 +143,12 @@ function QuickSettingsModal({ isOpen, onClose, theme, toggleTheme, notifications
                 <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{theme === 'dark' ? 'Ativado' : 'Desativado'}</p>
               </div>
             </div>
-            <button onClick={toggleTheme} className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${theme === 'dark' ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+            <button 
+              onClick={() => {
+                toggleTheme()
+              }} 
+              className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${theme === 'dark' ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+            >
               <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
             </button>
           </div>
@@ -266,7 +274,6 @@ function ExportModal({ isOpen, onClose, exporting, exportRange, setExportRange, 
 export default function MorePage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { theme, toggleTheme: toggleThemeOriginal } = useTheme()
   const { showToast } = useToast()
   const { appMode, setAppMode, effectiveContext } = useContext_()
 
@@ -310,17 +317,7 @@ export default function MorePage() {
     }
   }, [user?.id, user?.user_metadata?.full_name])
 
-  // ✅ CORRIGIDO: toggleTheme com toast baseado no novo estado
-  const toggleTheme = () => {
-    const currentTheme = theme
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
-    
-    // Chama a função do contexto
-    toggleThemeOriginal()
-    
-    // Força o toast baseado no novo estado (previsível)
-    showToast(newTheme === 'dark' ? '🌙 Modo escuro ativado' : '☀️ Modo claro ativado', 'success')
-  }
+  // ✅ Removido toggleTheme daqui – agora está dentro do modal
 
   const toggleNotifications = () => {
     const newValue = !notificationsEnabled
@@ -460,7 +457,14 @@ export default function MorePage() {
       {isClient && (
         <>
           <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} exporting={exporting} exportRange={exportRange} setExportRange={setExportRange} exportContext={exportContext} setExportContext={setExportContext} appMode={appMode} handleExport={handleExport} />
-          <QuickSettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} theme={theme} toggleTheme={toggleTheme} notificationsEnabled={notificationsEnabled} toggleNotifications={toggleNotifications} appMode={appMode} toggleAppMode={toggleAppMode} />
+          <QuickSettingsModal 
+            isOpen={showSettingsModal} 
+            onClose={() => setShowSettingsModal(false)} 
+            notificationsEnabled={notificationsEnabled}
+            toggleNotifications={toggleNotifications}
+            appMode={appMode}
+            toggleAppMode={toggleAppMode}
+          />
           <ProfileEditModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} name={name} setName={setName} isGoogleLogin={isGoogleLogin} onSave={saveName} saving={savingProfile} />
         </>
       )}
