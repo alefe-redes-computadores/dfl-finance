@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from '@/contexts/ToastContext'
+import { ThemeProvider } from '@/contexts/ThemeContext' // ✅ IMPORTADO
 
 // Configuração oficial da Fonte Poppins
 const poppins = Poppins({
@@ -22,7 +23,6 @@ export const metadata: Metadata = {
   },
 }
 
-
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -41,10 +41,29 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={`${poppins.variable} font-sans antialiased`} suppressHydrationWarning>
-      <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen selection:bg-teal-500/30">
-        <ToastProvider>
-          {children}
-        </ToastProvider>
+      <head>
+        {/* ✅ SCRIPT MÁGICO: Trava o tema antes da tela piscar no celular */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  document.documentElement.classList.add('dark')
+                } else {
+                  document.documentElement.classList.remove('dark')
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen selection:bg-teal-500/30 transition-colors duration-300">
+        {/* ✅ ENVELOPADO NO THEME PROVIDER */}
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
