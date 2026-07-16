@@ -1,7 +1,6 @@
 'use client'
 
-
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import {
@@ -15,7 +14,7 @@ import {
   PiggyBank,
   Trash2,
   ChevronRight,
-  ChevronLeft, // ✅ ADICIONADO
+  ChevronLeft,
   Landmark,
   Briefcase
 } from "lucide-react"
