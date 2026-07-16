@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
-  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown
+  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown, Tag
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -18,7 +18,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
 
 // ============================================================
-// COMPONENTES VISUAIS (apenas estrutura, sem lógica)
+// COMPONENTES VISUAIS
 // ============================================================
 
 function SectionHeader({ title, description }: { title: string; description?: string }) {
@@ -131,16 +131,19 @@ function BudgetDetailContent() {
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ✅ LÓGICA DE CARREGAMENTO (mantida exatamente igual)
+  // ✅ LÓGICA DE CARREGAMENTO CORRIGIDA (Com a trava budgetLoading)
   useEffect(() => {
     if (!id || !user?.id) return
+
+    // TRAVA DE SEGURANÇA: Se estiver carregando, não faça nada.
+    if (budgetLoading) return;
 
     const loadData = () => {
       setLoading(true)
       setLoadingPulse(true)
 
       try {
-        if (!budgetData) {
+        if (notFound || !budgetData) {
           router.push('/budgets')
           return
         }
@@ -195,9 +198,9 @@ function BudgetDetailContent() {
     }
 
     loadData()
-  }, [id, user, currentDate, budgetData, budgetTransactions, router])
+  }, [id, user, currentDate, budgetData, budgetLoading, notFound, budgetTransactions, router])
 
-  // ✅ FUNÇÕES AUXILIARES (mantidas exatamente iguais)
+  // ✅ FUNÇÕES AUXILIARES
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -248,7 +251,7 @@ function BudgetDetailContent() {
 
   if (!budget) return null
 
-  // ✅ CÁLCULOS (mantidos exatamente iguais)
+  // ✅ CÁLCULOS
   const remaining = Number(budget.amount) - spent
   const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
   const isOverBudget = remaining < 0
@@ -256,7 +259,7 @@ function BudgetDetailContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
-  // ✅ RENDERIZAÇÃO REFATORADA
+  // ✅ RENDERIZAÇÃO
   return (
     <div
       ref={containerRef}
@@ -277,9 +280,6 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      {/* ============================================================
-          BLOCO 1: HEADER
-          ============================================================ */}
       <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl">
         <div className="flex items-center justify-between mb-4">
           <button
@@ -312,7 +312,6 @@ function BudgetDetailContent() {
           </button>
         </div>
 
-        {/* Navegador de mês */}
         <div className="flex items-center justify-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-1.5 shadow-sm">
             <button
@@ -342,19 +341,12 @@ function BudgetDetailContent() {
         </div>
       </div>
 
-      {/* ============================================================
-          BLOCO 2: STATUS BADGE
-          ============================================================ */}
       <div className="mb-4 flex justify-center">
         <StatusBadge status={budget.status} isOverBudget={isOverBudget} isWarning={isWarning} />
       </div>
 
-      {/* ============================================================
-          BLOCO 3: CARD DE RESUMO COM MÉTRICAS
-          ============================================================ */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
         <div className="p-5 pb-4">
-          {/* Ícone e Nome */}
           <div className="flex items-center gap-4 mb-5">
             <div
               className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm"
@@ -378,7 +370,6 @@ function BudgetDetailContent() {
             </div>
           </div>
 
-          {/* Métricas */}
           <div className="grid grid-cols-3 gap-3 mb-5">
             <MetricCard label="Orçado" value={formatCurrency(Number(budget.amount))} color="gray" />
             <MetricCard label="Gasto" value={formatCurrency(spent)} color="red" />
@@ -389,7 +380,6 @@ function BudgetDetailContent() {
             />
           </div>
 
-          {/* Barra de Progresso */}
           <div className="mb-2">
             <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
               <div
@@ -414,9 +404,6 @@ function BudgetDetailContent() {
         </div>
       </section>
 
-      {/* ============================================================
-          BLOCO 4: PROJEÇÃO
-          ============================================================ */}
       {projection && (
         <div
           className={`rounded-[24px] p-4 mb-4 border flex items-start gap-3 ${
@@ -439,9 +426,6 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      {/* ============================================================
-          BLOCO 5: TRANSAÇÕES
-          ============================================================ */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
           <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
