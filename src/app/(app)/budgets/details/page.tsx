@@ -131,14 +131,14 @@ function BudgetDetailContent() {
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ✅ LÓGICA DE CARREGAMENTO CORRIGIDA (Com a trava budgetLoading)
+    // ✅ LÓGICA DE CARREGAMENTO BLINDADA (COMPLETA)
   useEffect(() => {
     if (!id || !user?.id) return
 
-    // TRAVA DE SEGURANÇA: Se estiver carregando, não faça nada.
+    // TRAVA DE SEGURANÇA: Se estiver carregando, não faz nada.
     if (budgetLoading) return;
 
-    const loadData = () => {
+    const loadData = async () => {
       setLoading(true)
       setLoadingPulse(true)
 
@@ -154,8 +154,11 @@ function BudgetDetailContent() {
         const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
         const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
 
-        let filteredTxs = (budgetTransactions || []).filter(
-          (tx: any) => tx.date >= start && tx.date <= end && tx.status === 'done'
+        // Verificação segura de transações
+        const txs = budgetTransactions || [];
+        
+        let filteredTxs = txs.filter(
+          (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
         )
 
         if (budgetData.category_id) {
@@ -196,6 +199,9 @@ function BudgetDetailContent() {
         setLoadingPulse(false)
       }
     }
+
+    loadData()
+  }, [id, user, currentDate, budgetData, budgetLoading, notFound, budgetTransactions, router])
 
     loadData()
   }, [id, user, currentDate, budgetData, budgetLoading, notFound, budgetTransactions, router])
