@@ -239,7 +239,7 @@ function BudgetDetailContent() {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
         <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
-          <Tag size={32} className="text-red-500" />
+          <AlertTriangle size={32} className="text-red-500" />
         </div>
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Orçamento não encontrado</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
@@ -254,6 +254,7 @@ function BudgetDetailContent() {
       </div>
     )
   }
+
 
   if (!budget) return null
 
