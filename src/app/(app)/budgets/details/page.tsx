@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -104,128 +104,113 @@ const BudgetDetailSkeleton = () => (
 )
 
 // ============================================================
-// COMPONENTE PRINCIPAL - CORRIGIDO
+// COMPONENTE PRINCIPAL - CORRIGIDO (VERSÃO ESTÁVEL)
 // ============================================================
 
 function BudgetDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const id = searchParams.get('id') as string
+  const id = searchParams.get('id')
   const { user } = useAuth()
   const { context } = useContext_()
   const { vibrate } = useHapticFeedback()
 
-  const [budget, setBudget] = useState<any>(null)
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [spent, setSpent] = useState(0)
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [loading, setLoading] = useState(true)
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [daysLeft, setDaysLeft] = useState<number | null>(null)
-  const [projection, setProjection] = useState('')
-
+  // ✅ 1. TODOS OS HOOKS NO TOPO (REGRRA MAIS IMPORTANTE)
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(id)
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(id)
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const hasRedirected = useRef(false) // ✅ EVITA REDIRECIONAMENTO MÚLTIPLO
+  // ✅ 2. STATES
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [refreshing, setRefreshing] = useState(false)
 
-  // ✅ CORRIGIDO: useEffect com lógica de carregamento e redirecionamento controlado
-  useEffect(() => {
-    // Se não tem ID ou usuário, não faz nada
-    if (!id || !user?.id) return;
-
-    // ✅ SE JÁ REDIRECIONOU, NÃO FAZ NADA (evita loop)
-    if (hasRedirected.current) return;
-
-    // ✅ SE NÃO ENCONTRADO, REDIRECIONA APENAS UMA VEZ
-    if (notFound) {
-      hasRedirected.current = true;
-      router.push('/budgets');
-      return;
-    }
-
-    // ✅ SE AINDA CARREGANDO, NÃO FAZ NADA (mantém loading true)
-    if (budgetLoading || txLoading) {
-      setLoading(true);
-      return;
-    }
-
-    // ✅ SE OS DADOS CHEGARAM, PROCESSAR
-    if (budgetData && budgetTransactions !== undefined) {
-      setLoading(true);
-      setLoadingPulse(true);
-
-      try {
-        setBudget(budgetData);
-
-        const start = format(startOfMonth(currentDate), 'yyyy-MM-dd');
-        const end = format(endOfMonth(currentDate), 'yyyy-MM-dd');
-        const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1;
-
-        const txs = budgetTransactions || [];
-        
-        let filteredTxs = txs.filter(
-          (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
-        );
-
-        if (budgetData.category_id) {
-          filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id);
-        }
-
-        const totalSpent = filteredTxs
-          .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
-          .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0);
-
-        setTransactions(filteredTxs);
-        setSpent(totalSpent);
-
-        const remaining = Number(budgetData.amount) - totalSpent;
-        const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0;
-
-        if (dailyAverage > 0 && remaining > 0) {
-          const projectedDays = Math.floor(remaining / dailyAverage);
-          setDaysLeft(projectedDays);
-
-          if (projectedDays <= 3) {
-            setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`);
-          } else if (projectedDays <= 7) {
-            setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`);
-          } else {
-            setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`);
-          }
-        } else if (remaining <= 0) {
-          setDaysLeft(0);
-          setProjection('🔴 Orçamento estourado!');
-        } else {
-          setProjection('✅ Nenhum gasto registrado ainda.');
-        }
-      } catch (err) {
-        console.error('Erro ao processar orçamento:', err);
-      } finally {
-        setLoading(false);
-        setLoadingPulse(false);
+  // ✅ 3. useMemo PARA DADOS DERIVADOS (não useState espelho)
+  const { spent, transactions, remaining, percent, isOverBudget, isWarning, daysLeft, projection } = useMemo(() => {
+    if (!budgetData || !budgetTransactions) {
+      return {
+        spent: 0,
+        transactions: [],
+        remaining: 0,
+        percent: 0,
+        isOverBudget: false,
+        isWarning: false,
+        daysLeft: null,
+        projection: '⏳ Carregando dados...'
       }
     }
-  }, [id, user, currentDate, budgetData, budgetLoading, txLoading, notFound, budgetTransactions, router]);
 
-  // ✅ FUNÇÕES AUXILIARES
-  const formatCurrency = (val: number) =>
-    `R$ ${(val || 0).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`
+    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+    const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
 
-  const getAttachmentIcon = (url: string | null) => {
-    if (!url) return null
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="shrink-0 text-blue-500" />
-    return <Paperclip size={12} className="shrink-0 text-slate-400" />
+    let filteredTxs = budgetTransactions.filter(
+      (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
+    )
+
+    if (budgetData.category_id) {
+      filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
+    }
+
+    const totalSpent = filteredTxs
+      .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
+      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
+
+    const remainingVal = Number(budgetData.amount) - totalSpent
+    const percentVal = Number(budgetData.amount) > 0 ? (totalSpent / Number(budgetData.amount)) * 100 : 0
+    const isOver = remainingVal < 0
+    const isWarn = percentVal >= 75 && percentVal < 100
+
+    // Projeção
+    let daysLeftVal: number | null = null
+    let projectionVal = '✅ Nenhum gasto registrado ainda.'
+
+    if (totalSpent > 0 && remainingVal > 0) {
+      const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
+      if (dailyAverage > 0) {
+        daysLeftVal = Math.floor(remainingVal / dailyAverage)
+        if (daysLeftVal <= 3) {
+          projectionVal = `⚠️ Neste ritmo, o orçamento acabará em ${daysLeftVal} dia(s)!`
+        } else if (daysLeftVal <= 7) {
+          projectionVal = `⚠️ Neste ritmo, dura mais ${daysLeftVal} dias.`
+        } else {
+          projectionVal = `✅ Ritmo tranquilo! Dura mais ${daysLeftVal} dias.`
+        }
+      }
+    } else if (remainingVal <= 0) {
+      daysLeftVal = 0
+      projectionVal = '🔴 Orçamento estourado!'
+    }
+
+    return {
+      spent: totalSpent,
+      transactions: filteredTxs,
+      remaining: remainingVal,
+      percent: Math.min(percentVal, 100),
+      isOverBudget: isOver,
+      isWarning: isWarn,
+      daysLeft: daysLeftVal,
+      projection: projectionVal
+    }
+  }, [budgetData, budgetTransactions, currentDate])
+
+  // ✅ 4. REDIRECIONAMENTO CONTROLADO (só se não encontrado e já carregou)
+  useEffect(() => {
+    if (!id || !user?.id) return
+    
+    // Só redireciona se o orçamento não foi encontrado E já terminou de carregar
+    if (notFound && !budgetLoading) {
+      router.push('/budgets')
+    }
+  }, [id, user?.id, notFound, budgetLoading, router])
+
+  // ✅ 5. RETURNS CONDICIONAIS (depois de todos os hooks)
+  // Se não tem ID, volta para listagem (com redirect imediato, mas sem hooks depois)
+  if (!id) {
+    router.push('/budgets')
+    return null
   }
 
-  // ✅ TRATAMENTO DE LOADING
-  if (budgetLoading) {
+  // Loading
+  if (budgetLoading || txLoading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 pb-24 font-sans transition-colors duration-300">
         <div className="flex items-center justify-between px-4 pt-6 mb-2">
@@ -238,10 +223,8 @@ function BudgetDetailContent() {
     )
   }
 
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO - AGORA NÃO VAI MAIS REDIRECIONAR
-  // O redirecionamento já aconteceu no useEffect
-  // Se cair aqui depois do redirect, mostra mensagem
-  if (notFound) {
+  // Não encontrado (já vai redirecionar pelo useEffect, mas fallback)
+  if (notFound || !budgetData) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
         <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
@@ -261,28 +244,24 @@ function BudgetDetailContent() {
     )
   }
 
-  if (!budget) return null
-
-  // ✅ CÁLCULOS
-  const remaining = Number(budget.amount) - spent
-  const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
-  const isOverBudget = remaining < 0
-  const isWarning = percent >= 75 && percent < 100
+  // ✅ 6. RENDERIZAÇÃO
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
-  const IconComp = getDynamicIcon(budget?.icon || 'tag')
+  const IconComp = getDynamicIcon(budgetData?.icon || 'tag')
+  const formatCurrency = (val: number) =>
+    `R$ ${(val || 0).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
 
-  // ✅ RENDERIZAÇÃO
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null
+    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
+    if (isImage) return <Image size={12} className="shrink-0 text-blue-500" />
+    return <Paperclip size={12} className="shrink-0 text-slate-400" />
+  }
+
   return (
-    <div
-      ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 px-4 pt-4 pb-28 font-sans transition-colors duration-300"
-    >
-      {loadingPulse && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.45)]" />
-        </div>
-      )}
-
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 px-4 pt-4 pb-28 font-sans transition-colors duration-300">
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-5 pointer-events-none">
           <div className="rounded-full bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08)] border border-gray-100 dark:border-slate-700/60 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -309,14 +288,14 @@ function BudgetDetailContent() {
               Detalhes do orçamento
             </p>
             <h1 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 truncate">
-              {budget.name}
+              {budgetData.name}
             </h1>
           </div>
 
           <button
             onClick={() => {
               vibrate([5])
-              router.push(`/budgets/new?edit=${budget.id}`)
+              router.push(`/budgets/new?edit=${budgetData.id}`)
             }}
             className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
           >
@@ -354,7 +333,7 @@ function BudgetDetailContent() {
       </div>
 
       <div className="mb-4 flex justify-center">
-        <StatusBadge status={budget.status} isOverBudget={isOverBudget} isWarning={isWarning} />
+        <StatusBadge status={budgetData.status} isOverBudget={isOverBudget} isWarning={isWarning} />
       </div>
 
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
@@ -362,20 +341,20 @@ function BudgetDetailContent() {
           <div className="flex items-center gap-4 mb-5">
             <div
               className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm"
-              style={{ backgroundColor: `${budget.color}18`, color: budget.color }}
+              style={{ backgroundColor: `${budgetData.color}18`, color: budgetData.color }}
             >
               <IconComp size={24} />
             </div>
 
             <div className="min-w-0">
               <h2 className="text-[19px] font-bold text-gray-900 dark:text-gray-100 leading-tight">
-                {budget.name}
+                {budgetData.name}
               </h2>
               <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">
-                {budget.categories?.name || 'Geral'} •{' '}
-                {budget.period === 'monthly'
+                {budgetData.categories?.name || 'Geral'} •{' '}
+                {budgetData.period === 'monthly'
                   ? 'Mensal'
-                  : budget.period === 'biweekly'
+                  : budgetData.period === 'biweekly'
                     ? 'Quinzenal'
                     : 'Semanal'}
               </p>
@@ -383,7 +362,7 @@ function BudgetDetailContent() {
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-5">
-            <MetricCard label="Orçado" value={formatCurrency(Number(budget.amount))} color="gray" />
+            <MetricCard label="Orçado" value={formatCurrency(Number(budgetData.amount))} color="gray" />
             <MetricCard label="Gasto" value={formatCurrency(spent)} color="red" />
             <MetricCard
               label="Restante"
