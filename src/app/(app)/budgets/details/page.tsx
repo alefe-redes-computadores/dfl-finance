@@ -105,7 +105,7 @@ const BudgetDetailSkeleton = () => (
 )
 
 // ============================================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL - CORRIGIDO
 // ============================================================
 
 function BudgetDetailContent() {
@@ -131,75 +131,77 @@ function BudgetDetailContent() {
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ✅ LÓGICA DE CARREGAMENTO E CÁLCULO CORRIGIDA
+  // ✅ CORRIGIDO: useEffect com lógica de carregamento correta
   useEffect(() => {
     if (!id || !user?.id) return;
 
-    // 1. TRAVA: Só prossegue se os dois hooks pararam de carregar
-    if (budgetLoading || txLoading) return;
-
-    // 2. EXPULSÃO: Só manda para a lista se o banco disser CLARAMENTE que não achou (excluído)
+    // ✅ SE NÃO ENCONTRADO, REDIRECIONA
     if (notFound) {
       router.push('/budgets');
       return;
     }
 
-    // 3. AGUARDA: Se o dado ainda está vazio na memória (mas não deu notFound), não expulsa, só espera o React atualizar.
-    if (!budgetData) return;
+    // ✅ SE AINDA CARREGANDO, NÃO FAZ NADA
+    if (budgetLoading || txLoading) {
+      setLoading(true);
+      return;
+    }
 
-    // --- INÍCIO DOS CÁLCULOS ---
-    setLoading(true);
-    setLoadingPulse(true);
+    // ✅ SE OS DADOS CHEGARAM, PROCESSAR
+    if (budgetData && budgetTransactions !== undefined) {
+      setLoading(true);
+      setLoadingPulse(true);
 
-    try {
-      setBudget(budgetData);
+      try {
+        setBudget(budgetData);
 
-      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd');
-      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd');
-      const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1;
+        const start = format(startOfMonth(currentDate), 'yyyy-MM-dd');
+        const end = format(endOfMonth(currentDate), 'yyyy-MM-dd');
+        const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1;
 
-      const txs = budgetTransactions || [];
-      
-      let filteredTxs = txs.filter(
-        (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
-      );
+        const txs = budgetTransactions || [];
+        
+        let filteredTxs = txs.filter(
+          (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
+        );
 
-      if (budgetData.category_id) {
-        filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id);
-      }
-
-      const totalSpent = filteredTxs
-        .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
-        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0);
-
-      setTransactions(filteredTxs);
-      setSpent(totalSpent);
-
-      const remaining = Number(budgetData.amount) - totalSpent;
-      const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0;
-
-      if (dailyAverage > 0 && remaining > 0) {
-        const projectedDays = Math.floor(remaining / dailyAverage);
-        setDaysLeft(projectedDays);
-
-        if (projectedDays <= 3) {
-          setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`);
-        } else if (projectedDays <= 7) {
-          setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`);
-        } else {
-          setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`);
+        if (budgetData.category_id) {
+          filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id);
         }
-      } else if (remaining <= 0) {
-        setDaysLeft(0);
-        setProjection('🔴 Orçamento estourado!');
-      } else {
-        setProjection('✅ Nenhum gasto registrado ainda.');
+
+        const totalSpent = filteredTxs
+          .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
+          .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0);
+
+        setTransactions(filteredTxs);
+        setSpent(totalSpent);
+
+        const remaining = Number(budgetData.amount) - totalSpent;
+        const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0;
+
+        if (dailyAverage > 0 && remaining > 0) {
+          const projectedDays = Math.floor(remaining / dailyAverage);
+          setDaysLeft(projectedDays);
+
+          if (projectedDays <= 3) {
+            setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`);
+          } else if (projectedDays <= 7) {
+            setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`);
+          } else {
+            setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`);
+          }
+        } else if (remaining <= 0) {
+          setDaysLeft(0);
+          setProjection('🔴 Orçamento estourado!');
+        } else {
+          setProjection('✅ Nenhum gasto registrado ainda.');
+        }
+      } catch (err) {
+        console.error('Erro ao processar orçamento:', err);
+      } finally {
+        setLoading(false);
+        setLoadingPulse(false);
       }
-    } catch (err) {
-      console.error('Erro ao processar orçamento:', err);
-    } finally {
-      setLoading(false);
-      setLoadingPulse(false);
     }
   }, [id, user, currentDate, budgetData, budgetLoading, txLoading, notFound, budgetTransactions, router]);
 
@@ -262,7 +264,7 @@ function BudgetDetailContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
-  // ✅ RENDERIZAÇÃO
+  // ✅ RENDERIZAÇÃO (mantida igual)
   return (
     <div
       ref={containerRef}
@@ -283,6 +285,7 @@ function BudgetDetailContent() {
         </div>
       )}
 
+      {/* HEADER - MANTIDO IGUAL */}
       <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl">
         <div className="flex items-center justify-between mb-4">
           <button
@@ -344,10 +347,12 @@ function BudgetDetailContent() {
         </div>
       </div>
 
+      {/* STATUS BADGE */}
       <div className="mb-4 flex justify-center">
         <StatusBadge status={budget.status} isOverBudget={isOverBudget} isWarning={isWarning} />
       </div>
 
+      {/* CARD DE RESUMO */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
         <div className="p-5 pb-4">
           <div className="flex items-center gap-4 mb-5">
@@ -407,6 +412,7 @@ function BudgetDetailContent() {
         </div>
       </section>
 
+      {/* PROJEÇÃO */}
       {projection && (
         <div
           className={`rounded-[24px] p-4 mb-4 border flex items-start gap-3 ${
@@ -429,6 +435,7 @@ function BudgetDetailContent() {
         </div>
       )}
 
+      {/* TRANSAÇÕES */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
           <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
