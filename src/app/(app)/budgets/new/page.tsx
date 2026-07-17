@@ -10,7 +10,6 @@ import {
   Check,
   Loader2,
   X,
-  Tag,
   Palette,
   Sparkles,
   CalendarRange,
@@ -39,7 +38,7 @@ function safeNum(val: any): number {
 }
 
 // ============================================================
-// COMPONENTES VISUAIS (apenas estrutura, sem lógica)
+// COMPONENTES VISUAIS
 // ============================================================
 
 function SectionHeader({ title, description }: { title: string; description?: string }) {
@@ -77,7 +76,6 @@ function NewBudgetContent() {
   const editId = searchParams.get('edit')
   const isEditing = Boolean(editId)
 
-  // ✅ HOOKS (mantidos exatamente iguais)
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(editId)
 
   const [saving, setSaving] = useState(false)
@@ -101,7 +99,6 @@ function NewBudgetContent() {
   })
   const categories = localCategories || []
 
-  // ✅ HIDRATAÇÃO (mantida exatamente igual)
   useEffect(() => {
     if (editId && budgetData && !initialized) {
       setName(budgetData.name || '')
@@ -126,7 +123,6 @@ function NewBudgetContent() {
     }
   }, [editId, budgetData, initialized])
 
-  // ✅ TRATAMENTO DE LOADING
   if (editId && budgetLoading) {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
@@ -142,12 +138,11 @@ function NewBudgetContent() {
     )
   }
 
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
   if (editId && notFound) {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
         <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
-          <Tag size={32} className="text-red-500" />
+          <Icons.Tag size={32} className="text-red-500" />
         </div>
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Orçamento não encontrado</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
@@ -163,7 +158,6 @@ function NewBudgetContent() {
     )
   }
 
-  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
   if (!initialized) {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
@@ -174,7 +168,6 @@ function NewBudgetContent() {
     )
   }
 
-  // ✅ FUNÇÃO DE SALVAR (mantida exatamente igual)
   const handleSave = async () => {
     if (!user?.id || !(name || '').trim() || amountNum <= 0) {
       showToast('Preencha todos os campos obrigatórios.', 'warning')
@@ -230,17 +223,12 @@ function NewBudgetContent() {
     }
   }
 
-  // ✅ DADOS DERIVADOS (mantidos exatamente iguais)
   const selectedCat = categories.find((c: any) => c.id === categoryId)
   const IconComp = (Icons as any)[icon] || Icons.Tag
 
-  // ✅ RENDERIZAÇÃO REFATORADA
   return (
     <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-      <div className="mx-auto w-full max-w-3xl px-4 py-4 md:py-6">
-        {/* ============================================================
-            BLOCO 1: HEADER
-            ============================================================ */}
+      <div className="mx-auto w-full max-w-md px-4 py-4 md:py-6">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Orçamentos</p>
@@ -263,9 +251,6 @@ function NewBudgetContent() {
           </button>
         </div>
 
-        {/* ============================================================
-            BLOCO 2: CARD DE CONTEXTO
-            ============================================================ */}
         <div className="mb-6 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -287,13 +272,9 @@ function NewBudgetContent() {
           </div>
         </div>
 
-        {/* ============================================================
-            BLOCO 3: FORMULÁRIO
-            ============================================================ */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6 pb-24">
           <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm space-y-6">
 
-            {/* SEÇÃO 1: INFORMAÇÕES PRINCIPAIS */}
             <section className="space-y-4">
               <SectionHeader
                 title="Informações principais"
@@ -301,7 +282,6 @@ function NewBudgetContent() {
               />
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {/* Nome */}
                 <div className="md:col-span-2">
                   <FormField label="Nome do orçamento">
                     <input
@@ -314,7 +294,6 @@ function NewBudgetContent() {
                   </FormField>
                 </div>
 
-                {/* Categoria */}
                 <div>
                   <FormField label="Categoria">
                     <button
@@ -328,7 +307,6 @@ function NewBudgetContent() {
                   </FormField>
                 </div>
 
-                {/* Valor */}
                 <div>
                   <FormField label="Valor do orçamento" helper="Informe o valor total previsto para este orçamento.">
                     <div className="flex items-center gap-2 h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/10 transition">
@@ -348,7 +326,6 @@ function NewBudgetContent() {
               </div>
             </section>
 
-            {/* SEÇÃO 2: PERSONALIZAÇÃO */}
             <section className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
               <SectionHeader
                 title="Personalização"
@@ -356,7 +333,6 @@ function NewBudgetContent() {
               />
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {/* Cor */}
                 <div>
                   <FormField label="Cor">
                     <div className="flex flex-wrap gap-3 pt-1">
@@ -377,7 +353,6 @@ function NewBudgetContent() {
                   </FormField>
                 </div>
 
-                {/* Ícone */}
                 <div>
                   <FormField label="Ícone">
                     <button
@@ -401,7 +376,6 @@ function NewBudgetContent() {
               </div>
             </section>
 
-            {/* SEÇÃO 3: CONFIGURAÇÃO */}
             <section className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
               <SectionHeader
                 title="Configuração"
@@ -409,7 +383,6 @@ function NewBudgetContent() {
               />
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {/* Período */}
                 <div>
                   <FormField label="Período" helper="Como o orçamento será renovado.">
                     <div className="grid grid-cols-3 gap-2">
@@ -435,7 +408,6 @@ function NewBudgetContent() {
                   </FormField>
                 </div>
 
-                {/* Acumular saldo */}
                 <div>
                   <FormField label="Acumular saldo" helper="O valor não gasto acumula para o mês seguinte.">
                     <div className="flex items-center justify-between h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-4">
@@ -467,11 +439,8 @@ function NewBudgetContent() {
 
           </div>
 
-          {/* ============================================================
-              BLOCO 4: BARRA DE AÇÃO FIXA
-              ============================================================ */}
           <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-4 bg-white/95 dark:bg-slate-900/95 border-t border-gray-200 dark:border-slate-700 backdrop-blur-xl">
-            <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-3">
+            <div className="mx-auto flex w-full max-w-md items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => router.back()}
@@ -497,11 +466,6 @@ function NewBudgetContent() {
         </form>
       </div>
 
-      {/* ============================================================
-          MODAIS (mantidos exatamente iguais)
-          ============================================================ */}
-
-      {/* MODAL DE CATEGORIA */}
       {showCatModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
@@ -546,7 +510,7 @@ function NewBudgetContent() {
                   }`}
                 >
                   <div className="w-11 h-11 rounded-[16px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 text-gray-400 flex items-center justify-center shrink-0">
-                    <Tag size={18} />
+                    <Icons.Tag size={18} />
                   </div>
                   <span
                     className={`flex-1 text-left text-[14px] font-semibold ${
@@ -603,7 +567,6 @@ function NewBudgetContent() {
         document.body
       )}
 
-      {/* IconPicker */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
