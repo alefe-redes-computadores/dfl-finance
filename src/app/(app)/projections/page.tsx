@@ -291,7 +291,7 @@ export default function ProjectionsPage() {
 
       <div className="bg-white dark:bg-slate-800 px-4 pt-6 pb-4 shadow-sm border-b border-gray-50 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push('/home')} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors active:scale-[0.95]">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-colors active:scale-[0.95]">
             <ChevronLeft size={24} />
           </button>
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
@@ -495,4 +495,3 @@ export default function ProjectionsPage() {
     </div>
   )
 }
-// ✅ Refatoração Premium Finalizada — Projeções
