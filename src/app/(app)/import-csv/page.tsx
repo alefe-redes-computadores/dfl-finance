@@ -362,7 +362,7 @@ export default function ImportCSVPage() {
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
-                onClick={() => router.push('/home')}
+                onClick={() => router.back()} // ✅ CORRIGIDO: voltar para a tela anterior
                 className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
               >
                 <ChevronLeft size={20} />
