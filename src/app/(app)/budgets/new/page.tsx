@@ -327,19 +327,19 @@ function NewBudgetContent() {
           </div>
         </div>
 
-        {/* CARD DE RESUMO — VERSÃO COMPACTA */}
-        <Card className="mb-4 overflow-hidden">
-          <div className="px-4 py-3">
+        {/* CARD DE RESUMO — VERSÃO COMPACTA COM FUNDO DIFERENCIADO */}
+        <Card className="mb-4 overflow-hidden border-teal-200/60 dark:border-teal-900/40">
+          <div className="bg-gradient-to-br from-teal-50/80 via-white/60 to-white/40 px-4 py-3 dark:from-teal-950/30 dark:via-slate-900/80 dark:to-slate-900">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                Resumo
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
+                📊 Resumo
               </p>
               <span
                 className={cn(
                   'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em]',
                   isEditing
-                    ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'
-                    : 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300'
+                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
+                    : 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
                 )}
               >
                 {isEditing ? 'Edição' : 'Novo'}
@@ -347,8 +347,8 @@ function NewBudgetContent() {
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl bg-white/80 p-2 text-center shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
-                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+              <div className="rounded-xl bg-white/90 p-2 text-center shadow-sm ring-1 ring-teal-200/50 dark:bg-slate-900/90 dark:ring-teal-800/30">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-teal-600/70 dark:text-teal-400/70">
                   Valor
                 </p>
                 <p className="mt-1 text-[16px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
@@ -356,8 +356,8 @@ function NewBudgetContent() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-white/80 p-2 text-center shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
-                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+              <div className="rounded-xl bg-white/90 p-2 text-center shadow-sm ring-1 ring-teal-200/50 dark:bg-slate-900/90 dark:ring-teal-800/30">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-teal-600/70 dark:text-teal-400/70">
                   Período
                 </p>
                 <p className="mt-1 text-[14px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
@@ -365,8 +365,8 @@ function NewBudgetContent() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-white/80 p-2 text-center shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
-                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+              <div className="rounded-xl bg-white/90 p-2 text-center shadow-sm ring-1 ring-teal-200/50 dark:bg-slate-900/90 dark:ring-teal-800/30">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-teal-600/70 dark:text-teal-400/70">
                   Acumula
                 </p>
                 <p className="mt-1 text-[14px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
