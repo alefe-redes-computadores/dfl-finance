@@ -302,8 +302,8 @@ function NewBudgetContent() {
   return (
     <div className="min-h-screen bg-[#f6f7f8] pb-28 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto w-full max-w-md px-4 pt-4">
-        {/* HEADER - SEM O BOTÃO REDUNDANTE */}
-        <div className="mb-4 flex items-start justify-between gap-3">
+        {/* HEADER - SEM BOTÃO REDUNDANTE */}
+        <div className="mb-4 flex items-start gap-3">
           <button
             type="button"
             onClick={() => router.back()}
@@ -325,55 +325,52 @@ function NewBudgetContent() {
                 : 'Crie um orçamento com identidade visual clara e configuração completa.'}
             </p>
           </div>
-
-          {/* 🔥 REMOVIDO: Botão "Voltar" redundante */}
-          <div className="w-11 shrink-0" />
         </div>
 
-        {/* CARD DE RESUMO */}
+        {/* CARD DE RESUMO — VERSÃO COMPACTA */}
         <Card className="mb-4 overflow-hidden">
-          <div className="bg-[linear-gradient(135deg,rgba(20,184,166,0.14),rgba(255,255,255,0))] px-5 pb-5 pt-4 dark:bg-[linear-gradient(135deg,rgba(20,184,166,0.14),rgba(15,23,42,0))]">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                  Resumo
-                </p>
-                <p className="mt-2 text-[14px] leading-6 text-slate-600 dark:text-slate-300">
-                  Defina nome, valor, categoria, ícone e frequência sem alterar a lógica de cálculo e salvamento.
-                </p>
-              </div>
-
-              <div
+          <div className="px-4 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                Resumo
+              </p>
+              <span
                 className={cn(
-                  'rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em]',
+                  'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em]',
                   isEditing
                     ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'
-                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                    : 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300'
                 )}
               >
-                {isEditing ? 'Modo edição' : 'Novo registro'}
-              </div>
+                {isEditing ? 'Edição' : 'Novo'}
+              </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-[22px] bg-white/80 p-3 shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Valor</p>
-                <p className="mt-2 truncate text-[18px] font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-white/80 p-2 text-center shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+                  Valor
+                </p>
+                <p className="mt-1 text-[16px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
                   R$ {amountNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
 
-              <div className="rounded-[22px] bg-white/80 p-3 shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Período</p>
-                <p className="mt-2 text-[15px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
+              <div className="rounded-xl bg-white/80 p-2 text-center shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+                  Período
+                </p>
+                <p className="mt-1 text-[14px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
                   {previewPeriodLabel}
                 </p>
               </div>
 
-              <div className="rounded-[22px] bg-white/80 p-3 shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Saldo</p>
-                <p className="mt-2 text-[15px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
-                  {accumulate ? 'Acumula' : 'Não'}
+              <div className="rounded-xl bg-white/80 p-2 text-center shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900/70 dark:ring-slate-800">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+                  Acumula
+                </p>
+                <p className="mt-1 text-[14px] font-black tracking-[-0.02em] text-slate-900 dark:text-slate-100">
+                  {accumulate ? 'Sim' : 'Não'}
                 </p>
               </div>
             </div>
