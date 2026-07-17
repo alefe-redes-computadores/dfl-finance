@@ -190,6 +190,7 @@ function NewBudgetContent() {
     return 'Mensal'
   }, [period])
 
+  // 🔥 TRATAMENTO DE LOADING
   if (editId && budgetLoading) {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
@@ -207,6 +208,7 @@ function NewBudgetContent() {
     )
   }
 
+  // 🔥 TRATAMENTO DE NÃO ENCONTRADO
   if (editId && notFound) {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4">
@@ -231,6 +233,7 @@ function NewBudgetContent() {
     )
   }
 
+  // 🔥 SKELETON ENQUANTO NÃO INICIALIZADO
   if (!initialized) {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
@@ -302,6 +305,7 @@ function NewBudgetContent() {
   return (
     <div className="min-h-screen bg-[#f6f7f8] pb-28 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto w-full max-w-md px-4 pt-4">
+        {/* 🔥 HEADER */}
         <div className="mb-4 flex items-start justify-between gap-3">
           <button
             type="button"
@@ -334,6 +338,7 @@ function NewBudgetContent() {
           </button>
         </div>
 
+        {/* 🔥 CARD DE RESUMO */}
         <Card className="mb-4 overflow-hidden">
           <div className="bg-[linear-gradient(135deg,rgba(20,184,166,0.14),rgba(255,255,255,0))] px-5 pb-5 pt-4 dark:bg-[linear-gradient(135deg,rgba(20,184,166,0.14),rgba(15,23,42,0))]">
             <div className="mb-4 flex items-start justify-between gap-3">
@@ -383,6 +388,7 @@ function NewBudgetContent() {
           </div>
         </Card>
 
+        {/* 🔥 FORMULÁRIO */}
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -390,6 +396,7 @@ function NewBudgetContent() {
           }}
           className="space-y-4"
         >
+          {/* SEÇÃO 1: INFORMAÇÕES PRINCIPAIS */}
           <Card className="p-5">
             <div className="space-y-5">
               <SectionHeader
@@ -445,6 +452,7 @@ function NewBudgetContent() {
             </div>
           </Card>
 
+          {/* SEÇÃO 2: PERSONALIZAÇÃO */}
           <Card className="p-5">
             <div className="space-y-5">
               <SectionHeader
@@ -509,6 +517,7 @@ function NewBudgetContent() {
             </div>
           </Card>
 
+          {/* SEÇÃO 3: CONFIGURAÇÃO */}
           <Card className="p-5">
             <div className="space-y-5">
               <SectionHeader
@@ -590,6 +599,7 @@ function NewBudgetContent() {
         </form>
       </div>
 
+      {/* 🔥 BARRA DE AÇÕES FIXA */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
         <div className="mx-auto flex w-full max-w-md items-center gap-3">
           <button
@@ -612,6 +622,7 @@ function NewBudgetContent() {
         </div>
       </div>
 
+      {/* 🔥 MODAL DE CATEGORIA */}
       {showCatModal &&
         typeof document !== 'undefined' &&
         createPortal(
@@ -737,6 +748,7 @@ function NewBudgetContent() {
           document.body
         )}
 
+      {/* 🔥 ICON PICKER */}
       <IconPicker
         isOpen={showIconModal}
         onClose={() => setShowIconModal(false)}
