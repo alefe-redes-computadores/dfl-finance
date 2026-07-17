@@ -1,22 +1,21 @@
-// src/hooks/useBudgetTransactions.ts
 'use client'
 
-import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 
 export function useBudgetTransactions(budgetId?: string | null) {
   const { user } = useAuth()
-  const [startDate, setStartDate] = useState<string | null>(null)
-  const [endDate, setEndDate] = useState<string | null>(null)
 
   const data = useLiveQuery(async () => {
     if (!user?.id || !budgetId) return []
 
+    // ✅ BUSCA DIRETAMENTE AS TRANSAÇÕES VINCULADAS AO BUDGET
+    // OU FILTRA PELA CATEGORIA + PERÍODO
     const budget = await db.budgets.get(budgetId)
     if (!budget) return []
 
+    // Opção 1: Se as transações têm budget_id (recomendado)
     let items = await db.transactions
       .where('user_id')
       .equals(user.id)
@@ -33,25 +32,15 @@ export function useBudgetTransactions(budgetId?: string | null) {
       item.status === 'done'
     )
 
-    // Filtra por período
-    if (startDate) {
-      items = items.filter((item) => item.date >= startDate)
-    }
-    if (endDate) {
-      items = items.filter((item) => item.date <= endDate)
-    }
-
     return items.sort((a, b) => {
       const aTime = a.date ? new Date(a.date).getTime() : 0
       const bTime = b.date ? new Date(b.date).getTime() : 0
       return bTime - aTime
     })
-  }, [user?.id, budgetId, startDate, endDate])
+  }, [user?.id, budgetId])
 
   return {
     data: data ?? [],
     loading: data === undefined,
-    setStartDate,
-    setEndDate,
   }
 }
