@@ -62,6 +62,7 @@ dfl-finance/
 ├── tailwind.config.ts      # Tokens de design e cores do projeto
 ├── package.json            # Gerenciamento de dependências
 └── tsconfig.json           # Tipagem estática do projeto
+
 ## ⚙️ Instalação e Configuração
 
 ### Pré-requisitos
