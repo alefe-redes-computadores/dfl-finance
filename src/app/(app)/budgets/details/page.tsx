@@ -131,77 +131,77 @@ function BudgetDetailContent() {
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // ✅ LÓGICA DE CARREGAMENTO BLINDADA (COMPLETA E ÚNICA)
+  // ✅ LÓGICA DE CARREGAMENTO E CÁLCULO CORRIGIDA
   useEffect(() => {
-    if (!id || !user?.id) return
+    if (!id || !user?.id) return;
 
-    // TRAVA DE SEGURANÇA: Se estiver carregando, não faz nada.
-    if (budgetLoading) return;
+    // 1. TRAVA: Só prossegue se os dois hooks pararam de carregar
+    if (budgetLoading || txLoading) return;
 
-    const loadData = async () => {
-      setLoading(true)
-      setLoadingPulse(true)
-
-      try {
-        if (notFound || !budgetData) {
-          router.push('/budgets')
-          return
-        }
-
-        setBudget(budgetData)
-
-        const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-        const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-        const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
-
-        // Verificação segura de transações
-        const txs = budgetTransactions || [];
-        
-        let filteredTxs = txs.filter(
-          (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
-        )
-
-        if (budgetData.category_id) {
-          filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
-        }
-
-        const totalSpent = filteredTxs
-          .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
-          .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-
-        setTransactions(filteredTxs)
-        setSpent(totalSpent)
-
-        const remaining = Number(budgetData.amount) - totalSpent
-        const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
-
-        if (dailyAverage > 0 && remaining > 0) {
-          const projectedDays = Math.floor(remaining / dailyAverage)
-          setDaysLeft(projectedDays)
-
-          if (projectedDays <= 3) {
-            setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`)
-          } else if (projectedDays <= 7) {
-            setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`)
-          } else {
-            setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`)
-          }
-        } else if (remaining <= 0) {
-          setDaysLeft(0)
-          setProjection('🔴 Orçamento estourado!')
-        } else {
-          setProjection('✅ Nenhum gasto registrado ainda.')
-        }
-      } catch (err) {
-        console.error('Erro ao carregar orçamento:', err)
-      } finally {
-        setLoading(false)
-        setLoadingPulse(false)
-      }
+    // 2. EXPULSÃO: Só manda para a lista se o banco disser CLARAMENTE que não achou (excluído)
+    if (notFound) {
+      router.push('/budgets');
+      return;
     }
 
-    loadData()
-  }, [id, user, currentDate, budgetData, budgetLoading, notFound, budgetTransactions, router])
+    // 3. AGUARDA: Se o dado ainda está vazio na memória (mas não deu notFound), não expulsa, só espera o React atualizar.
+    if (!budgetData) return;
+
+    // --- INÍCIO DOS CÁLCULOS ---
+    setLoading(true);
+    setLoadingPulse(true);
+
+    try {
+      setBudget(budgetData);
+
+      const start = format(startOfMonth(currentDate), 'yyyy-MM-dd');
+      const end = format(endOfMonth(currentDate), 'yyyy-MM-dd');
+      const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1;
+
+      const txs = budgetTransactions || [];
+      
+      let filteredTxs = txs.filter(
+        (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
+      );
+
+      if (budgetData.category_id) {
+        filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id);
+      }
+
+      const totalSpent = filteredTxs
+        .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
+        .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0);
+
+      setTransactions(filteredTxs);
+      setSpent(totalSpent);
+
+      const remaining = Number(budgetData.amount) - totalSpent;
+      const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0;
+
+      if (dailyAverage > 0 && remaining > 0) {
+        const projectedDays = Math.floor(remaining / dailyAverage);
+        setDaysLeft(projectedDays);
+
+        if (projectedDays <= 3) {
+          setProjection(`⚠️ Neste ritmo, o orçamento acabará em ${projectedDays} dia(s)!`);
+        } else if (projectedDays <= 7) {
+          setProjection(`⚠️ Neste ritmo, dura mais ${projectedDays} dias.`);
+        } else {
+          setProjection(`✅ Ritmo tranquilo! Dura mais ${projectedDays} dias.`);
+        }
+      } else if (remaining <= 0) {
+        setDaysLeft(0);
+        setProjection('🔴 Orçamento estourado!');
+      } else {
+        setProjection('✅ Nenhum gasto registrado ainda.');
+      }
+    } catch (err) {
+      console.error('Erro ao processar orçamento:', err);
+    } finally {
+      setLoading(false);
+      setLoadingPulse(false);
+    }
+  }, [id, user, currentDate, budgetData, budgetLoading, txLoading, notFound, budgetTransactions, router]);
 
   // ✅ FUNÇÕES AUXILIARES
   const formatCurrency = (val: number) =>
@@ -251,7 +251,6 @@ function BudgetDetailContent() {
       </div>
     )
   }
-
 
   if (!budget) return null
 
