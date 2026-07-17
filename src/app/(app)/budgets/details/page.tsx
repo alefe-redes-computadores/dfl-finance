@@ -131,7 +131,7 @@ function BudgetDetailContent() {
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-    // ✅ LÓGICA DE CARREGAMENTO BLINDADA (COMPLETA)
+  // ✅ LÓGICA DE CARREGAMENTO BLINDADA (COMPLETA E ÚNICA)
   useEffect(() => {
     if (!id || !user?.id) return
 
@@ -199,9 +199,6 @@ function BudgetDetailContent() {
         setLoadingPulse(false)
       }
     }
-
-    loadData()
-  }, [id, user, currentDate, budgetData, budgetLoading, notFound, budgetTransactions, router])
 
     loadData()
   }, [id, user, currentDate, budgetData, budgetLoading, notFound, budgetTransactions, router])
