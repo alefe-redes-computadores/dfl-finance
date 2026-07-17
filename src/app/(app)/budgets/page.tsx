@@ -58,8 +58,10 @@ function BudgetsContent() {
   const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
+  // ✅ 1. TODOS OS HOOKS NO TOPO
   const { data: localBudgets, loading: budgetsLoading } = useBudgetsList(effectiveContext)
 
+  // ✅ 2. USA useLocalData APENAS PARA TRANSAÇÕES (não para budgets)
   const { data: localTransactions, loading: txLoading } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -73,6 +75,7 @@ function BudgetsContent() {
     }
   }, [user?.id])
 
+  // ✅ 3. useMemo PARA DADOS DERIVADOS (não useState espelho)
   const monthStart = format(currentMonth, 'yyyy-MM-01')
   const monthEnd = format(currentMonth, 'yyyy-MM-31')
 
@@ -98,6 +101,7 @@ function BudgetsContent() {
     }
   })
 
+  // ✅ 4. FUNÇÕES DE AÇÃO
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir este orçamento?')) return
@@ -136,9 +140,10 @@ function BudgetsContent() {
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // ✅ Renomeado para não conflitar com propriedades locais
+  // ✅ 5. LOADING UNIFICADO
   const isDataLoading = budgetsLoading || txLoading || isAuthLoading
 
+  // ✅ 6. RETURNS CONDICIONAIS (depois dos hooks)
   return (
     <div
       ref={containerRef}
