@@ -5,13 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
-  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown, Tag
+  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useBudgetById } from '@/hooks/useBudgetById'
 import { useBudgetTransactions } from '@/hooks/useBudgetTransactions'
-import { useLocalData } from '@/hooks/useLocalData'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -130,18 +129,24 @@ function BudgetDetailContent() {
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(id)
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const hasRedirected = useRef(false) // ✅ EVITA REDIRECIONAMENTO MÚLTIPLO
 
-  // ✅ CORRIGIDO: useEffect com lógica de carregamento correta
+  // ✅ CORRIGIDO: useEffect com lógica de carregamento e redirecionamento controlado
   useEffect(() => {
+    // Se não tem ID ou usuário, não faz nada
     if (!id || !user?.id) return;
 
-    // ✅ SE NÃO ENCONTRADO, REDIRECIONA
+    // ✅ SE JÁ REDIRECIONOU, NÃO FAZ NADA (evita loop)
+    if (hasRedirected.current) return;
+
+    // ✅ SE NÃO ENCONTRADO, REDIRECIONA APENAS UMA VEZ
     if (notFound) {
+      hasRedirected.current = true;
       router.push('/budgets');
       return;
     }
 
-    // ✅ SE AINDA CARREGANDO, NÃO FAZ NADA
+    // ✅ SE AINDA CARREGANDO, NÃO FAZ NADA (mantém loading true)
     if (budgetLoading || txLoading) {
       setLoading(true);
       return;
@@ -233,7 +238,9 @@ function BudgetDetailContent() {
     )
   }
 
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  // ✅ TRATAMENTO DE NÃO ENCONTRADO - AGORA NÃO VAI MAIS REDIRECIONAR
+  // O redirecionamento já aconteceu no useEffect
+  // Se cair aqui depois do redirect, mostra mensagem
   if (notFound) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
@@ -264,7 +271,7 @@ function BudgetDetailContent() {
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const IconComp = getDynamicIcon(budget?.icon || 'tag')
 
-  // ✅ RENDERIZAÇÃO (mantida igual)
+  // ✅ RENDERIZAÇÃO
   return (
     <div
       ref={containerRef}
@@ -285,7 +292,6 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      {/* HEADER - MANTIDO IGUAL */}
       <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl">
         <div className="flex items-center justify-between mb-4">
           <button
@@ -347,12 +353,10 @@ function BudgetDetailContent() {
         </div>
       </div>
 
-      {/* STATUS BADGE */}
       <div className="mb-4 flex justify-center">
         <StatusBadge status={budget.status} isOverBudget={isOverBudget} isWarning={isWarning} />
       </div>
 
-      {/* CARD DE RESUMO */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
         <div className="p-5 pb-4">
           <div className="flex items-center gap-4 mb-5">
@@ -412,7 +416,6 @@ function BudgetDetailContent() {
         </div>
       </section>
 
-      {/* PROJEÇÃO */}
       {projection && (
         <div
           className={`rounded-[24px] p-4 mb-4 border flex items-start gap-3 ${
@@ -435,7 +438,6 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      {/* TRANSAÇÕES */}
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
           <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
