@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { Suspense, useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -33,7 +33,7 @@ function NewDebtContent() {
 
   const [saving, setSaving] = useState(false)
 
-  // ESTADOS DO FORMULÁRIO (Inicializados com segurança para evitar NaN)
+  // ESTADOS DO FORMULÁRIO
   const [personName, setPersonName] = useState('')
   const [amountNum, setAmountNum] = useState<number>(0)
   const [dueDate, setDueDate] = useState('')
@@ -48,7 +48,7 @@ function NewDebtContent() {
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // HOOKS REATIVOS (Leitura Estrita)
+  // HOOKS REATIVOS
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
@@ -64,7 +64,6 @@ function NewDebtContent() {
 
   // Efeito de "Hidratação" do Formulário
   useEffect(() => {
-    // Se não for modo edição, apenas ajusta o contexto atual
     if (!editId) {
       setDebtContext(context as 'dfl' | 'personal')
       return
@@ -78,13 +77,10 @@ function NewDebtContent() {
       return
     }
 
-    // Hidratação segura
     if (localDebt) {
       setPersonName(localDebt.person_name || '')
-      // Garante que é um número válido ou zero (Evita o NaN)
       const parsedAmount = Number(localDebt.total_amount)
       setAmountNum(isNaN(parsedAmount) ? 0 : parsedAmount)
-      
       setDueDate(localDebt.due_date || '')
       setDescription(localDebt.description || '')
       setCategoryId(localDebt.category_id || '')
@@ -105,7 +101,7 @@ function NewDebtContent() {
     setSaving(true)
 
     const now = new Date().toISOString()
-    const finalAmount = Number(amountNum) // Garantia extra antes de salvar
+    const finalAmount = Number(amountNum)
 
     const payload = {
       person_name: personName.trim(),
@@ -179,9 +175,6 @@ function NewDebtContent() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-32 pt-4">
-        {/* ... Restante do JSX do formulário (mantido inalterado pois a UI está correta) ... */}
-        {/* Adicionei apenas proteção extra no onChange do MoneyInput */}
-        
         {/* Cabeçalho */}
         <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-gray-100/80 bg-gray-50/90 px-4 py-3 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-900/90">
           <div className="flex items-center justify-between">
@@ -253,8 +246,7 @@ function NewDebtContent() {
               <MoneyInput
                 value={amountNum}
                 onChange={(num) => {
-                  // Garante que NaN nunca entre no estado
-                  setAmountNum(isNaN(num) ? 0 : num) 
+                  setAmountNum(isNaN(num) ? 0 : num)
                 }}
                 placeholder="0,00"
                 className="w-full bg-transparent text-[28px] font-bold tracking-tight text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
@@ -577,8 +569,16 @@ function NewDebtContent() {
 
 export default function NewDebtPage() {
   return (
-    <ContextProvider>
-      <NewDebtContent />
-    </ContextProvider>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+          <Loader2 className="animate-spin text-teal-600" size={28} />
+        </div>
+      }
+    >
+      <ContextProvider>
+        <NewDebtContent />
+      </ContextProvider>
+    </Suspense>
   )
 }
