@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -104,26 +104,48 @@ const BudgetDetailSkeleton = () => (
 )
 
 // ============================================================
-// COMPONENTE PRINCIPAL - CORRIGIDO (VERSÃO ESTÁVEL)
+// COMPONENTE PRINCIPAL - CORRIGIDO (PADRÃO QUE FUNCIONA)
 // ============================================================
 
 function BudgetDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const id = searchParams.get('id')
   const { user } = useAuth()
   const { context } = useContext_()
   const { vibrate } = useHapticFeedback()
 
-  // ✅ 1. TODOS OS HOOKS NO TOPO (REGRRA MAIS IMPORTANTE)
-  const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(id)
-  const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(id)
+  // ✅ 1. NORMALIZA O ID (igual ao padrão que funciona)
+  const rawBudgetId = searchParams?.get('id')
+  const budgetId = useMemo(() => rawBudgetId?.trim() || null, [rawBudgetId])
 
-  // ✅ 2. STATES
+  // ✅ 2. TODOS OS HOOKS NO TOPO
+  const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(budgetId)
+  const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(budgetId)
+
+  // ✅ 3. STATES
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
+  const hasScheduledRedirect = useRef(false)
 
-  // ✅ 3. useMemo PARA DADOS DERIVADOS (não useState espelho)
+  // ✅ 4. REDIRECIONAMENTO CONTROLADO (IGUAL AO PADRÃO QUE FUNCIONA)
+  useEffect(() => {
+    if (!budgetId) return
+    if (budgetLoading) return
+    if (!notFound) return
+    if (hasScheduledRedirect.current) return
+
+    hasScheduledRedirect.current = true
+
+    console.warn('[BudgetDetail] Orçamento não encontrado', { budgetId })
+
+    const timer = setTimeout(() => {
+      router.replace('/budgets')
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [budgetId, budgetLoading, notFound, router])
+
+  // ✅ 5. useMemo PARA DADOS DERIVADOS (não useState espelho)
   const { spent, transactions, remaining, percent, isOverBudget, isWarning, daysLeft, projection } = useMemo(() => {
     if (!budgetData || !budgetTransactions) {
       return {
@@ -192,25 +214,16 @@ function BudgetDetailContent() {
     }
   }, [budgetData, budgetTransactions, currentDate])
 
-  // ✅ 4. REDIRECIONAMENTO CONTROLADO (só se não encontrado e já carregou)
-  useEffect(() => {
-    if (!id || !user?.id) return
-    
-    // Só redireciona se o orçamento não foi encontrado E já terminou de carregar
-    if (notFound && !budgetLoading) {
-      router.push('/budgets')
-    }
-  }, [id, user?.id, notFound, budgetLoading, router])
+  // ✅ 6. RETURNS CONDICIONAIS (depois de todos os hooks)
 
-  // ✅ 5. RETURNS CONDICIONAIS (depois de todos os hooks)
-  // Se não tem ID, volta para listagem (com redirect imediato, mas sem hooks depois)
-  if (!id) {
-    router.push('/budgets')
+  // Se não tem ID, redireciona imediatamente
+  if (!budgetId) {
+    router.replace('/budgets')
     return null
   }
 
   // Loading
-  if (budgetLoading || txLoading) {
+  if (budgetLoading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 pb-24 font-sans transition-colors duration-300">
         <div className="flex items-center justify-between px-4 pt-6 mb-2">
@@ -244,7 +257,7 @@ function BudgetDetailContent() {
     )
   }
 
-  // ✅ 6. RENDERIZAÇÃO
+  // ✅ 7. RENDERIZAÇÃO
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const IconComp = getDynamicIcon(budgetData?.icon || 'tag')
   const formatCurrency = (val: number) =>
