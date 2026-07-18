@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, Suspense, useMemo, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense, useMemo, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ChevronLeft,
   Tag,
@@ -15,9 +15,11 @@ import {
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useCardById } from '@/hooks/useCardById'  // ✅ IMPORTANDO O HOOK
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { safeAdd } from '@/lib/safeDb'
+import { safeAdd, safeUpdate } from '@/lib/safeDb'
+import Skeleton from '@/components/Skeleton'
 
 const PREDEFINED_COLORS = [
   '#2a9d8f',
@@ -44,14 +46,22 @@ function safeNum(val: any): number {
 function NewCardContent() {
   const { user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { showToast } = useToast()
   const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const contextData = useContext_()
+
+  // ✅ useMemo para normalizar o ID
+  const rawEditId = searchParams.get("edit")
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
   const effectiveContext =
     contextData?.effectiveContext ??
     (contextData?.appMode === 'personal_only' ? 'personal' : contextData?.context) ??
     'dfl'
+
+  // ✅ USANDO O HOOK useCardById
+  const { data: cardData, loading: cardLoading, notFound } = useCardById(editId)
 
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
@@ -59,6 +69,9 @@ function NewCardContent() {
   })
 
   const accounts = localAccounts || []
+
+  const [initialized, setInitialized] = useState(!editId)
+  const [saving, setSaving] = useState(false)
 
   const [name, setName] = useState('')
   const [flag, setFlag] = useState('')
@@ -69,28 +82,87 @@ function NewCardContent() {
   const [paymentAccountId, setPaymentAccountId] = useState('')
   const [color, setColor] = useState(PREDEFINED_COLORS[0])
   const [limitAmount, setLimitAmount] = useState('0,00')
-  const [saving, setSaving] = useState(false)
   const [showAccountModal, setShowAccountModal] = useState(false)
 
-  const handleLimitChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      let value = e.target.value.replace(/D/g, '')
-      if (value === '') value = '0'
-      const formatted = (safeNum(value) / 100).toFixed(2).replace('.', ',')
-      setLimitAmount(formatted)
-    },
-    []
-  )
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO COM useCardById
+  useEffect(() => {
+    if (editId && cardData && !initialized) {
+      setName(cardData.name || '')
+      setFlag(cardData.flag || '')
+      setInstitution(cardData.institution || '')
+      setLastFour(cardData.last_four || '')
+      setClosingDay(cardData.closing_day ? String(cardData.closing_day) : '')
+      setDueDay(cardData.due_day ? String(cardData.due_day) : '')
+      setPaymentAccountId(cardData.payment_account_id || '')
+      setColor(cardData.color || PREDEFINED_COLORS[0])
+      
+      const limit = Number(cardData.limit_amount) || 0
+      setLimitAmount(limit.toFixed(2).replace('.', ','))
+      
+      setInitialized(true)
+    }
 
-  const handleDayChange = useCallback(
-    (val: string, setter: (v: string) => void) => {
-      const numeric = val.replace(/D/g, '').slice(0, 2)
-      if (numeric === '' || (Number(numeric) >= 1 && Number(numeric) <= 31)) {
-        setter(numeric)
-      }
-    },
-    []
-  )
+    if (!editId && !initialized) {
+      setInitialized(true)
+    }
+  }, [editId, cardData, initialized])
+
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !cardLoading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <CreditCard size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Cartão não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O cartão que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+        <button
+          onClick={() => router.push('/cards')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ LOADING
+  if (editId && cardLoading) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (!initialized) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '')
+    if (value === '') value = '0'
+    const formatted = (safeNum(value) / 100).toFixed(2).replace('.', ',')
+    setLimitAmount(formatted)
+  }
+
+  const handleDayChange = (val: string, setter: (v: string) => void) => {
+    const numeric = val.replace(/\D/g, '').slice(0, 2)
+    if (numeric === '' || (Number(numeric) >= 1 && Number(numeric) <= 31)) {
+      setter(numeric)
+    }
+  }
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -108,7 +180,6 @@ function NewCardContent() {
     setSaving(true)
 
     const payload = {
-      id: crypto.randomUUID(),
       user_id: user.id,
       name: name.trim(),
       flag: flag || null,
@@ -118,18 +189,31 @@ function NewCardContent() {
       due_day: dueDay ? parseInt(dueDay, 10) : 10,
       payment_account_id: paymentAccountId || null,
       color,
-      limit_amount: safeNum(limitAmount.replace(/./g, '').replace(',', '.')),
+      limit_amount: safeNum(limitAmount.replace(/\./g, '').replace(',', '.')),
       is_archived: false,
       context: effectiveContext,
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
 
     try {
-      const result = await safeAdd('credit_cards', payload)
-      if (!result?.success) throw new Error(result?.error || 'Erro ao criar cartão')
+      if (editId) {
+        const result = await safeUpdate('credit_cards', editId, payload)
+        if (!result?.success) throw new Error(result?.error || 'Erro ao atualizar cartão')
+        showToast('✅ Cartão atualizado!', 'success')
+      } else {
+        const newId = crypto.randomUUID()
+        const fullPayload = {
+          id: newId,
+          ...payload,
+          created_at: new Date().toISOString(),
+          sync_status: 'pending',
+          sync_attempts: 0,
+        }
+        const result = await safeAdd('credit_cards', fullPayload)
+        if (!result?.success) throw new Error(result?.error || 'Erro ao criar cartão')
+        showToast('✅ Cartão criado!', 'success')
+      }
 
-      showToast('✅ Cartão criado!', 'success')
       success()
       router.push('/cards')
     } catch (error: any) {
@@ -140,7 +224,7 @@ function NewCardContent() {
     }
   }
 
-  const renderFlagIcon = useCallback((cardFlag: string) => {
+  const renderFlagIcon = (cardFlag: string) => {
     switch (cardFlag) {
       case 'Visa':
         return <span className="text-[10px] font-bold italic text-blue-800">VISA</span>
@@ -160,7 +244,7 @@ function NewCardContent() {
       default:
         return <CreditCard size={14} />
     }
-  }, [])
+  }
 
   const selectedAccount = useMemo(
     () => accounts.find((a: any) => a.id === paymentAccountId),
@@ -190,7 +274,9 @@ function NewCardContent() {
           <div className="rounded-[30px] bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-5">
             <div className="flex items-start justify-between gap-4 mb-8">
               <div className="min-w-0 flex-1">
-                <p className="text-white/70 text-[12px] font-medium mb-2">Novo cartão</p>
+                <p className="text-white/70 text-[12px] font-medium mb-2">
+                  {editId ? 'Editar cartão' : 'Novo cartão'}
+                </p>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -266,7 +352,7 @@ function NewCardContent() {
                 <label className="text-[12px] font-medium text-gray-500 block mb-1">Final</label>
                 <input
                   value={lastFour}
-                  onChange={(e) => setLastFour(e.target.value.replace(/D/g, '').slice(0, 4))}
+                  onChange={(e) => setLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="0000"
                   className="w-full bg-transparent outline-none text-[14px] font-bold text-gray-900 dark:text-gray-100"
                 />
@@ -401,7 +487,7 @@ function NewCardContent() {
           className="w-full h-14 rounded-[22px] bg-emerald-700 text-white font-bold shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {saving ? <Loader2 className="animate-spin" size={22} /> : <Check size={22} />}
-          <span>{saving ? 'Salvando...' : 'Criar cartão'}</span>
+          <span>{saving ? 'Salvando...' : editId ? 'Atualizar cartão' : 'Criar cartão'}</span>
         </button>
       </div>
 
@@ -461,7 +547,7 @@ function NewCardContent() {
 
 export default function NewCardPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<Skeleton count={6} />}>
       <NewCardContent />
     </Suspense>
   )
