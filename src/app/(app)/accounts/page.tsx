@@ -12,7 +12,6 @@ import {
   Building2,
   CreditCard,
   PiggyBank,
-  Trash2,
   ChevronRight,
   ChevronLeft,
   Landmark,
@@ -141,12 +140,12 @@ function AccountsContent() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO COM BOTÃO DE VOLTAR */}
+      {/* HEADER UNIFICADO COM BOTÃO DE VOLTAR */}
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
-              {/* ✅ ADICIONADO: Botão Voltar Padronizado */}
+              {/* Botão Voltar Padronizado */}
               <button
                 onClick={() => { vibrate([5]); router.push('/more'); }}
                 className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
@@ -225,7 +224,7 @@ function AccountsContent() {
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
       >
-        {/* CARD DE SALDO CONSOLIDADO - VISUAL NEUTRO */}
+        {/* CARD DE SALDO CONSOLIDADO */}
         {!loading && (
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div className="flex items-start justify-between gap-3">
@@ -248,7 +247,7 @@ function AccountsContent() {
           </div>
         )}
 
-        {/* FILTROS RÁPIDOS - MAIS COMPACTOS */}
+        {/* FILTROS RÁPIDOS */}
         {!loading && accounts?.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
@@ -302,16 +301,10 @@ function AccountsContent() {
               return (
                 <div
                   key={acc.id}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 relative"
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
                 >
-                  <button
-                    onClick={() => { vibrate([10]); setDeleteModal(acc.id); }}
-                    className="absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center text-gray-300 dark:text-gray-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors z-10"
-                    title="Excluir conta"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-
+                  {/* ✅ REMOVIDO: Botão de excluir (lixeira) */}
+                  
                   <button
                     onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${acc.id}`); }}
                     className="w-full rounded-[18px] p-3 flex items-start gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
@@ -324,7 +317,7 @@ function AccountsContent() {
                       <Icon size={18} strokeWidth={2.3} />
                     </div>
 
-                    <div className="min-w-0 flex-1 pr-6">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
                         {acc.name}
                       </p>
@@ -359,7 +352,7 @@ function AccountsContent() {
         )}
       </div>
 
-      {/* MODAL DE EXCLUSÃO COM PORTAL */}
+      {/* MODAL DE EXCLUSÃO - Mantido pois pode ser usado em outros lugares */}
       {deleteModal && createPortal(
         <div
           className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm"
