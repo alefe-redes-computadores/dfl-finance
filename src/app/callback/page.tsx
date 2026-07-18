@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Server, Settings, Cpu, Zap, AlertCircle } from 'lucide-react'
@@ -13,13 +13,13 @@ const frasesEngracadas = [
   "Quase lá! Passando um café para o sistema..."
 ]
 
-export default function AuthCallback() {
+// 1. O componente que faz o trabalho duro (lê URL, conecta no Supabase e tem a UI)
+function CallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [mensagemIndex, setMensagemIndex] = useState(0)
 
-  // Timer para as frases
   useEffect(() => {
     const intervalo = setInterval(() => {
       setMensagemIndex((atual) => (atual + 1) % frasesEngracadas.length)
@@ -64,7 +64,6 @@ export default function AuthCallback() {
     handleAuth()
   }, [router, searchParams])
 
-  // UI de Erro
   if (errorMsg) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
@@ -76,7 +75,6 @@ export default function AuthCallback() {
     )
   }
 
-  // UI de Carregamento Estilizada
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col items-center justify-center p-6 text-center transition-colors duration-300">
       <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
@@ -91,5 +89,18 @@ export default function AuthCallback() {
         {frasesEngracadas[mensagemIndex]}
       </p>
     </div>
+  )
+}
+
+// 2. O componente principal que envelopa a lógica com o Suspense (Isso resolve o erro da Vercel)
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col items-center justify-center">
+         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Preparando sistema...</h1>
+      </div>
+    }>
+      <CallbackContent />
+    </Suspense>
   )
 }
