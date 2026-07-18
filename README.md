@@ -6,8 +6,6 @@ O projeto foi arquitetado para ser um sistema **"local-first"**. Isso significa 
 
 ## 🚀 Funcionalidades Principais
 
-
-
 *   **Gestão de Orçamentos:** Acompanhamento mensal, quinzenal ou semanal com cálculos de projeções inteligentes de consumo.
 *   **Controle de Transações:** Registro ágil de receitas (income) e despesas (expense) com suporte a categorização e anexos (recibos).
 *   **Gestão de Dívidas:** Monitoramento detalhado de devedores, histórico de pagamentos e envios de lembretes integrados via WhatsApp.
