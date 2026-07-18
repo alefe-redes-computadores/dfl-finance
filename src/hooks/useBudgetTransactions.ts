@@ -10,26 +10,25 @@ export function useBudgetTransactions(budgetId?: string | null) {
   const data = useLiveQuery(async () => {
     if (!user?.id || !budgetId) return []
 
-    // ✅ BUSCA DIRETAMENTE AS TRANSAÇÕES VINCULADAS AO BUDGET
-    // OU FILTRA PELA CATEGORIA + PERÍODO
     const budget = await db.budgets.get(budgetId)
     if (!budget) return []
 
-    // Opção 1: Se as transações têm budget_id (recomendado)
+    // ✅ USA ÍNDICE SIMPLES 'user_id'
     let items = await db.transactions
       .where('user_id')
       .equals(user.id)
       .toArray()
 
-    // Filtra por categoria do orçamento
+    // ✅ FILTRA POR CATEGORIA EM MEMÓRIA (não usa índice composto)
     if (budget.category_id) {
       items = items.filter((item) => item.category_id === budget.category_id)
     }
 
     // Apenas despesas concluídas
-    items = items.filter((item) => 
-      (item.type === 'expense' || item.type === 'sangria') && 
-      item.status === 'done'
+    items = items.filter(
+      (item) =>
+        (item.type === 'expense' || item.type === 'sangria') &&
+        item.status === 'done'
     )
 
     return items.sort((a, b) => {
