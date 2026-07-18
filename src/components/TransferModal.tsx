@@ -8,7 +8,7 @@ import {
   X, ArrowRightLeft, Wallet, Loader2, Check, ChevronRight, ArrowDown
 } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -37,9 +37,8 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
   const [showFromAccs, setShowFromAccs] = useState(false)
   const [showToAccs, setShowToAccs] = useState(false)
 
-  const { data: allAccounts } = useLocalData({
-    table: 'accounts' as any,
-  })
+  // ✅ HOOK ESPECÍFICO
+  const { data: allAccounts, loading: accountsLoading } = useAccountsList()
 
   const fromAccounts = useMemo(() => {
     return (allAccounts || [])
@@ -66,7 +65,7 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
   }, [isOpen, forcedContext])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/D/g, '')
+    const digits = e.target.value.replace(/\D/g, '')
     if (!digits) {
       setAmount('')
       setAmountNum(0)
