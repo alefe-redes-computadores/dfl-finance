@@ -1,7 +1,6 @@
 'use client'
 
-
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
@@ -333,7 +332,11 @@ function NewGoalContent() {
   const searchParams = useSearchParams()
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
-  const editId = searchParams.get('edit')
+  
+  // ✅ useMemo para normalizar o ID
+  const rawEditId = searchParams.get('edit')
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
+  
   const { safeAdd, safeUpdate } = useSafeDb()
 
   const { context, appMode } = useContext_()
@@ -388,6 +391,25 @@ function NewGoalContent() {
       setInitialized(true)
     }
   }, [editId, goalData, initialized])
+
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !loading) {
+    return <NotFoundState onBack={() => router.push('/goals')} />
+  }
+
+  if (editId && loading) {
+    return <LoadingState />
+  }
+
+  if (!initialized) {
+    return (
+      <div className="mx-auto min-h-screen max-w-md bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="px-4 pt-6">
+          <Skeleton count={5} />
+        </div>
+      </div>
+    )
+  }
 
   const selectedCat = useMemo(
     () => categories.find((c: any) => c.id === categoryId),
@@ -477,24 +499,6 @@ function NewGoalContent() {
     } finally {
       setSaving(false)
     }
-  }
-
-  if (editId && loading) {
-    return <LoadingState />
-  }
-
-  if (editId && notFound) {
-    return <NotFoundState onBack={() => router.push('/goals')} />
-  }
-
-  if (!initialized) {
-    return (
-      <div className="mx-auto min-h-screen max-w-md bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
-        <div className="px-4 pt-6">
-          <Skeleton count={5} />
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -719,8 +723,14 @@ function NewGoalContent() {
 
 export default function NewGoalPage() {
   return (
-    <ContextProvider>
-      <NewGoalContent />
-    </ContextProvider>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <Loader2 className="animate-spin text-teal-600" size={32} />
+      </div>
+    }>
+      <ContextProvider>
+        <NewGoalContent />
+      </ContextProvider>
+    </Suspense>
   )
 }
