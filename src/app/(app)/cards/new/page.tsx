@@ -15,7 +15,7 @@ import {
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useCardById } from '@/hooks/useCardById'  // ✅ IMPORTANDO O HOOK
+import { useCardById } from '@/hooks/useCardById'
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { safeAdd, safeUpdate } from '@/lib/safeDb'
@@ -51,7 +51,9 @@ function NewCardContent() {
   const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const contextData = useContext_()
 
-  // ✅ useMemo para normalizar o ID
+  // ✅ 1. TODOS OS HOOKS NO TOPO (REGRRA MAIS IMPORTANTE)
+
+  // useMemo para normalizar o ID
   const rawEditId = searchParams.get("edit")
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
@@ -60,7 +62,7 @@ function NewCardContent() {
     (contextData?.appMode === 'personal_only' ? 'personal' : contextData?.context) ??
     'dfl'
 
-  // ✅ USANDO O HOOK useCardById
+  // HOOKS DE DADOS
   const { data: cardData, loading: cardLoading, notFound } = useCardById(editId)
 
   const { data: localAccounts } = useLocalData({
@@ -70,9 +72,9 @@ function NewCardContent() {
 
   const accounts = localAccounts || []
 
+  // STATES
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
-
   const [name, setName] = useState('')
   const [flag, setFlag] = useState('')
   const [institution, setInstitution] = useState('')
@@ -84,7 +86,13 @@ function NewCardContent() {
   const [limitAmount, setLimitAmount] = useState('0,00')
   const [showAccountModal, setShowAccountModal] = useState(false)
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO COM useCardById
+  // ✅ useMemo para selectedAccount (MOVIDO PARA O TOPO!)
+  const selectedAccount = useMemo(
+    () => accounts.find((a: any) => a.id === paymentAccountId),
+    [accounts, paymentAccountId]
+  )
+
+  // ✅ useEffect para hidratação
   useEffect(() => {
     if (editId && cardData && !initialized) {
       setName(cardData.name || '')
@@ -107,7 +115,9 @@ function NewCardContent() {
     }
   }, [editId, cardData, initialized])
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  // ✅ 2. SÓ DEPOIS DOS HOOKS, OS RETURNS CONDICIONAIS
+
+  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
   if (editId && notFound && !cardLoading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
@@ -128,7 +138,7 @@ function NewCardContent() {
     )
   }
 
-  // ✅ LOADING
+  // LOADING
   if (editId && cardLoading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
@@ -139,7 +149,7 @@ function NewCardContent() {
     )
   }
 
-  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  // SKELETON ENQUANTO NÃO INICIALIZADO
   if (!initialized) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
@@ -150,6 +160,7 @@ function NewCardContent() {
     )
   }
 
+  // ✅ 3. FUNÇÕES (NÃO SÃO HOOKS, PODEM FICAR AQUI)
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '')
     if (value === '') value = '0'
@@ -246,11 +257,7 @@ function NewCardContent() {
     }
   }
 
-  const selectedAccount = useMemo(
-    () => accounts.find((a: any) => a.id === paymentAccountId),
-    [accounts, paymentAccountId]
-  )
-
+  // ✅ 4. RENDERIZAÇÃO
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 text-gray-900 dark:text-white pb-32 transition-colors duration-300">
       <div
