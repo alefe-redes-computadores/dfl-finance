@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, Suspense } from "react"
+import { useState, useCallback, useRef, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
@@ -61,7 +61,7 @@ const safeNum = (val: any): number => {
 }
 
 const normalizeBankKey = (bank?: string | null) =>
-  (bank || '').trim().toLowerCase().replace(/s+/g, ' ')
+  (bank || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
 function BankBadge({ bank }: { bank?: string | null }) {
   const key = normalizeBankKey(bank)
@@ -123,7 +123,11 @@ function BankBadge({ bank }: { bank?: string | null }) {
 function AccountDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const accountId = searchParams.get('id')
+  
+  // ✅ useMemo para normalizar o ID
+  const rawId = searchParams.get('id')
+  const accountId = useMemo(() => rawId?.trim() || null, [rawId])
+  
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
