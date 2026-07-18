@@ -7,6 +7,7 @@ import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLef
 import { differenceInDays } from 'date-fns'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { useDebtsList } from '@/hooks/useDebtsList' // ✅ HOOK ESPECÍFICO
 import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
@@ -20,18 +21,11 @@ function DebtsContent() {
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
   const [refreshing, setRefreshing] = useState(false)
 
-  const {
-    data: localDebts,
-    loading: debtsLoading,
-  } = useLocalData({
-    table: 'debts' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+  const { data: localDebts, loading: debtsLoading } = useDebtsList(effectiveContext)
 
-  const {
-    data: localTransactions,
-    loading: transactionsLoading,
-  } = useLocalData({
+  // ✅ TRANSAÇÕES ainda vêm via useLocalData para calcular pagamentos
+  const { data: localTransactions, loading: transactionsLoading } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext, type: 'income' },
   })
