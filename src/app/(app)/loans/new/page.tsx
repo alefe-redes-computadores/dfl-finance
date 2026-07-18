@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Save, RefreshCw, HandCoins, Calendar, Landmark, DollarSign,
@@ -54,7 +54,11 @@ function FieldCard({ children, className = '' }: { children: React.ReactNode; cl
 function NewLoanContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get("edit")
+  
+  // ✅ useMemo para normalizar o ID
+  const rawEditId = searchParams.get("edit")
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
+  
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { user } = useAuth()
@@ -63,7 +67,6 @@ function NewLoanContent() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  // ✅ HOOKS (mantidos exatamente iguais)
   const { data: loanData, loading, notFound } = useLoanById(editId)
 
   const [initialized, setInitialized] = useState(!editId)
@@ -79,7 +82,6 @@ function NewLoanContent() {
   const [notes, setNotes] = useState("")
   const [status, setStatus] = useState("active")
 
-  // ✅ HIDRATAÇÃO (mantida exatamente igual)
   useEffect(() => {
     if (editId && loanData && !initialized) {
       setDescription(loanData.description || "")
@@ -99,26 +101,8 @@ function NewLoanContent() {
     }
   }, [editId, loanData, initialized])
 
-  // ✅ TRATAMENTO DE LOADING
-  if (editId && loading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-        <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
-  if (editId && notFound) {
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !loading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
         <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
@@ -138,7 +122,23 @@ function NewLoanContent() {
     )
   }
 
-  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-11 w-11 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
   if (!initialized) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
@@ -149,7 +149,6 @@ function NewLoanContent() {
     )
   }
 
-  // ✅ HANDLERS (mantidos exatamente iguais)
   const handleSave = async () => {
     if (!description.trim()) {
       errorHaptic()
@@ -207,7 +206,6 @@ function NewLoanContent() {
     }
   }
 
-  // ✅ DADOS DERIVADOS (mantidos exatamente iguais)
   const contextTitle = effectiveContext === "dfl" ? "Empresa" : "Pessoal"
   const isLent = direction === "lent"
   const accent = isLent ? {
@@ -229,12 +227,8 @@ function NewLoanContent() {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  // ✅ RENDERIZAÇÃO REFATORADA
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-      {/* ============================================================
-          BLOCO 1: HEADER STICKY
-          ============================================================ */}
       <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between gap-3">
           <button
@@ -258,12 +252,7 @@ function NewLoanContent() {
         </div>
       </div>
 
-      {/* ============================================================
-          BLOCO 2: CONTEÚDO PRINCIPAL
-          ============================================================ */}
       <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28 space-y-4 animate-in fade-in duration-300">
-
-        {/* Card de Resumo */}
         <FieldCard>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
             Resumo
@@ -283,7 +272,6 @@ function NewLoanContent() {
           </div>
         </FieldCard>
 
-        {/* Seção Principal */}
         <FieldCard>
           <SectionTitle 
             title="Informações principais" 
@@ -326,7 +314,6 @@ function NewLoanContent() {
           </div>
         </FieldCard>
 
-        {/* Seção Condições */}
         <FieldCard>
           <SectionTitle 
             title="Condições" 
@@ -376,7 +363,6 @@ function NewLoanContent() {
             </FormField>
           </div>
 
-          {/* Direção */}
           <div className="mt-4">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
               Direção
@@ -408,7 +394,6 @@ function NewLoanContent() {
           </div>
         </FieldCard>
 
-        {/* Seção Observações */}
         <FieldCard>
           <SectionTitle 
             title="Observações" 
@@ -426,9 +411,6 @@ function NewLoanContent() {
         </FieldCard>
       </div>
 
-      {/* ============================================================
-          BLOCO 3: CTA STICKY
-          ============================================================ */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-[#f6f7f8] dark:from-slate-950 via-[#f6f7f8]/90 dark:via-slate-950/90 to-transparent px-4 py-5">
         <button
           onClick={() => { vibrate([10, 50]); handleSave(); }}
@@ -444,5 +426,13 @@ function NewLoanContent() {
 }
 
 export default function NewLoanPage() {
-  return <NewLoanContent />
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] dark:bg-slate-950">
+        <Loader2 className="animate-spin text-teal-600" size={32} />
+      </div>
+    }>
+      <NewLoanContent />
+    </Suspense>
+  )
 }
