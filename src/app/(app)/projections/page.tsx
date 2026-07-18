@@ -11,7 +11,7 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useTransactionsList } from '@/hooks/useTransactionsList' // ✅ HOOK ESPECÍFICO
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -79,10 +79,8 @@ export default function ProjectionsPage() {
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m')
   const [scenario, setScenario] = useState<'optimistic' | 'realistic' | 'pessimistic'>('realistic')
 
-  const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context: effectiveContext },
-  })
+  // ✅ HOOK ESPECÍFICO
+  const { data: localTransactions, loading: txLoading } = useTransactionsList(effectiveContext)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -100,9 +98,7 @@ export default function ProjectionsPage() {
     if (pullDistance > 60) {
       setRefreshing(true)
       isPulling.current = false
-      loadData().finally(() => {
-        setTimeout(() => setRefreshing(false), 400)
-      })
+      setTimeout(() => setRefreshing(false), 400)
     }
   }
 
@@ -122,22 +118,6 @@ export default function ProjectionsPage() {
       container.removeEventListener('touchend', handleTouchEnd)
     }
   }, [loading, refreshing])
-
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-
-    try {
-      await reloadTransactions()
-    } catch (err) {
-      console.error('Erro ao carregar transações:', err)
-      hapticError()
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [user?.id, reloadTransactions, hapticError])
 
   // 🔥 CÁLCULO DE PROJEÇÃO COM BLINDAGEM
   const processedProjections = useMemo(() => {
@@ -235,10 +215,8 @@ export default function ProjectionsPage() {
   }, [processedProjections])
 
   useEffect(() => {
-    if (user?.id && context) {
-      loadData()
-    }
-  }, [user?.id, context, loadData])
+    setLoading(txLoading)
+  }, [txLoading])
 
   const handleScenarioChange = (newScenario: typeof scenario) => {
     if (newScenario === scenario) return
@@ -299,7 +277,11 @@ export default function ProjectionsPage() {
             Projeções
           </h1>
           <button
-            onClick={loadData}
+            onClick={() => {
+              vibrate([10])
+              setLoadingPulse(true)
+              setTimeout(() => setLoadingPulse(false), 500)
+            }}
             className="p-2 text-gray-400 hover:text-teal-600 transition-colors active:scale-[0.95]"
           >
             <RefreshCw size={20} className={loadingPulse || isChangingScenario ? 'animate-spin' : ''} />
