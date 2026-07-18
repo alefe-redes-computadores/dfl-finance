@@ -4,59 +4,41 @@ import { useEffect, useState } from 'react'
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export function useAuthDeepLink() {
   const router = useRouter()
-  // Novo estado para controlar a tela de carregamento
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
 
     const listener = App.addListener('appUrlOpen', async ({ url }) => {
-      // Ativa a tela de feedback visual
-      setIsProcessing(true) 
-      await Browser.close().catch(() => {})
+      // Verifica se a URL recebida é a nossa de callback
+      if (url.includes('callback')) {
+        setIsProcessing(true)
+        await Browser.close().catch(() => {})
 
-      try {
-        const hashPart = url.split('#')[1]
-        if (!hashPart) {
-          setIsProcessing(false)
-          return
-        }
+        try {
+          // Extrai a URL completa e junta a parte do ?code e do #
+          const urlObj = new URL(url)
+          const params = urlObj.search + urlObj.hash
 
-        const params = new URLSearchParams(hashPart)
-        const access_token = params.get('access_token')
-        const refresh_token = params.get('refresh_token')
-
-        if (access_token && refresh_token) {
-          const { error } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          })
-          
-          if (!error) {
-            // Um pequeno delay de 1.5s só para a animação ficar fluida 
-            // e dar tempo de ler a mensagem bonita antes de pular pra home
-            setTimeout(() => {
-              router.replace('/home')
-              setIsProcessing(false)
-            }, 1500)
+          if (params) {
+            // Força o Next.js a navegar para a página de callback com os dados
+            router.push(`/auth/callback${params}`)
           } else {
-            console.error(error.message)
             setIsProcessing(false)
           }
+        } catch (err) {
+          console.error(err)
+          setIsProcessing(false)
         }
-      } catch (err) {
-        console.error(err)
-        setIsProcessing(false)
       }
     })
 
     return () => {
-      listener.remove()
+      listener.remove().catch(() => {})
     }
   }, [router])
 
