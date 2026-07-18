@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { Suspense, useState, useEffect, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useContactById } from "@/hooks/useContactById" // ✅ NOVO HOOK
+import { useContactById } from "@/hooks/useContactById"
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from "@/hooks/useSafeDb"
@@ -59,10 +59,14 @@ function Section({
 const inputBase =
   "w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5 text-[15px] font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900"
 
-export default function NewContactPage() {
+function NewContactContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get("edit")
+  
+  // ✅ useMemo para normalizar o ID
+  const rawEditId = searchParams.get("edit")
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
+  
   const { showToast } = useToast()
   const { success, error: errorHaptic } = useHapticFeedback()
   const { user } = useAuth()
@@ -71,7 +75,6 @@ export default function NewContactPage() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === "personal_only" ? "personal" : context
 
-  // ✅ HOOK ESPECÍFICO POR ID
   const { data: contact, loading, notFound } = useContactById(editId)
 
   const [initialized, setInitialized] = useState(!editId)
@@ -92,7 +95,7 @@ export default function NewContactPage() {
   const [zipCode, setZipCode] = useState("")
   const [notes, setNotes] = useState("")
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO
   useEffect(() => {
     if (editId && contact && !initialized) {
       setName(contact.name || "")
@@ -115,26 +118,8 @@ export default function NewContactPage() {
     }
   }, [editId, contact, initialized])
 
-  // ✅ TRATAMENTO DE LOADING
-  if (editId && loading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-          <div className="flex items-center justify-between">
-            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
-            <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
-  if (editId && notFound) {
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !loading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 items-center justify-center px-4">
         <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
@@ -154,7 +139,23 @@ export default function NewContactPage() {
     )
   }
 
-  // ✅ SKELETON ENQUANTO NÃO INICIALIZADO
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+        <div className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+          <div className="flex items-center justify-between">
+            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
+            <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
   if (!initialized) {
     return (
       <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -530,5 +531,17 @@ export default function NewContactPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function NewContactPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <RefreshCw className="animate-spin text-teal-600" size={32} />
+      </div>
+    }>
+      <NewContactContent />
+    </Suspense>
   )
 }
