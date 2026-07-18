@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -43,10 +43,13 @@ const ASSET_LABEL: Record<AssetType, string> = {
 
 const today = () => new Date().toISOString().split("T")[0]
 
-export default function NewFinancingPage() {
+function NewFinancingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get("edit")
+  
+  // ✅ useMemo para normalizar o ID
+  const rawEditId = searchParams.get("edit")
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
@@ -86,6 +89,7 @@ export default function NewFinancingPage() {
     return totalAmountNum / installmentsCountNum
   }, [totalAmountNum, installmentsCountNum])
 
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO
   useEffect(() => {
     if (editId && financing && !initialized) {
       setDescription(financing.description || "")
@@ -112,6 +116,60 @@ export default function NewFinancingPage() {
       setInitialized(true)
     }
   }, [editId, financing, initialized])
+
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !loading) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-950">
+        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
+          <Percent size={32} className="text-red-500" />
+        </div>
+
+        <h2 className="mb-2 text-xl font-bold text-gray-800 dark:text-gray-200">
+          Financiamento não encontrado
+        </h2>
+
+        <p className="mb-6 max-w-xs text-center text-sm text-gray-500 dark:text-gray-400">
+          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+
+        <button
+          onClick={() => router.push("/financings")}
+          className="rounded-full bg-teal-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-teal-700 active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  if (editId && loading) {
+    return (
+      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pt-6 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-center justify-between">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
+            <div className="h-6 w-32 animate-pulse rounded bg-gray-200 dark:bg-slate-700" />
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  if (!initialized) {
+    return (
+      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -256,59 +314,6 @@ export default function NewFinancingPage() {
     "mb-1.5 block text-[11px] font-semibold text-gray-500 dark:text-gray-400"
   const inputClass =
     "w-full bg-transparent text-[15px] font-semibold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
-
-  if (editId && loading) {
-    return (
-      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pt-6 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
-          <div className="flex items-center justify-between">
-            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
-            <div className="h-6 w-32 animate-pulse rounded bg-gray-200 dark:bg-slate-700" />
-            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
-          </div>
-        </div>
-
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  if (editId && notFound) {
-    return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-950">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
-          <Percent size={32} className="text-red-500" />
-        </div>
-
-        <h2 className="mb-2 text-xl font-bold text-gray-800 dark:text-gray-200">
-          Financiamento não encontrado
-        </h2>
-
-        <p className="mb-6 max-w-xs text-center text-sm text-gray-500 dark:text-gray-400">
-          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
-        </p>
-
-        <button
-          onClick={() => router.push("/financings")}
-          className="rounded-full bg-teal-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-teal-700 active:scale-95"
-        >
-          Voltar para listagem
-        </button>
-      </div>
-    )
-  }
-
-  if (!initialized) {
-    return (
-      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div
@@ -653,5 +658,17 @@ export default function NewFinancingPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function NewFinancingPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-[100dvh] items-center justify-center bg-gray-50 dark:bg-slate-950">
+        <RefreshCw className="animate-spin text-teal-600" size={32} />
+      </div>
+    }>
+      <NewFinancingContent />
+    </Suspense>
   )
 }
