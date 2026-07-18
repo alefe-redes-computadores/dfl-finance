@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Forçamos a URL e a chave manualmente se a Vercel falhar na leitura
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://bwggczkzsqcdeayyysmx.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3Z2djemt6c3FjZGVheXl5c214Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNjg3NTUsImV4cCI6MjA5Njg0NDc1NX0.cNX62xYIZiDbmbPMWNwC03SlwxsVAGlA4_Ww1jvXzfI'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Força o padrão mais seguro que devolve ?code=
+    flowType: 'pkce',
+    // Garante que o Next.js e o Supabase leiam a URL de retorno automaticamente
+    detectSessionInUrl: true, 
+  }
+})
