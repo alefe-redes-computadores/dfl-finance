@@ -10,10 +10,14 @@ export function useDebtPayments(debtId?: string | null) {
   const data = useLiveQuery(async () => {
     if (!user?.id || !debtId) return []
 
-    const results = await db.transactions
-      .where('[user_id+debt_id]')
-      .equals([user.id, debtId])
+    // ✅ USA ÍNDICE SIMPLES 'user_id' + FILTRO EM MEMÓRIA
+    let results = await db.transactions
+      .where('user_id')
+      .equals(user.id)
       .toArray()
+
+    // ✅ FILTRA POR debt_id EM MEMÓRIA
+    results = results.filter((tx) => tx.debt_id === debtId)
 
     return results.sort((a: LocalTransaction, b: LocalTransaction) => {
       const aTime = a.date ? new Date(a.date).getTime() : 0
