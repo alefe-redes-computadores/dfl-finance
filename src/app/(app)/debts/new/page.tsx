@@ -31,7 +31,11 @@ function NewDebtContent() {
   const rawEditId = searchParams?.get('edit')
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
+  // ✅ USA O HOOK CORRETAMENTE
+  const { debt: localDebt, loading: debtLoading, notFound: debtNotFound } = useDebtById(editId)
+
   const [saving, setSaving] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   // ESTADOS DO FORMULÁRIO
   const [personName, setPersonName] = useState('')
@@ -59,13 +63,11 @@ function NewDebtContent() {
     filters: { context },
   })
 
-  // Usa o hook por ID para edição
-  const { debt: localDebt, loading: debtLoading, notFound: debtNotFound } = useDebtById(editId)
-
-  // Efeito de "Hidratação" do Formulário
+  // ✅ HIDRATAÇÃO DO FORMULÁRIO (com initialized para evitar loop)
   useEffect(() => {
     if (!editId) {
       setDebtContext(context as 'dfl' | 'personal')
+      setInitialized(true)
       return
     }
 
@@ -77,7 +79,7 @@ function NewDebtContent() {
       return
     }
 
-    if (localDebt) {
+    if (localDebt && !initialized) {
       setPersonName(localDebt.person_name || '')
       const parsedAmount = Number(localDebt.total_amount)
       setAmountNum(isNaN(parsedAmount) ? 0 : parsedAmount)
@@ -88,8 +90,9 @@ function NewDebtContent() {
       setColor(localDebt.color || '#14b8a6')
       setIcon(localDebt.icon ? localDebt.icon.charAt(0).toUpperCase() + localDebt.icon.slice(1) : 'User')
       setDebtContext((localDebt.context as 'dfl' | 'personal') || 'dfl')
+      setInitialized(true)
     }
-  }, [editId, debtLoading, debtNotFound, localDebt, context, router, showToast])
+  }, [editId, debtLoading, debtNotFound, localDebt, context, router, showToast, initialized])
 
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0 || isNaN(amountNum)) {
@@ -159,8 +162,38 @@ function NewDebtContent() {
     }
   }
 
-  // Render condicional para proteger a tela durante o carregamento de edição
+  // ✅ RENDER CONDICIONAL - SÓ REDIRECIONA SE NÃO ENCONTRADO E JÁ CARREGOU
   if (editId && debtLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <Loader2 className="animate-spin text-teal-600" size={40} />
+      </div>
+    )
+  }
+
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ MAIS CARREGANDO
+  if (editId && debtNotFound && !debtLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-900 p-6">
+        <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+          <AlertTriangle size={32} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Registro não encontrado</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+          O empréstimo que você está tentando editar pode ter sido excluído ou você não tem permissão.
+        </p>
+        <button
+          onClick={() => router.push('/debts')}
+          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  // ✅ SÓ RENDERIZA SE INICIALIZOU (ou não é edição)
+  if (editId && !initialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
         <Loader2 className="animate-spin text-teal-600" size={40} />
