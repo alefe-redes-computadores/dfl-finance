@@ -254,7 +254,6 @@ function DebtDetailContent() {
 
   const { debt, loading, notFound } = useDebtById(debtId)
 
-  // 🔥 TROCANDO useLocalData por useDebtPayments
   const { data: localTransactions, loading: transactionsLoading } = useDebtPayments(debtId)
 
   const {
@@ -312,7 +311,6 @@ function DebtDetailContent() {
   const isPulling = useRef(false)
   const hasScheduledRedirect = useRef(false)
 
-  // 🔥 SIMPLIFICADO: removido reloadTransactions
   const loadData = useCallback(async () => {
     if (!debtId) return
     setLoadingPulse(true)
@@ -322,46 +320,6 @@ function DebtDetailContent() {
       setLoadingPulse(false)
     }
   }, [debtId, reloadAccounts])
-
-  useEffect(() => {
-    console.log('[DebtDetailsPage] Query param recebido', {
-      rawDebtId,
-      normalizedDebtId: debtId,
-      search: searchParams?.toString?.() ?? '',
-      sessionUserId: user?.id ?? null,
-    })
-  }, [rawDebtId, debtId, searchParams, user?.id])
-
-  useEffect(() => {
-    console.log('[DebtDetailsPage] Estado atual', {
-      debtId,
-      loading,
-      notFound,
-      hasDebt: !!debt,
-      debtUserId: debt?.user_id ?? null,
-      sessionUserId: user?.id ?? null,
-    })
-  }, [debtId, loading, notFound, debt, user?.id])
-
-  useEffect(() => {
-    async function debugDexie() {
-      if (!debtId) return
-      try {
-        const exact = await db.debts.get(debtId)
-        console.log('[DebtDetailsPage][DEBUG] Consulta exata db.debts.get(id)', {
-          searchedId: debtId,
-          foundId: exact?.id ?? null,
-          foundUserId: exact?.user_id ?? null,
-          sessionUserId: user?.id ?? null,
-          exact,
-        })
-      } catch (err) {
-        console.error('[DebtDetailsPage][DEBUG] Erro ao consultar Dexie', err)
-      }
-    }
-
-    debugDexie()
-  }, [debtId, user?.id])
 
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
@@ -407,10 +365,6 @@ function DebtDetailContent() {
     if (hasScheduledRedirect.current) return
 
     hasScheduledRedirect.current = true
-
-    console.warn('[DebtDetailsPage] Registro não encontrado após fim do loading', {
-      debtId,
-    })
 
     const timer = setTimeout(() => {
       router.replace('/debts')
@@ -524,7 +478,7 @@ function DebtDetailContent() {
       success()
       setShowDeleteDebtConfirm(false)
       showToast('🗑️ Registro excluído com sucesso.', 'success')
-      router.push('/debts')
+      router.replace('/debts')
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro: ${err.message}`, 'error')
