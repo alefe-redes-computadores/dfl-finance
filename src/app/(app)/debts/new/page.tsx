@@ -31,13 +31,11 @@ function NewDebtContent() {
   const rawEditId = searchParams?.get('edit')
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
-  // ✅ USA O HOOK CORRETAMENTE
   const { debt: localDebt, loading: debtLoading, notFound: debtNotFound } = useDebtById(editId)
 
   const [saving, setSaving] = useState(false)
   const [initialized, setInitialized] = useState(false)
 
-  // ESTADOS DO FORMULÁRIO
   const [personName, setPersonName] = useState('')
   const [amountNum, setAmountNum] = useState<number>(0)
   const [dueDate, setDueDate] = useState('')
@@ -52,7 +50,6 @@ function NewDebtContent() {
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
-  // HOOKS REATIVOS
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
@@ -63,7 +60,6 @@ function NewDebtContent() {
     filters: { context },
   })
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO (com initialized para evitar loop)
   useEffect(() => {
     if (!editId) {
       setDebtContext(context as 'dfl' | 'personal')
@@ -153,7 +149,7 @@ function NewDebtContent() {
         showToast('✅ Empréstimo registrado!', 'success')
       }
 
-      router.push('/debts')
+      router.replace('/debts')
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro: ${err?.message || 'Erro desconhecido ao salvar'}`, 'error')
@@ -162,7 +158,6 @@ function NewDebtContent() {
     }
   }
 
-  // ✅ RENDER CONDICIONAL - SÓ REDIRECIONA SE NÃO ENCONTRADO E JÁ CARREGOU
   if (editId && debtLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
@@ -171,7 +166,6 @@ function NewDebtContent() {
     )
   }
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ MAIS CARREGANDO
   if (editId && debtNotFound && !debtLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-900 p-6">
@@ -192,7 +186,6 @@ function NewDebtContent() {
     )
   }
 
-  // ✅ SÓ RENDERIZA SE INICIALIZOU (ou não é edição)
   if (editId && !initialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
@@ -208,7 +201,6 @@ function NewDebtContent() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-32 pt-4">
-        {/* Cabeçalho */}
         <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-gray-100/80 bg-gray-50/90 px-4 py-3 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-900/90">
           <div className="flex items-center justify-between">
             <button
