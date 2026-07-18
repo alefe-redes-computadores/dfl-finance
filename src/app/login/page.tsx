@@ -7,9 +7,11 @@ import { supabase } from '@/lib/supabase'
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
+import { useAuthDeepLink } from '@/hooks/useAuthDeepLink'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { isProcessing } = useAuthDeepLink() // Ativando o ouvido do aplicativo aqui!
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -23,11 +25,10 @@ export default function LoginPage() {
       const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
       
       if (signInErr) {
-        // Se falhar o login, tenta criar a conta
         const { error: signUpErr } = await supabase.auth.signUp({ email, password })
         if (signUpErr) {
           setError('E-mail ou senha inválidos.')
-          setLoading(false) // Destrava o loading em caso de erro
+          setLoading(false) 
         } else {
           router.replace('/home')
         }
@@ -45,10 +46,8 @@ export default function LoginPage() {
     setError('')
     
     try {
-      // Verifica se está rodando no aplicativo nativo ou no navegador da web
       const isNative = Capacitor.isNativePlatform()
       
-      // O pulo do gato Híbrido: Se for nativo usa dfl://, se for web usa a URL do site
       const redirectUrl = isNative 
         ? 'dfl://callback' 
         : `${window.location.origin}`
@@ -57,7 +56,7 @@ export default function LoginPage() {
         provider: 'google',
         options: { 
           redirectTo: redirectUrl,
-          skipBrowserRedirect: isNative, // Só pula o redirecionamento se for o App
+          skipBrowserRedirect: isNative, 
         }
       })
 
@@ -65,8 +64,6 @@ export default function LoginPage() {
         throw error
       }
 
-      // Se estiver no celular, abre o Custom Tab. 
-      // Na web, o próprio Supabase já vai redirecionar a página automaticamente.
       if (isNative && data?.url) {
         await Browser.open({ url: data.url, presentationStyle: 'popover' })
         setLoading(false)
@@ -74,20 +71,18 @@ export default function LoginPage() {
       
     } catch (err) {
       setError('Erro ao entrar com Google.')
-      setLoading(false) // Destrava o loading se o Google falhar
+      setLoading(false) 
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
       
-      {/* Luzes de Fundo (Efeito moderno) */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-teal-500/20 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="w-full max-w-sm relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center mb-8">
-          {/* Logotipo DFL em SVG */}
           <div className="flex justify-center mb-4">
             <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 drop-shadow-xl">
               <rect width="40" height="40" rx="12" className="fill-teal-600 dark:fill-teal-500" />
@@ -105,7 +100,6 @@ export default function LoginPage() {
           <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mt-1 uppercase tracking-widest">Gestão Inteligente</p>
         </div>
 
-        {/* Card Principal - Padrão Soft UI */}
         <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white/40 dark:border-slate-700/50">
           <div className="space-y-4">
             
@@ -144,7 +138,7 @@ export default function LoginPage() {
 
             <button
               onClick={handleEmail}
-              disabled={loading || !email || !password}
+              disabled={loading || !email || !password || isProcessing}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-[24px] py-4 font-bold text-[16px] flex items-center justify-center gap-2 shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:shadow-none disabled:active:scale-100 mt-2"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : (
@@ -163,10 +157,10 @@ export default function LoginPage() {
 
             <button
               onClick={handleGoogle}
-              disabled={loading}
+              disabled={loading || isProcessing}
               className="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-800 dark:text-white rounded-[24px] py-4 font-bold text-[15px] flex items-center justify-center gap-3 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             >
-              {loading ? (
+              {loading || isProcessing ? (
                 <Loader2 className="animate-spin text-gray-400" size={20} />
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24">
@@ -176,7 +170,7 @@ export default function LoginPage() {
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                 </svg>
               )}
-              {loading ? 'Conectando...' : 'Google'}
+              {loading || isProcessing ? 'Conectando...' : 'Google'}
             </button>
           </div>
         </div>
