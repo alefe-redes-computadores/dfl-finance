@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
-import { useAuthDeepLink } from '@/hooks/useAuthDeepLink'
+import { useAuthDeepLink } from '@/lib/hooks/useAuthDeepLink'
 
 export default function LoginPage() {
   const router = useRouter()
