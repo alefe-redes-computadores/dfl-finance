@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
-  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown
+  Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown,
+  Trash2, X  // ✅ ADICIONEI Trash2 e X
 } from 'lucide-react'
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -14,6 +15,9 @@ import { useBudgetTransactions } from '@/hooks/useBudgetTransactions'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useToast } from '@/contexts/ToastContext'
+import { useSafeDb } from '@/hooks/useSafeDb'
+import { db } from '@/lib/db'
 import Skeleton from '@/components/Skeleton'
 
 // ============================================================
@@ -104,7 +108,67 @@ const BudgetDetailSkeleton = () => (
 )
 
 // ============================================================
-// COMPONENTE PRINCIPAL - CORRIGIDO (PADRÃO QUE FUNCIONA)
+// MODAL DE CONFIRMAÇÃO
+// ============================================================
+
+function ConfirmDeleteModal({
+  open,
+  onClose,
+  onConfirm,
+  loading,
+}: {
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void
+  loading: boolean
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-t-[32px] bg-white dark:bg-slate-900 p-6 animate-in slide-in-from-bottom-8 duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-300 dark:bg-slate-700" />
+
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[20px] font-bold text-gray-900 dark:text-gray-100">Excluir orçamento</h3>
+          <button
+            onClick={onClose}
+            className="rounded-full bg-gray-100 p-2 text-gray-400 active:scale-95 dark:bg-slate-800"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <p className="text-[14px] font-medium leading-relaxed text-gray-500 dark:text-gray-400 mb-6">
+          Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-[20px] border border-gray-200 bg-white py-3 text-[14px] font-bold text-gray-700 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200"
+          >
+            Cancelar
+          </button>
+
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="rounded-[20px] bg-red-500 py-3 text-[14px] font-bold text-white shadow-lg shadow-red-500/25 active:scale-[0.98] disabled:opacity-60"
+          >
+            {loading ? 'Excluindo...' : 'Excluir'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// COMPONENTE PRINCIPAL
 // ============================================================
 
 function BudgetDetailContent() {
@@ -113,21 +177,25 @@ function BudgetDetailContent() {
   const { user } = useAuth()
   const { context } = useContext_()
   const { vibrate } = useHapticFeedback()
+  const { showToast } = useToast()
+  const { safeDelete } = useSafeDb()
 
-  // ✅ 1. NORMALIZA O ID (igual ao padrão que funciona)
+  // ✅ NORMALIZA O ID
   const rawBudgetId = searchParams?.get('id')
   const budgetId = useMemo(() => rawBudgetId?.trim() || null, [rawBudgetId])
 
-  // ✅ 2. TODOS OS HOOKS NO TOPO
+  // ✅ HOOKS NO TOPO
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(budgetId)
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(budgetId)
 
-  // ✅ 3. STATES
+  // ✅ STATES
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const hasScheduledRedirect = useRef(false)
 
-  // ✅ 4. REDIRECIONAMENTO CONTROLADO (IGUAL AO PADRÃO QUE FUNCIONA)
+  // ✅ REDIRECIONAMENTO CONTROLADO
   useEffect(() => {
     if (!budgetId) return
     if (budgetLoading) return
@@ -136,8 +204,6 @@ function BudgetDetailContent() {
 
     hasScheduledRedirect.current = true
 
-    console.warn('[BudgetDetail] Orçamento não encontrado', { budgetId })
-
     const timer = setTimeout(() => {
       router.replace('/budgets')
     }, 1500)
@@ -145,7 +211,26 @@ function BudgetDetailContent() {
     return () => clearTimeout(timer)
   }, [budgetId, budgetLoading, notFound, router])
 
-  // ✅ 5. useMemo PARA DADOS DERIVADOS (não useState espelho)
+  // ✅ FUNÇÃO DE EXCLUIR
+  const handleDelete = async () => {
+    if (!user?.id || !budgetId) return
+    setDeleting(true)
+
+    try {
+      const result = await safeDelete('budgets', budgetId)
+      if (!result.success) throw new Error(result.error || 'Erro ao excluir')
+
+      showToast('✅ Orçamento excluído com sucesso!', 'success')
+      router.replace('/budgets')
+    } catch (err: any) {
+      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
+      setShowDeleteModal(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // ✅ useMemo PARA DADOS DERIVADOS
   const { spent, transactions, remaining, percent, isOverBudget, isWarning, daysLeft, projection } = useMemo(() => {
     if (!budgetData || !budgetTransactions) {
       return {
@@ -181,7 +266,6 @@ function BudgetDetailContent() {
     const isOver = remainingVal < 0
     const isWarn = percentVal >= 75 && percentVal < 100
 
-    // Projeção
     let daysLeftVal: number | null = null
     let projectionVal = '✅ Nenhum gasto registrado ainda.'
 
@@ -214,15 +298,12 @@ function BudgetDetailContent() {
     }
   }, [budgetData, budgetTransactions, currentDate])
 
-  // ✅ 6. RETURNS CONDICIONAIS (depois de todos os hooks)
-
-  // Se não tem ID, redireciona imediatamente
+  // ✅ RETURNS CONDICIONAIS
   if (!budgetId) {
     router.replace('/budgets')
     return null
   }
 
-  // Loading
   if (budgetLoading) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 pb-24 font-sans transition-colors duration-300">
@@ -236,7 +317,6 @@ function BudgetDetailContent() {
     )
   }
 
-  // Não encontrado (já vai redirecionar pelo useEffect, mas fallback)
   if (notFound || !budgetData) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
@@ -257,7 +337,7 @@ function BudgetDetailContent() {
     )
   }
 
-  // ✅ 7. RENDERIZAÇÃO
+  // ✅ RENDERIZAÇÃO
   const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
   const IconComp = getDynamicIcon(budgetData?.icon || 'tag')
   const formatCurrency = (val: number) =>
@@ -305,15 +385,26 @@ function BudgetDetailContent() {
             </h1>
           </div>
 
-          <button
-            onClick={() => {
-              vibrate([5])
-              router.push(`/budgets/new?edit=${budgetData.id}`)
-            }}
-            className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
-          >
-            <Edit2 size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* ✅ BOTÃO EXCLUIR */}
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-red-500 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            >
+              <Trash2 size={18} />
+            </button>
+
+            {/* ✅ BOTÃO EDITAR */}
+            <button
+              onClick={() => {
+                vibrate([5])
+                router.push(`/budgets/new?edit=${budgetData.id}`)
+              }}
+              className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            >
+              <Edit2 size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-center">
@@ -507,6 +598,14 @@ function BudgetDetailContent() {
           </div>
         )}
       </section>
+
+      {/* ✅ MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      <ConfirmDeleteModal
+        open={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   )
 }
