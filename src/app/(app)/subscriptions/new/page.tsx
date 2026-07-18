@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Save, RefreshCw, Loader2 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
@@ -25,7 +25,10 @@ const BILLING_CYCLES = [
 function NewSubscriptionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get("edit")
+  // ✅ useMemo para normalizar o ID
+  const rawEditId = searchParams.get("edit")
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
+  
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { context, appMode } = useContext_()
@@ -65,17 +68,8 @@ function NewSubscriptionContent() {
     }
   }, [editId, subscription, initialized])
 
-  if (editId && loading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
-        <div className="flex-1 px-4 pt-6">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  if (editId && notFound) {
+  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !loading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
         <p className="text-gray-600 dark:text-gray-400 text-center">
@@ -87,6 +81,16 @@ function NewSubscriptionContent() {
         >
           Voltar para listagem
         </button>
+      </div>
+    )
+  }
+
+  if (editId && loading) {
+    return (
+      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex-1 px-4 pt-6">
+          <Skeleton count={6} />
+        </div>
       </div>
     )
   }
