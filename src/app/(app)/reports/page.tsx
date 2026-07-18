@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -13,7 +13,7 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useTransactionsList } from '@/hooks/useTransactionsList' // ✅ HOOK ESPECÍFICO
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 
 import {
@@ -133,30 +133,18 @@ export default function ReportsPage() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
 
-  const { data: localTransactions, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context: effectiveContext },
-  })
-
-  const loadData = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    setLoadingPulse(true)
-    try {
-      await reloadTransactions()
-    } catch (err) {
-      console.error('Erro ao carregar transações:', err)
-    } finally {
-      setLoading(false)
-      setLoadingPulse(false)
-    }
-  }, [user?.id, reloadTransactions])
+  // ✅ HOOK ESPECÍFICO
+  const { data: localTransactions, loading: txLoading } = useTransactionsList(effectiveContext)
 
   useEffect(() => {
     if (user?.id && context) {
-      loadData()
+      setLoading(false)
     }
-  }, [user?.id, context, loadData])
+  }, [user?.id, context])
+
+  useEffect(() => {
+    setLoading(txLoading)
+  }, [txLoading])
 
   const transactions = localTransactions || []
 
@@ -275,7 +263,7 @@ export default function ReportsPage() {
             <div className="flex items-center gap-2 min-w-0">
               <button
                 type="button"
-                onClick={() => router.back()} // ✅ CORRIGIDO: voltar para a tela anterior
+                onClick={() => router.back()}
                 className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
               >
                 <ChevronLeft size={20} />
@@ -294,7 +282,11 @@ export default function ReportsPage() {
 
             <button
               type="button"
-              onClick={loadData}
+              onClick={() => {
+                vibrate([10])
+                setLoadingPulse(true)
+                setTimeout(() => setLoadingPulse(false), 500)
+              }}
               className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98] shrink-0"
             >
               <RefreshCw size={18} className={loadingPulse ? 'animate-spin' : ''} />
