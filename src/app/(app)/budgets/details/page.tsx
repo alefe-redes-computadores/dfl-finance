@@ -1,5 +1,6 @@
 'use client'
 
+//FORÇAR DEPLOY
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
