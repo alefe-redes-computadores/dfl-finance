@@ -11,7 +11,7 @@ import { format } from 'date-fns'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import BankLogo from '@/components/BankLogo'
@@ -51,7 +51,7 @@ type Props = {
 
 export default function FAB({ onSave }: Props) {
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { safeAdd, safeUpdate } = useSafeDb()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
@@ -80,11 +80,8 @@ export default function FAB({ onSave }: Props) {
     setMounted(true)
   }, [])
 
-  const { data: allAccountsRaw } = useLocalData({ table: 'accounts' as any })
-
-  const allAccounts = useMemo(() => {
-    return Array.isArray(allAccountsRaw) ? allAccountsRaw : []
-  }, [allAccountsRaw])
+  // ✅ HOOK ESPECÍFICO
+  const { data: allAccounts, loading: accountsLoading } = useAccountsList(effectiveContext)
 
   useEffect(() => {
     if (!showModal) return
@@ -92,7 +89,7 @@ export default function FAB({ onSave }: Props) {
   }, [showModal, context])
 
   const accounts = useMemo(() => {
-    return allAccounts
+    return (allAccounts || [])
       .filter((a: any) => (a?.context ?? 'dfl') === quickContext)
       .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? '')))
   }, [allAccounts, quickContext])
