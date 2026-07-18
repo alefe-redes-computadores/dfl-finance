@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Upload, RefreshCw, Loader2 } from 'lucide-react'
 import { useConciQueue } from '@/hooks/useConciQueue'
@@ -9,7 +9,7 @@ import { ConciProgress } from '@/components/conciliation/ConciProgress'
 import { ConciSummary } from '@/components/conciliation/ConciSummary'
 import { useToast } from '@/contexts/ToastContext'
 import { useSafeDb } from '@/hooks/useSafeDb'
-import { useLocalData } from '@/hooks/useLocalData'
+import { useTransactionsList } from '@/hooks/useTransactionsList' // ✅ HOOK ESPECÍFICO
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 
@@ -24,10 +24,11 @@ export default function ConciliationPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
 
-  const { data: pendingTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { context: effectiveContext, status: 'pending' },
-  })
+  // ✅ HOOK ESPECÍFICO
+  const { data: allTransactions, loading: txLoading } = useTransactionsList(effectiveContext)
+
+  // ✅ FILTRA PENDENTES EM MEMÓRIA
+  const pendingTransactions = (allTransactions || []).filter((tx: any) => tx.status === 'pending')
 
   const {
     queue,
@@ -48,8 +49,6 @@ export default function ConciliationPage() {
       setIsLoading(true)
 
       try {
-        await reloadTransactions()
-        
         if (pendingTransactions && pendingTransactions.length > 0) {
           reset(pendingTransactions)
         } else {
@@ -65,7 +64,7 @@ export default function ConciliationPage() {
     }
 
     initQueue()
-  }, [effectiveContext])
+  }, [effectiveContext, pendingTransactions])
 
   const handleApprove = (id: string) => {
     setIsProcessing(true)
