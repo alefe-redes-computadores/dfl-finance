@@ -1,96 +1,119 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { X, Check, Loader2, Wallet, Calendar, User, FileText, Tag, ChevronLeft } from 'lucide-react'
+import { X, Check, Loader2, Wallet, Calendar, Tag, ChevronLeft, Building } from 'lucide-react'
 import { useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import MoneyInput from '@/components/MoneyInput'
+import { useLocalData } from '@/hooks/useLocalData'
+import { useSafeDb } from '@/hooks/useSafeDb'
+import { db } from '@/lib/db'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
-interface ModalEmprestimoProps {
+interface ModalFinancingProps {
   isOpen: boolean
   onClose: () => void
   onSave: (id: string) => void
 }
 
-export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmprestimoProps) {
+export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinancingProps) {
   const { user } = useAuth()
   const { context } = useContext_()
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
+  const { safeAdd } = useSafeDb()
 
   const [saving, setSaving] = useState(false)
-  const [categories, setCategories] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
 
-  const [personName, setPersonName] = useState('')
-  const [amountNum, setAmountNum] = useState(0)
-  const [amountFormatted, setAmountFormatted] = useState('0,00')
-  const [dueDate, setDueDate] = useState('')
-  const [description, setDescription] = useState('')
-  const [categoryId, setCategoryId] = useState('')
+  // ✅ DADOS LOCAIS (Dexie)
+  const { data: categories } = useLocalData({
+    table: 'categories' as any,
+    filters: { context, type: 'expense' },
+  })
+
+  const { data: accounts } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context },
+  })
+
+  const [name, setName] = useState('')
+  const [institution, setInstitution] = useState('')
+  const [installmentValueNum, setInstallmentValueNum] = useState(0)
+  const [installmentValueFormatted, setInstallmentValueFormatted] = useState('0,00')
+  const [totalInstallments, setTotalInstallments] = useState('1')
+  const [nextDueDate, setNextDueDate] = useState('')
+  const [outstandingBalanceNum, setOutstandingBalanceNum] = useState(0)
+  const [outstandingBalanceFormatted, setOutstandingBalanceFormatted] = useState('0,00')
   const [accountId, setAccountId] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('User')
-  const [debtContext, setDebtContext] = useState<'dfl' | 'personal'>('dfl')
+  const [icon, setIcon] = useState('Home')
+  const [finContext, setFinContext] = useState<'dfl' | 'personal'>('dfl')
 
   const [showCatModal, setShowCatModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
+  // Reset form quando o modal abre
   useEffect(() => {
-    if (!isOpen || !user?.id) return
-    const loadData = async () => {
-      const [{ data: cats }, { data: accs }] = await Promise.all([
-        supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, context }).eq('type', 'expense'),
-        supabase.from('accounts').select('id, name, color').match({ user_id: user.id, context })
-      ])
-      setCategories(Array.isArray(cats) ? cats : [])
-      setAccounts(Array.isArray(accs) ? accs : [])
-      setDebtContext(context === 'dfl' ? 'dfl' : 'personal')
+    if (isOpen) {
+      setFinContext(context === 'dfl' ? 'dfl' : 'personal')
     }
-    loadData()
-  }, [isOpen, user, context])
+  }, [isOpen, context])
 
   const handleSave = async () => {
-    if (!user?.id || !personName.trim() || amountNum <= 0) {
-      showToast('⚠️ Preencha nome e valor.', 'warning')
+    if (!user?.id || !name.trim() || installmentValueNum <= 0) {
+      showToast('⚠️ Preencha nome e valor da parcela.', 'warning')
       hapticError()
       return
     }
+
     setSaving(true)
 
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+
     const payload = {
+      id,
       user_id: user.id,
-      context: debtContext,
-      person_name: personName.trim(),
-      total_amount: amountNum,
-      due_date: dueDate || null,
-      description: description || null,
-      category_id: categoryId || null,
+      context: finContext,
+      name: name.trim(),
+      institution: institution || null,
+      installment_value: installmentValueNum,
+      total_installments: parseInt(totalInstallments),
+      current_installment: 1,
+      next_due_date: nextDueDate || null,
+      outstanding_balance: outstandingBalanceNum,
       account_id: accountId || null,
+      category_id: categoryId || null,
       color,
-      icon,
-      status: 'pending'
+      icon: icon.toLowerCase(),
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_attempts: 0,
     }
 
     try {
-      const { data, error } = await supabase.from('debts').insert(payload).select('id').single()
-      if (error) throw error
+      await db.transaction('rw', db.financings, db.syncQueue, async () => {
+        const result = await safeAdd('financings', payload)
+        if (!result.success) throw new Error(result.error)
+      })
+
       success()
-      showToast('✅ Empréstimo registrado!', 'success')
-      onSave(data.id)
+      showToast('✅ Financiamento criado!', 'success')
+      onSave(id)
       onClose()
     } catch (err: any) {
       hapticError()
-      showToast('❌ Erro ao salvar empréstimo.', 'error')
+      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -98,8 +121,8 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
 
   if (!isOpen) return null
 
-  const selectedCat = categories.find(c => c.id === categoryId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
+  const selectedCat = categories?.find((c: any) => c.id === categoryId)
+  const selectedAcc = accounts?.find((a: any) => a.id === accountId)
   const IconComp = getDynamicIcon(icon)
 
   return (
@@ -112,9 +135,15 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
         <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
 
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-semibold text-[22px] text-gray-800 dark:text-gray-100 tracking-tight">
-            Novo Empréstimo
-          </h3>
+          <div>
+            <h3 className="font-semibold text-[22px] text-gray-900 dark:text-gray-100 tracking-tight">
+              Novo Financiamento
+            </h3>
+            <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+              Preencha os dados principais do contrato
+            </p>
+          </div>
+
           <button
             onClick={() => { vibrate([10]); onClose(); }}
             className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-500 dark:text-gray-300 flex items-center justify-center active:scale-[0.98] transition-colors"
@@ -123,21 +152,21 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
           </button>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
+        <div className="space-y-4">
           {/* Contexto */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
               Contexto
             </label>
-            <div className="flex rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-1">
+            <div className="flex rounded-[20px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 p-1">
               {(['dfl', 'personal'] as const).map(c => (
                 <button
                   key={c}
-                  onClick={() => { vibrate([5]); setDebtContext(c); }}
-                  className={`flex-1 h-10 rounded-[14px] text-[13px] font-bold transition-all active:scale-[0.98] ${
-                    debtContext === c
+                  onClick={() => { vibrate([5]); setFinContext(c); }}
+                  className={`flex-1 h-10 rounded-[16px] text-[13px] font-bold transition-all active:scale-[0.98] ${
+                    finContext === c
                       ? 'bg-teal-700 text-white shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-slate-800'
                   }`}
                 >
                   {c === 'dfl' ? 'Empresa' : 'Pessoal'}
@@ -147,108 +176,118 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
           </div>
 
           {/* Nome */}
-          <div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
             <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Nome da pessoa
+              Nome do financiamento
+            </label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex: Financiamento Imóvel"
+              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500/20 outline-none"
+              autoFocus
+            />
+          </div>
+
+          {/* Instituição */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+              Instituição financeira
             </label>
             <div className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <User size={18} className="text-gray-400 dark:text-gray-500 shrink-0" />
+              <Building size={17} className="text-gray-400 dark:text-gray-500 shrink-0" />
               <input
                 type="text"
-                value={personName}
-                onChange={e => setPersonName(e.target.value)}
-                placeholder="Ex: João Silva"
+                value={institution}
+                onChange={e => setInstitution(e.target.value)}
+                placeholder="Ex: Itaú, Caixa"
                 className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                autoFocus
               />
             </div>
           </div>
 
-          {/* Valor */}
-          <div>
+          {/* Valor da parcela */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
             <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Valor emprestado
+              Valor da parcela
             </label>
             <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
               <span className="text-[18px] text-gray-400 dark:text-gray-500 font-semibold">R$</span>
               <MoneyInput
-                value={amountNum}
+                value={installmentValueNum}
                 onChange={(num, formatted) => {
-                  setAmountNum(num)
-                  setAmountFormatted(formatted)
+                  setInstallmentValueNum(num)
+                  setInstallmentValueFormatted(formatted)
                 }}
-                className="text-[26px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="text-[24px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 placeholder="0,00"
               />
             </div>
           </div>
 
-          {/* Vencimento */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Vencimento (opcional)
-            </label>
-            <div className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <Calendar size={18} className="text-gray-400 dark:text-gray-500 shrink-0" />
+          {/* Parcelas e vencimento */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                Qtd. parcelas
+              </label>
               <input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-200 outline-none w-full"
+                type="number"
+                value={totalInstallments}
+                onChange={e => setTotalInstallments(e.target.value)}
+                min={1}
+                max={360}
+                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/20"
               />
             </div>
-          </div>
 
-          {/* Descrição */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Descrição (opcional)
-            </label>
-            <div className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <FileText size={18} className="text-gray-400 dark:text-gray-500 shrink-0" />
-              <input
-                type="text"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Ex: Empréstimo rápido"
-                className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-            </div>
-          </div>
-
-          {/* Categoria */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Categoria
-            </label>
-            <button
-              onClick={() => { vibrate([10]); setShowCatModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100/80 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <Tag size={18} className="text-gray-400 dark:text-gray-500" />
-                </div>
-                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
-                  {selectedCat ? selectedCat.name : 'Geral'}
-                </span>
+            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+                1º vencimento
+              </label>
+              <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
+                <Calendar size={16} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                <input
+                  type="date"
+                  value={nextDueDate}
+                  onChange={e => setNextDueDate(e.target.value)}
+                  className="bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-200 outline-none w-full"
+                />
               </div>
-              <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180 shrink-0" />
-            </button>
+            </div>
+          </div>
+
+          {/* Saldo devedor */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+              Saldo devedor total
+            </label>
+            <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
+              <span className="text-[18px] text-gray-400 dark:text-gray-500 font-semibold">R$</span>
+              <MoneyInput
+                value={outstandingBalanceNum}
+                onChange={(num, formatted) => {
+                  setOutstandingBalanceNum(num)
+                  setOutstandingBalanceFormatted(formatted)
+                }}
+                className="text-[24px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                placeholder="0,00"
+              />
+            </div>
           </div>
 
           {/* Conta */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Conta para depósito
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
+              Conta para débito
             </label>
             <button
               onClick={() => { vibrate([10]); setShowAccModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100/80 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <Wallet size={18} className="text-gray-400 dark:text-gray-500" />
+                  <Wallet size={17} className="text-gray-400 dark:text-gray-500" />
                 </div>
                 <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
                   {selectedAcc ? selectedAcc.name : 'Nenhuma conta'}
@@ -258,20 +297,41 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
             </button>
           </div>
 
+          {/* Categoria */}
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
+              Categoria
+            </label>
+            <button
+              onClick={() => { vibrate([10]); setShowCatModal(true); }}
+              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
+                  <Tag size={17} className="text-gray-400 dark:text-gray-500" />
+                </div>
+                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
+                  {selectedCat ? selectedCat.name : 'Geral'}
+                </span>
+              </div>
+              <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180 shrink-0" />
+            </button>
+          </div>
+
           {/* Cor */}
-          <div>
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
             <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
               Cor
             </label>
-            <div className="flex flex-wrap gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-4">
+            <div className="flex flex-wrap gap-3">
               {COLORS.map(c => (
                 <button
                   key={c}
                   onClick={() => { vibrate([5]); setColor(c); }}
-                  className={`w-9 h-9 rounded-full transition-all active:scale-90 ${
+                  className={`w-9 h-9 rounded-full transition-all active:scale-[0.95] ${
                     color === c
-                      ? 'scale-110 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400 shadow-md'
-                      : 'hover:scale-105 shadow-sm'
+                      ? 'scale-110 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400 shadow-sm'
+                      : 'hover:scale-105'
                   }`}
                   style={{ backgroundColor: c }}
                 />
@@ -280,13 +340,13 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
           </div>
 
           {/* Ícone */}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
               Ícone
             </label>
             <button
               onClick={() => { vibrate([10]); setShowIconModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100/80 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div
@@ -307,9 +367,9 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
         <button
           onClick={() => { vibrate([10, 50]); handleSave(); }}
           disabled={saving}
-          className="w-full mt-6 bg-teal-700 text-white py-4 rounded-[20px] font-bold hover:bg-teal-800 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-teal-600/20"
+          className="w-full mt-7 bg-teal-700 text-white py-4 rounded-[20px] font-bold hover:bg-teal-800 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-teal-600/20"
         >
-          {saving ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Empréstimo'}
+          {saving ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Financiamento'}
         </button>
 
         {/* Modal Categorias */}
@@ -322,10 +382,10 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
             >
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
               <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-                <h3 className="font-semibold text-[20px] text-gray-800 dark:text-gray-100">Categorias</h3>
+                <h3 className="font-semibold text-[22px] text-gray-900 dark:text-gray-100">Categorias</h3>
                 <button
                   onClick={() => setShowCatModal(false)}
-                  className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-300 flex items-center justify-center active:scale-[0.98]"
+                  className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-300 flex items-center justify-center active:scale-[0.98]"
                 >
                   <X size={18} />
                 </button>
@@ -349,10 +409,9 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
                   {!categoryId && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
                 </button>
 
-                {categories.map(cat => {
+                {(categories || []).map((cat: any) => {
                   const CatIconComp = getDynamicIcon(cat.icon)
                   const isActive = cat.id === categoryId
-
                   return (
                     <button
                       key={cat.id}
@@ -388,10 +447,10 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
             >
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
               <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-                <h3 className="font-semibold text-[20px] text-gray-800 dark:text-gray-100">Contas</h3>
+                <h3 className="font-semibold text-[22px] text-gray-900 dark:text-gray-100">Contas</h3>
                 <button
                   onClick={() => setShowAccModal(false)}
-                  className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-300 flex items-center justify-center active:scale-[0.98]"
+                  className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-300 flex items-center justify-center active:scale-[0.98]"
                 >
                   <X size={18} />
                 </button>
@@ -415,9 +474,8 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
                   {!accountId && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
                 </button>
 
-                {accounts.map(acc => {
+                {(accounts || []).map((acc: any) => {
                   const isActive = acc.id === accountId
-
                   return (
                     <button
                       key={acc.id}
