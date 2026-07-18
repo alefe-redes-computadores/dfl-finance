@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Plus,
-  Tag, MoreHorizontal,
+  Tag, Edit2,  // ✅ TROQUEI MoreHorizontal por Edit2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -58,10 +58,7 @@ function BudgetsContent() {
   const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  // ✅ 1. TODOS OS HOOKS NO TOPO
   const { data: localBudgets, loading: budgetsLoading } = useBudgetsList(effectiveContext)
-
-  // ✅ 2. USA useLocalData APENAS PARA TRANSAÇÕES (não para budgets)
   const { data: localTransactions, loading: txLoading } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -75,7 +72,6 @@ function BudgetsContent() {
     }
   }, [user?.id])
 
-  // ✅ 3. useMemo PARA DADOS DERIVADOS (não useState espelho)
   const monthStart = format(currentMonth, 'yyyy-MM-01')
   const monthEnd = format(currentMonth, 'yyyy-MM-31')
 
@@ -101,7 +97,6 @@ function BudgetsContent() {
     }
   })
 
-  // ✅ 4. FUNÇÕES DE AÇÃO
   const handleDelete = async (id: string) => {
     if (!user) return
     if (!confirm('Excluir este orçamento?')) return
@@ -138,24 +133,30 @@ function BudgetsContent() {
     }
   }
 
-  // ✅ FUNÇÃO DE NAVEGAÇÃO PARA DETALHES (com log e validação)
+  // ✅ NAVEGAÇÃO: CARD → DETALHES
   const goToDetails = (budgetId: string, e?: React.MouseEvent) => {
-    e?.stopPropagation() // Evita propagação para elementos pai
+    e?.stopPropagation()
     if (!budgetId) {
-      console.warn('[BudgetsList] ID do orçamento é inválido:', budgetId)
-      showToast('Erro ao abrir orçamento.', 'error')
+      console.warn('[BudgetsList] ID inválido:', budgetId)
       return
     }
-    console.log('[BudgetsList] Navegando para detalhes do orçamento:', budgetId)
     router.push(`/budgets/details?id=${budgetId}`)
+  }
+
+  // ✅ NAVEGAÇÃO: LÁPIS → EDIÇÃO
+  const goToEdit = (budgetId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!budgetId) {
+      console.warn('[BudgetsList] ID inválido para edição:', budgetId)
+      return
+    }
+    router.push(`/budgets/new?edit=${budgetId}`)
   }
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // ✅ 5. LOADING UNIFICADO
   const isDataLoading = budgetsLoading || txLoading || isAuthLoading
 
-  // ✅ 6. RETURNS CONDICIONAIS (depois dos hooks)
   return (
     <div
       ref={containerRef}
@@ -167,7 +168,6 @@ function BudgetsContent() {
         </div>
       )}
 
-      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -255,9 +255,11 @@ function BudgetsContent() {
               const isOver = budget.remaining < 0
 
               return (
+                // ✅ CARD INTEIRO CLICÁVEL → ABRE DETALHES
                 <div
                   key={budget.id}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
+                  onClick={(e) => goToDetails(budget.id, e)}
+                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer transition-transform active:scale-[0.98] hover:shadow-md"
                 >
                   <div className="rounded-[18px] p-3">
                     <div className="flex items-start justify-between gap-3 mb-3">
@@ -315,7 +317,10 @@ function BudgetsContent() {
 
                       <div className="flex items-center gap-2 shrink-0">
                         <button
-                          onClick={() => handleToggleStatus(budget)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleToggleStatus(budget)
+                          }}
                           className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors active:scale-[0.98] ${
                             isActive
                               ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400'
@@ -325,13 +330,13 @@ function BudgetsContent() {
                           {isActive ? 'Ativo' : 'Inativo'}
                         </button>
 
-                        {/* ✅ BOTÃO DE NAVEGAÇÃO CORRIGIDO */}
+                        {/* ✅ LÁPIS → ABRE EDIÇÃO */}
                         <button
-                          onClick={(e) => goToDetails(budget.id, e)}
+                          onClick={(e) => goToEdit(budget.id, e)}
                           className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-teal-600 dark:hover:text-teal-400 transition-colors active:scale-[0.98]"
-                          aria-label="Ver detalhes do orçamento"
+                          aria-label="Editar orçamento"
                         >
-                          <MoreHorizontal size={16} />
+                          <Edit2 size={16} />
                         </button>
                       </div>
                     </div>
