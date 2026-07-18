@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Plus,
-  Tag, Edit2,  // ✅ TROQUEI MoreHorizontal por Edit2
+  Tag, Edit2,  
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
