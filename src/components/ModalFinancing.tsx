@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { X, Check, Loader2, Wallet, Calendar, Tag, ChevronLeft, Building } from 'lucide-react'
 import { useContext_ } from '@/components/ContextToggle'
@@ -11,6 +10,9 @@ import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useLocalData } from '@/hooks/useLocalData'
+import { useSafeDb } from '@/hooks/useSafeDb'
+import { db } from '@/lib/db'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 
@@ -25,10 +27,20 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
   const { context } = useContext_()
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
+  const { safeAdd } = useSafeDb()
 
   const [saving, setSaving] = useState(false)
-  const [categories, setCategories] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
+
+  // ✅ DADOS LOCAIS (Dexie)
+  const { data: categories } = useLocalData({
+    table: 'categories' as any,
+    filters: { context, type: 'expense' },
+  })
+
+  const { data: accounts } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context },
+  })
 
   const [name, setName] = useState('')
   const [institution, setInstitution] = useState('')
@@ -48,19 +60,12 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
 
+  // Reset form quando o modal abre
   useEffect(() => {
-    if (!isOpen || !user?.id) return
-    const loadData = async () => {
-      const [{ data: cats }, { data: accs }] = await Promise.all([
-        supabase.from('categories').select('id, name, color, icon').match({ user_id: user.id, context }).eq('type', 'expense'),
-        supabase.from('accounts').select('id, name, color').match({ user_id: user.id, context })
-      ])
-      setCategories(Array.isArray(cats) ? cats : [])
-      setAccounts(Array.isArray(accs) ? accs : [])
+    if (isOpen) {
       setFinContext(context === 'dfl' ? 'dfl' : 'personal')
     }
-    loadData()
-  }, [isOpen, user, context])
+  }, [isOpen, context])
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || installmentValueNum <= 0) {
@@ -68,9 +73,14 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
       hapticError()
       return
     }
+
     setSaving(true)
 
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+
     const payload = {
+      id,
       user_id: user.id,
       context: finContext,
       name: name.trim(),
@@ -83,19 +93,27 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
       account_id: accountId || null,
       category_id: categoryId || null,
       color,
-      icon
+      icon: icon.toLowerCase(),
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_attempts: 0,
     }
 
     try {
-      const { data, error } = await supabase.from('financings').insert(payload).select('id').single()
-      if (error) throw error
+      await db.transaction('rw', db.financings, db.syncQueue, async () => {
+        const result = await safeAdd('financings', payload)
+        if (!result.success) throw new Error(result.error)
+      })
+
       success()
       showToast('✅ Financiamento criado!', 'success')
-      onSave(data.id)
+      onSave(id)
       onClose()
     } catch (err: any) {
       hapticError()
-      showToast('❌ Erro ao salvar financiamento.', 'error')
+      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -103,8 +121,8 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
 
   if (!isOpen) return null
 
-  const selectedCat = categories.find(c => c.id === categoryId)
-  const selectedAcc = accounts.find(a => a.id === accountId)
+  const selectedCat = categories?.find((c: any) => c.id === categoryId)
+  const selectedAcc = accounts?.find((a: any) => a.id === accountId)
   const IconComp = getDynamicIcon(icon)
 
   return (
@@ -391,7 +409,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                   {!categoryId && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
                 </button>
 
-                {categories.map(cat => {
+                {(categories || []).map((cat: any) => {
                   const CatIconComp = getDynamicIcon(cat.icon)
                   const isActive = cat.id === categoryId
                   return (
@@ -456,7 +474,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                   {!accountId && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
                 </button>
 
-                {accounts.map(acc => {
+                {(accounts || []).map((acc: any) => {
                   const isActive = acc.id === accountId
                   return (
                     <button
