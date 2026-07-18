@@ -120,7 +120,11 @@ const CardDetailSkeleton = () => (
 function CardDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const id = searchParams.get('id')
+  
+  // ✅ useMemo para normalizar o ID
+  const rawId = searchParams.get('id')
+  const id = useMemo(() => rawId?.trim() || null, [rawId])
+  
   const { user } = useAuth()
   const { context } = useContext_()
   const { showToast } = useToast()
