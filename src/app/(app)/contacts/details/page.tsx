@@ -11,8 +11,8 @@ import {
 import { format } from 'date-fns'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
-import { useContactById } from '@/hooks/useContactById' // ✅ NOVO HOOK
-import { useContactTransactions } from '@/hooks/useContactTransactions' // ✅ NOVO HOOK
+import { useContactById } from '@/hooks/useContactById'
+import { useContactTransactions } from '@/hooks/useContactTransactions'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -39,7 +39,10 @@ const ContactDetailSkeleton = () => (
 function ContactDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const id = searchParams.get('id')
+  
+  // ✅ useMemo para normalizar o ID
+  const rawId = searchParams.get('id')
+  const id = useMemo(() => rawId?.trim() || null, [rawId])
 
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
