@@ -138,6 +138,18 @@ function BudgetsContent() {
     }
   }
 
+  // ✅ FUNÇÃO DE NAVEGAÇÃO PARA DETALHES (com log e validação)
+  const goToDetails = (budgetId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation() // Evita propagação para elementos pai
+    if (!budgetId) {
+      console.warn('[BudgetsList] ID do orçamento é inválido:', budgetId)
+      showToast('Erro ao abrir orçamento.', 'error')
+      return
+    }
+    console.log('[BudgetsList] Navegando para detalhes do orçamento:', budgetId)
+    router.push(`/budgets/details?id=${budgetId}`)
+  }
+
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   // ✅ 5. LOADING UNIFICADO
@@ -313,9 +325,11 @@ function BudgetsContent() {
                           {isActive ? 'Ativo' : 'Inativo'}
                         </button>
 
+                        {/* ✅ BOTÃO DE NAVEGAÇÃO CORRIGIDO */}
                         <button
-                          onClick={() => router.push(`/budgets/details?id=${budget.id}`)}
+                          onClick={(e) => goToDetails(budget.id, e)}
                           className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-teal-600 dark:hover:text-teal-400 transition-colors active:scale-[0.98]"
+                          aria-label="Ver detalhes do orçamento"
                         >
                           <MoreHorizontal size={16} />
                         </button>
