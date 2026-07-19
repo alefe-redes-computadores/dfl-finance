@@ -16,7 +16,6 @@ O projeto foi arquitetado para ser um sistema **"local-first"**. Isso significa 
 
 ## 🛠️ Tecnologias Utilizadas
 
-
 *   **Framework:** [Next.js 14+](https://nextjs.org/) (Utilizando o novo App Router)
 *   **Estilização:** [Tailwind CSS](https://tailwindcss.com/)
 *   **Banco de Dados/BaaS:** [Supabase](https://supabase.com/)
