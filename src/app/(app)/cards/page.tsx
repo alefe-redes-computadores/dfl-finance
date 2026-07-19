@@ -12,7 +12,6 @@ import {
   Receipt,
 } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import { useCardsList } from '@/hooks/useCardsList'
 import { useLocalData } from '@/hooks/useLocalData'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -47,7 +46,11 @@ export default function CardsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse] = useState(false)
 
-  const { data: localCards, loading: cardsLoading } = useCardsList(effectiveContext)
+  // ✅ VOLTANDO PARA useLocalData
+  const { data: localCards, loading: cardsLoading } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { context: effectiveContext },
+  })
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
