@@ -45,19 +45,20 @@ import EmptyState from '@/components/EmptyState'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
+// ✅ ALL_SECTIONS COM DESCRIÇÕES PARA O PERSONALIZE MODAL
 const ALL_SECTIONS = [
-  { id: 'balance', label: 'Saldo Total' },
-  { id: 'income-expense', label: 'Receitas / Despesas' },
-  { id: 'projection', label: 'Projeção de Saldo' },
-  { id: 'loans', label: 'Empréstimos entre Contextos' },
-  { id: 'next-card', label: 'Próxima Fatura' },
-  { id: 'pendings', label: 'Pendências' },
-  { id: 'receivables', label: 'A Receber' },
-  { id: 'financings', label: 'Financiamentos' },
-  { id: 'budgets', label: 'Orçamentos' },
-  { id: 'accounts', label: 'Contas' },
-  { id: 'cards', label: 'Cartões' },
-  { id: 'recent', label: 'Transações Recentes' },
+  { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },
+  { id: 'income-expense', label: 'Receitas e despesas', description: 'Entradas e saídas do mês' },
+  { id: 'projection', label: 'Projeção de Saldo', description: 'Previsão para os próximos 30 dias' },
+  { id: 'loans', label: 'Empréstimos entre Contextos', description: 'Transferências entre PF e PJ' },
+  { id: 'next-card', label: 'Próxima Fatura', description: 'Próximo vencimento do cartão' },
+  { id: 'pendings', label: 'Pendências', description: 'Contas a pagar e a receber' },
+  { id: 'receivables', label: 'A Receber', description: 'Valores a receber de terceiros' },
+  { id: 'financings', label: 'Financiamentos', description: 'Parcelas de financiamentos ativos' },
+  { id: 'budgets', label: 'Orçamentos', description: 'Acompanhamento de orçamentos' },
+  { id: 'accounts', label: 'Contas', description: 'Suas contas bancárias' },
+  { id: 'cards', label: 'Cartões', description: 'Cartões de crédito' },
+  { id: 'recent', label: 'Transações Recentes', description: 'Últimas movimentações' },
 ]
 
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
@@ -658,24 +659,24 @@ function HomeContent() {
           </div>
         )
       case 'projection':
-  return (
-    <div key="projection" className="mb-5 relative">
-      {!isFixed && (
-        <button
-          onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
-          className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-95"
-          title="Ocultar card"
-        >
-          <EyeOff size={14} />
-        </button>
-      )}
-      
-      <ProjectionChart 
-        hideBalance={hideBalance} 
-        formatCurrency={formatCurrency} 
-      />
-    </div>
-  )
+        return (
+          <div key="projection" className="mb-5 relative">
+            {!isFixed && (
+              <button
+                onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                title="Ocultar seção"
+              >
+                <EyeOff size={13} />
+              </button>
+            )}
+            
+            <ProjectionChart 
+              hideBalance={hideBalance} 
+              formatCurrency={formatCurrency} 
+            />
+          </div>
+        )
       case 'loans':
         if (appMode === 'personal_only') return null
         if (loans.length === 0) return null
@@ -684,10 +685,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                className="absolute -top-1 right-0 z-10 rounded-full p-1 text-gray-300/70 transition hover:bg-gray-100 hover:text-gray-500 dark:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300 active:scale-95"
-                title="Ocultar card"
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                title="Ocultar seção"
               >
-                <EyeOff size={14} />
+                <EyeOff size={13} />
               </button>
             )}
 
@@ -772,10 +773,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard("next-card", "Próxima Fatura")}
-                className="absolute -top-1 right-0 z-10 rounded-full p-1 text-gray-300/70 transition hover:bg-gray-100 hover:text-gray-500 dark:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300 active:scale-95"
-                title="Ocultar card"
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                title="Ocultar seção"
               >
-                <EyeOff size={14} />
+                <EyeOff size={13} />
               </button>
             )}
 
@@ -895,10 +896,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard("receivables", "A Receber")}
-                className="absolute -top-1 right-0 z-10 rounded-full p-1 text-gray-300/70 transition hover:bg-gray-100 hover:text-gray-500 dark:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300 active:scale-95"
-                title="Ocultar card"
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                title="Ocultar seção"
               >
-                <EyeOff size={14} />
+                <EyeOff size={13} />
               </button>
             )}
 
@@ -989,10 +990,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard("financings", "Financiamentos")}
-                className="absolute -top-1 right-0 z-10 rounded-full p-1 text-gray-300/70 transition hover:bg-gray-100 hover:text-gray-500 dark:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300 active:scale-95"
-                title="Ocultar card"
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                title="Ocultar seção"
               >
-                <EyeOff size={14} />
+                <EyeOff size={13} />
               </button>
             )}
 
@@ -1075,10 +1076,10 @@ function HomeContent() {
             {!isFixed && (
               <button
                 onClick={() => handleHideCard("budgets", "Orçamentos")}
-                className="absolute -top-1 right-0 z-10 rounded-full p-1 text-gray-300/70 transition hover:bg-gray-100 hover:text-gray-500 dark:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300 active:scale-95"
-                title="Ocultar card"
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                title="Ocultar seção"
               >
-                <EyeOff size={14} />
+                <EyeOff size={13} />
               </button>
             )}
 
