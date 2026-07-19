@@ -56,10 +56,9 @@ export default function CardsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse] = useState(false)
 
-  // ========== PERSONALIZAÇÃO DA ORDEM ==========
+  // ========== PERSONALIZAÇÃO DA ORDEM (ITENS DA LISTA) ==========
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
   const [cardOrder, setCardOrder] = useState<string[]>([])
-  const [isDragging, setIsDragging] = useState(false)
 
   const { data: localCards, loading: cardsLoading } = useCardsList(effectiveContext)
 
@@ -99,8 +98,6 @@ export default function CardsPage() {
 
   // ========== HANDLER DO DRAG & DROP ==========
   const handleDragEnd = (result: DropResult) => {
-    setIsDragging(false)
-
     if (!result.destination) return
 
     const sourceIndex = result.source.index
@@ -115,11 +112,6 @@ export default function CardsPage() {
 
     const newOrder = newItems.map(item => item.id)
     saveOrder(newOrder)
-  }
-
-  const handleDragStart = () => {
-    setIsDragging(true)
-    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(5)
   }
 
   const openPersonalize = () => {
@@ -276,7 +268,7 @@ export default function CardsPage() {
     })
   }, [getVisibleCards, cardOrder])
 
-  // ========== MODAL DE PERSONALIZAÇÃO ==========
+  // ========== MODAL DE PERSONALIZAÇÃO (REORDENAR CARTÕES) ==========
   const PersonalizeOrderModal = () => {
     if (!showPersonalizeModal) return null
 
@@ -323,7 +315,7 @@ export default function CardsPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4">
-            <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+            <DragDropContext onDragEnd={handleDragEnd}>
               <Droppable droppableId="cards">
                 {(provided, snapshot) => (
                   <div
@@ -445,7 +437,7 @@ export default function CardsPage() {
                 <Plus size={20} />
               </button>
 
-              {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CARTÕES */}
+              {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CARTÕES (ITENS) */}
               <button
                 onClick={openPersonalize}
                 className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
@@ -630,7 +622,7 @@ export default function CardsPage() {
         )}
       </div>
 
-      {/* ✅ MODAL DE REORDENAÇÃO */}
+      {/* ✅ MODAL DE REORDENAÇÃO (ITENS DA LISTA) */}
       <PersonalizeOrderModal />
     </div>
   )
