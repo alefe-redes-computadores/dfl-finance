@@ -1,3 +1,4 @@
+// src/app/(app)/home/page.tsx
 'use client'
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,6 @@ import {
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-// ✅ CORRIGIDO: useOfflineQueue trocado por useLocalSync (é o hook que possui pullRemoteChanges)
 import { useLocalSync } from '@/hooks/useLocalSync'
 import InvoiceAlert from '@/components/InvoiceAlert'
 import DebtAlert from '@/components/DebtAlert'
@@ -84,6 +84,7 @@ function HomeContent() {
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [isClient, setIsClient] = useState(false)
+  const [syncAttempted, setSyncAttempted] = useState(false)
 
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
@@ -96,9 +97,7 @@ function HomeContent() {
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  // ✅ CORRIGIDO: agora usamos useLocalSync, que contém o pullRemoteChanges().
-  // Ao instanciar este hook, o useEffect interno dele já dispara processSyncQueue()
-  // (push + pull) automaticamente assim que a Home monta e o dispositivo está online.
+  // ✅ useLocalSync - contém pullRemoteChanges()
   const { isOnline, pendingCount, isSyncing, forceSync } = useLocalSync()
 
   // ========== CLIENTE ==========
@@ -106,17 +105,41 @@ function HomeContent() {
     setIsClient(true)
   }, [])
 
-  // ========== LOCALSTORAGE (seguro) ==========
+  // ========== LOCALSTORAGE ==========
   useEffect(() => {
     const saved = localStorage.getItem('dfl_notifications_enabled')
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
-  const greeting = getGreeting()
-  const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
+  // ========== ✅ CORREÇÃO 1: FORÇAR SYNC NA MONTAGEM ==========
+  useEffect(() => {
+    if (user?.id && isOnline && isClient && !syncAttempted) {
+      console.log('🏠 Home: Disparando sync automático...')
+      const timer = setTimeout(() => {
+        forceSync().then(() => {
+          console.log('✅ Home: Sync automático concluído')
+          setSyncAttempted(true)
+        }).catch((err) => {
+          console.error('❌ Home: Erro no sync automático:', err)
+          setSyncAttempted(true)
+        })
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
 
-  // ========== ✅ DADOS LOCAIS COM useLocalData (TUDO) ==========
+  // ========== ✅ CORREÇÃO 2: LOADING COM TIMEOUT ==========
+  useEffect(() => {
+    if (!isDataLoading && !syncAttempted) {
+      // Dá tempo para o pull trazer dados
+      const timer = setTimeout(() => {
+        setIsInitialLoad(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [isDataLoading, syncAttempted])
+
+  // ========== ✅ DADOS LOCAIS COM useLocalData ==========
   const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext },
@@ -130,7 +153,6 @@ function HomeContent() {
     filters: { context: effectiveContext }
   })
 
-  // ✅ VOLTANDO PARA useLocalData (em vez de useDebtsList)
   const { data: rawDebts, loading: debtsLoading, reload: reloadDebts } = useLocalData({ 
     table: 'debts' as any, 
     filters: { context: effectiveContext }
@@ -174,12 +196,6 @@ function HomeContent() {
     setLoadingPulse(isDataLoading)
   }, [isDataLoading])
 
-  useEffect(() => {
-    if (!isDataLoading && (localTransactions.length || localAccountsData.length)) {
-      setIsInitialLoad(false)
-    }
-  }, [isDataLoading, localTransactions, localAccountsData])
-
   // ========== DATAS SEGURAS ==========
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
@@ -209,7 +225,7 @@ function HomeContent() {
       }),
   [transactionsWithJoin, start, end])
 
-  // ========== RESUMO (safeNumber) ==========
+  // ========== RESUMO ==========
   const summary = useMemo(() => {
     const income = monthTransactions
       .filter((t: any) => t.type === 'income' && t.status === 'done')
@@ -283,7 +299,7 @@ function HomeContent() {
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
-  // ========== DÍVIDAS (✅ agora usando useLocalData) ==========
+  // ========== DÍVIDAS ==========
   const debtsList = useMemo(() => {
     const allDebts = localDebts.map((debt: any) => {
       const payments = localTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
@@ -413,7 +429,7 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
-  // ========== PULL TO REFRESH ==========
+  // ========== ✅ CORREÇÃO 3: PULL TO REFRESH MELHORADO ==========
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -431,14 +447,18 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-      // ✅ CORRIGIDO: força o sync completo (push + pullRemoteChanges) antes de
-      // recarregar as leituras locais. Antes, o pull-to-refresh só relia o Dexie,
-      // sem nunca buscar o que havia de novo no Supabase.
+      
+      console.log('🔄 Pull-to-refresh: forçando sync...')
+      
+      // ✅ força o sync completo (push + pullRemoteChanges)
       await forceSync()
-      await reloadTxs()
-      await reloadAccounts()
-      await reloadDebts()
+      
+      // ✅ NÃO PRECISA de reloadTxs/reloadAccounts/reloadDebts
+      // O useLiveQuery já vai reagir automaticamente!
+      
       setRefreshing(false)
+      showToast('✅ Dados atualizados!', 'success')
+      hapticSuccess()
     }
   }
 
@@ -455,7 +475,7 @@ function HomeContent() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [isDataLoading, refreshing])
+  }, [isDataLoading, refreshing, forceSync])
 
   // ========== PERSONALIZAÇÃO ==========
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
