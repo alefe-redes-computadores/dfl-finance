@@ -45,7 +45,7 @@ import EmptyState from '@/components/EmptyState'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
-// ✅ ALL_SECTIONS COM DESCRIÇÕES PARA O PERSONALIZE MODAL
+// ALL_SECTIONS COM DESCRIÇÕES PARA O PERSONALIZE MODAL
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },
   { id: 'income-expense', label: 'Receitas e despesas', description: 'Entradas e saídas do mês' },
@@ -75,19 +75,15 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
   return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400 shrink-0" /> }
 }
 
-// ✅ FUNÇÃO DEFENSIVA PARA CALCULAR PORCENTAGEM
+// FUNÇÃO DEFENSIVA PARA CALCULAR PORCENTAGEM
 const calculateVariation = (current: number, previous: number): number => {
-  // Se o valor anterior for zero ou muito próximo de zero
   if (Math.abs(previous) < 0.01) {
     if (Math.abs(current) < 0.01) return 0
     return current > 0 ? 100 : -100
   }
   
   let diff = ((current - previous) / Math.abs(previous)) * 100
-  
-  // 🔥 Limita a -100% a +100% para não mostrar números absurdos
   diff = Math.min(Math.max(diff, -100), 100)
-  
   return Math.round(diff * 10) / 10
 }
 
@@ -101,7 +97,6 @@ function HomeContent() {
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
-  // ========== LINHAS RESTAURADAS ==========
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
@@ -123,21 +118,17 @@ function HomeContent() {
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  // useLocalSync - contém pullRemoteChanges()
   const { isOnline, pendingCount, isSyncing, forceSync } = useLocalSync()
 
-  // ========== CLIENTE ==========
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  // ========== LOCALSTORAGE ==========
   useEffect(() => {
     const saved = localStorage.getItem('dfl_notifications_enabled')
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  // ========== DADOS LOCAIS COM useLocalData ==========
   const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext },
@@ -177,7 +168,6 @@ function HomeContent() {
     filters: { user_id: user?.id }
   })
 
-  // ========== NORMALIZAÇÃO DE ARRAYS ==========
   const localTransactions = safeArray<any>(rawTransactions)
   const localCategories = safeArray<any>(rawCategories)
   const localAccountsData = safeArray<any>(rawAccounts)
@@ -188,12 +178,8 @@ function HomeContent() {
   const localLoans = safeArray<any>(rawLoans)
   const localNotifications = safeArray<any>(rawNotifications)
 
-  // ============================================================
-  // DEFINÇÃO DE isDataLoading (ANTES DOS USEEFFECTS QUE DEPENDEM)
-  // ============================================================
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
-  // ========== CORREÇÃO 1: FORÇAR SYNC NA MONTAGEM ==========
   useEffect(() => {
     if (user?.id && isOnline && isClient && !syncAttempted) {
       console.log('🏠 Home: Disparando sync automático...')
@@ -210,7 +196,6 @@ function HomeContent() {
     }
   }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
 
-  // ========== CORREÇÃO 2: LOADING COM TIMEOUT ==========
   useEffect(() => {
     if (!isDataLoading && !syncAttempted) {
       const timer = setTimeout(() => {
@@ -220,24 +205,20 @@ function HomeContent() {
     }
   }, [isDataLoading, syncAttempted])
 
-  // ========== LOADING PULSE ==========
   useEffect(() => {
     setLoadingPulse(isDataLoading)
   }, [isDataLoading])
 
-  // ========== INICIAL LOAD ==========
   useEffect(() => {
     if (!isDataLoading && (localTransactions.length || localAccountsData.length)) {
       setIsInitialLoad(false)
     }
   }, [isDataLoading, localTransactions, localAccountsData])
 
-  // ========== DATAS SEGURAS ==========
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const today = useMemo(() => new Date(), [])
 
-  // ========== JOIN SEGURO ==========
   const transactionsWithJoin = useMemo(() => {
     return localTransactions.map((tx: any) => {
       const category = localCategories.find((c: any) => c.id === tx.category_id) as any
@@ -250,7 +231,6 @@ function HomeContent() {
     })
   }, [localTransactions, localCategories, localAccountsData])
 
-  // ========== FILTRO MÊS ==========
   const monthTransactions = useMemo(() => 
     transactionsWithJoin
       .filter((t: any) => t.date >= start && t.date <= end)
@@ -261,7 +241,6 @@ function HomeContent() {
       }),
   [transactionsWithJoin, start, end])
 
-  // ========== RESUMO ==========
   const summary = useMemo(() => {
     const income = monthTransactions
       .filter((t: any) => t.type === 'income' && t.status === 'done')
@@ -272,7 +251,6 @@ function HomeContent() {
     return { income, expense, balance: income - expense }
   }, [monthTransactions])
 
-  // ========== VARIAÇÃO ==========
   const { previousBalance, balanceVariation } = useMemo(() => {
     const prevMonthDate = subMonths(currentDate, 1)
     const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
@@ -287,16 +265,13 @@ function HomeContent() {
       .reduce((a, t) => a + safeNumber(t.amount), 0)
     const prevBal = prevInc - prevExp
     
-    // ✅ USANDO A FUNÇÃO DEFENSIVA DE CÁLCULO
     const variation = calculateVariation(summary.balance, prevBal)
     
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
 
-  // ========== RECENTES ==========
   const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
 
-  // ========== CONTAS ==========
   const accounts = useMemo(() => {
     return localAccountsData.map((acc: any) => {
       const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
@@ -311,7 +286,6 @@ function HomeContent() {
     })
   }, [localAccountsData, monthTransactions])
 
-  // ========== CARTÕES ==========
   const cards = useMemo(() => {
     return localCards.map((card: any) => {
       const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
@@ -320,7 +294,6 @@ function HomeContent() {
     })
   }, [localCards, monthTransactions])
 
-  // ========== PENDÊNCIAS ==========
   const pendings = useMemo(() => {
     const allPending = localTransactions.filter((t: any) => t.status === 'pending')
     
@@ -337,7 +310,6 @@ function HomeContent() {
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
-  // ========== DÍVIDAS ==========
   const debtsList = useMemo(() => {
     const allDebts = localDebts.map((debt: any) => {
       const payments = localTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
@@ -356,10 +328,8 @@ function HomeContent() {
     return allDebts.filter(d => d.status !== 'paid' && d.status !== 'cancelled')
   }, [localDebts, localTransactions])
 
-  // ========== FINANCIAMENTOS ==========
   const financings = localFinancings
 
-  // ========== ORÇAMENTOS ==========
   const budgets = useMemo(() => {
     const budgetsWithSpent = localBudgets.map((budget: any) => {
       const cat = localCategories.find((c: any) => c.id === budget.category_id) as any
@@ -381,14 +351,12 @@ function HomeContent() {
     return budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3)
   }, [localBudgets, localCategories, monthTransactions])
 
-  // ========== EMPRÉSTIMOS ==========
   const loans = useMemo(() => {
     return localLoans
       .filter((l: any) => l.status === 'active' || l.status === 'completed')
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [localLoans])
 
-  // ========== NOTIFICAÇÕES ==========
   const notificationsMap = useMemo(() => {
     return localNotifications
       .map((n: any) => ({ ...n, isRead: n.is_read || n.isRead, cardId: n.card_id || n.cardId }))
@@ -398,7 +366,6 @@ function HomeContent() {
   const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
   const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
 
-  // ========== GERAR NOTIFICAÇÕES DE FATURA ==========
   useEffect(() => {
     if (!user?.id || cards.length === 0) return
     const generateNotifs = async () => {
@@ -448,7 +415,6 @@ function HomeContent() {
     generateNotifs()
   }, [cards, user?.id, currentDate, reloadNotifs])
 
-  // ========== CARREGAR LAYOUT ==========
   useEffect(() => {
     if (user?.id && isOnline) {
       supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single().then(({ data }) => {
@@ -467,7 +433,6 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
-  // ========== PULL TO REFRESH MELHORADO ==========
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -511,13 +476,11 @@ function HomeContent() {
     }
   }, [isDataLoading, refreshing, forceSync])
 
-  // ========== PERSONALIZAÇÃO ==========
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
   const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('✅ Tela inicial personalizada!', 'success'); hapticSuccess() }
   const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
-  // ========== UTILITÁRIOS ==========
   const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + safeNumber(curr.balance), 0)
   
@@ -543,7 +506,6 @@ function HomeContent() {
 
   const getBalanceStyle = (val: number) => { if (val > 0) return 'text-emerald-600 font-semibold'; if (val < 0) return 'text-red-500 font-semibold'; return 'text-gray-800 dark:text-gray-200 font-semibold' }
 
-  // ========== NAVEGAÇÃO SEGURA ==========
   const goToTransaction = (id?: string) => { if (!id) return; safeNavigate(router, '/transactions/details', id) }
   const goToLoan = (id?: string) => { if (!id) return; safeNavigate(router, '/loans/details', id) }
   const goToCard = (id?: string) => { if (!id) return; safeNavigate(router, '/cards/details', id) }
@@ -552,7 +514,6 @@ function HomeContent() {
   const goToBudget = (id?: string) => { if (!id) return; safeNavigate(router, '/budgets/details', id) }
   const goToAccount = (id?: string) => { if (!id) return; safeNavigate(router, '/accounts/details', id) }
 
-  // ========== RENDERIZAÇÃO DE SEÇÕES ==========
   const renderSection = (sectionId: string) => {
     const sectionLabel = ALL_SECTIONS.find(s => s.id === sectionId)?.label || sectionId
     const isFixed = FIXED_SECTIONS.includes(sectionId)
@@ -584,7 +545,6 @@ function HomeContent() {
                 </button>
               </div>
 
-              {/* ✅ SALDO CLICÁVEL - REDIRECIONA PARA TRANSAÇÕES */}
               <button
                 onClick={() => {
                   vibrate([5])
@@ -663,8 +623,11 @@ function HomeContent() {
           <div key="projection" className="mb-5 relative">
             {!isFixed && (
               <button
-                onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHideCard('projection', 'Projeção de Saldo')
+                }}
+                className="absolute bottom-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
                 title="Ocultar seção"
               >
                 <EyeOff size={13} />
@@ -684,8 +647,11 @@ function HomeContent() {
           <div key="loans" className="mb-5 relative">
             {!isFixed && (
               <button
-                onClick={() => handleHideCard('loans', 'Empréstimos entre Contextos')}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHideCard('loans', 'Empréstimos entre Contextos')
+                }}
+                className="absolute bottom-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
                 title="Ocultar seção"
               >
                 <EyeOff size={13} />
@@ -772,8 +738,11 @@ function HomeContent() {
           <div key="next-card" className="mb-5 relative">
             {!isFixed && (
               <button
-                onClick={() => handleHideCard("next-card", "Próxima Fatura")}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHideCard("next-card", "Próxima Fatura")
+                }}
+                className="absolute bottom-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
                 title="Ocultar seção"
               >
                 <EyeOff size={13} />
@@ -895,8 +864,11 @@ function HomeContent() {
           <div key="receivables" className="mb-5 relative">
             {!isFixed && (
               <button
-                onClick={() => handleHideCard("receivables", "A Receber")}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHideCard("receivables", "A Receber")
+                }}
+                className="absolute bottom-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
                 title="Ocultar seção"
               >
                 <EyeOff size={13} />
@@ -989,8 +961,11 @@ function HomeContent() {
           <div key="financings" className="mb-5 relative">
             {!isFixed && (
               <button
-                onClick={() => handleHideCard("financings", "Financiamentos")}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHideCard("financings", "Financiamentos")
+                }}
+                className="absolute bottom-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
                 title="Ocultar seção"
               >
                 <EyeOff size={13} />
@@ -1075,8 +1050,11 @@ function HomeContent() {
           <div key="budgets" className="mb-5 relative">
             {!isFixed && (
               <button
-                onClick={() => handleHideCard("budgets", "Orçamentos")}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHideCard("budgets", "Orçamentos")
+                }}
+                className="absolute bottom-3 right-3 z-10 p-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 border border-gray-200/60 dark:border-slate-700/60 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-sm"
                 title="Ocultar seção"
               >
                 <EyeOff size={13} />
@@ -1397,7 +1375,6 @@ function HomeContent() {
     }
   }
 
-  // ========== RENDERIZAÇÃO PRINCIPAL ==========
   if (isInitialLoad || (isDataLoading && !localTransactions.length && !localAccountsData.length)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 pt-6">
@@ -1429,12 +1406,9 @@ function HomeContent() {
         />
       )}
 
-      {/* ========== ALERTAS UNIFICADOS ========== */}
       {(() => {
-        // Filtra faturas com valor > 0
         const cardsWithInvoice = cards.filter((card: any) => (card.faturaAtual || 0) > 0)
 
-        // Filtra faturas próximas (até 5 dias) e vencidas
         const upcomingCards = cardsWithInvoice.filter((card: any) => {
           const todayDay = new Date().getDate()
           let days = (card.due_day || 1) - todayDay
@@ -1455,7 +1429,6 @@ function HomeContent() {
           return days < 0
         })
 
-        // Filtra débitos atrasados
         const overdueDebts = debtsList.filter((d: any) => {
           const due = safeDate(d.due_date)
           return due && differenceInDays(today, due) >= 0 && d.status !== 'paid'
@@ -1470,7 +1443,6 @@ function HomeContent() {
         return (
           <div className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-              {/* Header do card de alertas */}
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/50">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
                   totalAlerts > 0
@@ -1496,7 +1468,6 @@ function HomeContent() {
               </div>
 
               <div className="flex flex-col">
-                {/* Faturas vencidas */}
                 {overdueCards.map((card: any, index: number) => {
                   const todayDay = new Date().getDate()
                   let days = (card.due_day || 1) - todayDay
@@ -1536,7 +1507,6 @@ function HomeContent() {
                   )
                 })}
 
-                {/* Faturas próximas */}
                 {upcomingCards.map((card: any, index: number) => {
                   const todayDay = new Date().getDate()
                   let days = (card.due_day || 1) - todayDay
@@ -1584,7 +1554,6 @@ function HomeContent() {
                   )
                 })}
 
-                {/* Débitos atrasados */}
                 {overdueDebts.map((debt: any, index: number) => {
                   const due = safeDate(debt.due_date)
                   const daysOverdue = due ? differenceInDays(today, due) : 0
