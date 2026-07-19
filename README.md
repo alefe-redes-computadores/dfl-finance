@@ -14,6 +14,7 @@ O projeto foi arquitetado para ser um sistema **"local-first"**. Isso significa 
 *   **Modo Offline e PWA:** Funcionalidade de Progressive Web App permitindo a instalação nativa no smartphone e cache de dados via Service Workers.
 *   **UX Mobile:** Resposta tátil (Haptic Feedback) e navegação otimizada para o uso com uma só mão.
 
+
 ## 🛠️ Tecnologias Utilizadas
 
 *   **Framework:** [Next.js 14+](https://nextjs.org/) (Utilizando o novo App Router)
@@ -25,6 +26,7 @@ O projeto foi arquitetado para ser um sistema **"local-first"**. Isso significa 
 ## 🏗️ Arquitetura e Estrutura de Diretórios
 
 O projeto segue a arquitetura **Local-First**. Os *Custom Hooks* (`useLocalData`, `useSafeDb`) priorizam a leitura e gravação no IndexedDB local. Uma fila de sincronização (`syncQueue`) trabalha em segundo plano para enviar os dados ao Supabase assim que a conexão de rede estiver estável.
+
 
 Abaixo está a estrutura de pastas atual da aplicação:
 
@@ -62,6 +64,7 @@ dfl-finance/
 ├── tailwind.config.ts      # Tokens de design e cores do projeto
 ├── package.json            # Gerenciamento de dependências
 └── tsconfig.json           # Tipagem estática do projeto
+
 
 ## ⚙️ Instalação e Configuração
 
