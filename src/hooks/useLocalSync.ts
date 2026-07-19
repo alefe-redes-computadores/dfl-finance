@@ -44,13 +44,17 @@ export function useLocalSync() {
   }, [user?.id])
 
   // ✅ NOVA LÓGICA: Puxar dados remotos (do Bot/Supabase) para o celular
-  // ✅ CORRIGIDO: aceita um parâmetro opcional "force". Além disso, para CADA
+  // ✅ CORRIGIDO (parte 1): aceita um parâmetro opcional "force". Para CADA
   // tabela, se o Dexie local estiver vazio para aquele usuário, ignora o
-  // "lastPull" salvo e busca TUDO do zero. Isso evita o cenário onde o
-  // localStorage guarda um timestamp recente (de uma tentativa de pull
-  // anterior que não trouxe nada, por erro de RLS, contexto, etc.) e o app
-  // fica preso para sempre perguntando "o que mudou depois disso", sem nunca
-  // buscar os registros antigos que já existiam na nuvem.
+  // "lastPull" salvo e busca TUDO do zero (full resync daquela tabela).
+  //
+  // ✅ CORRIGIDO (parte 2 — ESTA É A CORREÇÃO PRINCIPAL DESTA RODADA):
+  // a lista tablesToPull estava com só 4 tabelas ('transactions', 'accounts',
+  // 'categories', 'credit_cards'). Isso fazia com que debts, budgets, goals,
+  // loans, financings, subscriptions, tags, contacts, credit_invoices e
+  // notifications NUNCA fossem puxadas da nuvem — mesmo existindo lá, com
+  // schema correto e sem erro de RLS. Agora a lista cobre todas as tabelas
+  // do app que fazem sentido sincronizar via pull.
   const pullRemoteChanges = useCallback(async (force = false) => {
     if (!user?.id || !isOnline) return
     renderLog(`Iniciando PULL da nuvem${force ? ' (FORÇADO / FULL RESYNC)' : ''}...`, 'info')
@@ -60,12 +64,29 @@ export function useLocalSync() {
       const storedLastPull = localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
       const syncTime = new Date().toISOString()
 
-      // Tabelas principais que o bot ou outros dispositivos podem alterar
-      const tablesToPull: AllTables[] = ['transactions', 'accounts', 'categories', 'credit_cards']
+      // ✅ Lista ampliada — agora cobre todas as tabelas sincronizáveis do app.
+      // chat_history e chat_sessions ficam de fora de propósito: são
+      // conversas do bot/assistente e não fazem sentido no pull genérico.
+      const tablesToPull: AllTables[] = [
+        'transactions',
+        'accounts',
+        'categories',
+        'credit_cards',
+        'debts',
+        'loans',
+        'financings',
+        'subscriptions',
+        'tags',
+        'contacts',
+        'budgets',
+        'goals',
+        'credit_invoices',
+        'notifications',
+      ]
 
       for (const tableName of tablesToPull) {
-        // ✅ Verifica se a tabela local está vazia para este usuário.
-        // Se estiver, ignora o cutoff salvo e busca tudo (full resync daquela tabela).
+        // Verifica se a tabela local está vazia para este usuário.
+        // Se estiver (ou se force=true), ignora o cutoff salvo e busca tudo.
         let effectiveLastPull = storedLastPull
         try {
           const localCount = await db.table(tableName).where('user_id').equals(user.id).count()
@@ -249,6 +270,8 @@ export function useLocalSync() {
     await processSyncQueue(false)
   }, [isOnline, processSyncQueue])
 
+  // Força uma ressincronização completa, ignorando qualquer "lastPull" salvo —
+  // útil como botão de emergência ("Ressincronizar tudo").
   const forceFullResync = useCallback(async () => {
     renderLog('Ação manual: Ressincronização COMPLETA acionada.', 'info')
     if (!isOnline) {
