@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
+import { useAccountById } from "@/hooks/useAccountById"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
@@ -61,13 +62,15 @@ function formatCurrencyPreview(value: string) {
 function AccountFormContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get("edit")
+  const rawEditId = searchParams.get("edit")
+  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
   const { context } = useContext_()
   const { user } = useAuth()
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
 
   const [saving, setSaving] = useState(false)
+  const [initialized, setInitialized] = useState(!editId)
   const [formData, setFormData] = useState({
     name: "",
     type: "checking",
@@ -77,25 +80,70 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
-  // ✅ VOLTANDO PARA useLocalData
-  const { data: accountData, loading: accountLoading } = useLocalData({
-    table: 'accounts' as any,
-    filters: { id: editId },
-  })
+  const { data: accountData, loading: accountLoading, notFound } = useAccountById(editId)
 
   useEffect(() => {
-    if (accountData && accountData.length > 0) {
-      const acc = accountData[0]
+    if (editId && accountData && !initialized) {
       setFormData({
-        name: acc.name || "",
-        type: acc.type || "checking",
-        bank: acc.bank || "",
-        balance: String(acc.balance || 0),
-        color: acc.color || "#0f766e",
-        icon: acc.icon || "wallet",
+        name: accountData.name || "",
+        type: accountData.type || "checking",
+        bank: accountData.bank || "",
+        balance: String(accountData.balance || 0),
+        color: accountData.color || "#0f766e",
+        icon: accountData.icon || "wallet",
       })
+      setInitialized(true)
     }
-  }, [accountData])
+
+    if (!editId && !initialized) {
+      setInitialized(true)
+    }
+  }, [editId, accountData, initialized])
+
+  if (editId && notFound && !accountLoading) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f8f9fa] p-6 dark:bg-slate-950">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[20px] border border-red-100 bg-red-50 text-red-500 shadow-sm dark:border-red-900/30 dark:bg-red-500/10">
+            <X size={32} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Conta não encontrada</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A conta que você está tentando editar pode ter sido excluída.</p>
+          <button
+            onClick={() => router.push('/accounts')}
+            className="mt-6 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+          >
+            Voltar para listagem
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (editId && accountLoading) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
+        <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+            <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-700" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={5} height="96px" borderRadius="24px" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!initialized) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={5} height="96px" borderRadius="24px" />
+        </div>
+      </div>
+    )
+  }
 
   const selectedType =
     ACCOUNT_TYPES.find((item) => item.value === formData.type) || ACCOUNT_TYPES[0]
@@ -170,7 +218,7 @@ function AccountFormContent() {
         showToast("✅ Conta criada com sucesso!", "success")
       }
 
-      router.push("/accounts")
+      router.replace("/accounts")
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ ${err?.message || "Erro ao salvar conta"}`, "error")
@@ -181,22 +229,7 @@ function AccountFormContent() {
 
   const handleCancel = () => {
     vibrate([5])
-    router.push("/accounts")
-  }
-
-  if (accountLoading && editId) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
-        <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
-          <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
-            <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-700" />
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={5} height="96px" borderRadius="24px" />
-        </div>
-      </div>
-    )
+    router.replace("/accounts")
   }
 
   return (
