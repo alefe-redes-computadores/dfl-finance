@@ -30,7 +30,6 @@ import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useDebtsList } from '@/hooks/useDebtsList'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
   safeNumber,
@@ -113,7 +112,7 @@ function HomeContent() {
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
-  // ========== DADOS LOCAIS (sempre normalizados) ==========
+  // ========== ✅ DADOS LOCAIS COM useLocalData (TUDO) ==========
   const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext },
@@ -122,13 +121,16 @@ function HomeContent() {
     table: 'categories' as any, 
     filters: { context: effectiveContext }
   })
-  const { data: rawAccounts, loading: accLoading } = useLocalData({ 
+  const { data: rawAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({ 
     table: 'accounts' as any, 
     filters: { context: effectiveContext }
   })
 
-  // 🔥 TROCADO: agora usa useDebtsList em vez de useLocalData para dívidas
-  const { data: rawDebts, loading: debtsLoading } = useDebtsList(effectiveContext)
+  // ✅ VOLTANDO PARA useLocalData (em vez de useDebtsList)
+  const { data: rawDebts, loading: debtsLoading, reload: reloadDebts } = useLocalData({ 
+    table: 'debts' as any, 
+    filters: { context: effectiveContext }
+  })
 
   const { data: rawFinancings, loading: finLoading } = useLocalData({ 
     table: 'financings' as any, 
@@ -277,7 +279,7 @@ function HomeContent() {
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
-  // ========== DÍVIDAS (agora usando useDebtsList) ==========
+  // ========== DÍVIDAS (✅ agora usando useLocalData) ==========
   const debtsList = useMemo(() => {
     const allDebts = localDebts.map((debt: any) => {
       const payments = localTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
@@ -425,8 +427,9 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-      // 🔥 REMOVIDO reloadDebts, pois useDebtsList é reativo
       await reloadTxs()
+      await reloadAccounts()
+      await reloadDebts()
       setRefreshing(false)
     }
   }
@@ -445,9 +448,6 @@ function HomeContent() {
       container.removeEventListener('touchend', handleTouchEnd)
     }
   }, [isDataLoading, refreshing])
-
-  // ========== ATUALIZAÇÃO PERIÓDICA DOS ALERTAS REMOVIDA ==========
-  // 🔥 REMOVIDO: não é mais necessário porque useDebtsList é reativo
 
   // ========== PERSONALIZAÇÃO ==========
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
