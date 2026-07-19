@@ -27,7 +27,7 @@ import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
-import BankLogo from '@/components/BankLogo'  // ✅ NOVO IMPORT
+import BankLogo from '@/components/BankLogo'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Landmark,
@@ -65,7 +65,7 @@ function AccountsContent() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ✅ USANDO HOOK ESPECÍFICO
+  // USANDO HOOK ESPECÍFICO
   const { data: accounts, loading } = useAccountsList(effectiveContext)
 
   const handleDelete = async () => {
@@ -269,7 +269,7 @@ function AccountsContent() {
           </div>
         )}
 
-        {/* LISTAGEM DE CONTAS - NOVO LAYOUT CONTÍNUO */}
+        {/* LISTAGEM DE CONTAS - LAYOUT CONTÍNUO */}
         {loading ? (
           <div className="space-y-4">
             <Skeleton count={1} height="120px" borderRadius="24px" />
