@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import React, { useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   Home,
   ArrowLeftRight,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import TransferModal from './TransferModal'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
 
 const tabs = [
   { href: '/home', icon: Home, label: 'Início' },
@@ -22,8 +23,6 @@ const tabs = [
   { href: '/more', icon: MoreHorizontal, label: 'Mais' },
 ]
 
-const VISIBLE_ROUTES = ['/home', '/transactions', '/analysis', '/more']
-
 export default function BottomNav() {
   const pathname = usePathname() || ''
   const router = useRouter()
@@ -31,10 +30,11 @@ export default function BottomNav() {
   const [isOpen, setIsOpen] = useState(false)
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
 
-  const isVisible = useMemo(
-    () => VISIBLE_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`) || pathname.startsWith(`${r}?`)),
-    [pathname]
-  )
+  // ✅ CORRIGIDO: visibilidade agora vem de um hook compartilhado
+  // (useBottomNavVisible), a mesma fonte de verdade usada pelo AppLayout
+  // pra decidir o padding-bottom. Antes essa lógica vivia só aqui dentro,
+  // duplicada e sem sincronia com o layout.
+  const isVisible = useBottomNavVisible()
 
   if (!isVisible) return null
 
