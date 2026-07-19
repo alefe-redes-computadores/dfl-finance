@@ -73,7 +73,6 @@ const getLimitColor = (percent: number) => {
       border: 'border-amber-200 dark:border-amber-800/60',
     }
   }
-
   return {
     bar: 'bg-emerald-500',
     text: 'text-emerald-600 dark:text-emerald-400',
