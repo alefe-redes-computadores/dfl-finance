@@ -13,8 +13,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
-  ExternalLink,
-  Trash2
+  ExternalLink
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -191,41 +190,6 @@ export default function NotificationCenter({
     }
   }, [user?.id, localNotifs, markAsRead, showToast, success, vibrate])
 
-  const handleClearAll = useCallback(async () => {
-    if (!user?.id || processing) return
-
-    if (!isAdmin) {
-      showToast('⚠️ Apenas administradores podem limpar todas as notificações.', 'warning')
-      return
-    }
-
-    if (!window.confirm('⚠️ Tem certeza que deseja limpar TODAS as notificações? Esta ação não pode ser desfeita.')) {
-      return
-    }
-
-    setProcessing(true)
-
-    try {
-      const result = await clearAllNotifications(user.id)
-
-      if (!result?.success) {
-        throw new Error(result?.error || 'Falha ao limpar notificações')
-      }
-
-      setLocalNotifs([])
-      emitReadChange(0)
-
-      success()
-      vibrate([20, 10])
-      showToast('🗑️ Todas as notificações foram removidas!', 'success')
-    } catch (err: any) {
-      errorHaptic()
-      showToast(`❌ Erro ao limpar notificações: ${err?.message || 'Erro desconhecido'}`, 'error')
-    } finally {
-      setProcessing(false)
-    }
-  }, [user?.id, processing, isAdmin, emitReadChange, showToast, success, errorHaptic, vibrate])
-
   const activeNotifs = useMemo(
     () => localNotifs.filter((n) => !isNotifRead(n)),
     [localNotifs]
@@ -314,17 +278,6 @@ export default function NotificationCenter({
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button
-                onClick={handleClearAll}
-                disabled={processing}
-                className="flex items-center gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[11px] font-bold hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 active:scale-95"
-                title="Limpar todas"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
