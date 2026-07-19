@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -11,26 +11,20 @@ import {
   ChevronRight,
   Receipt,
   Settings2,
+  GripVertical,
+  Check,
+  X,
 } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useCardsList } from '@/hooks/useCardsList'
 import { useLocalData } from '@/hooks/useLocalData'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import PersonalizeModal from '@/components/PersonalizeModal'
-
-// ========== SEÇÕES PARA PERSONALIZAÇÃO ==========
-const CARD_SECTIONS = [
-  { id: 'invoices', label: 'Faturas do mês', description: 'Total das faturas do período' },
-  { id: 'filters', label: 'Filtros rápidos', description: 'Ordenar e filtrar cartões' },
-  { id: 'list', label: 'Lista de cartões', description: 'Seus cartões de crédito' },
-]
-
-const DEFAULT_CARD_ORDER = CARD_SECTIONS.map(s => s.id)
-const FIXED_CARD_SECTIONS = ['invoices', 'list'] // Seções que NÃO podem ser ocultadas
+import { createPortal } from 'react-dom'
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 
 // ========== CHAVE PARA LOCALSTORAGE ==========
-const STORAGE_KEY = 'dfl_cards_layout'
+const STORAGE_KEY = 'dfl_cards_order'
 
 const CardsSkeleton = () => (
   <div className="space-y-4 animate-pulse pt-2">
@@ -62,11 +56,10 @@ export default function CardsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse] = useState(false)
 
-  // ========== PERSONALIZAÇÃO ==========
+  // ========== PERSONALIZAÇÃO DA ORDEM ==========
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
-  const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_CARD_ORDER)
-  const [personalizeOrder, setPersonalizeOrder] = useState<typeof CARD_SECTIONS>(CARD_SECTIONS)
-  const [personalizeEnabled, setPersonalizeEnabled] = useState<Set<string>>(new Set(DEFAULT_CARD_ORDER))
+  const [cardOrder, setCardOrder] = useState<string[]>([])
+  const [isDragging, setIsDragging] = useState(false)
 
   const { data: localCards, loading: cardsLoading } = useCardsList(effectiveContext)
 
@@ -79,101 +72,75 @@ export default function CardsPage() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  // ========== CARREGAR LAYOUT SALVO ==========
+  // ========== CARREGAR ORDEM SALVA ==========
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed.enabled && Array.isArray(parsed.enabled)) {
-          setEnabledSections(parsed.enabled)
-          setPersonalizeEnabled(new Set(parsed.enabled))
-        }
         if (parsed.order && Array.isArray(parsed.order)) {
-          const orderedSections = parsed.order
-            .map((id: string) => CARD_SECTIONS.find(s => s.id === id))
-            .filter(Boolean) as typeof CARD_SECTIONS
-          if (orderedSections.length > 0) {
-            setPersonalizeOrder(orderedSections)
-          }
+          setCardOrder(parsed.order)
         }
       }
     } catch (e) {
-      console.warn('Erro ao carregar layout de cartões:', e)
+      console.warn('Erro ao carregar ordem de cartões:', e)
     }
   }, [])
 
-  // ========== SALVAR LAYOUT ==========
-  const saveLayout = useCallback((order: string[]) => {
-    setEnabledSections(order)
+  // ========== SALVAR ORDEM ==========
+  const saveOrder = useCallback((order: string[]) => {
+    setCardOrder(order)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
-        enabled: order, 
-        order: order 
-      }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ order }))
     } catch (e) {
-      console.warn('Erro ao salvar layout de cartões:', e)
+      console.warn('Erro ao salvar ordem de cartões:', e)
     }
   }, [])
 
-  const toggleSection = (id: string) => {
-    vibrate([5])
-    const isFixed = FIXED_CARD_SECTIONS.includes(id)
-    if (isFixed) return
-    
-    setPersonalizeEnabled(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
+  // ========== HANDLER DO DRAG & DROP ==========
+  const handleDragEnd = (result: DropResult) => {
+    setIsDragging(false)
+
+    if (!result.destination) return
+
+    const sourceIndex = result.source.index
+    const destIndex = result.destination.index
+
+    if (sourceIndex === destIndex) return
+
+    const visibleCards = getVisibleCards()
+    const newItems = Array.from(visibleCards)
+    const [removed] = newItems.splice(sourceIndex, 1)
+    newItems.splice(destIndex, 0, removed)
+
+    const newOrder = newItems.map(item => item.id)
+    saveOrder(newOrder)
   }
 
-  const moveSection = (id: string, direction: 'up' | 'down') => {
-    setPersonalizeOrder((prev) => {
-      const currentIndex = prev.findIndex((item) => item.id === id)
-      if (currentIndex === -1) return prev
-      const newOrder = [...prev]
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-      if (targetIndex >= 0 && targetIndex < newOrder.length) {
-        [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]]
-      }
-      return newOrder
-    })
-  }
-
-  const handleSavePersonalize = () => {
-    const finalOrder = personalizeOrder
-      .filter(s => personalizeEnabled.has(s.id))
-      .map(s => s.id)
-    saveLayout(finalOrder)
-    setShowPersonalizeModal(false)
-    showToast('✅ Layout personalizado!', 'success')
-    success()
-    vibrate([10])
+  const handleDragStart = () => {
+    setIsDragging(true)
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(5)
   }
 
   const openPersonalize = () => {
-    const enabledOrder = enabledSections
-      .map(id => CARD_SECTIONS.find(s => s.id === id))
-      .filter(Boolean) as typeof CARD_SECTIONS
-    const missing = CARD_SECTIONS.filter(s => !enabledSections.includes(s.id))
-    setPersonalizeOrder([...enabledOrder, ...missing])
-    setPersonalizeEnabled(new Set(enabledSections))
     setShowPersonalizeModal(true)
-    vibrate([5])
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(5)
+  }
+
+  const handleSavePersonalize = () => {
+    setShowPersonalizeModal(false)
+    showToast('✅ Ordem personalizada!', 'success')
+    success()
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([10])
   }
 
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
-      if (window.scrollY > 10 || loading) return
+      if (window.scrollY > 10 || cardsLoading) return
       pullStartY.current = e.touches[0].clientY
       isPulling.current = true
     },
-    [loading]
+    [cardsLoading]
   )
 
   const handleTouchMove = useCallback(
@@ -290,35 +257,205 @@ export default function CardsPage() {
     return <span className="text-sm font-bold opacity-80">{brand}</span>
   }
 
-  // ========== RENDERIZAR SEÇÕES ==========
-  const renderSection = (sectionId: string) => {
-    switch (sectionId) {
-      case 'invoices':
-        if (cardsWithInvoice.length === 0) return null
-        return (
-          <div key="invoices" className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
-                  Faturas do mês
-                </p>
-                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                  {formatCurrency(totalInvoices)}
-                </p>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
-                  Total de {cardsWithInvoice.length}{' '}
-                  {cardsWithInvoice.length === 1 ? 'cartão' : 'cartões'}
+  // ========== APLICAR ORDEM PERSONALIZADA ==========
+  const getVisibleCards = useCallback(() => {
+    return cardsWithInvoice
+  }, [cardsWithInvoice])
+
+  const sortedCards = useMemo(() => {
+    const visible = getVisibleCards()
+    if (cardOrder.length === 0) return visible
+    
+    return [...visible].sort((a, b) => {
+      const idxA = cardOrder.indexOf(a.id)
+      const idxB = cardOrder.indexOf(b.id)
+      if (idxA === -1 && idxB === -1) return 0
+      if (idxA === -1) return 1
+      if (idxB === -1) return -1
+      return idxA - idxB
+    })
+  }, [getVisibleCards, cardOrder])
+
+  // ========== MODAL DE PERSONALIZAÇÃO ==========
+  const PersonalizeOrderModal = () => {
+    if (!showPersonalizeModal) return null
+
+    const visibleCards = getVisibleCards()
+    const orderedItems = cardOrder.length > 0
+      ? visibleCards.sort((a, b) => {
+          const idxA = cardOrder.indexOf(a.id)
+          const idxB = cardOrder.indexOf(b.id)
+          if (idxA === -1 && idxB === -1) return 0
+          if (idxA === -1) return 1
+          if (idxB === -1) return -1
+          return idxA - idxB
+        })
+      : visibleCards
+
+    return createPortal(
+      <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowPersonalizeModal(false)}>
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div
+          className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-[32px] shadow-2xl flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-8 duration-300"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex justify-center pt-4 pb-2">
+            <div className="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-slate-700" />
+          </div>
+
+          <div className="flex-shrink-0 bg-white dark:bg-slate-800 px-6 pt-2 pb-4 border-b border-gray-100 dark:border-slate-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-[20px] text-gray-800 dark:text-gray-100 tracking-tight">
+                  Reordenar Cartões
+                </h2>
+                <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">
+                  Arraste para reorganizar a ordem dos cartões
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-[18px] bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
-                <Receipt size={20} className="text-indigo-600 dark:text-indigo-400" />
-              </div>
+              <button
+                onClick={() => setShowPersonalizeModal(false)}
+                className="p-2.5 bg-gray-50 dark:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full transition-colors active:scale-95"
+              >
+                <X size={20} />
+              </button>
             </div>
           </div>
-        )
-      case 'filters':
-        return (
-          <div key="filters" className="flex items-center justify-end gap-3 mb-3">
+
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+              <Droppable droppableId="cards">
+                {(provided, snapshot) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className={`space-y-2 transition-colors duration-200 ${
+                      snapshot.isDraggingOver ? 'bg-teal-50/30 dark:bg-teal-900/10 rounded-[24px] p-1' : ''
+                    }`}
+                  >
+                    {orderedItems.map((card: any, index: number) => (
+                      <Draggable key={card.id} draggableId={card.id} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={`flex items-center gap-3 p-3 rounded-[20px] transition-all ${
+                              snapshot.isDragging
+                                ? 'bg-white dark:bg-slate-800 shadow-lg ring-2 ring-teal-500/30 scale-[1.02]'
+                                : 'bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+                            } border border-gray-100 dark:border-slate-700/50`}
+                          >
+                            <div
+                              {...provided.dragHandleProps}
+                              className="shrink-0 p-1.5 rounded-full cursor-grab text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                              <GripVertical size={18} />
+                            </div>
+
+                            <div
+                              className="w-10 h-10 rounded-[12px] flex items-center justify-center text-white shadow-sm shrink-0"
+                              style={{ backgroundColor: card.color || '#f97316' }}
+                            >
+                              <CreditCard size={18} />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                {card.name}
+                              </p>
+                              <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                                Vence dia {card.due_day}
+                              </p>
+                            </div>
+
+                            <span className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
+                              #{index + 1}
+                            </span>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          </div>
+
+          <div className="flex-shrink-0 bg-white dark:bg-slate-800 px-6 pt-4 pb-6 border-t border-gray-100 dark:border-slate-700/50">
+            <button
+              onClick={handleSavePersonalize}
+              className="w-full py-3.5 rounded-[20px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Check size={18} />
+              Guardar Ordem
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-28 relative transition-colors duration-300"
+    >
+      {loadingPulse && (
+        <div className="fixed top-6 right-6 z-50">
+          <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
+        </div>
+      )}
+
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
+          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
+            <RefreshCw size={16} className="animate-spin text-teal-600" />
+            <span className="text-xs font-semibold text-teal-600">Atualizando...</span>
+          </div>
+        </div>
+      )}
+
+      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push('/more')}
+                  className="h-9 w-9 -ml-1 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Cartões
+                </h1>
+              </div>
+              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5 ml-1">
+                {appMode === 'personal_only' ? 'Visão pessoal' : 'Visão global'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => router.push('/cards/new')}
+                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
+              >
+                <Plus size={20} />
+              </button>
+
+              {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CARTÕES */}
+              <button
+                onClick={openPersonalize}
+                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+              >
+                <Settings2 size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <ContextToggle />
             </div>
@@ -341,11 +478,55 @@ export default function CardsPage() {
               </button>
             </div>
           </div>
-        )
-      case 'list':
-        return (
-          <div key="list" className="space-y-3">
-            {cardsWithInvoice.map((card: any, index: number) => {
+        </div>
+      </div>
+
+      <div className="px-4 pt-3 space-y-3">
+        {!loading && cardsWithInvoice.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                  Faturas do mês
+                </p>
+                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  {formatCurrency(totalInvoices)}
+                </p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
+                  Total de {cardsWithInvoice.length}{' '}
+                  {cardsWithInvoice.length === 1 ? 'cartão' : 'cartões'}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-[18px] bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
+                <Receipt size={20} className="text-indigo-600 dark:text-indigo-400" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <CardsSkeleton />
+        ) : cardsWithInvoice.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+              <CreditCard size={28} className="opacity-30 text-gray-500" />
+            </div>
+            <h3 className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 mb-1">
+              Nenhum cartão
+            </h3>
+            <p className="text-gray-400 dark:text-gray-500 text-[12px] mb-6 max-w-[250px]">
+              Adicione cartões para acompanhar faturas e limites.
+            </p>
+            <button
+              onClick={() => router.push('/cards/new')}
+              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-[20px] font-bold text-[14px] shadow-lg shadow-teal-600/20 active:scale-[0.98] transition-all"
+            >
+              Adicionar Cartão
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedCards.map((card: any, index: number) => {
               const limitPercent = getLimitPercent(card.faturaAtual || 0, Number(card.limit_amount) || 0)
               const limitColor = getLimitColor(limitPercent)
               const available = (Number(card.limit_amount) || 0) - (card.faturaAtual || 0)
@@ -446,136 +627,11 @@ export default function CardsPage() {
               )
             })}
           </div>
-        )
-      default:
-        return null
-    }
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-28 relative transition-colors duration-300"
-    >
-      {loadingPulse && (
-        <div className="fixed top-6 right-6 z-50">
-          <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
-        </div>
-      )}
-
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-xs font-semibold text-teal-600">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
-      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => router.push('/more')}
-                  className="h-9 w-9 -ml-1 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                  Cartões
-                </h1>
-              </div>
-              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5 ml-1">
-                {appMode === 'personal_only' ? 'Visão pessoal' : 'Visão global'}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => router.push('/cards/new')}
-                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
-              >
-                <Plus size={20} />
-              </button>
-
-              {/* ✅ BOTÃO PERSONALIZAR */}
-              <button
-                onClick={openPersonalize}
-                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-              >
-                <Settings2 size={20} />
-              </button>
-            </div>
-          </div>
-
-          {enabledSections.includes('filters') && (
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <ContextToggle />
-              </div>
-
-              <div className="flex items-center gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-1.5 py-1 shrink-0">
-                <button
-                  onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                  className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98]"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="min-w-[78px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">
-                  {monthLabel}
-                </span>
-                <button
-                  onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                  className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 active:scale-[0.98]"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="px-4 pt-3 space-y-3">
-        {loading ? (
-          <CardsSkeleton />
-        ) : cardsWithInvoice.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
-              <CreditCard size={28} className="opacity-30 text-gray-500" />
-            </div>
-            <h3 className="font-semibold text-[15px] text-gray-800 dark:text-gray-200 mb-1">
-              Nenhum cartão
-            </h3>
-            <p className="text-gray-400 dark:text-gray-500 text-[12px] mb-6 max-w-[250px]">
-              Adicione cartões para acompanhar faturas e limites.
-            </p>
-            <button
-              onClick={() => router.push('/cards/new')}
-              className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-[20px] font-bold text-[14px] shadow-lg shadow-teal-600/20 active:scale-[0.98] transition-all"
-            >
-              Adicionar Cartão
-            </button>
-          </div>
-        ) : (
-          // ✅ RENDERIZA AS SEÇÕES NA ORDEM PERSONALIZADA
-          enabledSections.map(sectionId => renderSection(sectionId))
         )}
       </div>
 
-      {/* ✅ PERSONALIZE MODAL */}
-      <PersonalizeModal
-        isOpen={showPersonalizeModal}
-        onClose={() => setShowPersonalizeModal(false)}
-        sections={CARD_SECTIONS}
-        enabled={personalizeEnabled}
-        order={personalizeOrder}
-        onToggle={toggleSection}
-        onMove={moveSection}
-        onSave={handleSavePersonalize}
-      />
+      {/* ✅ MODAL DE REORDENAÇÃO */}
+      <PersonalizeOrderModal />
     </div>
   )
 }
