@@ -1,17 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
 import { Loader2 } from 'lucide-react'
+import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
+
+  const bottomNavVisible = useBottomNavVisible()
 
   useEffect(() => {
     setMounted(true)
@@ -34,7 +36,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 pb-20 transition-colors duration-300">
+    <div
+      className={`min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300 ${
+        bottomNavVisible ? 'pb-20' : ''
+      }`}
+    >
       <div className="page-transition">
         {children}
       </div>
