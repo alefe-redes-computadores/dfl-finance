@@ -8,23 +8,23 @@ export function useDebtById(debtId?: string | null) {
   const { user } = useAuth()
 
   const debt = useLiveQuery(async () => {
-    if (!user?.id || !debtId) return null
+    // CORREÇÃO: Se ainda não temos os IDs, retornamos "undefined" (e não null).
+    // O "undefined" avisa o sistema que ainda estamos "loading",
+    // impedindo a tela de fechar por falso positivo de "não encontrado".
+    if (!user?.id || !debtId) return undefined
 
     const found = await db.debts.get(debtId)
 
+    // Se a busca finalizou e realmente não existe, aí sim retornamos null
     if (!found) return null
     if (found.user_id !== user.id) return null
 
     return found
   }, [user?.id, debtId])
 
-  // Enquanto o auth ainda não resolveu (user.id undefined) mas já existe
-  // um debtId, isso é "ainda carregando" e não "não encontrado".
-  const stillWaitingForAuth = !user?.id && !!debtId
-
   return {
     debt,
-    loading: debt === undefined || stillWaitingForAuth,
-    notFound: debt === null && !stillWaitingForAuth,
+    loading: debt === undefined,
+    notFound: debt === null,
   }
 }
