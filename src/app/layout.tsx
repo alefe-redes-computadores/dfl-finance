@@ -1,70 +1,63 @@
-import type { Metadata, Viewport } from 'next'
-import { Poppins } from 'next/font/google'
-import './globals.css'
-import { ToastProvider } from '@/contexts/ToastContext'
-import { ThemeProvider } from '@/contexts/ThemeContext' // ✅ IMPORTADO
+'use client'
 
-// Configuração oficial da Fonte Poppins
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-poppins',
-  display: 'swap',
-})
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
+import BottomNav from '@/components/BottomNav'
+import { ContextProvider } from '@/components/ContextToggle'
+import { Loader2 } from 'lucide-react'
+import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
 
-export const metadata: Metadata = {
-  title: 'DFL Finance',
-  description: 'Controle financeiro pessoal e empresarial',
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'DFL Finance',
-  },
-}
+function AppContent({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
 
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8f9fa' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
-  ],
-}
+  // ✅ NOVO: mesma fonte de verdade usada pelo BottomNav pra decidir se
+  // renderiza. Assim o padding-bottom (pb-20) só é aplicado quando o nav
+  // realmente vai aparecer na tela — nas telas de formulário (transactions/new,
+  // transactions/edit, transactions/card-expense) o nav some e o espaço
+  // reservado pra ele também some, evitando um respiro vazio no fim da página.
+  const bottomNavVisible = useBottomNavVisible()
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!loading && !user && mounted) {
+      router.replace('/login')
+    }
+  }, [user, loading, router, mounted])
+
+  if (loading || !mounted) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900">
+        <Loader2 size={40} className="animate-spin text-teal-700" />
+      </div>
+    )
+  }
+
+  if (!user) return null
+
   return (
-    <html lang="pt-BR" className={`${poppins.variable} font-sans antialiased`} suppressHydrationWarning>
-      <head>
-        {/* ✅ SCRIPT MÁGICO: Trava o tema antes da tela piscar no celular */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.documentElement.classList.add('dark')
-                } else {
-                  document.documentElement.classList.remove('dark')
-                }
-              } catch (_) {}
-            `,
-          }}
-        />
-      </head>
-      <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen selection:bg-teal-500/30 transition-colors duration-300">
-        {/* ✅ ENVELOPADO NO THEME PROVIDER */}
-        <ThemeProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </ThemeProvider>
-      </body>
-    </html>
+    <div
+      className={`min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300 ${
+        bottomNavVisible ? 'pb-20' : ''
+      }`}
+    >
+      <div className="page-transition">
+        {children}
+      </div>
+      <BottomNav />
+    </div>
+  )
+}
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ContextProvider>
+      <AppContent>{children}</AppContent>
+    </ContextProvider>
   )
 }
