@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import {
@@ -19,6 +19,7 @@ import {
   Briefcase,
   Settings2,
   GripVertical,
+  Check,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -198,7 +199,6 @@ function AccountsContent() {
     return [...visible].sort((a, b) => {
       const idxA = accountOrder.indexOf(a.id)
       const idxB = accountOrder.indexOf(b.id)
-      // Itens não ordenados vão para o final
       if (idxA === -1 && idxB === -1) return 0
       if (idxA === -1) return 1
       if (idxB === -1) return -1
@@ -217,7 +217,7 @@ function AccountsContent() {
 
     const visibleAccounts = getVisibleAccounts()
     const orderedItems = accountOrder.length > 0
-      ? visibleAccounts.sort((a, b) => {
+      ? [...visibleAccounts].sort((a, b) => {
           const idxA = accountOrder.indexOf(a.id)
           const idxB = accountOrder.indexOf(b.id)
           if (idxA === -1 && idxB === -1) return 0
