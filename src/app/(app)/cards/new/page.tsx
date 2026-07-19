@@ -15,7 +15,6 @@ import {
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useCardById } from '@/hooks/useCardById'
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { safeAdd, safeUpdate } from '@/lib/safeDb'
@@ -51,9 +50,7 @@ function NewCardContent() {
   const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const contextData = useContext_()
 
-  // ✅ 1. TODOS OS HOOKS NO TOPO (REGRRA MAIS IMPORTANTE)
-
-  // useMemo para normalizar o ID
+  // ✅ useMemo para normalizar o ID
   const rawEditId = searchParams.get("edit")
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
@@ -62,8 +59,11 @@ function NewCardContent() {
     (contextData?.appMode === 'personal_only' ? 'personal' : contextData?.context) ??
     'dfl'
 
-  // HOOKS DE DADOS
-  const { data: cardData, loading: cardLoading, notFound } = useCardById(editId)
+  // ✅ VOLTANDO PARA useLocalData
+  const { data: cardData, loading: cardLoading } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { id: editId },
+  })
 
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
@@ -86,7 +86,7 @@ function NewCardContent() {
   const [limitAmount, setLimitAmount] = useState('0,00')
   const [showAccountModal, setShowAccountModal] = useState(false)
 
-  // ✅ useMemo para selectedAccount (MOVIDO PARA O TOPO!)
+  // ✅ useMemo para selectedAccount
   const selectedAccount = useMemo(
     () => accounts.find((a: any) => a.id === paymentAccountId),
     [accounts, paymentAccountId]
@@ -94,17 +94,18 @@ function NewCardContent() {
 
   // ✅ useEffect para hidratação
   useEffect(() => {
-    if (editId && cardData && !initialized) {
-      setName(cardData.name || '')
-      setFlag(cardData.flag || '')
-      setInstitution(cardData.institution || '')
-      setLastFour(cardData.last_four || '')
-      setClosingDay(cardData.closing_day ? String(cardData.closing_day) : '')
-      setDueDay(cardData.due_day ? String(cardData.due_day) : '')
-      setPaymentAccountId(cardData.payment_account_id || '')
-      setColor(cardData.color || PREDEFINED_COLORS[0])
+    if (editId && cardData && cardData.length > 0 && !initialized) {
+      const card = cardData[0]
+      setName(card.name || '')
+      setFlag(card.flag || '')
+      setInstitution(card.institution || '')
+      setLastFour(card.last_four || '')
+      setClosingDay(card.closing_day ? String(card.closing_day) : '')
+      setDueDay(card.due_day ? String(card.due_day) : '')
+      setPaymentAccountId(card.payment_account_id || '')
+      setColor(card.color || PREDEFINED_COLORS[0])
       
-      const limit = Number(cardData.limit_amount) || 0
+      const limit = Number(card.limit_amount) || 0
       setLimitAmount(limit.toFixed(2).replace('.', ','))
       
       setInitialized(true)
@@ -115,28 +116,7 @@ function NewCardContent() {
     }
   }, [editId, cardData, initialized])
 
-  // ✅ 2. SÓ DEPOIS DOS HOOKS, OS RETURNS CONDICIONAIS
-
-  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
-  if (editId && notFound && !cardLoading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
-        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
-          <CreditCard size={32} className="text-red-500" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Cartão não encontrado</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
-          O cartão que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
-        </p>
-        <button
-          onClick={() => router.push('/cards')}
-          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
-        >
-          Voltar para listagem
-        </button>
-      </div>
-    )
-  }
+  // ✅ SÓ DEPOIS DOS HOOKS, OS RETURNS CONDICIONAIS
 
   // LOADING
   if (editId && cardLoading) {
@@ -160,7 +140,7 @@ function NewCardContent() {
     )
   }
 
-  // ✅ 3. FUNÇÕES (NÃO SÃO HOOKS, PODEM FICAR AQUI)
+  // ✅ FUNÇÕES
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '')
     if (value === '') value = '0'
@@ -257,7 +237,6 @@ function NewCardContent() {
     }
   }
 
-  // ✅ 4. RENDERIZAÇÃO
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 text-gray-900 dark:text-white pb-32 transition-colors duration-300">
       <div
