@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, useRef, useMemo, useCallback } from "react"
+import { Suspense, useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
@@ -17,7 +17,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
 import { db, addToSyncQueue } from '@/lib/db'
-import BankLogo from '@/components/BankLogo'  // ✅ NOVO IMPORT
+import BankLogo from '@/components/BankLogo'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -124,14 +124,21 @@ function BankBadge({ bank }: { bank?: string | null }) {
 function AccountDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const rawId = searchParams.get('id')
-  const accountId = useMemo(() => rawId?.trim() || null, [rawId])
+  
+  // ✅ PEGA O ID CORRETAMENTE E FAZ VALIDAÇÃO
+  const rawId = searchParams?.get('id')
+  const accountId = useMemo(() => {
+    if (!rawId || rawId === 'null' || rawId === 'undefined') return null
+    return rawId.trim()
+  }, [rawId])
+  
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
   const { user } = useAuth()
 
+  // ✅ SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
   const { data: accountData, loading, notFound } = useAccountById(accountId)
   const { data: transactions, loading: txLoading } = useAccountTransactions(accountId)
   const { data: allAccounts } = useLocalData({
@@ -168,6 +175,7 @@ function AccountDetailContent() {
     }
   }, [refreshing, vibrate])
 
+  // ✅ TRATAMENTO DE ID AUSENTE - MAIS ROBUSTO
   if (!accountId) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f8f9fa] p-6 dark:bg-slate-950">
@@ -178,11 +186,11 @@ function AccountDetailContent() {
           <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Conta não identificada</p>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">O ID da conta não foi fornecido na URL.</p>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/accounts')}
             className="mt-6 inline-flex items-center gap-2 rounded-[18px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700"
           >
             <ArrowLeft size={18} />
-            Voltar
+            Voltar para contas
           </button>
         </div>
       </div>
@@ -212,11 +220,11 @@ function AccountDetailContent() {
           <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Conta não encontrada</p>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A conta que você procura não existe ou foi removida.</p>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/accounts')}
             className="mt-6 inline-flex items-center gap-2 rounded-[18px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700"
           >
             <ArrowLeft size={18} />
-            Voltar
+            Voltar para contas
           </button>
         </div>
       </div>
@@ -392,7 +400,7 @@ function AccountDetailContent() {
       await addToSyncQueue(user.id, 'accounts', 'delete', accountId, { id: accountId })
       success()
       showToast("🗑️ Conta excluída com sucesso!", "success")
-      router.back()
+      router.push('/accounts')
     } catch (err: any) {
       errorHaptic()
       showToast(`❌ Erro ao excluir: ${err.message}`, "error")
@@ -434,7 +442,7 @@ function AccountDetailContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                router.back()
+                router.push('/accounts')
               }}
               className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-black/5 bg-gray-50 text-gray-700 transition-transform active:scale-95 dark:border-white/10 dark:bg-slate-800 dark:text-gray-200"
             >
@@ -484,7 +492,6 @@ function AccountDetailContent() {
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-transparent dark:from-teal-500/10" />
               <div className="relative">
                 <div className="mb-5 flex items-start justify-between gap-4">
-                  {/* ✅ SUBSTITUÍDO ÍCONE GENÉRICO POR BankLogo */}
                   <div className="flex items-center gap-4">
                     <BankLogo color={account.color} name={account.name} size="lg" />
                     <div className="min-w-0">
