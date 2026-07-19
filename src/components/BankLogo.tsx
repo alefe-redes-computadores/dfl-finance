@@ -1,25 +1,35 @@
-import Image from 'next/image';
-import { Building2 } from 'lucide-react';
+import {
+  Building2,
+  CreditCard,
+  Smartphone,
+  Infinity as InfinityIcon,
+  Utensils,
+  Landmark,
+  CircleDollarSign,
+  Wallet
+} from 'lucide-react';
 
-// Dicionário mapeando a palavra-chave para o site oficial da empresa
-const bankDomains: Record<string, string> = {
-  'inter': 'bancointer.com.br',
-  'nubank': 'nubank.com.br',
-  'itau': 'itau.com.br',
-  'itaú': 'itau.com.br',
-  'bradesco': 'banco.bradesco',
-  'caixa': 'caixa.gov.br',
-  'banco do brasil': 'bb.com.br',
-  'bb': 'bb.com.br',
-  'santander': 'santander.com.br',
-  'c6': 'c6bank.com.br',
-  'sicredi': 'sicredi.com.br',
-  'sicoob': 'sicoob.com.br',
-  'stone': 'stone.com.br',
-  'infinitepay': 'infinitepay.io',
-  'ifood': 'ifood.com.br',
-  'mercado pago': 'mercadopago.com.br',
-  'picpay': 'picpay.com',
+// Dicionário com as cores hexadecimais oficiais e um ícone que lembre a marca
+const brandMap: Record<string, { icon: any; color: string }> = {
+  ifood: { icon: Utensils, color: '#EA1D2C' },
+  stone: { icon: CircleDollarSign, color: '#1BBC6D' },
+  infinite: { icon: InfinityIcon, color: '#1A1A1A' }, // InfinitePay
+  pagbank: { icon: Smartphone, color: '#F48A20' },
+  pagseguro: { icon: Smartphone, color: '#F48A20' },
+  nubank: { icon: CreditCard, color: '#8A05BE' },
+  inter: { icon: Landmark, color: '#FF7A00' },
+  itau: { icon: Landmark, color: '#EC7000' },
+  itaú: { icon: Landmark, color: '#EC7000' },
+  bradesco: { icon: Landmark, color: '#CC092F' },
+  bb: { icon: Landmark, color: '#F9D300' }, // Banco do Brasil
+  bancodobrasil: { icon: Landmark, color: '#F9D300' },
+  caixa: { icon: Landmark, color: '#005CA9' },
+  santander: { icon: Landmark, color: '#EC0000' },
+  sicredi: { icon: Landmark, color: '#00A859' },
+  sicoob: { icon: Landmark, color: '#00AE9D' },
+  mercadopago: { icon: Smartphone, color: '#009EE3' },
+  picpay: { icon: Smartphone, color: '#11C76F' },
+  carteira: { icon: Wallet, color: '#64748b' }, // Conta carteira física
 };
 
 interface BankLogoProps {
@@ -29,10 +39,12 @@ interface BankLogoProps {
 }
 
 export default function BankLogo({ name, color, size = 'md' }: BankLogoProps) {
-  const normalizedName = name.toLowerCase();
+  // Remove espaços e deixa tudo em minúsculo (ex: "Ifood Pago" vira "ifoodpago")
+  const normalizedName = name.toLowerCase().replace(/\s+/g, '');
 
-  // Procura se o nome da conta contém alguma das chaves do nosso mapa
-  const matchedBankKey = Object.keys(bankDomains).find(key => normalizedName.includes(key));
+  // Tenta achar a marca pelas palavras-chave mapeadas
+  const matchedKey = Object.keys(brandMap).find(key => normalizedName.includes(key));
+  const brand = matchedKey ? brandMap[matchedKey] : null;
 
   const sizeClasses = {
     sm: 'w-6 h-6 rounded-md',
@@ -40,24 +52,25 @@ export default function BankLogo({ name, color, size = 'md' }: BankLogoProps) {
     lg: 'w-12 h-12 rounded-2xl'
   };
 
-  // Se achou uma correspondência, busca a logo direto da API do Clearbit
-  if (matchedBankKey) {
-    const domain = bankDomains[matchedBankKey];
+  const iconSize = size === 'md' ? 20 : size === 'sm' ? 14 : 24;
+
+  // Se achou uma marca mapeada, usa a cor e o ícone oficiais
+  if (brand) {
+    const IconComp = brand.icon;
     return (
-      <div className={`${sizeClasses[size]} shrink-0 overflow-hidden shadow-sm border border-gray-200/60 dark:border-slate-700 bg-white flex items-center justify-center`}>
-        <Image
-          src={`https://logo.clearbit.com/${domain}`}
-          alt={`Logo ${name}`}
-          width={40}
-          height={40}
-          className="w-full h-full object-cover"
-          unoptimized // Fundamental para carregar imagens de URLs externas sem erro
-        />
+      <div
+        className={`${sizeClasses[size]} shrink-0 flex items-center justify-center shadow-sm`}
+        style={{
+          backgroundColor: `${brand.color}15`, // Fundo com 15% de opacidade da cor oficial
+          color: brand.color
+        }}
+      >
+        <IconComp size={iconSize} />
       </div>
     );
   }
 
-  // Fallback: Ícone genérico suave
+  // Fallback: Ícone genérico com a cor personalizada pelo usuário (ou cinza padrão)
   return (
     <div
       className={`${sizeClasses[size]} shrink-0 flex items-center justify-center shadow-sm`}
@@ -66,7 +79,7 @@ export default function BankLogo({ name, color, size = 'md' }: BankLogoProps) {
         color: color || '#64748b'
       }}
     >
-      <Building2 size={size === 'md' ? 20 : size === 'sm' ? 14 : 24} />
+      <Building2 size={iconSize} />
     </div>
   );
 }
