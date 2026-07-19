@@ -13,6 +13,7 @@ import {
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
   AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
+  SearchX,  // ✅ ADICIONADO
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -39,6 +40,7 @@ import {
   safeArray,
   safeNavigate,
 } from '@/lib/safe'
+import EmptyState from '@/components/EmptyState'  // ✅ NOVO IMPORT
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -1151,8 +1153,12 @@ function HomeContent() {
 
               <div className="flex flex-col">
                 {accounts.length === 0 ? (
-                  <div className="p-4 text-center text-[13px] font-medium text-gray-400 dark:text-gray-500">
-                    Nenhuma conta registrada.
+                  <div className="p-4">
+                    <EmptyState
+                      icon={Wallet}
+                      title="Nenhuma conta"
+                      message="Você ainda não registrou nenhuma conta bancária neste contexto."
+                    />
                   </div>
                 ) : (
                   accounts.map((acc: any, index: number) => (
@@ -1211,13 +1217,13 @@ function HomeContent() {
               <div className="flex flex-col">
                 {cards.length === 0 ? (
                   <div className="px-4 pb-4">
-                    <button
-                      onClick={() => router.push("/cards/new")}
-                      className="w-full rounded-[16px] py-3.5 flex items-center justify-center gap-2 text-sm font-semibold text-teal-600 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/10 active:scale-[0.98]"
-                    >
-                      <Plus size={18} />
-                      Adicionar cartão
-                    </button>
+                    <EmptyState
+                      icon={CreditCard}
+                      title="Nenhum cartão"
+                      message="Adicione seu primeiro cartão de crédito para acompanhar as faturas."
+                      actionLabel="Adicionar cartão"
+                      onAction={() => router.push("/cards/new")}
+                    />
                   </div>
                 ) : (
                   cards.map((card: any, index: number) => (
@@ -1281,8 +1287,12 @@ function HomeContent() {
 
               <div className="flex flex-col">
                 {recentTransactions.length === 0 ? (
-                  <div className="p-4 text-center text-[13px] font-medium text-gray-400 dark:text-gray-500">
-                    Nenhuma transação registrada.
+                  <div className="p-4">
+                    <EmptyState
+                      icon={SearchX}
+                      title="Sem movimentações"
+                      message="Você ainda não possui transações recentes registradas neste recorte."
+                    />
                   </div>
                 ) : (
                   recentTransactions.map((tx: any, index: number) => {
