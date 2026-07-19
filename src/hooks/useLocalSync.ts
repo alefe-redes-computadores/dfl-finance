@@ -44,25 +44,48 @@ export function useLocalSync() {
   }, [user?.id])
 
   // ✅ NOVA LÓGICA: Puxar dados remotos (do Bot/Supabase) para o celular
-  const pullRemoteChanges = useCallback(async () => {
+  // ✅ CORRIGIDO: aceita um parâmetro opcional "force". Além disso, para CADA
+  // tabela, se o Dexie local estiver vazio para aquele usuário, ignora o
+  // "lastPull" salvo e busca TUDO do zero. Isso evita o cenário onde o
+  // localStorage guarda um timestamp recente (de uma tentativa de pull
+  // anterior que não trouxe nada, por erro de RLS, contexto, etc.) e o app
+  // fica preso para sempre perguntando "o que mudou depois disso", sem nunca
+  // buscar os registros antigos que já existiam na nuvem.
+  const pullRemoteChanges = useCallback(async (force = false) => {
     if (!user?.id || !isOnline) return
-    renderLog('Iniciando PULL da nuvem (Buscando dados do WhatsApp/Externos)...', 'info')
+    renderLog(`Iniciando PULL da nuvem${force ? ' (FORÇADO / FULL RESYNC)' : ''}...`, 'info')
 
     try {
       const lastPullKey = `dfl_last_pull_${user.id}`
-      // Pega a última data de sync ou usa uma data bem antiga se for a primeira vez
-      const lastPull = localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
+      const storedLastPull = localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
       const syncTime = new Date().toISOString()
 
       // Tabelas principais que o bot ou outros dispositivos podem alterar
       const tablesToPull: AllTables[] = ['transactions', 'accounts', 'categories', 'credit_cards']
 
       for (const tableName of tablesToPull) {
+        // ✅ Verifica se a tabela local está vazia para este usuário.
+        // Se estiver, ignora o cutoff salvo e busca tudo (full resync daquela tabela).
+        let effectiveLastPull = storedLastPull
+        try {
+          const localCount = await db.table(tableName).where('user_id').equals(user.id).count()
+          if (force || localCount === 0) {
+            effectiveLastPull = '2000-01-01T00:00:00.000Z'
+            renderLog(
+              `Tabela [${tableName}] vazia localmente (ou força ativa) — buscando histórico completo.`,
+              'info'
+            )
+          }
+        } catch (countErr: any) {
+          // Se por algum motivo a contagem falhar, joga pro modo seguro (full fetch)
+          effectiveLastPull = '2000-01-01T00:00:00.000Z'
+        }
+
         const { data, error } = await supabase
           .from(tableName)
           .select('*')
           .eq('user_id', user.id)
-          .gt('updated_at', lastPull) // Busca só o que foi alterado APÓS o último sync
+          .gt('updated_at', effectiveLastPull)
 
         if (error) {
           renderLog(`Erro ao puxar ${tableName}: ${error.message}`, 'error')
@@ -81,6 +104,8 @@ export function useLocalSync() {
           
           // bulkPut insere os novos e atualiza os existentes silenciosamente
           await db.table(tableName).bulkPut(localData)
+        } else {
+          renderLog(`Nenhuma atualização em ${tableName}.`, 'info')
         }
       }
 
@@ -94,7 +119,7 @@ export function useLocalSync() {
     }
   }, [user?.id, isOnline, isAdmin])
 
-  const processSyncQueue = useCallback(async () => {
+  const processSyncQueue = useCallback(async (forcePull = false) => {
     renderLog('Iniciando processSyncQueue...', 'info')
     
     if (!user?.id) { renderLog('Cancelado: Usuário sem ID logado', 'error'); return }
@@ -173,7 +198,7 @@ export function useLocalSync() {
       }
 
       // PASSO 2: PUXAR (PULL) OS DADOS DO WHATSAPP / NUVEM PARA O CELULAR
-      await pullRemoteChanges()
+      await pullRemoteChanges(forcePull)
 
       await updatePendingCount()
       if (pendingCount === 0) setSyncStatus(isOnline ? 'online' : 'offline')
@@ -221,12 +246,37 @@ export function useLocalSync() {
       showToast('📡 Sem conexão.', 'warning')
       return
     }
-    await processSyncQueue()
+    await processSyncQueue(false)
   }, [isOnline, processSyncQueue])
+
+  // ✅ NOVO: força uma ressincronização completa, ignorando qualquer
+  // "lastPull" salvo — útil como botão de emergência ("Ressincronizar tudo")
+  // caso o usuário suspeite que dados da nuvem não estão aparecendo local.
+  const forceFullResync = useCallback(async () => {
+    renderLog('Ação manual: Ressincronização COMPLETA acionada.', 'info')
+    if (!isOnline) {
+      showToast('📡 Sem conexão.', 'warning')
+      return
+    }
+    if (user?.id) {
+      localStorage.removeItem(`dfl_last_pull_${user.id}`)
+    }
+    await processSyncQueue(true)
+    showToast('✅ Ressincronização completa concluída.', 'success')
+  }, [isOnline, processSyncQueue, user?.id, showToast])
 
   const refreshPendingCount = useCallback(async () => {
     await updatePendingCount()
   }, [updatePendingCount])
 
-  return { syncStatus, isOnline, pendingCount, isSyncing: isSyncing.current, queueOperation, forceSync, refreshPendingCount }
+  return {
+    syncStatus,
+    isOnline,
+    pendingCount,
+    isSyncing: isSyncing.current,
+    queueOperation,
+    forceSync,
+    forceFullResync,
+    refreshPendingCount,
+  }
 }
