@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, Suspense, useMemo } from "react"
+import { Suspense, useState, useRef, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
@@ -17,6 +17,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
 import { db, addToSyncQueue } from '@/lib/db'
+import BankLogo from '@/components/BankLogo'  // ✅ NOVO IMPORT
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -483,17 +484,9 @@ function AccountDetailContent() {
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-transparent dark:from-teal-500/10" />
               <div className="relative">
                 <div className="mb-5 flex items-start justify-between gap-4">
+                  {/* ✅ SUBSTITUÍDO ÍCONE GENÉRICO POR BankLogo */}
                   <div className="flex items-center gap-4">
-                    <div
-                      className={`flex h-16 w-16 items-center justify-center rounded-[20px] shadow-sm ${
-                        balancePositive
-                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                          : "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                      }`}
-                    >
-                      <Icon size={30} />
-                    </div>
-
+                    <BankLogo color={account.color} name={account.name} size="lg" />
                     <div className="min-w-0">
                       <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
                         Saldo atual
