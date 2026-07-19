@@ -80,6 +80,13 @@ function HomeContent() {
   
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
+
+  // ========== ✅ LINHAS RESTAURADAS (eram as que faltavam) ==========
+  const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
+  const greeting = getGreeting()
+  const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
+  // ===============================================================
+
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
