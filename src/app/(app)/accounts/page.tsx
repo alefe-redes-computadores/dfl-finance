@@ -16,7 +16,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Landmark,
-  Briefcase
+  Briefcase,
+  Settings2,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -28,6 +29,7 @@ import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
 import BankLogo from '@/components/BankLogo'
+import PersonalizeModal from '@/components/PersonalizeModal'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Landmark,
@@ -47,6 +49,19 @@ const ACCOUNT_LABELS: Record<string, string> = {
   other: "Outros",
 }
 
+// ========== SEÇÕES PARA PERSONALIZAÇÃO ==========
+const ACCOUNT_SECTIONS = [
+  { id: 'balance', label: 'Saldo consolidado', description: 'Visão total das suas contas' },
+  { id: 'filters', label: 'Filtros rápidos', description: 'Corrente, Poupança, Investimentos' },
+  { id: 'list', label: 'Lista de contas', description: 'Suas contas bancárias' },
+]
+
+const DEFAULT_ACCOUNT_ORDER = ACCOUNT_SECTIONS.map(s => s.id)
+const FIXED_ACCOUNT_SECTIONS = ['balance', 'list'] // Seções que NÃO podem ser ocultadas
+
+// ========== CHAVE PARA LOCALSTORAGE ==========
+const STORAGE_KEY = 'dfl_accounts_layout'
+
 function AccountsContent() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -62,11 +77,105 @@ function AccountsContent() {
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [accountFilter, setAccountFilter] = useState<string>('all')
   
+  // ========== PERSONALIZAÇÃO ==========
+  const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
+  const [enabledSections, setEnabledSections] = useState<string[]>(DEFAULT_ACCOUNT_ORDER)
+  const [personalizeOrder, setPersonalizeOrder] = useState<typeof ACCOUNT_SECTIONS>(ACCOUNT_SECTIONS)
+  const [personalizeEnabled, setPersonalizeEnabled] = useState<Set<string>>(new Set(DEFAULT_ACCOUNT_ORDER))
+
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // USANDO HOOK ESPECÍFICO
   const { data: accounts, loading } = useAccountsList(effectiveContext)
+
+  // ========== CARREGAR LAYOUT SALVO ==========
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.enabled && Array.isArray(parsed.enabled)) {
+          setEnabledSections(parsed.enabled)
+          setPersonalizeEnabled(new Set(parsed.enabled))
+        }
+        if (parsed.order && Array.isArray(parsed.order)) {
+          const orderedSections = parsed.order
+            .map((id: string) => ACCOUNT_SECTIONS.find(s => s.id === id))
+            .filter(Boolean) as typeof ACCOUNT_SECTIONS
+          if (orderedSections.length > 0) {
+            setPersonalizeOrder(orderedSections)
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar layout de contas:', e)
+    }
+  }, [])
+
+  // ========== SALVAR LAYOUT ==========
+  const saveLayout = useCallback((order: string[]) => {
+    setEnabledSections(order)
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+        enabled: order, 
+        order: order 
+      }))
+    } catch (e) {
+      console.warn('Erro ao salvar layout de contas:', e)
+    }
+  }, [])
+
+  const toggleSection = (id: string) => {
+    vibrate([5])
+    const isFixed = FIXED_ACCOUNT_SECTIONS.includes(id)
+    if (isFixed) return
+    
+    setPersonalizeEnabled(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const moveSection = (id: string, direction: 'up' | 'down') => {
+    setPersonalizeOrder((prev) => {
+      const currentIndex = prev.findIndex((item) => item.id === id)
+      if (currentIndex === -1) return prev
+      const newOrder = [...prev]
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+      if (targetIndex >= 0 && targetIndex < newOrder.length) {
+        [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]]
+      }
+      return newOrder
+    })
+  }
+
+  const handleSavePersonalize = () => {
+    const finalOrder = personalizeOrder
+      .filter(s => personalizeEnabled.has(s.id))
+      .map(s => s.id)
+    saveLayout(finalOrder)
+    setShowPersonalizeModal(false)
+    showToast('✅ Layout personalizado!', 'success')
+    success()
+    vibrate([10])
+  }
+
+  const openPersonalize = () => {
+    const enabledOrder = enabledSections
+      .map(id => ACCOUNT_SECTIONS.find(s => s.id === id))
+      .filter(Boolean) as typeof ACCOUNT_SECTIONS
+    const missing = ACCOUNT_SECTIONS.filter(s => !enabledSections.includes(s.id))
+    setPersonalizeOrder([...enabledOrder, ...missing])
+    setPersonalizeEnabled(new Set(enabledSections))
+    setShowPersonalizeModal(true)
+    vibrate([5])
+  }
 
   const handleDelete = async () => {
     if (!deleteModal || !user) return
@@ -117,6 +226,122 @@ function AccountsContent() {
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
   const totalBalance = (accounts || []).reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0)
+
+  // ========== RENDERIZAR SEÇÕES ==========
+  const renderSection = (sectionId: string) => {
+    switch (sectionId) {
+      case 'balance':
+        return (
+          <div key="balance" className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                  Saldo consolidado
+                </p>
+                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  {formatCurrency(totalBalance)}
+                </p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
+                  Compondo {accounts?.length || 0} {(accounts?.length || 0) === 1 ? 'conta' : 'contas'}
+                </p>
+              </div>
+
+              <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
+                <Wallet size={22} className="text-teal-600 dark:text-teal-400" />
+              </div>
+            </div>
+          </div>
+        )
+      case 'filters':
+        return (
+          <div key="filters" className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
+            {[
+              { key: 'all', label: 'Todas' },
+              { key: 'checking', label: 'Corrente' },
+              { key: 'savings', label: 'Poupança' },
+              { key: 'investment', label: 'Investimentos' },
+              { key: 'wallet', label: 'Física' },
+            ].map(f => (
+              <button
+                type="button"
+                key={f.key}
+                onClick={() => { vibrate([5]); setAccountFilter(f.key); }}
+                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                  accountFilter === f.key
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )
+      case 'list':
+        return (
+          <div key="list" className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="flex flex-col">
+              {filteredAccounts.map((acc: any, index: number) => {
+                const isPositive = (acc.balance || 0) >= 0
+                return (
+                  <div
+                    key={acc.id}
+                    onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${acc.id}`); }}
+                    className={`flex items-center justify-between px-4 py-4 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                      index !== filteredAccounts.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                    }`}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <BankLogo color={acc.color} name={acc.name} size="md" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                          {acc.name}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-gray-400 dark:text-gray-500">
+                          <span className="truncate max-w-[120px]">
+                            {ACCOUNT_LABELS[acc.type] || acc.type}
+                          </span>
+                          {acc.bank && (
+                            <>
+                              <span className="text-gray-300 dark:text-slate-600">•</span>
+                              <span className="truncate">{acc.bank}</span>
+                            </>
+                          )}
+                        </div>
+                        <p className={`mt-1.5 text-[15px] font-semibold tracking-tight ${
+                          isPositive
+                            ? "text-teal-600 dark:text-teal-400"
+                            : "text-red-500 dark:text-red-400"
+                        }`}>
+                          {formatCurrency(acc.balance || 0)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          vibrate([10])
+                          setDeleteModal(acc.id)
+                        }}
+                        className="p-2 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
+                        aria-label="Excluir conta"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 font-sans transition-colors duration-300">
@@ -175,6 +400,15 @@ function AccountsContent() {
               >
                 <Plus size={20} />
               </button>
+
+              {/* ✅ BOTÃO PERSONALIZAR */}
+              <button
+                type="button"
+                onClick={openPersonalize}
+                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+              >
+                <Settings2 size={20} />
+              </button>
             </div>
           </div>
 
@@ -220,56 +454,6 @@ function AccountsContent() {
         onTouchMove={handleTouchMove}
         className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
       >
-        {/* CARD DE SALDO CONSOLIDADO */}
-        {!loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
-                  Saldo consolidado
-                </p>
-                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                  {formatCurrency(totalBalance)}
-                </p>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
-                  Compondo {accounts?.length || 0} {(accounts?.length || 0) === 1 ? 'conta' : 'contas'}
-                </p>
-              </div>
-
-              <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
-                <Wallet size={22} className="text-teal-600 dark:text-teal-400" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* FILTROS RÁPIDOS */}
-        {!loading && accounts?.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
-            {[
-              { key: 'all', label: 'Todas' },
-              { key: 'checking', label: 'Corrente' },
-              { key: 'savings', label: 'Poupança' },
-              { key: 'investment', label: 'Investimentos' },
-              { key: 'wallet', label: 'Física' },
-            ].map(f => (
-              <button
-                type="button"
-                key={f.key}
-                onClick={() => { vibrate([5]); setAccountFilter(f.key); }}
-                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
-                  accountFilter === f.key
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
-                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* LISTAGEM DE CONTAS - LAYOUT CONTÍNUO */}
         {loading ? (
           <div className="space-y-4">
             <Skeleton count={1} height="120px" borderRadius="24px" />
@@ -288,64 +472,8 @@ function AccountsContent() {
             </p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
-            <div className="flex flex-col">
-              {filteredAccounts.map((acc: any, index: number) => {
-                const isPositive = (acc.balance || 0) >= 0
-                return (
-                  <div
-                    key={acc.id}
-                    onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${acc.id}`); }}
-                    className={`flex items-center justify-between px-4 py-4 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
-                      index !== filteredAccounts.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
-                    }`}
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <BankLogo color={acc.color} name={acc.name} size="md" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                          {acc.name}
-                        </p>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-gray-400 dark:text-gray-500">
-                          <span className="truncate max-w-[120px]">
-                            {ACCOUNT_LABELS[acc.type] || acc.type}
-                          </span>
-                          {acc.bank && (
-                            <>
-                              <span className="text-gray-300 dark:text-slate-600">•</span>
-                              <span className="truncate">{acc.bank}</span>
-                            </>
-                          )}
-                        </div>
-                        <p className={`mt-1.5 text-[15px] font-semibold tracking-tight ${
-                          isPositive
-                            ? "text-teal-600 dark:text-teal-400"
-                            : "text-red-500 dark:text-red-400"
-                        }`}>
-                          {formatCurrency(acc.balance || 0)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          vibrate([10])
-                          setDeleteModal(acc.id)
-                        }}
-                        className="p-2 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
-                        aria-label="Excluir conta"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          // ✅ RENDERIZA AS SEÇÕES NA ORDEM PERSONALIZADA
+          enabledSections.map(sectionId => renderSection(sectionId))
         )}
       </div>
 
@@ -388,6 +516,18 @@ function AccountsContent() {
         </div>,
         document.body
       )}
+
+      {/* ✅ PERSONALIZE MODAL */}
+      <PersonalizeModal
+        isOpen={showPersonalizeModal}
+        onClose={() => setShowPersonalizeModal(false)}
+        sections={ACCOUNT_SECTIONS}
+        enabled={personalizeEnabled}
+        order={personalizeOrder}
+        onToggle={toggleSection}
+        onMove={moveSection}
+        onSave={handleSavePersonalize}
+      />
     </div>
   )
 }
