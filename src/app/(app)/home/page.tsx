@@ -73,6 +73,19 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
   return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400 shrink-0" /> }
 }
 
+// ✅ FUNÇÃO DEFENSIVA PARA CALCULAR PORCENTAGEM
+const calculateVariation = (current: number, previous: number): number => {
+  if (previous === 0) {
+    // Se não tinha nada no mês anterior, considera 100% se cresceu, 0% se não
+    return current > 0 ? 100 : 0
+  }
+  
+  const diff = ((current - previous) / Math.abs(previous)) * 100
+  
+  // Limita a exibição para não ficar bizarro (nunca mostrar mais que 1000%)
+  return Math.min(Math.max(diff, -1000), 1000)
+}
+
 function HomeContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -269,7 +282,9 @@ function HomeContent() {
       .reduce((a, t) => a + safeNumber(t.amount), 0)
     const prevBal = prevInc - prevExp
     
-    const variation = prevBal !== 0 ? ((summary.balance - prevBal) / Math.abs(prevBal)) * 100 : (summary.balance > 0 ? 100 : summary.balance < 0 ? -100 : 0)
+    // ✅ USANDO A FUNÇÃO DEFENSIVA DE CÁLCULO
+    const variation = calculateVariation(summary.balance, prevBal)
+    
     return { previousBalance: prevBal, balanceVariation: variation }
   }, [transactionsWithJoin, currentDate, summary.balance])
 
@@ -564,7 +579,14 @@ function HomeContent() {
                 </button>
               </div>
 
-              <div className="relative z-10">
+              {/* ✅ SALDO CLICÁVEL - REDIRECIONA PARA TRANSAÇÕES */}
+              <button
+                onClick={() => {
+                  vibrate([5])
+                  router.push('/transactions')
+                }}
+                className="relative z-10 w-full text-left group transition-transform active:scale-[0.98]"
+              >
                 <h1
                   className={`text-[32px] leading-none font-light text-gray-900 dark:text-gray-50 ${
                     hideBalance ? "tracking-[0.18em]" : "tracking-tight"
@@ -585,7 +607,7 @@ function HomeContent() {
                     {safeNumber(balanceVariation).toFixed(1)}% vs. mês anterior
                   </div>
                 )}
-              </div>
+              </button>
             </div>
           </div>
         )
