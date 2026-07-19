@@ -11,8 +11,6 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from '@/hooks/useLocalSync'
-import { useAccountById } from "@/hooks/useAccountById"
-import { useAccountTransactions } from "@/hooks/useAccountTransactions"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
@@ -61,7 +59,7 @@ const safeNum = (val: any): number => {
 }
 
 const normalizeBankKey = (bank?: string | null) =>
-  (bank || '').trim().toLowerCase().replace(/s+/g, ' ')
+  (bank || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
 function BankBadge({ bank }: { bank?: string | null }) {
   const key = normalizeBankKey(bank)
@@ -130,8 +128,17 @@ function AccountDetailContent() {
   const { context } = useContext_()
   const { user } = useAuth()
 
-  const { data: accountData, loading, notFound } = useAccountById(accountId)
-  const { data: transactions } = useAccountTransactions(accountId)
+  // ✅ VOLTANDO PARA useLocalData
+  const { data: accountData, loading } = useLocalData({
+    table: 'accounts' as any,
+    filters: { id: accountId },
+  })
+
+  const { data: transactions } = useLocalData({
+    table: 'transactions' as any,
+    filters: { account_id: accountId },
+  })
+
   const { data: allAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
@@ -200,7 +207,9 @@ function AccountDetailContent() {
     )
   }
 
-  if (notFound || !accountData) {
+  const account = accountData && accountData.length > 0 ? accountData[0] : null
+
+  if (!account) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f8f9fa] p-6 dark:bg-slate-950">
         <div className="max-w-sm text-center">
@@ -395,13 +404,13 @@ function AccountDetailContent() {
     }
   }
 
-  const Icon = ACCOUNT_ICONS[accountData.type] || Wallet
+  const Icon = ACCOUNT_ICONS[account.type] || Wallet
   const sortedTransactions = [...(transactions || [])].sort(
     (a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
   )
-  const balance = safeNum(accountData.balance)
+  const balance = safeNum(account.balance)
   const balancePositive = balance >= 0
-  const bankName = accountData.bank || ""
+  const bankName = account.bank || ""
 
   const targetAccounts = (allAccounts || []).filter((a: any) => a.id !== accountId)
 
@@ -442,7 +451,7 @@ function AccountDetailContent() {
                 Detalhes da conta
               </p>
               <h1 className="truncate text-[20px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-                {accountData.name}
+                {account.name}
               </h1>
             </div>
           </div>
@@ -504,7 +513,7 @@ function AccountDetailContent() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-gray-100 px-3 py-1.5 text-[12px] font-medium text-gray-600 dark:bg-slate-800 dark:text-gray-300">
-                    {ACCOUNT_LABELS[accountData.type] || accountData.type}
+                    {ACCOUNT_LABELS[account.type] || account.type}
                   </span>
 
                   <BankBadge bank={bankName} />
