@@ -166,13 +166,14 @@ function CardDetailContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
+  // ✅ CORRIGIDO: usando cardLoading em vez de loading
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
-      if (window.scrollY > 10 || loading) return
+      if (window.scrollY > 10 || cardLoading) return
       pullStartY.current = e.touches[0].clientY
       isPulling.current = true
     },
-    [loading]
+    [cardLoading]
   )
 
   const handleTouchEnd = useCallback(() => {
