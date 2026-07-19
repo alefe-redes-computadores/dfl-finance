@@ -23,6 +23,8 @@ import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useCardById } from '@/hooks/useCardById'
+import { useCardTransactions } from '@/hooks/useCardTransactions'
 import { db, addToSyncQueue } from '@/lib/db'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -152,16 +154,8 @@ function CardDetailContent() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [paying, setPaying] = useState(false)
 
-  // ✅ VOLTANDO PARA useLocalData
-  const { data: cardData, loading } = useLocalData({
-    table: 'credit_cards' as any,
-    filters: { id: id },
-  })
-
-  const { data: allTransactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { credit_card_id: id },
-  })
+  const { data: cardData, loading: cardLoading, notFound } = useCardById(id)
+  const { data: allTransactions, loading: txLoading } = useCardTransactions(id)
 
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
@@ -216,9 +210,8 @@ function CardDetailContent() {
     }
   }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
-  const card = cardData && cardData.length > 0 ? cardData[0] : null
+  const card = cardData
 
-  // Filtra transações do mês atual
   const start = useMemo(() => format(startOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
   const end = useMemo(() => format(endOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
 
@@ -325,8 +318,7 @@ function CardDetailContent() {
     }
   }
 
-  // 🔥 Estados de carregamento
-  if (loading) {
+  if (cardLoading) {
     return (
       <div className="mx-auto min-h-screen max-w-md bg-gray-50 pb-20 font-sans transition-colors duration-300 dark:bg-slate-900">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/90 p-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
@@ -339,7 +331,7 @@ function CardDetailContent() {
     )
   }
 
-  if (!card) {
+  if (notFound || !card) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
         <div className="max-w-sm text-center">
