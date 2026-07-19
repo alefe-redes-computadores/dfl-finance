@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useProjection, ProjectionData } from '@/hooks/useProjection'
 import { useContext_ } from '@/components/ContextToggle'
@@ -30,6 +30,30 @@ const defaultFormatCurrency = (val: number) =>
     maximumFractionDigits: 2,
   })}`
 
+// ✅ FUNÇÃO SEGURA PARA FORMATAR DATA
+const safeFormatDate = (dateStr: string, pattern: string): string => {
+  try {
+    if (!dateStr) return ''
+    const date = parseISO(dateStr)
+    if (!isValid(date)) return ''
+    return format(date, pattern, { locale: ptBR })
+  } catch {
+    return ''
+  }
+}
+
+// ✅ FUNÇÃO SEGURA PARA FORMATAR DATA DO TOOLTIP
+const safeFormatTooltipDate = (dateStr: string): string => {
+  try {
+    if (!dateStr) return ''
+    const date = parseISO(dateStr)
+    if (!isValid(date)) return ''
+    return format(date, "dd 'de' MMM", { locale: ptBR })
+  } catch {
+    return dateStr || ''
+  }
+}
+
 // Gradiente para o preenchimento da área
 const GradientDef = () => (
   <defs>
@@ -44,7 +68,7 @@ const GradientDef = () => (
   </defs>
 )
 
-// Custom Tooltip
+// ✅ Custom Tooltip com tratamento seguro
 const CustomTooltip = ({
   active,
   payload,
@@ -61,12 +85,13 @@ const CustomTooltip = ({
   if (!active || !payload || !payload.length) return null
 
   const data = payload[0].payload
-  const date = parseISO(label)
-  const dayLabel = format(date, "dd 'de' MMM", { locale: ptBR })
+  if (!data) return null
+
+  const dayLabel = safeFormatTooltipDate(label || '')
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-[16px] p-3 shadow-lg">
-      <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{dayLabel}</p>
+      <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{dayLabel || label}</p>
       <p className={`text-[16px] font-bold ${data.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
         {hideBalance ? '••••' : formatCurrency(data.balance)}
       </p>
@@ -84,14 +109,17 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
     return projection.dailyProjection.some((p) => p.balance < 0)
   }, [projection])
 
-  // Dados formatados para o gráfico
+  // ✅ Dados formatados para o gráfico com tratamento de data seguro
   const chartData = useMemo(() => {
     if (!projection?.dailyProjection) return []
-    return projection.dailyProjection.map((p) => ({
-      ...p,
-      dayLabel: format(parseISO(p.day), "dd/MM"),
-      isNegative: p.balance < 0,
-    }))
+    return projection.dailyProjection.map((p) => {
+      const dayLabel = safeFormatDate(p.day, "dd/MM")
+      return {
+        ...p,
+        dayLabel: dayLabel || p.day || '',
+        isNegative: p.balance < 0,
+      }
+    })
   }, [projection])
 
   // Loading
