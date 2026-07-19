@@ -101,7 +101,4 @@ Este repositório foi otimizado para manutenção direta via smartphone utilizan
 * Para enviar alterações feitas pelo celular:
     git add .
     git commit -m "feat: descrição da sua alteração"
-    git push origin main
-
----
-*DFL Finance — Controle financeiro local-first desenvolvido para máxima produtividade.*
+    git push origin maina
