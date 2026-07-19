@@ -16,7 +16,8 @@ import {
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
-import { useOfflineQueue } from '@/hooks/useOfflineQueue'
+// ✅ CORRIGIDO: useOfflineQueue trocado por useLocalSync (é o hook que possui pullRemoteChanges)
+import { useLocalSync } from '@/hooks/useLocalSync'
 import InvoiceAlert from '@/components/InvoiceAlert'
 import DebtAlert from '@/components/DebtAlert'
 import NotificationBell from '@/components/NotificationBell'
@@ -95,7 +96,10 @@ function HomeContent() {
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  const { isOnline = true, pendingCount = 0, isSyncing = false, syncQueue = async () => {} } = useOfflineQueue() || {}
+  // ✅ CORRIGIDO: agora usamos useLocalSync, que contém o pullRemoteChanges().
+  // Ao instanciar este hook, o useEffect interno dele já dispara processSyncQueue()
+  // (push + pull) automaticamente assim que a Home monta e o dispositivo está online.
+  const { isOnline, pendingCount, isSyncing, forceSync } = useLocalSync()
 
   // ========== CLIENTE ==========
   useEffect(() => {
@@ -427,6 +431,10 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
+      // ✅ CORRIGIDO: força o sync completo (push + pullRemoteChanges) antes de
+      // recarregar as leituras locais. Antes, o pull-to-refresh só relia o Dexie,
+      // sem nunca buscar o que havia de novo no Supabase.
+      await forceSync()
       await reloadTxs()
       await reloadAccounts()
       await reloadDebts()
@@ -1389,7 +1397,7 @@ function HomeContent() {
                 pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
                 isSyncing={!!isSyncing}
                 isOnline={!!isOnline}
-                onSync={syncQueue}
+                onSync={forceSync}
                 onClick={() => setIsSyncModalOpen(true)}
               />
             ) : (
