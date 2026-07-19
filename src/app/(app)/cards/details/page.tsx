@@ -23,8 +23,6 @@ import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useCardById } from '@/hooks/useCardById'
-import { useCardTransactions } from '@/hooks/useCardTransactions'
 import { db, addToSyncQueue } from '@/lib/db'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -120,7 +118,8 @@ const CardDetailSkeleton = () => (
 function CardDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const id = searchParams.get('id')
+  const rawId = searchParams.get('id')
+  const id = useMemo(() => rawId?.trim() || null, [rawId])
   const { user } = useAuth()
   const { context } = useContext_()
   const { showToast } = useToast()
@@ -153,11 +152,17 @@ function CardDetailContent() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [paying, setPaying] = useState(false)
 
-  // 🔥 NOVOS HOOKS REATIVOS
-  const { data: card, loading, notFound } = useCardById(id)
-  const { data: allTransactions } = useCardTransactions(id)
+  // ✅ VOLTANDO PARA useLocalData
+  const { data: cardData, loading } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { id: id },
+  })
 
-  // Ainda precisamos de contas para o modal de pagamento
+  const { data: allTransactions } = useLocalData({
+    table: 'transactions' as any,
+    filters: { credit_card_id: id },
+  })
+
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
@@ -166,8 +171,6 @@ function CardDetailContent() {
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
-
-  // 🔥 REMOVIDO loadData e reloads
 
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
@@ -212,6 +215,8 @@ function CardDetailContent() {
       container.removeEventListener('touchend', handleTouchEnd)
     }
   }, [handleTouchStart, handleTouchMove, handleTouchEnd])
+
+  const card = cardData && cardData.length > 0 ? cardData[0] : null
 
   // Filtra transações do mês atual
   const start = useMemo(() => format(startOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
@@ -334,7 +339,7 @@ function CardDetailContent() {
     )
   }
 
-  if (notFound || !card) {
+  if (!card) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
         <div className="max-w-sm text-center">
