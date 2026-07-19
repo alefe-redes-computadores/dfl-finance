@@ -27,6 +27,7 @@ import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
+import BankLogo from '@/components/BankLogo'  // ✅ NOVO IMPORT
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Landmark,
@@ -268,7 +269,7 @@ function AccountsContent() {
           </div>
         )}
 
-        {/* LISTAGEM DE CONTAS */}
+        {/* LISTAGEM DE CONTAS - NOVO LAYOUT CONTÍNUO */}
         {loading ? (
           <div className="space-y-4">
             <Skeleton count={1} height="120px" borderRadius="24px" />
@@ -287,68 +288,63 @@ function AccountsContent() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2.5 animate-in fade-in duration-500">
-            {filteredAccounts.map((acc: any) => {
-              const Icon = ACCOUNT_ICONS[acc.type] || Wallet
-              const label = ACCOUNT_LABELS[acc.type] || acc.type
-              const isPositive = (acc.balance || 0) >= 0
-
-              return (
-                <div
-                  key={acc.id}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 relative"
-                >
-                  <button
-                    onClick={() => { vibrate([10]); setDeleteModal(acc.id); }}
-                    className="absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center text-gray-300 dark:text-gray-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors z-10"
-                    title="Excluir conta"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-
-                  <button
+          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="flex flex-col">
+              {filteredAccounts.map((acc: any, index: number) => {
+                const isPositive = (acc.balance || 0) >= 0
+                return (
+                  <div
+                    key={acc.id}
                     onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${acc.id}`); }}
-                    className="w-full rounded-[18px] p-3 flex items-start gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+                    className={`flex items-center justify-between px-4 py-4 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                      index !== filteredAccounts.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                    }`}
                   >
-                    <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 shadow-sm ${
-                      isPositive
-                        ? "bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400"
-                        : "bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400"
-                    }`}>
-                      <Icon size={18} strokeWidth={2.3} />
-                    </div>
-
-                    <div className="min-w-0 flex-1 pr-6">
-                      <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                        {acc.name}
-                      </p>
-
-                      <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[12px] text-gray-400 dark:text-gray-500">
-                        <span className="truncate max-w-[120px]">{label}</span>
-                        {acc.bank && (
-                          <>
-                            <span className="text-gray-300 dark:text-slate-600">•</span>
-                            <span className="truncate">{acc.bank}</span>
-                          </>
-                        )}
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <BankLogo color={acc.color} name={acc.name} size="md" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                          {acc.name}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-gray-400 dark:text-gray-500">
+                          <span className="truncate max-w-[120px]">
+                            {ACCOUNT_LABELS[acc.type] || acc.type}
+                          </span>
+                          {acc.bank && (
+                            <>
+                              <span className="text-gray-300 dark:text-slate-600">•</span>
+                              <span className="truncate">{acc.bank}</span>
+                            </>
+                          )}
+                        </div>
+                        <p className={`mt-1.5 text-[15px] font-semibold tracking-tight ${
+                          isPositive
+                            ? "text-teal-600 dark:text-teal-400"
+                            : "text-red-500 dark:text-red-400"
+                        }`}>
+                          {formatCurrency(acc.balance || 0)}
+                        </p>
                       </div>
-
-                      <p className={`mt-1.5 text-[15px] font-semibold tracking-tight ${
-                        isPositive
-                          ? "text-teal-600 dark:text-teal-400"
-                          : "text-red-500 dark:text-red-400"
-                      }`}>
-                        {formatCurrency(acc.balance || 0)}
-                      </p>
                     </div>
 
-                    <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                      <ChevronRight size={15} className="text-gray-400 dark:text-gray-500" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          vibrate([10])
+                          setDeleteModal(acc.id)
+                        }}
+                        className="p-2 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-[0.98]"
+                        aria-label="Excluir conta"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <ChevronRight size={16} className="text-gray-400 dark:text-gray-500" />
                     </div>
-                  </button>
-                </div>
-              )
-            })}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
