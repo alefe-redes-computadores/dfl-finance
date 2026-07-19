@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useAccountById } from "@/hooks/useAccountById"
+import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
@@ -77,17 +77,22 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
-  const { data: accountData, loading: accountLoading } = useAccountById(editId)
+  // ✅ VOLTANDO PARA useLocalData
+  const { data: accountData, loading: accountLoading } = useLocalData({
+    table: 'accounts' as any,
+    filters: { id: editId },
+  })
 
   useEffect(() => {
-    if (accountData) {
+    if (accountData && accountData.length > 0) {
+      const acc = accountData[0]
       setFormData({
-        name: accountData.name || "",
-        type: accountData.type || "checking",
-        bank: accountData.bank || "",
-        balance: String(accountData.balance || 0),
-        color: accountData.color || "#0f766e",
-        icon: accountData.icon || "wallet",
+        name: acc.name || "",
+        type: acc.type || "checking",
+        bank: acc.bank || "",
+        balance: String(acc.balance || 0),
+        color: acc.color || "#0f766e",
+        icon: acc.icon || "wallet",
       })
     }
   }, [accountData])
