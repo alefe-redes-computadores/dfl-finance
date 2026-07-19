@@ -81,11 +81,10 @@ function HomeContent() {
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
-  // ========== ✅ LINHAS RESTAURADAS (eram as que faltavam) ==========
+  // ========== ✅ LINHAS RESTAURADAS ==========
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
-  // ===============================================================
 
   const [refreshing, setRefreshing] = useState(false)
   const [loadingPulse, setLoadingPulse] = useState(false)
@@ -669,7 +668,7 @@ function HomeContent() {
 
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/loans")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -678,8 +677,8 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
-                {loans.slice(0, 3).map((loan: any) => {
+              <div className="flex flex-col">
+                {loans.slice(0, 3).map((loan: any, index: number) => {
                   const progress = safeNumber(loan.total_amount) > 0 
                     ? ((safeNumber(loan.total_amount) - safeNumber(loan.remaining_amount)) / safeNumber(loan.total_amount)) * 100 
                     : 0;
@@ -690,11 +689,13 @@ function HomeContent() {
                     <div
                       key={loan.id}
                       onClick={() => goToLoan(loan.id)}
-                      className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
+                      className={`cursor-pointer px-4 py-3.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== Math.min(loans.length, 3) - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
                     >
-                      <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
                             <ArrowRightLeft size={18} />
                           </div>
 
@@ -717,7 +718,7 @@ function HomeContent() {
                         </p>
                       </div>
 
-                      <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
+                      <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${
                             isOverdue ? "bg-red-500" : "bg-teal-500"
@@ -878,7 +879,7 @@ function HomeContent() {
 
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/debts")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -887,8 +888,8 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
-                {debtsList.slice(0, 3).map((debt: any) => {
+              <div className="flex flex-col">
+                {debtsList.slice(0, 3).map((debt: any, index: number) => {
                   const IconComp = getDynamicIcon(debt.icon || "user");
                   const remaining = safeNumber(debt.total_amount) - debt.paid_amount || 0;
                   const dueDate = safeDate(debt.due_date);
@@ -900,12 +901,14 @@ function HomeContent() {
                     <div
                       key={debt.id}
                       onClick={() => goToDebt(debt.id)}
-                      className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
+                      className={`cursor-pointer px-4 py-3.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== Math.min(debtsList.length, 3) - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
                     >
-                      <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <div
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px]"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]"
                             style={{ backgroundColor: `${debt.color}15`, color: debt.color }}
                           >
                             <IconComp size={18} />
@@ -934,7 +937,7 @@ function HomeContent() {
                         </p>
                       </div>
 
-                      <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
+                      <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${
                             isOverdue ? "bg-red-500" : remaining <= 0 ? "bg-emerald-500" : "bg-teal-500"
@@ -970,7 +973,7 @@ function HomeContent() {
 
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/financings")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -979,8 +982,8 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
-                {financings.slice(0, 3).map((fin: any) => {
+              <div className="flex flex-col">
+                {financings.slice(0, 3).map((fin: any, index: number) => {
                   const IconComp = getDynamicIcon(fin.icon || "wallet");
                   const remaining = safeNumber(fin.total_installments) - safeNumber(fin.current_installment) + 1;
                   const dueDate = safeDate(fin.next_due_date);
@@ -990,12 +993,14 @@ function HomeContent() {
                     <div
                       key={fin.id}
                       onClick={() => goToFinancing(fin.id)}
-                      className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
+                      className={`cursor-pointer px-4 py-3.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== Math.min(financings.length, 3) - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
                     >
-                      <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <div
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px]"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]"
                             style={{ backgroundColor: `${fin.color}15`, color: fin.color }}
                           >
                             <IconComp size={18} />
@@ -1015,7 +1020,7 @@ function HomeContent() {
                           </div>
                         </div>
 
-                        <div className="shrink-0 pt-1">
+                        <div className="shrink-0 pt-2">
                           <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
                             <div
                               className={`h-full rounded-full ${
@@ -1054,7 +1059,7 @@ function HomeContent() {
 
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/budgets")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -1063,8 +1068,8 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
-                {budgets.map((budget: any) => {
+              <div className="flex flex-col">
+                {budgets.map((budget: any, index: number) => {
                   const IconComp = getDynamicIcon(budget.icon || "wallet");
                   const isWarning = budget.percent >= 80 && budget.remaining > 0;
                   const isDanger = budget.remaining <= 0;
@@ -1073,12 +1078,14 @@ function HomeContent() {
                     <div
                       key={budget.id}
                       onClick={() => goToBudget(budget.id)}
-                      className="rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
+                      className={`cursor-pointer px-4 py-3.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== budgets.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
                     >
-                      <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <div
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px]"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]"
                             style={{ backgroundColor: `${budget.color}15`, color: budget.color }}
                           >
                             <IconComp size={18} />
@@ -1108,7 +1115,7 @@ function HomeContent() {
                         </span>
                       </div>
 
-                      <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
+                      <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
                             isDanger ? "bg-red-500" : isWarning ? "bg-orange-500" : "bg-teal-500"
@@ -1133,7 +1140,7 @@ function HomeContent() {
           <div key="accounts" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/accounts")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -1142,17 +1149,19 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
+              <div className="flex flex-col">
                 {accounts.length === 0 ? (
                   <div className="p-4 text-center text-[13px] font-medium text-gray-400 dark:text-gray-500">
                     Nenhuma conta registrada.
                   </div>
                 ) : (
-                  accounts.map((acc: any) => (
+                  accounts.map((acc: any, index: number) => (
                     <div
                       key={acc.id}
                       onClick={() => goToAccount(acc.id)}
-                      className="flex items-center justify-between gap-3 rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
+                      className={`flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== accounts.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <BankLogo color={acc.color} name={acc.name} size="md" />
@@ -1190,7 +1199,7 @@ function HomeContent() {
           <div key="cards" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/cards")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -1199,25 +1208,29 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
+              <div className="flex flex-col">
                 {cards.length === 0 ? (
-                  <button
-                    onClick={() => router.push("/cards/new")}
-                    className="w-full rounded-[18px] p-4 flex items-center justify-center gap-2 text-sm font-semibold text-teal-600 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/10 active:scale-[0.98]"
-                  >
-                    <Plus size={18} />
-                    Adicionar cartão
-                  </button>
+                  <div className="px-4 pb-4">
+                    <button
+                      onClick={() => router.push("/cards/new")}
+                      className="w-full rounded-[16px] py-3.5 flex items-center justify-center gap-2 text-sm font-semibold text-teal-600 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/10 active:scale-[0.98]"
+                    >
+                      <Plus size={18} />
+                      Adicionar cartão
+                    </button>
+                  </div>
                 ) : (
-                  cards.map((card: any) => (
+                  cards.map((card: any, index: number) => (
                     <div
                       key={card.id}
                       onClick={() => goToCard(card.id)}
-                      className="flex items-center justify-between gap-3 rounded-[18px] p-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98]"
+                      className={`flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== cards.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="flex h-11 w-11 items-center justify-center rounded-[16px] text-white shadow-sm shrink-0"
+                          className="flex h-10 w-10 items-center justify-center rounded-[12px] text-white shadow-sm shrink-0"
                           style={{ backgroundColor: card.color || "#f97316" }}
                         >
                           <CreditCard size={18} />
@@ -1257,7 +1270,7 @@ function HomeContent() {
           <div key="recent" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
+                className="flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/30 active:bg-gray-100 dark:active:bg-slate-700"
                 onClick={() => router.push("/transactions")}
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
@@ -1266,7 +1279,7 @@ function HomeContent() {
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600" />
               </div>
 
-              <div className="px-2 pb-2">
+              <div className="flex flex-col">
                 {recentTransactions.length === 0 ? (
                   <div className="p-4 text-center text-[13px] font-medium text-gray-400 dark:text-gray-500">
                     Nenhuma transação registrada.
@@ -1303,26 +1316,14 @@ function HomeContent() {
                       <div
                         key={tx.id}
                         onClick={() => goToTransaction(tx.id)}
-                        className={`flex items-center justify-between gap-3 rounded-[18px] p-3 cursor-pointer transition-colors active:scale-[0.98] hover:bg-gray-50 dark:hover:bg-slate-700/50 ${
-                          isPending ? "bg-amber-50 dark:bg-amber-900/10" : ""
+                        className={`flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer transition-colors active:bg-gray-100 hover:bg-gray-50 dark:hover:bg-slate-700/50 ${
+                          isPending ? "bg-amber-50/50 dark:bg-amber-900/10" : ""
                         } ${
-                          index !== recentTransactions.length - 1 ? "border-b border-gray-100 dark:border-slate-700/70" : ""
+                          index !== recentTransactions.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
                         }`}
                       >
                         <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <div className="shrink-0">
-                            {isPending ? (
-                              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-50 dark:bg-orange-500/10">
-                                <Clock size={12} className="text-orange-500" />
-                              </div>
-                            ) : (
-                              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10">
-                                <Check size={12} className="text-emerald-500" />
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] shrink-0"
+                          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] shrink-0"
                             style={{
                               backgroundColor: tx.categories?.color ? `${tx.categories.color}15` : "#94a3b815",
                               color: tx.categories?.color || "#64748b",
