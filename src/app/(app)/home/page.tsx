@@ -76,15 +76,18 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
 
 // ✅ FUNÇÃO DEFENSIVA PARA CALCULAR PORCENTAGEM
 const calculateVariation = (current: number, previous: number): number => {
-  if (previous === 0) {
-    // Se não tinha nada no mês anterior, considera 100% se cresceu, 0% se não
-    return current > 0 ? 100 : 0
+  // Se o valor anterior for zero ou muito próximo de zero
+  if (Math.abs(previous) < 0.01) {
+    if (Math.abs(current) < 0.01) return 0
+    return current > 0 ? 100 : -100
   }
   
-  const diff = ((current - previous) / Math.abs(previous)) * 100
+  let diff = ((current - previous) / Math.abs(previous)) * 100
   
-  // Limita a exibição para não ficar bizarro (nunca mostrar mais que 1000%)
-  return Math.min(Math.max(diff, -1000), 1000)
+  // 🔥 Limita a -100% a +100% para não mostrar números absurdos
+  diff = Math.min(Math.max(diff, -100), 100)
+  
+  return Math.round(diff * 10) / 10
 }
 
 function HomeContent() {
