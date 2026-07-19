@@ -11,7 +11,8 @@ import {
   CreditCard,
   PiggyBank,
   Landmark,
-  Check
+  Check,
+  X
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -21,7 +22,7 @@ import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { safeAdd, safeUpdate } from "@/lib/safeDb"
-import BankLogo from '@/components/BankLogo'  // ✅ NOVO IMPORT
+import BankLogo from '@/components/BankLogo'
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Conta Corrente", icon: Wallet },
@@ -63,8 +64,14 @@ function formatCurrencyPreview(value: string) {
 function AccountFormContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const rawEditId = searchParams.get("edit")
-  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
+  
+  // ✅ PEGA O ID CORRETAMENTE
+  const rawEditId = searchParams?.get("edit")
+  const editId = useMemo(() => {
+    if (!rawEditId || rawEditId === 'null' || rawEditId === 'undefined') return null
+    return rawEditId.trim()
+  }, [rawEditId])
+  
   const { context } = useContext_()
   const { user } = useAuth()
   const { showToast } = useToast()
@@ -81,6 +88,7 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
+  // ✅ SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
   const { data: accountData, loading: accountLoading, notFound } = useAccountById(editId)
 
   useEffect(() => {
@@ -149,7 +157,6 @@ function AccountFormContent() {
   const selectedType =
     ACCOUNT_TYPES.find((item) => item.value === formData.type) || ACCOUNT_TYPES[0]
 
-  // ✅ Substituído por BankLogo no preview
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -255,7 +262,6 @@ function AccountFormContent() {
               </div>
             </div>
 
-            {/* ✅ Substituído ícone genérico por BankLogo */}
             <BankLogo color={formData.color} name={formData.name} size="lg" />
           </div>
         </div>
