@@ -282,7 +282,7 @@ export default function CardsPage() {
 
     const visibleCards = getVisibleCards()
     const orderedItems = cardOrder.length > 0
-      ? visibleCards.sort((a, b) => {
+      ? [...visibleCards].sort((a, b) => {
           const idxA = cardOrder.indexOf(a.id)
           const idxB = cardOrder.indexOf(b.id)
           if (idxA === -1 && idxB === -1) return 0
