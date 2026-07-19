@@ -21,6 +21,7 @@ import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { safeAdd, safeUpdate } from "@/lib/safeDb"
+import BankLogo from '@/components/BankLogo'  // ✅ NOVO IMPORT
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Conta Corrente", icon: Wallet },
@@ -148,8 +149,7 @@ function AccountFormContent() {
   const selectedType =
     ACCOUNT_TYPES.find((item) => item.value === formData.type) || ACCOUNT_TYPES[0]
 
-  const SelectedIcon = selectedType.icon
-
+  // ✅ Substituído por BankLogo no preview
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -255,12 +255,8 @@ function AccountFormContent() {
               </div>
             </div>
 
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] shadow-sm"
-              style={{ backgroundColor: formData.color }}
-            >
-              <SelectedIcon size={22} className="text-white" />
-            </div>
+            {/* ✅ Substituído ícone genérico por BankLogo */}
+            <BankLogo color={formData.color} name={formData.name} size="lg" />
           </div>
         </div>
       </div>
@@ -308,12 +304,7 @@ function AccountFormContent() {
 
             <div className="mt-4 rounded-[18px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center gap-3">
-                <div
-                  className="flex h-11 w-11 items-center justify-center rounded-[14px] shadow-sm"
-                  style={{ backgroundColor: formData.color }}
-                >
-                  <SelectedIcon size={20} className="text-white" />
-                </div>
+                <BankLogo color={formData.color} name={formData.name} size="md" />
                 <div className="min-w-0">
                   <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
                     Pré-visualização
