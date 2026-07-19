@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
+import ProjectionChart from '@/components/ProjectionChart'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -654,22 +655,24 @@ function HomeContent() {
           </div>
         )
       case 'projection':
-        return (
-          <div key="projection" className="mb-5 relative">
-            {!isFixed && (
-              <button
-                onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
-                className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-95"
-                title="Ocultar card"
-              >
-                <EyeOff size={14} />
-              </button>
-            )}
-            <Suspense fallback={<Skeleton count={1} className="h-24 w-full rounded-[24px]" />}>
-              <ProjectionSparklineCard />
-            </Suspense>
-          </div>
-        )
+  return (
+    <div key="projection" className="mb-5 relative">
+      {!isFixed && (
+        <button
+          onClick={() => handleHideCard('projection', 'Projeção de Saldo')}
+          className="absolute -top-1 right-0 p-1 text-gray-300/70 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition z-10 active:scale-95"
+          title="Ocultar card"
+        >
+          <EyeOff size={14} />
+        </button>
+      )}
+      
+      <ProjectionChart 
+        hideBalance={hideBalance} 
+        formatCurrency={formatCurrency} 
+      />
+    </div>
+  )
       case 'loans':
         if (appMode === 'personal_only') return null
         if (loans.length === 0) return null
