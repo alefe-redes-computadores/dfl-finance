@@ -111,34 +111,6 @@ function HomeContent() {
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  // ========== ✅ CORREÇÃO 1: FORÇAR SYNC NA MONTAGEM ==========
-  useEffect(() => {
-    if (user?.id && isOnline && isClient && !syncAttempted) {
-      console.log('🏠 Home: Disparando sync automático...')
-      const timer = setTimeout(() => {
-        forceSync().then(() => {
-          console.log('✅ Home: Sync automático concluído')
-          setSyncAttempted(true)
-        }).catch((err) => {
-          console.error('❌ Home: Erro no sync automático:', err)
-          setSyncAttempted(true)
-        })
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
-
-  // ========== ✅ CORREÇÃO 2: LOADING COM TIMEOUT ==========
-  useEffect(() => {
-    if (!isDataLoading && !syncAttempted) {
-      // Dá tempo para o pull trazer dados
-      const timer = setTimeout(() => {
-        setIsInitialLoad(false)
-      }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [isDataLoading, syncAttempted])
-
   // ========== ✅ DADOS LOCAIS COM useLocalData ==========
   const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
@@ -190,11 +162,50 @@ function HomeContent() {
   const localLoans = safeArray<any>(rawLoans)
   const localNotifications = safeArray<any>(rawNotifications)
 
+  // ============================================================
+  // ✅ DEFINIÇÃO DE isDataLoading (ANTES DOS USEEFFECTS QUE DEPENDEM)
+  // ============================================================
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
+  // ========== ✅ CORREÇÃO 1: FORÇAR SYNC NA MONTAGEM ==========
+  useEffect(() => {
+    if (user?.id && isOnline && isClient && !syncAttempted) {
+      console.log('🏠 Home: Disparando sync automático...')
+      const timer = setTimeout(() => {
+        forceSync().then(() => {
+          console.log('✅ Home: Sync automático concluído')
+          setSyncAttempted(true)
+        }).catch((err) => {
+          console.error('❌ Home: Erro no sync automático:', err)
+          setSyncAttempted(true)
+        })
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
+
+  // ========== ✅ CORREÇÃO 2: LOADING COM TIMEOUT ==========
+  useEffect(() => {
+    if (!isDataLoading && !syncAttempted) {
+      // Dá tempo para o pull trazer dados
+      const timer = setTimeout(() => {
+        setIsInitialLoad(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [isDataLoading, syncAttempted])
+
+  // ========== LOADING PULSE ==========
   useEffect(() => {
     setLoadingPulse(isDataLoading)
   }, [isDataLoading])
+
+  // ========== INICIAL LOAD ==========
+  useEffect(() => {
+    if (!isDataLoading && (localTransactions.length || localAccountsData.length)) {
+      setIsInitialLoad(false)
+    }
+  }, [isDataLoading, localTransactions, localAccountsData])
 
   // ========== DATAS SEGURAS ==========
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
