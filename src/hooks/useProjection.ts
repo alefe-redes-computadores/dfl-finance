@@ -1,25 +1,27 @@
+// src/hooks/useProjection.ts
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
-import { startOfMonth, endOfMonth, subMonths, addMonths, differenceInDays, isAfter, isBefore } from 'date-fns'
+import { 
+  startOfMonth, 
+  endOfMonth, 
+  subMonths, 
+  addDays, 
+  differenceInDays, 
+  format 
+} from 'date-fns'
 import { safeNumber } from '@/lib/safe'
 
 export interface ProjectionData {
-  context: 'dfl' | 'personal'
+  dailyProjection: Array<{ day: string; balance: number }>
   currentBalance: number
-  projectedEndMonth: number
-  projectedEndNextMonth: number
+  projectedEndBalance: number
   dailyAverage: number
-  projectedBalanceByDay: Array<{ date: string; balance: number }>
   pendingDebts: number
-  upcomingInvoices: number
-  subscriptions: number
-  dayZero: number | null // Quantos dias até o saldo zerar (null se não zerar)
   isAtRisk: boolean
   riskLevel: 'low' | 'medium' | 'high' | 'critical'
-  monthEndDate: string
-  nextMonthEndDate: string
+  dayZero: number | null
   recommendation: string | null
 }
 
@@ -28,51 +30,13 @@ export function useProjection(context: 'dfl' | 'personal') {
     if (!context) return null
 
     const now = new Date()
-    const monthStart = startOfMonth(now)
-    const monthEnd = endOfMonth(now)
-    const nextMonthEnd = endOfMonth(addMonths(now, 1))
+    const today = format(now, 'yyyy-MM-dd')
 
     // ============================================================
-    // 1. BUSCA DADOS FILTRADOS PELO CONTEXTO ATIVO
+    // 1. BUSCAR DADOS DO CONTEXTO ATUAL
     // ============================================================
 
-    // Transações do mês atual
-    const monthTransactions = await db.transactions
-      .where('context').equals(context)
-      .and((t: any) => t.date >= monthStart.toISOString().split('T')[0] && t.date <= monthEnd.toISOString().split('T')[0])
-      .toArray()
-
-    // Transações do mês passado (para calcular média)
-    const prevMonthStart = startOfMonth(subMonths(now, 1))
-    const prevMonthEnd = endOfMonth(subMonths(now, 1))
-    const prevMonthTransactions = await db.transactions
-      .where('context').equals(context)
-      .and((t: any) => t.date >= prevMonthStart.toISOString().split('T')[0] && t.date <= prevMonthEnd.toISOString().split('T')[0])
-      .toArray()
-
-    // Dívidas ativas (não pagas)
-    const debts = await db.debts
-      .where('context').equals(context)
-      .and((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
-      .toArray()
-
-    // Faturas de cartão (com valor > 0)
-    const cards = await db.credit_cards
-      .where('context').equals(context)
-      .and((c: any) => c.is_archived !== true)
-      .toArray()
-
-    // Assinaturas ativas
-    const subscriptions = await db.subscriptions
-      .where('context').equals(context)
-      .and((s: any) => s.status === 'active')
-      .toArray()
-
-    // ============================================================
-    // 2. CÁLCULOS
-    // ============================================================
-
-    // Saldo atual (soma das contas)
+    // Saldo atual das contas
     const accounts = await db.accounts
       .where('context').equals(context)
       .and((a: any) => a.is_archived !== true)
@@ -80,38 +44,57 @@ export function useProjection(context: 'dfl' | 'personal') {
 
     const currentBalance = accounts.reduce((acc, a) => acc + safeNumber(a.balance), 0)
 
-    // Total de despesas do mês atual (transações já pagas)
-    const currentMonthExpenses = monthTransactions
+    // Buscar transações dos últimos 3 meses (para média)
+    const threeMonthsAgo = subMonths(now, 3)
+    const threeMonthsAgoStr = format(threeMonthsAgo, 'yyyy-MM-dd')
+
+    const allTransactions = await db.transactions
+      .where('context').equals(context)
+      .and((t: any) => t.date >= threeMonthsAgoStr)
+      .toArray()
+
+    // Filtrar apenas despesas (expense, sangria) com status done
+    const expenses = allTransactions
       .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((acc, t) => acc + safeNumber(t.amount), 0)
 
-    // Total de receitas do mês atual
-    const currentMonthIncome = monthTransactions
-      .filter((t: any) => t.type === 'income' && t.status === 'done')
-      .reduce((acc, t) => acc + safeNumber(t.amount), 0)
-
-    // Média diária de gastos (baseado no mês passado)
-    const prevMonthExpenses = prevMonthTransactions
-      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((acc, t) => acc + safeNumber(t.amount), 0)
-
-    const daysInPrevMonth = differenceInDays(prevMonthEnd, prevMonthStart) + 1
-    const dailyAverage = daysInPrevMonth > 0 ? prevMonthExpenses / daysInPrevMonth : 0
-
-    // Total de dívidas pendentes
-    const pendingDebts = debts.reduce((acc, d) => acc + (safeNumber(d.total_amount) - safeNumber(d.paid_amount || 0)), 0)
-
-    // Total de faturas de cartão (estimativa do mês)
-    let totalInvoices = 0
-    for (const card of cards) {
-      const cardTransactions = await db.transactions
-        .where('credit_card_id').equals(card.id)
-        .and((t: any) => t.date >= monthStart.toISOString().split('T')[0] && t.date <= monthEnd.toISOString().split('T')[0])
-        .toArray()
-      totalInvoices += cardTransactions.reduce((acc, t) => acc + safeNumber(t.amount), 0)
+    // Calcular média diária de gastos
+    let dailyAverage = 0
+    if (expenses.length > 0) {
+      const totalExpense = expenses.reduce((acc, t) => acc + safeNumber(t.amount), 0)
+      
+      // Dias entre a primeira e a última transação + 1
+      const dates = expenses.map((t: any) => new Date(t.date))
+      const minDate = new Date(Math.min(...dates.map(d => d.getTime())))
+      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())))
+      const daysRange = differenceInDays(maxDate, minDate) + 1
+      
+      // Evita divisão por zero
+      dailyAverage = daysRange > 0 ? totalExpense / daysRange : 0
     }
 
-    // Total de assinaturas (valor mensal)
+    // Se não houver gastos, usa um valor mínimo
+    if (dailyAverage === 0) {
+      dailyAverage = 10 // Valor mínimo para evitar projeção linear infinita
+    }
+
+    // Dívidas pendentes (não pagas)
+    const debts = await db.debts
+      .where('context').equals(context)
+      .and((d: any) => d.status !== 'paid' && d.status !== 'cancelled')
+      .toArray()
+
+    const pendingDebts = debts.reduce((acc, d) => {
+      const total = safeNumber(d.total_amount)
+      const paid = safeNumber(d.paid_amount || 0)
+      return acc + (total - paid)
+    }, 0)
+
+    // Assinaturas ativas (gastos fixos mensais)
+    const subscriptions = await db.subscriptions
+      .where('context').equals(context)
+      .and((s: any) => s.status === 'active')
+      .toArray()
+
     const subscriptionsTotal = subscriptions.reduce((acc, s) => {
       let monthlyAmount = safeNumber(s.amount)
       switch (s.billing_cycle) {
@@ -119,92 +102,90 @@ export function useProjection(context: 'dfl' | 'personal') {
         case 'weekly': monthlyAmount = monthlyAmount * 4.33; break
         case 'quarterly': monthlyAmount = monthlyAmount / 3; break
         case 'semiannually': monthlyAmount = monthlyAmount / 6; break
+        default: monthlyAmount = monthlyAmount // monthly
       }
       return acc + monthlyAmount
     }, 0)
 
-    // Total de despesas projetadas para o resto do mês
-    const daysLeftInMonth = differenceInDays(monthEnd, now) + 1
-    const projectedRemainingExpenses = dailyAverage * daysLeftInMonth
+    // ============================================================
+    // 2. GERAR PROJEÇÃO DIÁRIA (30 dias)
+    // ============================================================
 
-    // Projeção do saldo no final do mês
-    const projectedEndMonth = currentBalance - projectedRemainingExpenses - pendingDebts - totalInvoices - subscriptionsTotal
+    const dailyProjection: Array<{ day: string; balance: number }> = []
+    let runningBalance = currentBalance
 
-    // Projeção para o próximo mês (assumindo mesmo padrão)
-    const projectedNextMonthExpenses = dailyAverage * 30
-    const projectedEndNextMonth = projectedEndMonth - projectedNextMonthExpenses - pendingDebts
+    // Parcelamento das dívidas em 30 dias (se houver)
+    const dailyDebtPayment = pendingDebts > 0 ? pendingDebts / 30 : 0
+    const dailySubscriptions = subscriptionsTotal / 30
 
-    // Cálculo do "Dia do Zero" (quando o saldo chegaria a R$ 0)
+    for (let i = 0; i < 30; i++) {
+      const date = addDays(now, i)
+      const dayStr = format(date, 'yyyy-MM-dd')
+      
+      // Reduz gastos nos finais de semana (opcional - 20% menos)
+      const dayOfWeek = date.getDay()
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+      const dailySpend = isWeekend ? dailyAverage * 0.8 : dailyAverage
+
+      // Deduz do saldo: gasto médio + dívida parcelada + assinaturas
+      runningBalance = runningBalance - dailySpend - dailyDebtPayment - dailySubscriptions
+
+      dailyProjection.push({
+        day: dayStr,
+        balance: Math.round(runningBalance * 100) / 100,
+      })
+    }
+
+    // ============================================================
+    // 3. MÉTRICAS E ANÁLISE DE RISCO
+    // ============================================================
+
+    const lastDayBalance = dailyProjection[dailyProjection.length - 1]?.balance || 0
+    const projectedEndBalance = Math.round(lastDayBalance * 100) / 100
+
+    // "Dia do Zero" - quando o saldo chegaria a R$ 0
     let dayZero: number | null = null
-    if (projectedEndMonth < 0 && dailyAverage > 0) {
-      const daysUntilZero = Math.floor(currentBalance / dailyAverage)
-      dayZero = daysUntilZero > 0 && daysUntilZero <= 30 ? daysUntilZero : null
+    for (let i = 0; i < dailyProjection.length; i++) {
+      if (dailyProjection[i].balance < 0) {
+        dayZero = i + 1 // dias até zerar
+        break
+      }
     }
 
     // Nível de risco
     let riskLevel: 'low' | 'medium' | 'high' | 'critical' = 'low'
     let recommendation: string | null = null
 
-    if (projectedEndMonth < 0) {
+    if (projectedEndBalance < -500) {
       riskLevel = 'critical'
-      recommendation = `⚠️ Seu saldo projetado para o fim do mês é negativo (R$ ${projectedEndMonth.toFixed(2)}). Recomendamos reduzir gastos em ${((projectedRemainingExpenses * 0.15) / 30).toFixed(2)} por dia.`
-    } else if (projectedEndMonth < 100) {
+      recommendation = `⚠️ Projeção crítica! Saldo estimado em R$ ${projectedEndBalance.toFixed(2)}. Reduza gastos em R$ ${(dailyAverage * 0.3).toFixed(2)}/dia.`
+    } else if (projectedEndBalance < 0) {
       riskLevel = 'high'
-      recommendation = `🔴 Seu saldo projetado está baixo (R$ ${projectedEndMonth.toFixed(2)}). Tente economizar ${((projectedRemainingExpenses * 0.1) / 30).toFixed(2)} por dia.`
-    } else if (projectedEndMonth < 500) {
+      recommendation = `🔴 Atenção! Saldo projetado negativo (R$ ${projectedEndBalance.toFixed(2)}). Tente reduzir R$ ${(dailyAverage * 0.2).toFixed(2)}/dia.`
+    } else if (projectedEndBalance < 200) {
       riskLevel = 'medium'
-      recommendation = `🟡 Saldo projetado de R$ ${projectedEndMonth.toFixed(2)}. Mantenha o ritmo para fechar o mês com folga.`
+      recommendation = `🟡 Saldo projetado de R$ ${projectedEndBalance.toFixed(2)}. Mantenha o controle para não apertar.`
+    } else if (projectedEndBalance < 500) {
+      riskLevel = 'medium'
+      recommendation = `🟡 Saldo de R$ ${projectedEndBalance.toFixed(2)}. Bom, mas com margem para melhorar.`
     } else {
       riskLevel = 'low'
-      recommendation = `🟢 Ótimo! Projeção de R$ ${projectedEndMonth.toFixed(2)} para o fim do mês. Continue assim!`
-    }
-
-    // Projeção diária (para o gráfico)
-    const projectedBalanceByDay: Array<{ date: string; balance: number }> = []
-    let runningBalance = currentBalance
-
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(now)
-      date.setDate(date.getDate() + i)
-      const dateStr = date.toISOString().split('T')[0]
-
-      // Gasto médio do dia (reduz aos finais de semana)
-      const dayOfWeek = date.getDay()
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
-      const dailySpend = isWeekend ? dailyAverage * 0.8 : dailyAverage
-
-      runningBalance = runningBalance - dailySpend
-
-      // Aplica parcelas de dívidas (se houver)
-      if (i % 30 === 0 && pendingDebts > 0) {
-        runningBalance -= pendingDebts / (30 / 30) // parcelado em 30 dias
-      }
-
-      projectedBalanceByDay.push({
-        date: dateStr,
-        balance: Math.round(runningBalance * 100) / 100,
-      })
+      recommendation = `🟢 Ótimo! Projeção de R$ ${projectedEndBalance.toFixed(2)}. Continue assim!`
     }
 
     // ============================================================
-    // 3. RETORNO
+    // 4. RETORNO
     // ============================================================
 
     return {
-      context,
+      dailyProjection,
       currentBalance: Math.round(currentBalance * 100) / 100,
-      projectedEndMonth: Math.round(projectedEndMonth * 100) / 100,
-      projectedEndNextMonth: Math.round(projectedEndNextMonth * 100) / 100,
+      projectedEndBalance,
       dailyAverage: Math.round(dailyAverage * 100) / 100,
-      projectedBalanceByDay,
       pendingDebts: Math.round(pendingDebts * 100) / 100,
-      upcomingInvoices: Math.round(totalInvoices * 100) / 100,
-      subscriptions: Math.round(subscriptionsTotal * 100) / 100,
-      dayZero,
-      isAtRisk: projectedEndMonth < 0,
+      isAtRisk: projectedEndBalance < 0,
       riskLevel,
-      monthEndDate: monthEnd.toISOString().split('T')[0],
-      nextMonthEndDate: nextMonthEnd.toISOString().split('T')[0],
+      dayZero,
       recommendation,
     }
   }, [context])
