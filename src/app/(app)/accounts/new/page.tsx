@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense, useMemo } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
@@ -61,19 +61,13 @@ function formatCurrencyPreview(value: string) {
 function AccountFormContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
-  // ✅ useMemo para normalizar o ID
-  const rawEditId = searchParams.get("edit")
-  const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
-  
+  const editId = searchParams.get("edit")
   const { context } = useContext_()
   const { user } = useAuth()
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
 
   const [saving, setSaving] = useState(false)
-  const [initialized, setInitialized] = useState(!editId)
-  
   const [formData, setFormData] = useState({
     name: "",
     type: "checking",
@@ -83,11 +77,10 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
-  const { data: accountData, loading: accountLoading, notFound } = useAccountById(editId)
+  const { data: accountData, loading: accountLoading } = useAccountById(editId)
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO
   useEffect(() => {
-    if (editId && accountData && !initialized) {
+    if (accountData) {
       setFormData({
         name: accountData.name || "",
         type: accountData.type || "checking",
@@ -96,64 +89,17 @@ function AccountFormContent() {
         color: accountData.color || "#0f766e",
         icon: accountData.icon || "wallet",
       })
-      setInitialized(true)
     }
+  }, [accountData])
 
-    if (!editId && !initialized) {
-      setInitialized(true)
-    }
-  }, [editId, accountData, initialized])
+  const selectedType =
+    ACCOUNT_TYPES.find((item) => item.value === formData.type) || ACCOUNT_TYPES[0]
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
-  if (editId && notFound && !accountLoading) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-950 items-center justify-center px-4">
-        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
-          <Wallet size={32} className="text-red-500" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Conta não encontrada</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
-          A conta que você está tentando editar pode ter sido excluída ou você não tem permissão para acessá-la.
-        </p>
-        <button
-          onClick={() => router.push('/accounts')}
-          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
-        >
-          Voltar para listagem
-        </button>
-      </div>
-    )
-  }
-
-  if (editId && accountLoading) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
-        <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
-          <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
-            <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-700" />
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={5} height="96px" borderRadius="24px" />
-        </div>
-      </div>
-    )
-  }
-
-  if (!initialized) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={5} height="96px" borderRadius="24px" />
-        </div>
-      </div>
-    )
-  }
-
-  const selectedType = ACCOUNT_TYPES.find((item) => item.value === formData.type) || ACCOUNT_TYPES[0]
   const SelectedIcon = selectedType.icon
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
@@ -231,6 +177,21 @@ function AccountFormContent() {
   const handleCancel = () => {
     vibrate([5])
     router.push("/accounts")
+  }
+
+  if (accountLoading && editId) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
+        <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+          <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+            <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-700" />
+          </div>
+        </div>
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={5} height="96px" borderRadius="24px" />
+        </div>
+      </div>
+    )
   }
 
   return (
