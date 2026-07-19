@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, Suspense } from "react"
+import { useState, useCallback, useRef, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
@@ -11,6 +11,8 @@ import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from '@/hooks/useLocalSync'
+import { useAccountById } from "@/hooks/useAccountById"
+import { useAccountTransactions } from "@/hooks/useAccountTransactions"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
@@ -121,24 +123,16 @@ function BankBadge({ bank }: { bank?: string | null }) {
 function AccountDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const accountId = searchParams.get('id')
+  const rawId = searchParams.get('id')
+  const accountId = useMemo(() => rawId?.trim() || null, [rawId])
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
   const { user } = useAuth()
 
-  // ✅ VOLTANDO PARA useLocalData
-  const { data: accountData, loading } = useLocalData({
-    table: 'accounts' as any,
-    filters: { id: accountId },
-  })
-
-  const { data: transactions } = useLocalData({
-    table: 'transactions' as any,
-    filters: { account_id: accountId },
-  })
-
+  const { data: accountData, loading, notFound } = useAccountById(accountId)
+  const { data: transactions, loading: txLoading } = useAccountTransactions(accountId)
   const { data: allAccounts } = useLocalData({
     table: 'accounts' as any,
     filters: { context },
@@ -207,9 +201,7 @@ function AccountDetailContent() {
     )
   }
 
-  const account = accountData && accountData.length > 0 ? accountData[0] : null
-
-  if (!account) {
+  if (notFound || !accountData) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f8f9fa] p-6 dark:bg-slate-950">
         <div className="max-w-sm text-center">
@@ -229,6 +221,8 @@ function AccountDetailContent() {
       </div>
     )
   }
+
+  const account = accountData
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
