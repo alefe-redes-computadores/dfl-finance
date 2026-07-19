@@ -13,7 +13,7 @@ import {
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
   AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
-  SearchX,  // ✅ ADICIONADO
+  SearchX,
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -40,7 +40,7 @@ import {
   safeArray,
   safeNavigate,
 } from '@/lib/safe'
-import EmptyState from '@/components/EmptyState'  // ✅ NOVO IMPORT
+import EmptyState from '@/components/EmptyState'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -83,7 +83,7 @@ function HomeContent() {
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
-  // ========== ✅ LINHAS RESTAURADAS ==========
+  // ========== LINHAS RESTAURADAS ==========
   const monthLabel = format(currentDate, 'MMMM', { locale: ptBR })
   const greeting = getGreeting()
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
@@ -105,7 +105,7 @@ function HomeContent() {
   const [undoToast, setUndoToast] = useState<{ message: string; onUndo: () => void } | null>(null)
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
 
-  // ✅ useLocalSync - contém pullRemoteChanges()
+  // useLocalSync - contém pullRemoteChanges()
   const { isOnline, pendingCount, isSyncing, forceSync } = useLocalSync()
 
   // ========== CLIENTE ==========
@@ -119,7 +119,7 @@ function HomeContent() {
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  // ========== ✅ DADOS LOCAIS COM useLocalData ==========
+  // ========== DADOS LOCAIS COM useLocalData ==========
   const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext },
@@ -171,11 +171,11 @@ function HomeContent() {
   const localNotifications = safeArray<any>(rawNotifications)
 
   // ============================================================
-  // ✅ DEFINIÇÃO DE isDataLoading (ANTES DOS USEEFFECTS QUE DEPENDEM)
+  // DEFINÇÃO DE isDataLoading (ANTES DOS USEEFFECTS QUE DEPENDEM)
   // ============================================================
   const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
 
-  // ========== ✅ CORREÇÃO 1: FORÇAR SYNC NA MONTAGEM ==========
+  // ========== CORREÇÃO 1: FORÇAR SYNC NA MONTAGEM ==========
   useEffect(() => {
     if (user?.id && isOnline && isClient && !syncAttempted) {
       console.log('🏠 Home: Disparando sync automático...')
@@ -192,10 +192,9 @@ function HomeContent() {
     }
   }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
 
-  // ========== ✅ CORREÇÃO 2: LOADING COM TIMEOUT ==========
+  // ========== CORREÇÃO 2: LOADING COM TIMEOUT ==========
   useEffect(() => {
     if (!isDataLoading && !syncAttempted) {
-      // Dá tempo para o pull trazer dados
       const timer = setTimeout(() => {
         setIsInitialLoad(false)
       }, 3000)
@@ -448,7 +447,7 @@ function HomeContent() {
     await supabase.from('home_layout').upsert({ user_id: user.id, context, section_order: order }, { onConflict: 'user_id,context' })
   }
 
-  // ========== ✅ CORREÇÃO 3: PULL TO REFRESH MELHORADO ==========
+  // ========== PULL TO REFRESH MELHORADO ==========
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -469,11 +468,7 @@ function HomeContent() {
       
       console.log('🔄 Pull-to-refresh: forçando sync...')
       
-      // ✅ força o sync completo (push + pullRemoteChanges)
       await forceSync()
-      
-      // ✅ NÃO PRECISA de reloadTxs/reloadAccounts/reloadDebts
-      // O useLiveQuery já vai reagir automaticamente!
       
       setRefreshing(false)
       showToast('✅ Dados atualizados!', 'success')
@@ -1405,28 +1400,203 @@ function HomeContent() {
         />
       )}
 
-      {cards.length > 0 && (
-        <div className="mb-4 space-y-2">
-          {cards.map((card: any) => (
-            <InvoiceAlert key={card.id} dueDay={card.due_day} closingDay={card.closing_day} cardName={card.name} />
-          ))}
-        </div>
-      )}
+      {/* ========== ALERTAS UNIFICADOS ========== */}
+      {(() => {
+        // Filtra faturas com valor > 0
+        const cardsWithInvoice = cards.filter((card: any) => (card.faturaAtual || 0) > 0)
 
-      {debtsList
-        .filter((d: any) => {
+        // Filtra faturas próximas (até 5 dias) e vencidas
+        const upcomingCards = cardsWithInvoice.filter((card: any) => {
+          const todayDay = new Date().getDate()
+          let days = (card.due_day || 1) - todayDay
+          if (days < 0) {
+            const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
+            days = differenceInDays(nextMonth, new Date())
+          }
+          return days >= 0 && days <= 5
+        })
+
+        const overdueCards = cardsWithInvoice.filter((card: any) => {
+          const todayDay = new Date().getDate()
+          let days = (card.due_day || 1) - todayDay
+          if (days < 0) {
+            const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
+            days = differenceInDays(nextMonth, new Date())
+          }
+          return days < 0
+        })
+
+        // Filtra débitos atrasados
+        const overdueDebts = debtsList.filter((d: any) => {
           const due = safeDate(d.due_date)
           return due && differenceInDays(today, due) >= 0 && d.status !== 'paid'
         })
-        .map((debt: any) => (
-          <DebtAlert
-            key={debt.id}
-            personName={debt.person_name}
-            amount={safeNumber(debt.total_amount) - (debt.paid_amount || 0)}
-            dueDate={debt.due_date}
-            debtId={debt.id}
-          />
-        ))}
+
+        const hasAlerts = upcomingCards.length > 0 || overdueCards.length > 0 || overdueDebts.length > 0
+
+        if (!hasAlerts) return null
+
+        const totalAlerts = overdueCards.length + overdueDebts.length
+
+        return (
+          <div className="mb-5">
+            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+              {/* Header do card de alertas */}
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/50">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                  totalAlerts > 0
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+                }`}>
+                  <AlertTriangle size={16} />
+                </div>
+                <div>
+                  <p className={`text-[13px] font-semibold ${
+                    totalAlerts > 0
+                      ? 'text-red-700 dark:text-red-300'
+                      : 'text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {totalAlerts > 0 ? '⚠️ Atenção necessária' : '📅 Próximos vencimentos'}
+                  </p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                    {totalAlerts > 0
+                      ? `${totalAlerts} item(ns) pendente(s)`
+                      : `${upcomingCards.length} fatura(s) próxima(s)`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col">
+                {/* Faturas vencidas */}
+                {overdueCards.map((card: any, index: number) => {
+                  const todayDay = new Date().getDate()
+                  let days = (card.due_day || 1) - todayDay
+                  if (days < 0) {
+                    const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
+                    days = differenceInDays(nextMonth, new Date())
+                  }
+                  const daysOverdue = Math.abs(days)
+
+                  return (
+                    <div
+                      key={`overdue-${card.id}`}
+                      onClick={() => goToCard(card.id)}
+                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== 0 ? "border-t border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-red-50 dark:bg-red-900/20 text-red-500">
+                          <CreditCard size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {card.name}
+                          </p>
+                          <p className="text-[11px] font-medium text-red-500">
+                            Vencida há {daysOverdue} dia{daysOverdue > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[14px] font-bold text-red-500">
+                          {formatCurrency(card.faturaAtual)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Faturas próximas */}
+                {upcomingCards.map((card: any, index: number) => {
+                  const todayDay = new Date().getDate()
+                  let days = (card.due_day || 1) - todayDay
+                  if (days < 0) {
+                    const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
+                    days = differenceInDays(nextMonth, new Date())
+                  }
+                  const isUrgent = days <= 2
+
+                  return (
+                    <div
+                      key={`upcoming-${card.id}`}
+                      onClick={() => goToCard(card.id)}
+                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== 0 || overdueCards.length > 0 ? "border-t border-gray-100 dark:border-slate-700/50" : ""
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${
+                          isUrgent
+                            ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
+                            : 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
+                        }`}>
+                          <CreditCard size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {card.name}
+                          </p>
+                          <p className={`text-[11px] font-medium ${
+                            isUrgent ? 'text-orange-500' : 'text-amber-500'
+                          }`}>
+                            Vence em {days} dia{days > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className={`text-[14px] font-bold ${
+                          isUrgent ? 'text-orange-500' : 'text-amber-500'
+                        }`}>
+                          {formatCurrency(card.faturaAtual)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Débitos atrasados */}
+                {overdueDebts.map((debt: any, index: number) => {
+                  const due = safeDate(debt.due_date)
+                  const daysOverdue = due ? differenceInDays(today, due) : 0
+                  const remaining = safeNumber(debt.total_amount) - (debt.paid_amount || 0)
+
+                  return (
+                    <div
+                      key={`debt-${debt.id}`}
+                      onClick={() => goToDebt(debt.id)}
+                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                        index !== 0 || overdueCards.length > 0 || upcomingCards.length > 0
+                          ? "border-t border-gray-100 dark:border-slate-700/50"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-red-50 dark:bg-red-900/20 text-red-500">
+                          <User size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {debt.person_name}
+                          </p>
+                          <p className="text-[11px] font-medium text-red-500">
+                            Atrasado há {daysOverdue} dia{daysOverdue > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[14px] font-bold text-red-500">
+                          {formatCurrency(remaining)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-3">
