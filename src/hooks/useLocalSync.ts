@@ -249,9 +249,6 @@ export function useLocalSync() {
     await processSyncQueue(false)
   }, [isOnline, processSyncQueue])
 
-  // ✅ NOVO: força uma ressincronização completa, ignorando qualquer
-  // "lastPull" salvo — útil como botão de emergência ("Ressincronizar tudo")
-  // caso o usuário suspeite que dados da nuvem não estão aparecendo local.
   const forceFullResync = useCallback(async () => {
     renderLog('Ação manual: Ressincronização COMPLETA acionada.', 'info')
     if (!isOnline) {
