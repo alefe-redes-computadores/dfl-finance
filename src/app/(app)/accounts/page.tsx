@@ -33,15 +33,6 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import BankLogo from '@/components/BankLogo'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 
-const ACCOUNT_ICONS: Record<string, any> = {
-  checking: Landmark,
-  savings: PiggyBank,
-  investment: Building2,
-  credit_card: CreditCard,
-  wallet: Wallet,
-  other: Briefcase,
-}
-
 const ACCOUNT_LABELS: Record<string, string> = {
   checking: "Conta Corrente",
   savings: "Poupança",
@@ -69,10 +60,9 @@ function AccountsContent() {
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [accountFilter, setAccountFilter] = useState<string>('all')
   
-  // ========== PERSONALIZAÇÃO DA ORDEM ==========
+  // ========== PERSONALIZAÇÃO DA ORDEM (ITENS DA LISTA) ==========
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
   const [accountOrder, setAccountOrder] = useState<string[]>([])
-  const [isDragging, setIsDragging] = useState(false)
 
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -107,8 +97,6 @@ function AccountsContent() {
 
   // ========== HANDLER DO DRAG & DROP ==========
   const handleDragEnd = (result: DropResult) => {
-    setIsDragging(false)
-
     if (!result.destination) return
 
     const sourceIndex = result.source.index
@@ -123,11 +111,6 @@ function AccountsContent() {
 
     const newOrder = newItems.map(item => item.id)
     saveOrder(newOrder)
-  }
-
-  const handleDragStart = () => {
-    setIsDragging(true)
-    vibrate([5])
   }
 
   const openPersonalize = () => {
@@ -211,7 +194,7 @@ function AccountsContent() {
 
   const totalBalance = (accounts || []).reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0)
 
-  // ========== MODAL DE PERSONALIZAÇÃO ==========
+  // ========== MODAL DE PERSONALIZAÇÃO (REORDENAR CONTAS) ==========
   const PersonalizeOrderModal = () => {
     if (!showPersonalizeModal) return null
 
@@ -258,7 +241,7 @@ function AccountsContent() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4">
-            <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+            <DragDropContext onDragEnd={handleDragEnd}>
               <Droppable droppableId="accounts">
                 {(provided, snapshot) => (
                   <div
@@ -385,7 +368,7 @@ function AccountsContent() {
                 <Plus size={20} />
               </button>
 
-              {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CONTAS */}
+              {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CONTAS (ITENS) */}
               <button
                 type="button"
                 onClick={openPersonalize}
@@ -607,7 +590,7 @@ function AccountsContent() {
         document.body
       )}
 
-      {/* ✅ MODAL DE REORDENAÇÃO */}
+      {/* ✅ MODAL DE REORDENAÇÃO (ITENS DA LISTA) */}
       <PersonalizeOrderModal />
     </div>
   )
