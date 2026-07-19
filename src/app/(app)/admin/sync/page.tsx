@@ -6,6 +6,7 @@ import { ErudaToggler } from '@/components/admin/ErudaToggler'
 import { AdminReset } from '@/components/admin/AdminReset'
 import { AdminDataViewer } from '@/components/admin/AdminDataViewer'
 import { AdminStatus } from '@/components/admin/AdminStatus'
+import { AdminSyncDiagnostics } from '@/components/admin/AdminSyncDiagnostics'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 
@@ -34,6 +35,7 @@ export default function AdminSyncPage() {
 
         <div className="space-y-4">
           <AdminStatus />
+          <AdminSyncDiagnostics />
           <SyncQueueTable />
           <AdminLogger />
           <ErudaToggler />
