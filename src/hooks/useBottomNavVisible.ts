@@ -17,9 +17,14 @@ const VISIBLE_ROUTES = ['/home', '/transactions', '/analysis', '/more']
 // Sub-rotas de /transactions (ou de qualquer rota "visível") que têm seu
 // PRÓPRIO botão fixo de ação (salvar transação, salvar edição, lançar
 // cartão) e por isso não devem mostrar o BottomNav por cima.
+//
+// ✅ CORRIGIDO: a tela de edição de transação NÃO é /transactions/edit —
+// é /transactions/details (usa ?id= como query param, lido via
+// searchParams.get('id') dentro do componente). Path real confirmado:
+// src/app/(app)/transactions/details
 const HIDDEN_SUBROUTES = [
   '/transactions/new',
-  '/transactions/edit',
+  '/transactions/details',
   '/transactions/card-expense',
 ]
 
