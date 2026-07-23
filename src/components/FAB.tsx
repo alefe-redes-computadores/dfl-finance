@@ -11,6 +11,7 @@ import { format } from 'date-fns'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
+import { useBottomNavOverlay } from '@/contexts/BottomNavOverlayContext'
 import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -55,6 +56,7 @@ export default function FAB({ onSave }: Props) {
   const { showToast } = useToast()
   const { safeAdd, safeUpdate } = useSafeDb()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
+  const { setHidden: setNavHidden } = useBottomNavOverlay()
 
   const [mounted, setMounted] = useState(false)
   const [visible, setVisible] = useState(true)
@@ -87,6 +89,12 @@ export default function FAB({ onSave }: Props) {
     if (!showModal) return
     setQuickContext(context === 'personal' ? 'personal' : 'dfl')
   }, [showModal, context])
+
+  // ✅ NOVO: oculta o BottomNav enquanto o modal do FAB estiver aberto
+  useEffect(() => {
+    setNavHidden(showModal)
+    return () => setNavHidden(false)
+  }, [showModal, setNavHidden])
 
   const accounts = useMemo(() => {
     return (allAccounts || [])
