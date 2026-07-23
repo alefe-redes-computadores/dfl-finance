@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from '@/contexts/ToastContext'
-import { ThemeProvider } from '@/contexts/ThemeContext' // ✅ IMPORTADO
+import { ThemeProvider } from '@/contexts/ThemeContext'
+import { BottomNavOverlayProvider } from '@/contexts/BottomNavOverlayContext'
 
 // Configuração oficial da Fonte Poppins
 const poppins = Poppins({
@@ -61,7 +62,10 @@ export default function RootLayout({
         {/* ✅ ENVELOPADO NO THEME PROVIDER */}
         <ThemeProvider>
           <ToastProvider>
-            {children}
+            {/* ✅ NOVO: overlay compartilhado entre FAB e BottomNav */}
+            <BottomNavOverlayProvider>
+              {children}
+            </BottomNavOverlayProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>
