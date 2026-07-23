@@ -29,6 +29,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useTransactionsList } from '@/hooks/useTransactionsList'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { useSmartSearch, SmartSearchSuggestion } from '@/hooks/useSmartSearch'
 import { db } from '@/lib/db'
 import { createPortal } from 'react-dom'
 
@@ -84,6 +85,22 @@ function NewTransactionContent() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // ✅ NOVO: busca inteligente
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestions = useSmartSearch(desc, effectiveContext as 'dfl' | 'personal', type === 'income' ? 'income' : 'expense')
+
+  const applySuggestion = (s: SmartSearchSuggestion) => {
+    vibrate([10])
+    setDesc(s.description)
+    if (s.category_id) setCategoryId(s.category_id)
+    if (s.credit_card_id) {
+      setCreditCardId(s.credit_card_id)
+    } else if (s.account_id) {
+      setAccountId(s.account_id)
+    }
+    setShowSuggestions(false)
+  }
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
@@ -743,15 +760,37 @@ function NewTransactionContent() {
               <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
                 Descrição
               </label>
-              <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
+              <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20 relative">
                 <Edit3 size={18} className="text-gray-400 shrink-0" />
                 <input
                   type="text"
                   value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
+                  onChange={(e) => { setDesc(e.target.value); setShowSuggestions(true) }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                   placeholder={selectedCat ? selectedCat.name : 'Nome ou descrição'}
                   className="flex-1 bg-transparent text-[15px] font-semibold outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
+
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-[16px] shadow-lg overflow-hidden z-20">
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onMouseDown={() => applySuggestion(s)}
+                        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-100 dark:border-slate-700 last:border-0"
+                      >
+                        <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate">
+                          {s.description}
+                        </span>
+                        <span className="text-[12px] font-bold text-gray-400 shrink-0 ml-2">
+                          R$ {s.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
