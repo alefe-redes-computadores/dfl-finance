@@ -219,6 +219,83 @@ function HomeContent() {
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const today = useMemo(() => new Date(), [])
 
+  const getCardDueDate = (
+    dueDay: number | null | undefined,
+    year: number,
+    month: number
+  ) => {
+    const normalizedDueDay = Math.max(
+      1,
+      Math.min(31, safeNumber(dueDay) || 1)
+    )
+
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate()
+    const clampedDay = Math.min(normalizedDueDay, lastDayOfMonth)
+
+    return new Date(year, month, clampedDay, 12, 0, 0, 0)
+  }
+
+  const getNextCardDueDate = (
+    dueDay: number | null | undefined,
+    referenceDate: Date = new Date()
+  ) => {
+    const reference = new Date(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth(),
+      referenceDate.getDate(),
+      12,
+      0,
+      0,
+      0
+    )
+
+    let dueDate = getCardDueDate(
+      dueDay,
+      reference.getFullYear(),
+      reference.getMonth()
+    )
+
+    if (dueDate < reference) {
+      const nextMonthReference = new Date(
+        reference.getFullYear(),
+        reference.getMonth() + 1,
+        1,
+        12,
+        0,
+        0,
+        0
+      )
+
+      dueDate = getCardDueDate(
+        dueDay,
+        nextMonthReference.getFullYear(),
+        nextMonthReference.getMonth()
+      )
+    }
+
+    return dueDate
+  }
+
+  const getDaysUntilCardDue = (
+    dueDay: number | null | undefined,
+    referenceDate: Date = new Date()
+  ) => {
+    const reference = new Date(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth(),
+      referenceDate.getDate(),
+      12,
+      0,
+      0,
+      0
+    )
+
+    return differenceInDays(
+      getNextCardDueDate(dueDay, reference),
+      reference
+    )
+  }
+
   const transactionsWithJoin = useMemo(() => {
     return localTransactions.map((tx: any) => {
       const category = localCategories.find((c: any) => c.id === tx.category_id) as any
@@ -288,8 +365,16 @@ function HomeContent() {
 
   const cards = useMemo(() => {
     return localCards.map((card: any) => {
-      const cardTxs = monthTransactions.filter((t: any) => t.credit_card_id === card.id)
-      const faturaAtual = cardTxs.reduce((acc: number, t: any) => acc + safeNumber(t.amount), 0)
+      const cardTxs = monthTransactions.filter(
+        (t: any) =>
+          t.credit_card_id === card.id &&
+          t.type === 'expense' &&
+          t.affects_balance !== true
+      )
+      const faturaAtual = cardTxs.reduce(
+        (acc: number, t: any) => acc + safeNumber(t.amount),
+        0
+      )
       return { ...card, faturaAtual }
     })
   }, [localCards, monthTransactions])
@@ -367,53 +452,113 @@ function HomeContent() {
   const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
 
   useEffect(() => {
-    if (!user?.id || cards.length === 0) return
+    if (!user?.id || localCards.length === 0) return
+
     const generateNotifs = async () => {
-      const todayDay = new Date().getDate()
+      const now = new Date()
+
+      const realStart = format(
+        startOfMonth(now),
+        'yyyy-MM-dd'
+      )
+
+      const realEnd = format(
+        endOfMonth(now),
+        'yyyy-MM-dd'
+      )
+
+      const realMonthTransactions = localTransactions.filter(
+        (t: any) =>
+          t.date >= realStart &&
+          t.date <= realEnd
+      )
+
+      const realCards = localCards.map((card: any) => {
+        const faturaAtual = realMonthTransactions
+          .filter(
+            (t: any) =>
+              t.credit_card_id === card.id &&
+              t.type === 'expense' &&
+              t.affects_balance !== true
+          )
+          .reduce(
+            (acc: number, t: any) =>
+              acc + safeNumber(t.amount),
+            0
+          )
+
+        return {
+          ...card,
+          faturaAtual
+        }
+      })
+
       let addedNew = false
 
-      for (const card of cards) {
-        const days = (card.due_day || 1) - todayDay
-        let notifData = null
+      for (const card of realCards) {
+        if (safeNumber(card.faturaAtual) <= 0) continue
 
-        if (days < 0 && card.faturaAtual > 0) {
-          notifData = {
-            id: `invoice-overdue-${card.id}-${currentDate.getMonth()}`,
-            user_id: user.id,
-            type: 'invoice_overdue',
-            title: `Fatura vencida: ${card.name}`,
-            subtitle: `Venceu dia ${card.due_day}`,
-            card_id: card.id,
-            severity: 'critical',
-            is_read: false,
-            created_at: new Date().toISOString()
-          }
-        } else if (days <= 3 && days >= 0 && card.faturaAtual > 0) {
-          notifData = {
-            id: `invoice-soon-${card.id}-${currentDate.getMonth()}`,
-            user_id: user.id,
-            type: 'invoice_soon',
-            title: `Fatura próxima: ${card.name}`,
-            subtitle: `Vence em ${days} dia(s)`,
-            card_id: card.id,
-            severity: 'warning',
-            is_read: false,
-            created_at: new Date().toISOString()
-          }
+        const dueDate = getNextCardDueDate(
+          card.due_day,
+          now
+        )
+
+        const days = getDaysUntilCardDue(
+          card.due_day,
+          now
+        )
+
+        if (days > 3) continue
+
+        const dueKey =
+          `${dueDate.getFullYear()}-${String(
+            dueDate.getMonth() + 1
+          ).padStart(2, '0')}`
+
+        const notifData = {
+          id: `invoice-soon-${card.id}-${dueKey}`,
+          user_id: user.id,
+          type: 'invoice_soon',
+          title: `Fatura próxima: ${card.name}`,
+          subtitle:
+            days === 0
+              ? 'Vence hoje'
+              : days === 1
+              ? 'Vence amanhã'
+              : `Vence em ${days} dias`,
+          card_id: card.id,
+          severity: 'warning',
+          is_read: false,
+          created_at: new Date().toISOString()
         }
 
-        if (notifData) {
-          const existing = await db.table('notifications').get(notifData.id)
-          if (!existing) {
-            await db.table('notifications').put({ ...notifData, sync_status: 'pending', sync_attempts: 0 })
-            addedNew = true
-          }
+        const existing = await db
+          .table('notifications')
+          .get(notifData.id)
+
+        if (!existing) {
+          await db.table('notifications').put({
+            ...notifData,
+            sync_status: 'pending',
+            sync_attempts: 0
+          })
+
+          addedNew = true
         }
       }
-      if (addedNew) reloadNotifs()
+
+      if (addedNew) {
+        reloadNotifs()
+      }
     }
+
     generateNotifs()
-  }, [cards, user?.id, currentDate, reloadNotifs])
+  }, [
+    localCards,
+    localTransactions,
+    user?.id,
+    reloadNotifs
+  ])
 
   useEffect(() => {
     if (user?.id && isOnline) {
@@ -484,9 +629,24 @@ function HomeContent() {
   const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + safeNumber(curr.balance), 0)
   
-  const sortedByDue = [...cards].sort((a, b) => { const todayDay = today.getDate(); const aDue = a.due_day < todayDay ? a.due_day + 31 : a.due_day; const bDue = b.due_day < todayDay ? b.due_day + 31 : b.due_day; return aDue - bDue })
-  const nextCard = sortedByDue.length > 0 ? sortedByDue[0] : null
-  const allCardsPaid = cards.length > 0 && cards.every((c) => (c.faturaAtual || 0) === 0)
+  const openCards = cards.filter(
+    (card: any) => safeNumber(card.faturaAtual) > 0
+  )
+
+  const sortedByDue = [...openCards].sort(
+    (a: any, b: any) =>
+      getNextCardDueDate(a.due_day, today).getTime() -
+      getNextCardDueDate(b.due_day, today).getTime()
+  )
+
+  const nextCard =
+    sortedByDue.length > 0
+      ? sortedByDue[0]
+      : null
+
+  const allCardsPaid =
+    cards.length > 0 &&
+    openCards.length === 0
 
   const getAttachmentIcon = (url: string | null) => { 
     if (!url) return null; 
@@ -579,41 +739,51 @@ function HomeContent() {
       case 'income-expense':
         return (
           <div key="income-expense" className="mb-5">
-            <div className="grid grid-cols-2 gap-3">
-              <div
-                onClick={() => router.push("/transactions?filter=income")}
-                className="rounded-[22px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
-              >
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10">
-                    <ArrowUp size={18} />
-                  </div>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                    Receitas
-                  </span>
-                </div>
-
-                <p className="text-[18px] font-bold leading-none text-emerald-600 dark:text-emerald-400">
-                  {hideBalance ? "••••" : formatCurrency(summary.income)}
+            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="px-4 pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+                  Movimentação do mês
                 </p>
               </div>
 
-              <div
-                onClick={() => router.push("/transactions?filter=expense")}
-                className="rounded-[22px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
-              >
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-50 text-red-500 dark:bg-red-500/10">
+              <div className="grid grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => router.push("/transactions?filter=income")}
+                  className="group flex min-w-0 items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <ArrowUp size={18} />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                      Receitas
+                    </p>
+                    <p className="mt-1 truncate text-[17px] font-bold leading-none text-emerald-600 dark:text-emerald-400">
+                      {hideBalance ? "••••" : formatCurrency(summary.income)}
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/transactions?filter=expense")}
+                  className="group flex min-w-0 items-center gap-3 border-l border-gray-100 px-4 py-4 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-slate-700/70 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400">
                     <ArrowDown size={18} />
                   </div>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                    Despesas
-                  </span>
-                </div>
 
-                <p className="text-[18px] font-bold leading-none text-red-500 dark:text-red-400">
-                  {hideBalance ? "••••" : formatCurrency(summary.expense)}
-                </p>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                      Despesas
+                    </p>
+                    <p className="mt-1 truncate text-[17px] font-bold leading-none text-red-500 dark:text-red-400">
+                      {hideBalance ? "••••" : formatCurrency(summary.expense)}
+                    </p>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
@@ -750,114 +920,169 @@ function HomeContent() {
             )}
 
             {nextCard ? (
-              <div
+              <button
+                type="button"
                 onClick={() => goToCard(nextCard.id)}
-                className="flex items-center justify-between gap-3 rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm transition-all hover:shadow-md active:scale-[0.98] cursor-pointer"
+                className="w-full overflow-hidden rounded-[24px] border border-orange-200/70 bg-white text-left shadow-sm transition-all hover:shadow-md active:scale-[0.99] dark:border-orange-900/40 dark:bg-slate-800"
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-orange-50 text-orange-500 dark:bg-orange-500/10">
-                    <CreditCard size={20} />
+                <div className="flex items-center justify-between gap-3 px-4 pt-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-orange-50 text-orange-500 dark:bg-orange-500/10">
+                      <CreditCard size={20} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-500">
+                        Próxima fatura
+                      </p>
+                      <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                        {nextCard.name}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
-                      Próxima fatura
-                    </p>
-                    <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                      {nextCard.name}
-                    </p>
-                    <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                      Vence dia {nextCard.due_day}
-                    </p>
-                  </div>
+                  <ChevronRight size={18} className="shrink-0 text-orange-300 dark:text-orange-700" />
                 </div>
 
-                <div className="shrink-0 text-right">
-                  <p
-                    className={`text-[16px] font-bold ${
-                      nextCard.faturaAtual > 0 ? "text-orange-500" : "text-gray-800 dark:text-gray-200"
-                    }`}
-                  >
-                    {hideBalance ? "••••" : formatCurrency(safeNumber(nextCard.faturaAtual))}
-                  </p>
-                </div>
-              </div>
-            ) : allCardsPaid ? (
-              <div className="rounded-[24px] border border-emerald-200/70 dark:border-emerald-900/60 bg-white dark:bg-slate-800 p-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <Check size={18} />
-                  </div>
+                <div className="flex items-end justify-between gap-4 px-4 pb-4 pt-3">
                   <div>
-                    <p className="text-[14px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      Tudo em dia
+                    <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                      Valor em aberto
                     </p>
-                    <p className="text-[12px] text-gray-400 dark:text-gray-500">
-                      Todas as faturas estão pagas.
+                    <p className="mt-1 text-[22px] font-bold leading-none tracking-tight text-orange-500">
+                      {hideBalance ? "••••" : formatCurrency(safeNumber(nextCard.faturaAtual))}
                     </p>
                   </div>
+
+                  <div className="shrink-0 rounded-full bg-orange-50 px-3 py-1.5 text-[11px] font-semibold text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
+                    Vence dia {nextCard.due_day}
+                  </div>
+                </div>
+              </button>
+            ) : allCardsPaid ? (
+              <div className="flex items-center gap-3 rounded-[20px] border border-emerald-200/70 bg-emerald-50/40 px-4 py-3.5 dark:border-emerald-900/50 dark:bg-emerald-900/10">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
+                  <Check size={17} />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    Faturas em dia
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-500">
+                    Nenhuma fatura aberta neste período.
+                  </p>
                 </div>
               </div>
             ) : null}
           </div>
         )
-      case 'pendings':
+      case 'pendings': {
+        const hasPendingItems =
+          safeNumber(pendings.toPay) > 0 ||
+          safeNumber(pendings.toReceive) > 0 ||
+          safeNumber(pendings.faturas) > 0
+
         return (
           <div key="pendings" className="mb-5">
-            <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
-              <h3 className="mb-3 px-1 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
-                Pendências
-              </h3>
-
-              <div className="grid grid-cols-3 gap-2.5">
-                <div
-                  onClick={() => router.push("/transactions?filter=expense")}
-                  className="cursor-pointer rounded-[18px] px-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-95"
-                >
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
-                    <ArrowDown size={16} />
-                  </div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                    A pagar
+            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex items-center justify-between px-4 pt-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+                    Atenção agora
                   </p>
-                  <p className="mt-1 text-[14px] font-bold text-red-500 dark:text-red-400">
-                    {hideBalance ? "•••" : formatCurrency(pendings.toPay)}
-                  </p>
+                  <h3 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                    Pendências
+                  </h3>
                 </div>
 
-                <div
-                  onClick={() => router.push("/transactions?filter=income")}
-                  className="cursor-pointer rounded-[18px] px-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-95"
-                >
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10">
-                    <ArrowUp size={16} />
+                {hasPendingItems ? (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400">
+                    <Clock size={15} />
                   </div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                    Receber
-                  </p>
-                  <p className="mt-1 text-[14px] font-bold text-emerald-600 dark:text-emerald-400">
-                    {hideBalance ? "•••" : formatCurrency(pendings.toReceive)}
-                  </p>
-                </div>
-
-                <div
-                  onClick={() => router.push("/cards")}
-                  className="cursor-pointer rounded-[18px] px-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-95"
-                >
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-orange-50 text-orange-500 dark:bg-orange-500/10">
-                    <CreditCard size={16} />
+                ) : (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <Check size={15} />
                   </div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                    Faturas
-                  </p>
-                  <p className="mt-1 text-[14px] font-bold text-orange-500">
-                    {hideBalance ? "•••" : formatCurrency(pendings.faturas)}
-                  </p>
-                </div>
+                )}
               </div>
+
+              {hasPendingItems ? (
+                <div className="grid grid-cols-3 gap-1 px-2 pb-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/transactions?filter=expense")}
+                    className="min-w-0 rounded-[18px] px-2 py-3 text-left transition-colors hover:bg-red-50/60 active:scale-[0.97] dark:hover:bg-red-500/5"
+                  >
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
+                      <ArrowDown size={15} />
+                    </div>
+                    <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
+                      A pagar
+                    </p>
+                    <p className={`mt-1 truncate text-[13px] font-bold ${
+                      safeNumber(pendings.toPay) > 0
+                        ? "text-red-500 dark:text-red-400"
+                        : "text-gray-300 dark:text-gray-600"
+                    }`}>
+                      {hideBalance ? "•••" : formatCurrency(pendings.toPay)}
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push("/transactions?filter=income")}
+                    className="min-w-0 rounded-[18px] px-2 py-3 text-left transition-colors hover:bg-emerald-50/60 active:scale-[0.97] dark:hover:bg-emerald-500/5"
+                  >
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10">
+                      <ArrowUp size={15} />
+                    </div>
+                    <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
+                      A receber
+                    </p>
+                    <p className={`mt-1 truncate text-[13px] font-bold ${
+                      safeNumber(pendings.toReceive) > 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-gray-300 dark:text-gray-600"
+                    }`}>
+                      {hideBalance ? "•••" : formatCurrency(pendings.toReceive)}
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push("/cards")}
+                    className="min-w-0 rounded-[18px] px-2 py-3 text-left transition-colors hover:bg-orange-50/60 active:scale-[0.97] dark:hover:bg-orange-500/5"
+                  >
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-orange-500 dark:bg-orange-500/10">
+                      <CreditCard size={15} />
+                    </div>
+                    <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
+                      Faturas
+                    </p>
+                    <p className={`mt-1 truncate text-[13px] font-bold ${
+                      safeNumber(pendings.faturas) > 0
+                        ? "text-orange-500 dark:text-orange-400"
+                        : "text-gray-300 dark:text-gray-600"
+                    }`}>
+                      {hideBalance ? "•••" : formatCurrency(pendings.faturas)}
+                    </p>
+                  </button>
+                </div>
+              ) : (
+                <div className="px-4 pb-4 pt-3">
+                  <div className="flex items-center gap-2 rounded-[16px] bg-emerald-50/60 px-3 py-3 dark:bg-emerald-500/5">
+                    <Check size={15} className="shrink-0 text-emerald-500" />
+                    <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+                      Tudo em dia. Nenhuma pendência financeira aberta.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )
+      }
       case 'receivables':
         if (debtsList.length === 0) return null
         return (
@@ -889,7 +1114,7 @@ function HomeContent() {
               <div className="flex flex-col">
                 {debtsList.slice(0, 3).map((debt: any, index: number) => {
                   const IconComp = getDynamicIcon(debt.icon || "user");
-                  const remaining = safeNumber(debt.total_amount) - debt.paid_amount || 0;
+                  const remaining = safeNumber(debt.total_amount) - safeNumber(debt.paid_amount);
                   const dueDate = safeDate(debt.due_date);
                   const daysUntilDue = dueDate ? differenceInDays(dueDate, today) : null;
                   const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
@@ -1409,25 +1634,20 @@ function HomeContent() {
       {(() => {
         const cardsWithInvoice = cards.filter((card: any) => (card.faturaAtual || 0) > 0)
 
-        const upcomingCards = cardsWithInvoice.filter((card: any) => {
-          const todayDay = new Date().getDate()
-          let days = (card.due_day || 1) - todayDay
-          if (days < 0) {
-            const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
-            days = differenceInDays(nextMonth, new Date())
-          }
-          return days >= 0 && days <= 5
-        })
+        const upcomingCards = cardsWithInvoice.filter(
+          (card: any) => {
+            const days = getDaysUntilCardDue(
+              card.due_day,
+              today
+            )
 
-        const overdueCards = cardsWithInvoice.filter((card: any) => {
-          const todayDay = new Date().getDate()
-          let days = (card.due_day || 1) - todayDay
-          if (days < 0) {
-            const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
-            days = differenceInDays(nextMonth, new Date())
+            return days >= 0 && days <= 5
           }
-          return days < 0
-        })
+        )
+
+        // Sem competência/ciclo real da fatura, due_day sozinho
+        // não é suficiente para declarar atraso com segurança.
+        const overdueCards: any[] = []
 
         const overdueDebts = debtsList.filter((d: any) => {
           const due = safeDate(d.due_date)
@@ -1468,52 +1688,12 @@ function HomeContent() {
               </div>
 
               <div className="flex flex-col">
-                {overdueCards.map((card: any, index: number) => {
-                  const todayDay = new Date().getDate()
-                  let days = (card.due_day || 1) - todayDay
-                  if (days < 0) {
-                    const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
-                    days = differenceInDays(nextMonth, new Date())
-                  }
-                  const daysOverdue = Math.abs(days)
-
-                  return (
-                    <div
-                      key={`overdue-${card.id}`}
-                      onClick={() => goToCard(card.id)}
-                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
-                        index !== 0 ? "border-t border-gray-100 dark:border-slate-700/50" : ""
-                      }`}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-red-50 dark:bg-red-900/20 text-red-500">
-                          <CreditCard size={16} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {card.name}
-                          </p>
-                          <p className="text-[11px] font-medium text-red-500">
-                            Vencida há {daysOverdue} dia{daysOverdue > 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-[14px] font-bold text-red-500">
-                          {formatCurrency(card.faturaAtual)}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
-
                 {upcomingCards.map((card: any, index: number) => {
-                  const todayDay = new Date().getDate()
-                  let days = (card.due_day || 1) - todayDay
-                  if (days < 0) {
-                    const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, card.due_day || 1)
-                    days = differenceInDays(nextMonth, new Date())
-                  }
+                  const days = getDaysUntilCardDue(
+                    card.due_day,
+                    today
+                  )
+
                   const isUrgent = days <= 2
 
                   return (
@@ -1539,7 +1719,11 @@ function HomeContent() {
                           <p className={`text-[11px] font-medium ${
                             isUrgent ? 'text-orange-500' : 'text-amber-500'
                           }`}>
-                            Vence em {days} dia{days > 1 ? 's' : ''}
+                            {days === 0
+                              ? 'Vence hoje'
+                              : days === 1
+                              ? 'Vence amanhã'
+                              : `Vence em ${days} dias`}
                           </p>
                         </div>
                       </div>
@@ -1557,7 +1741,7 @@ function HomeContent() {
                 {overdueDebts.map((debt: any, index: number) => {
                   const due = safeDate(debt.due_date)
                   const daysOverdue = due ? differenceInDays(today, due) : 0
-                  const remaining = safeNumber(debt.total_amount) - (debt.paid_amount || 0)
+                  const remaining = safeNumber(debt.total_amount) - safeNumber(debt.paid_amount)
 
                   return (
                     <div
