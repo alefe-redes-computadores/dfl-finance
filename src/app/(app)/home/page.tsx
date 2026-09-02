@@ -682,8 +682,14 @@ function HomeContent() {
                 className="relative z-10 w-full text-left group transition-transform active:scale-[0.98]"
               >
                 <h1
-                  className={`text-[32px] leading-none font-light text-gray-900 dark:text-gray-50 ${
-                    hideBalance ? "tracking-[0.18em]" : "tracking-tight"
+                  className={`text-[32px] leading-none font-light ${
+                    hideBalance
+                      ? "text-gray-900 dark:text-gray-50 tracking-[0.18em]"
+                      : totalAccountsBalance > 0
+                        ? "text-emerald-600 dark:text-emerald-400 tracking-tight"
+                        : totalAccountsBalance < 0
+                          ? "text-red-500 dark:text-red-400 tracking-tight"
+                          : "text-gray-900 dark:text-gray-50 tracking-tight"
                   }`}
                 >
                   {hideBalance ? "••••" : formatCurrency(totalAccountsBalance)}

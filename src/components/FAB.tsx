@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Plus, X, Zap, ArrowDown, ArrowUp, Wallet, Check,
   Coffee, ShoppingCart, Car, Home, Smartphone, Utensils, Heart,
@@ -59,7 +59,6 @@ export default function FAB({ onSave }: Props) {
   const { setHidden: setNavHidden } = useBottomNavOverlay()
 
   const [mounted, setMounted] = useState(false)
-  const [visible, setVisible] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconPicker, setShowIconPicker] = useState(false)
@@ -71,12 +70,6 @@ export default function FAB({ onSave }: Props) {
   const [accountId, setAccountId] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const [position, setPosition] = useState({ x: 20, y: 80 })
-  const [isDragging, setIsDragging] = useState(false)
-  const [showDeleteZone, setShowDeleteZone] = useState(false)
-
-  const isTouchMove = useRef(false)
-  const fabRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -128,56 +121,6 @@ export default function FAB({ onSave }: Props) {
     setShowIconPicker(false)
     setShowModal(false)
   }, [])
-
-  const handleTouchStart = () => {
-    isTouchMove.current = false
-    setIsDragging(true)
-    vibrate([10])
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!mounted) return
-    isTouchMove.current = true
-    setShowDeleteZone(true)
-
-    const touch = e.touches?.[0]
-    if (!touch) return
-
-    const fabSize = 56
-    const margin = 10
-    const newX = window.innerWidth - touch.clientX - fabSize / 2
-    const newY = window.innerHeight - touch.clientY - fabSize / 2
-
-    const clampedX = Math.max(margin, Math.min(window.innerWidth - fabSize - margin, newX))
-    const clampedY = Math.max(80, Math.min(window.innerHeight - fabSize - margin, newY))
-
-    setPosition({ x: clampedX, y: clampedY })
-  }
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!mounted) return
-
-    setIsDragging(false)
-    setShowDeleteZone(false)
-
-    if (!isTouchMove.current) {
-      vibrate([10])
-      setShowModal(true)
-      return
-    }
-
-    const touch = e.changedTouches?.[0]
-    if (!touch) return
-
-    if (touch.clientY > window.innerHeight * 0.8) {
-      setVisible(false)
-      hapticError()
-      showToast('Botão oculto até a próxima sessão.', 'info')
-      return
-    }
-
-    vibrate([5])
-  }
 
   const save = async () => {
     if (!user?.id) {
@@ -285,40 +228,24 @@ export default function FAB({ onSave }: Props) {
     }
   }
 
-  if (!mounted || !visible) return null
+  if (!mounted) return null
 
   return (
     <>
-      {showDeleteZone && (
-        <div className="fixed bottom-6 left-0 right-0 z-[499] flex justify-center pointer-events-none">
-          <div className="bg-red-500 text-white px-6 py-4 rounded-[24px] shadow-2xl flex items-center gap-2 font-bold text-sm shadow-red-500/30">
-            <X size={20} />
-            Solte aqui para ocultar
-          </div>
-        </div>
-      )}
-
       <button
-        ref={fabRef}
         type="button"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         onClick={() => {
           vibrate([10])
           setShowModal(true)
         }}
-        className={`fixed z-[500] w-[56px] h-[56px] rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-90 touch-none ${
-          isDragging ? 'scale-110 shadow-2xl opacity-90' : ''
-        } ${
+        className={`fixed bottom-[112px] right-4 z-[500] flex h-[52px] w-[52px] items-center justify-center rounded-full border border-white/10 text-white shadow-xl transition-all active:scale-90 ${
           quickType === 'expense'
-            ? 'bg-red-500 shadow-red-500/30'
-            : 'bg-emerald-500 shadow-emerald-500/30'
-        } text-white`}
-        style={{ right: `${position.x}px`, bottom: `${position.y}px` }}
+            ? 'bg-red-500 shadow-red-500/25'
+            : 'bg-emerald-500 shadow-emerald-500/25'
+        }`}
         aria-label={quickType === 'expense' ? 'Nova despesa' : 'Nova receita'}
       >
-        {quickType === 'expense' ? <ArrowDown size={28} /> : <ArrowUp size={28} />}
+        {quickType === 'expense' ? <ArrowDown size={24} /> : <ArrowUp size={24} />}
       </button>
 
       {showModal && (
