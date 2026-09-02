@@ -624,37 +624,37 @@ export default function TransactionsPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-5 gap-1 rounded-[16px] bg-gray-100 p-1 dark:bg-slate-800/80">
             {[
               {
                 key: 'all',
                 label: 'Todas',
                 icon: ReceiptText,
-                active: 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-gray-900 dark:border-white',
+                active: 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white',
               },
               {
                 key: 'income',
                 label: 'Receitas',
                 icon: ArrowUp,
-                active: 'bg-emerald-600 text-white border-emerald-600',
+                active: 'bg-emerald-50 text-emerald-700 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-400',
               },
               {
                 key: 'expense',
                 label: 'Despesas',
                 icon: ArrowDown,
-                active: 'bg-rose-600 text-white border-rose-600',
+                active: 'bg-rose-50 text-rose-700 shadow-sm dark:bg-rose-500/15 dark:text-rose-400',
               },
               {
                 key: 'transfer',
                 label: 'Transf.',
                 icon: ArrowLeftRight,
-                active: 'bg-blue-600 text-white border-blue-600',
+                active: 'bg-blue-50 text-blue-700 shadow-sm dark:bg-blue-500/15 dark:text-blue-400',
               },
               {
                 key: 'pending',
                 label: 'Pend.',
                 icon: Clock,
-                active: 'bg-amber-500 text-white border-amber-500',
+                active: 'bg-amber-50 text-amber-700 shadow-sm dark:bg-amber-500/15 dark:text-amber-400',
               },
             ].map(f => {
               const QuickIcon = f.icon
@@ -665,10 +665,10 @@ export default function TransactionsPage() {
                   type="button"
                   key={f.key}
                   onClick={() => setQuickFilter(f.key as QuickFilter)}
-                  className={`flex h-[48px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[14px] border text-[9.5px] font-semibold transition-all active:scale-[0.97] ${
+                  className={`flex h-[42px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[12px] border border-transparent text-[9.5px] font-semibold transition-all active:scale-[0.97] ${
                     selected
                       ? f.active
-                      : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'
+                      : 'bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-slate-700/70 dark:hover:text-gray-200'
                   }`}
                 >
                   <QuickIcon size={15} strokeWidth={2.25} />
@@ -701,17 +701,17 @@ export default function TransactionsPage() {
               <PendingCard txs={pendingTxs} loading={false} />
             )}
 
-            <div className="space-y-5 animate-in fade-in duration-500">
+            <div className="space-y-4 animate-in fade-in duration-500">
               {sortedDates.map(date => (
                 <div key={date} className="relative">
-                  <div className="mb-2 flex items-center gap-2 px-1 pt-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-gray-300 dark:bg-slate-600" />
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+                  <div className="mb-2 flex items-center gap-2 px-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.11em] text-gray-400 dark:text-gray-500">
                       {dateLabel(date)}
                     </p>
+                    <div className="h-px flex-1 bg-gray-200/80 dark:bg-slate-800" />
                   </div>
 
-                  <div className="overflow-hidden rounded-[20px] border border-gray-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                  <div className="overflow-hidden rounded-[18px] border border-gray-200/70 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.025)] dark:border-slate-800 dark:bg-slate-800/80">
                     {grouped[date].map((t, index) => (
                       <TransactionItem
                         key={t.id}

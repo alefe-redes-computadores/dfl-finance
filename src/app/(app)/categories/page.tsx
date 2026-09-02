@@ -1,11 +1,12 @@
+// src/app/(app)/categories/page.tsx
 'use client'
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import * as Icons from 'lucide-react'
 import { ChevronLeft, Plus, Trash2, X, ChevronDown, Tag, Edit3, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react'
 import IconPicker from '@/components/IconPicker'
+import { getDynamicIcon, normalizeIconName } from '@/lib/iconUtils'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
@@ -58,8 +59,7 @@ export default function CategoriesPage() {
     setColor(cat.color)
 
     if (cat.icon) {
-      const formattedIcon = cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1)
-      setIcon(formattedIcon)
+      setIcon(normalizeIconName(cat.icon) || 'Tag')
     } else {
       setIcon('Tag')
     }
@@ -97,7 +97,7 @@ export default function CategoriesPage() {
       if (editingCategory) {
         const updatePayload = {
           name: name.trim(),
-          icon: icon.toLowerCase(),
+          icon: normalizeIconName(icon) || 'Tag',
           color,
           updated_at: new Date().toISOString()
         }
@@ -116,7 +116,7 @@ export default function CategoriesPage() {
           id,
           user_id: user.id,
           name: name.trim(),
-          icon: icon.toLowerCase(),
+          icon: normalizeIconName(icon) || 'Tag',
           color,
           type: tab,
           context: effectiveContext,
@@ -188,7 +188,7 @@ export default function CategoriesPage() {
     }
   }
 
-  const FormIconComp = (Icons as any)[icon] || Icons.Tag
+  const FormIconComp = getDynamicIcon(icon)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300">
@@ -361,8 +361,7 @@ export default function CategoriesPage() {
       ) : (
         <div className="space-y-2.5 animate-in fade-in duration-300">
           {categories.map((cat: any, index: number) => {
-            const catIconName = cat.icon ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1) : 'Tag'
-            const ListIconComp = (Icons as any)[catIconName] || Icons.Tag
+            const ListIconComp = getDynamicIcon(cat.icon || 'Tag')
 
             return (
               <div

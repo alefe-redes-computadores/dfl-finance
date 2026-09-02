@@ -1,7 +1,9 @@
 // src/lib/iconUtils.ts
+import type { ComponentType } from 'react'
 import * as Icons from 'lucide-react'
+import { ICON_CATEGORIES } from '@/constants/iconLibrary'
 
-type LucideIconComponent = React.ComponentType<{
+type LucideIconComponent = ComponentType<{
   size?: number | string
   color?: string
   strokeWidth?: number | string
@@ -9,6 +11,10 @@ type LucideIconComponent = React.ComponentType<{
 }>
 
 const FALLBACK_ICON = Icons.Tag
+
+const LIBRARY_ICON_NAMES = Array.from(
+  new Set(Object.values(ICON_CATEGORIES).flat())
+)
 
 const toPascalCase = (value: string) => {
   return value
@@ -21,19 +27,31 @@ const toPascalCase = (value: string) => {
     .join('')
 }
 
-export const normalizeIconName = (iconName?: string | null) => {
-  if (!iconName) return ''
-  return toPascalCase(String(iconName))
+const compactIconName = (value: string) => {
+  return value
+    .trim()
+    .replace(/Icon$/i, '')
+    .replace(/[\s_-]+/g, '')
+    .toLowerCase()
 }
 
-export const getDynamicIcon = (
+const findLegacyLibraryName = (value: string) => {
+  const compact = compactIconName(value)
+
+  return LIBRARY_ICON_NAMES.find(
+    iconName => compactIconName(iconName) === compact
+  )
+}
+
+export const normalizeIconName = (
   iconName?: string | null
-): LucideIconComponent => {
-  if (!iconName) return FALLBACK_ICON
+) => {
+  if (!iconName) return ''
 
   const raw = String(iconName).trim()
+  if (!raw) return ''
 
-  const candidates = Array.from(
+  const directCandidates = Array.from(
     new Set([
       raw,
       raw.replace(/Icon$/i, ''),
@@ -42,12 +60,37 @@ export const getDynamicIcon = (
     ].filter(Boolean))
   )
 
-  for (const candidate of candidates) {
-    const icon = (Icons as Record<string, unknown>)[candidate]
-
-    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null)) {
-      return icon as LucideIconComponent
+  for (const candidate of directCandidates) {
+    if ((Icons as Record<string, unknown>)[candidate]) {
+      return candidate
     }
+  }
+
+  const legacyName = findLegacyLibraryName(raw)
+
+  if (legacyName && (Icons as Record<string, unknown>)[legacyName]) {
+    return legacyName
+  }
+
+  return ''
+}
+
+export const getDynamicIcon = (
+  iconName?: string | null
+): LucideIconComponent => {
+  const normalizedName = normalizeIconName(iconName)
+
+  if (!normalizedName) {
+    return FALLBACK_ICON
+  }
+
+  const icon = (Icons as Record<string, unknown>)[normalizedName]
+
+  if (
+    typeof icon === 'function' ||
+    (typeof icon === 'object' && icon !== null)
+  ) {
+    return icon as LucideIconComponent
   }
 
   return FALLBACK_ICON
