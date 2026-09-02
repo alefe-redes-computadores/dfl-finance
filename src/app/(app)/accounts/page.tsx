@@ -45,6 +45,21 @@ const ACCOUNT_LABELS: Record<string, string> = {
 // ========== CHAVE PARA LOCALSTORAGE ==========
 const STORAGE_KEY = 'dfl_accounts_order'
 
+function sortAccountsByOrder(accounts: any[], order: string[]) {
+  if (order.length === 0) return accounts
+
+  return [...accounts].sort((a, b) => {
+    const idxA = order.indexOf(a.id)
+    const idxB = order.indexOf(b.id)
+
+    if (idxA === -1 && idxB === -1) return 0
+    if (idxA === -1) return 1
+    if (idxB === -1) return -1
+
+    return idxA - idxB
+  })
+}
+
 function AccountsContent() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -70,30 +85,43 @@ function AccountsContent() {
   // USANDO HOOK ESPECÍFICO
   const { data: accounts, loading } = useAccountsList(effectiveContext)
 
-  // ========== CARREGAR ORDEM SALVA ==========
+  // ========== CARREGAR ORDEM SALVA POR CONTEXTO ==========
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.order && Array.isArray(parsed.order)) {
-          setAccountOrder(parsed.order)
-        }
+      const contextKey = `${STORAGE_KEY}:${effectiveContext}`
+      const saved =
+        localStorage.getItem(contextKey) ||
+        localStorage.getItem(STORAGE_KEY)
+
+      if (!saved) {
+        setAccountOrder([])
+        return
+      }
+
+      const parsed = JSON.parse(saved)
+
+      if (parsed.order && Array.isArray(parsed.order)) {
+        setAccountOrder(parsed.order)
+      } else {
+        setAccountOrder([])
       }
     } catch (e) {
       console.warn('Erro ao carregar ordem de contas:', e)
+      setAccountOrder([])
     }
-  }, [])
+  }, [effectiveContext])
 
-  // ========== SALVAR ORDEM ==========
+  // ========== SALVAR ORDEM POR CONTEXTO ==========
   const saveOrder = useCallback((order: string[]) => {
     setAccountOrder(order)
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ order }))
+      const contextKey = `${STORAGE_KEY}:${effectiveContext}`
+      localStorage.setItem(contextKey, JSON.stringify({ order }))
     } catch (e) {
       console.warn('Erro ao salvar ordem de contas:', e)
     }
-  }, [])
+  }, [effectiveContext])
 
   // ========== HANDLER DO DRAG & DROP ==========
   const handleDragEnd = (result: DropResult) => {
@@ -104,9 +132,16 @@ function AccountsContent() {
 
     if (sourceIndex === destIndex) return
 
-    const visibleAccounts = getVisibleAccounts()
-    const newItems = Array.from(visibleAccounts)
+    const orderedItems = sortAccountsByOrder(
+      accounts || [],
+      accountOrder
+    )
+
+    const newItems = Array.from(orderedItems)
     const [removed] = newItems.splice(sourceIndex, 1)
+
+    if (!removed) return
+
     newItems.splice(destIndex, 0, removed)
 
     const newOrder = newItems.map(item => item.id)
@@ -120,7 +155,7 @@ function AccountsContent() {
 
   const handleSavePersonalize = () => {
     setShowPersonalizeModal(false)
-    showToast('✅ Ordem personalizada!', 'success')
+    showToast('Ordem personalizada!', 'success')
     success()
     vibrate([10])
   }
@@ -171,23 +206,10 @@ function AccountsContent() {
   })
 
   // ========== APLICAR ORDEM PERSONALIZADA ==========
-  const getVisibleAccounts = useCallback(() => {
-    return filteredAccounts
-  }, [filteredAccounts])
-
-  const sortedAccounts = useMemo(() => {
-    const visible = getVisibleAccounts()
-    if (accountOrder.length === 0) return visible
-    
-    return [...visible].sort((a, b) => {
-      const idxA = accountOrder.indexOf(a.id)
-      const idxB = accountOrder.indexOf(b.id)
-      if (idxA === -1 && idxB === -1) return 0
-      if (idxA === -1) return 1
-      if (idxB === -1) return -1
-      return idxA - idxB
-    })
-  }, [getVisibleAccounts, accountOrder])
+  const sortedAccounts = useMemo(
+    () => sortAccountsByOrder(filteredAccounts, accountOrder),
+    [filteredAccounts, accountOrder]
+  )
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
@@ -198,17 +220,10 @@ function AccountsContent() {
   const PersonalizeOrderModal = () => {
     if (!showPersonalizeModal) return null
 
-    const visibleAccounts = getVisibleAccounts()
-    const orderedItems = accountOrder.length > 0
-      ? [...visibleAccounts].sort((a, b) => {
-          const idxA = accountOrder.indexOf(a.id)
-          const idxB = accountOrder.indexOf(b.id)
-          if (idxA === -1 && idxB === -1) return 0
-          if (idxA === -1) return 1
-          if (idxB === -1) return -1
-          return idxA - idxB
-        })
-      : visibleAccounts
+    const orderedItems = sortAccountsByOrder(
+      accounts || [],
+      accountOrder
+    )
 
     return createPortal(
       <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowPersonalizeModal(false)}>
