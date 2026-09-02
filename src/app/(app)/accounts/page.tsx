@@ -326,7 +326,7 @@ function AccountsContent() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 font-sans transition-colors duration-300">
+    <div className="flex h-[100dvh] flex-col bg-[#f6f7f8] font-sans transition-colors duration-300 dark:bg-slate-950">
       
       {/* Ponto de Luz de Sincronização */}
       {(loading || pendingCount > 0) && (
@@ -345,22 +345,22 @@ function AccountsContent() {
       )}
 
       {/* HEADER UNIFICADO COM BOTÃO DE VOLTAR */}
-      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="sticky top-0 z-40 border-b border-black/5 bg-[#f6f7f8]/92 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/92">
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={() => { vibrate([5]); router.push('/more'); }}
-                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-500 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
               >
                 <ChevronLeft size={20} />
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                <h1 className="text-[22px] font-semibold tracking-tight text-gray-950 dark:text-white">
                   Contas
                 </h1>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
+                <p className="mt-0.5 text-[11px] font-medium text-gray-400 dark:text-gray-500">
                   {appMode === "personal_only" ? "Visão pessoal" : "Visão global"}
                 </p>
               </div>
@@ -370,7 +370,7 @@ function AccountsContent() {
               <button
                 type="button"
                 onClick={() => { vibrate([5]); setShowSearch(!showSearch); }}
-                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-600 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
               >
                 {showSearch ? <X size={18} /> : <Search size={18} />}
               </button>
@@ -378,12 +378,12 @@ function AccountsContent() {
               <button
                 type="button"
                 onClick={() => { vibrate([10]); router.push("/accounts/new"); }}
-                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+                className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-teal-600 text-white shadow-sm shadow-teal-600/20 transition-all active:scale-95"
               >
                 <Plus size={20} />
               </button>
 
-              {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CONTAS (ITENS) */}
+              {/*  BOTÃO PERSONALIZAR - REORDENAR CONTAS (ITENS) */}
               <button
                 type="button"
                 onClick={openPersonalize}
@@ -394,12 +394,12 @@ function AccountsContent() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <ContextToggle />
             </div>
 
-            <span className="shrink-0 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 px-3 py-2 text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+            <span className="shrink-0 rounded-full border border-black/5 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-500 shadow-sm dark:border-white/10 dark:bg-slate-900 dark:text-gray-400">
               {effectiveContext === 'dfl' ? 'Empresa (PJ)' : 'Pessoal (PF)'}
             </span>
           </div>
@@ -434,26 +434,26 @@ function AccountsContent() {
         ref={scrollRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
+        className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-28 pt-3"
       >
         {/* CARD DE SALDO CONSOLIDADO */}
         {!loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
+          <div className="mx-auto mb-3 w-full max-w-2xl overflow-hidden rounded-[22px] bg-slate-950 px-5 py-4 text-white shadow-sm dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
+                <p className="mb-1 text-[11px] font-medium text-slate-400">
                   Saldo consolidado
                 </p>
-                <p className="text-[30px] leading-none font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                <p className="text-[29px] font-semibold leading-none tracking-tight text-white">
                   {formatCurrency(totalBalance)}
                 </p>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
+                <p className="mt-2 text-[11px] font-medium text-slate-400">
                   Compondo {accounts?.length || 0} {(accounts?.length || 0) === 1 ? 'conta' : 'contas'}
                 </p>
               </div>
 
-              <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
-                <Wallet size={22} className="text-teal-600 dark:text-teal-400" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-white/10">
+                <Wallet size={22} className="text-teal-300" />
               </div>
             </div>
           </div>
@@ -461,7 +461,7 @@ function AccountsContent() {
 
         {/* FILTROS RÁPIDOS */}
         {!loading && accounts?.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
+          <div className="scrollbar-hide mx-auto mb-1 flex w-full max-w-2xl gap-2 overflow-x-auto pb-3">
             {[
               { key: 'all', label: 'Todas' },
               { key: 'checking', label: 'Corrente' },
@@ -473,10 +473,10 @@ function AccountsContent() {
                 type="button"
                 key={f.key}
                 onClick={() => { vibrate([5]); setAccountFilter(f.key); }}
-                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                className={`h-8 shrink-0 whitespace-nowrap rounded-full border px-3 text-[12px] font-semibold transition-all active:scale-[0.97] ${
                   accountFilter === f.key
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
-                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                    ? 'border-transparent bg-gray-950 text-white shadow-sm dark:bg-white dark:text-gray-950'
+                    : 'border-black/5 bg-white text-gray-500 shadow-sm dark:border-white/10 dark:bg-slate-900 dark:text-gray-400'
                 }`}
               >
                 {f.label}
@@ -504,7 +504,7 @@ function AccountsContent() {
             </p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-[22px] border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
             <div className="flex flex-col">
               {sortedAccounts.map((acc: any, index: number) => {
                 const isPositive = (acc.balance || 0) >= 0
@@ -512,14 +512,14 @@ function AccountsContent() {
                   <div
                     key={acc.id}
                     onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${acc.id}`); }}
-                    className={`flex items-center justify-between px-4 py-4 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
+                    className={`flex cursor-pointer items-center justify-between px-4 py-3.5 transition-colors active:bg-gray-50 dark:active:bg-slate-800 ${
                       index !== sortedAccounts.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
                     }`}
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <BankLogo color={acc.color} name={acc.name} size="md" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                        <p className="truncate text-[14px] font-semibold text-gray-950 dark:text-gray-100">
                           {acc.name}
                         </p>
                         <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-gray-400 dark:text-gray-500">
@@ -533,7 +533,7 @@ function AccountsContent() {
                             </>
                           )}
                         </div>
-                        <p className={`mt-1.5 text-[15px] font-semibold tracking-tight ${
+                        <p className={`mt-1 text-[14px] font-semibold tracking-tight ${
                           isPositive
                             ? "text-teal-600 dark:text-teal-400"
                             : "text-red-500 dark:text-red-400"
@@ -605,7 +605,7 @@ function AccountsContent() {
         document.body
       )}
 
-      {/* ✅ MODAL DE REORDENAÇÃO (ITENS DA LISTA) */}
+      {/*  MODAL DE REORDENAÇÃO (ITENS DA LISTA) */}
       <PersonalizeOrderModal />
     </div>
   )

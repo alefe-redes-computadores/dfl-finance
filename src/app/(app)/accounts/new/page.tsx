@@ -65,7 +65,7 @@ function AccountFormContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // ✅ PEGA O ID CORRETAMENTE
+  //  PEGA O ID CORRETAMENTE
   const rawEditId = searchParams?.get("edit")
   const editId = useMemo(() => {
     if (!rawEditId || rawEditId === 'null' || rawEditId === 'undefined') return null
@@ -88,7 +88,7 @@ function AccountFormContent() {
     icon: "wallet",
   })
 
-  // ✅ SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
+  //  SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
   const { data: accountData, loading: accountLoading, notFound } = useAccountById(editId)
 
   useEffect(() => {
@@ -132,8 +132,8 @@ function AccountFormContent() {
   if (editId && accountLoading) {
     return (
       <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
-        <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
-          <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+        <div className="sticky top-0 z-30 border-b border-black/5 bg-[#f6f7f8]/92 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/92">
+          <div className="mx-auto w-full max-w-2xl">
             <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-700" />
           </div>
         </div>
@@ -174,13 +174,13 @@ function AccountFormContent() {
 
     if (!user) {
       errorHaptic()
-      showToast("❌ Usuário não autenticado.", "error")
+      showToast(" Usuário não autenticado.", "error")
       return
     }
 
     if (!formData.name.trim()) {
       errorHaptic()
-      showToast("⚠️ Informe o nome da conta.", "warning")
+      showToast("Informe o nome da conta.", "warning")
       return
     }
 
@@ -208,7 +208,7 @@ function AccountFormContent() {
           throw new Error(result.error || "Erro ao atualizar conta")
         }
         success()
-        showToast("✅ Conta atualizada com sucesso!", "success")
+        showToast("Conta atualizada com sucesso!", "success")
       } else {
         const newId = crypto.randomUUID()
         const newPayload = {
@@ -226,13 +226,13 @@ function AccountFormContent() {
           throw new Error(result.error || "Erro ao criar conta")
         }
         success()
-        showToast("✅ Conta criada com sucesso!", "success")
+        showToast("Conta criada com sucesso!", "success")
       }
 
       router.replace("/accounts")
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ ${err?.message || "Erro ao salvar conta"}`, "error")
+      showToast(`${err?.message || "Erro ao salvar conta"}`, "error")
     } finally {
       setSaving(false)
     }
@@ -244,24 +244,24 @@ function AccountFormContent() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] transition-colors duration-300 dark:bg-slate-950">
+    <div className="flex min-h-[100dvh] flex-col bg-[#f6f7f8] transition-colors duration-300 dark:bg-slate-950">
       <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-[#f8f9fa]/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
         <div className="rounded-[24px] border border-gray-200/70 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 onClick={handleCancel}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-gray-200/70 bg-gray-50 text-gray-500 transition-colors active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900/50 dark:text-gray-300"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-500 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
               >
                 <ArrowLeft size={20} />
               </button>
 
               <div className="min-w-0">
-                <h1 className="truncate text-[24px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                <h1 className="truncate text-[21px] font-semibold tracking-tight text-gray-950 dark:text-white">
                   {editId ? "Editar conta" : "Nova conta"}
                 </h1>
                 <p className="mt-0.5 text-[12px] text-gray-400 dark:text-gray-500">
-                  Configure nome, tipo, banco e saldo inicial
+                  {editId ? "Atualize os dados cadastrais da conta" : "Cadastre os dados e o saldo inicial"}
                 </p>
               </div>
             </div>
@@ -271,9 +271,9 @@ function AccountFormContent() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex-1 px-4 pb-28 pt-4">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <form onSubmit={handleSubmit} className="flex-1 px-4 pb-28 pt-3">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-2.5">
+          <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
             <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Nome da conta
             </label>
@@ -283,12 +283,12 @@ function AccountFormContent() {
               value={formData.name}
               onChange={handleChange}
               placeholder="Ex: Conta corrente Nubank"
-              className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200 dark:placeholder:text-gray-500"
+              className="w-full rounded-[14px] border border-black/5 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-teal-500/40 focus:ring-2 focus:ring-teal-500/10 dark:border-white/10 dark:bg-slate-800 dark:text-gray-100"
               required
             />
           </div>
 
-          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
             <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Tipo de conta
             </label>
@@ -327,7 +327,7 @@ function AccountFormContent() {
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
             <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Banco / Instituição
             </label>
@@ -337,44 +337,55 @@ function AccountFormContent() {
               value={formData.bank}
               onChange={handleChange}
               placeholder="Ex: Nubank, Itaú, Inter..."
-              className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200 dark:placeholder:text-gray-500"
+              className="w-full rounded-[14px] border border-black/5 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-teal-500/40 focus:ring-2 focus:ring-teal-500/10 dark:border-white/10 dark:bg-slate-800 dark:text-gray-100"
             />
           </div>
 
-          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
             <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
-              Saldo inicial
+              {editId ? "Saldo atual" : "Saldo inicial"}
             </label>
 
-            <div className="rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
-              <div className="mb-1 text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                Valor informado
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[16px] font-semibold text-gray-400">R$</span>
-                <input
-                  type="number"
-                  name="balance"
-                  step="0.01"
-                  placeholder="0,00"
-                  value={formData.balance}
-                  onChange={handleChange}
-                  className="w-full bg-transparent text-[20px] font-semibold text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
-                />
-              </div>
-            </div>
+            {editId ? (
+              <>
+                <div className="rounded-[16px] border border-black/5 bg-gray-50 px-4 py-3.5 dark:border-white/10 dark:bg-slate-800">
+                  <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                    Saldo registrado
+                  </p>
+                  <p className="mt-1 text-[21px] font-semibold tracking-tight text-gray-950 dark:text-white">
+                    {formatCurrencyPreview(formData.balance)}
+                  </p>
+                </div>
 
-            <div className="mt-3 rounded-[16px] bg-teal-50 px-4 py-3 dark:bg-teal-950/30">
-              <p className="text-[12px] font-medium text-teal-700 dark:text-teal-300">
-                Prévia do saldo
-              </p>
-              <p className="mt-0.5 text-[16px] font-bold text-teal-700 dark:text-teal-200">
-                {formatCurrencyPreview(formData.balance)}
-              </p>
-            </div>
+                <p className="mt-2 px-1 text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+                  Para alterar o saldo, use a opção Ajustar saldo nos detalhes da conta.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="rounded-[16px] border border-black/5 bg-gray-50 px-4 py-3 dark:border-white/10 dark:bg-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[15px] font-semibold text-gray-400">R$</span>
+                    <input
+                      type="number"
+                      name="balance"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={formData.balance}
+                      onChange={handleChange}
+                      className="w-full bg-transparent text-[21px] font-semibold tracking-tight text-gray-950 outline-none placeholder:text-gray-300 dark:text-white dark:placeholder:text-gray-600"
+                    />
+                  </div>
+                </div>
+
+                <p className="mt-2 px-1 text-[11px] text-gray-400 dark:text-gray-500">
+                  Saldo que a conta possui no momento do cadastro.
+                </p>
+              </>
+            )}
           </div>
 
-          <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
             <label className="mb-3 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
               Cor da conta
             </label>
@@ -408,7 +419,7 @@ function AccountFormContent() {
             <button
               type="button"
               onClick={handleCancel}
-              className="flex-1 rounded-[20px] bg-gray-100 py-4 text-[15px] font-bold text-gray-600 transition-colors active:scale-[0.98] dark:bg-slate-700 dark:text-gray-300"
+              className="flex-1 rounded-[16px] border border-black/5 bg-white py-3.5 text-[14px] font-semibold text-gray-600 shadow-sm transition-all active:scale-[0.98] dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
             >
               Cancelar
             </button>
@@ -416,7 +427,7 @@ function AccountFormContent() {
             <button
               type="submit"
               disabled={saving}
-              className="flex flex-1 items-center justify-center gap-2 rounded-[20px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-2 rounded-[16px] bg-teal-600 py-3.5 text-[14px] font-semibold text-white shadow-sm shadow-teal-600/20 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 size={20} className="animate-spin" />

@@ -84,7 +84,7 @@ function BankBadge({ bank }: { bank?: string | null }) {
           {meta.icon}
         </div>
         <div className="min-w-0">
-          <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Instituição</p>
+          <p className="text-[11px] font-medium text-slate-400">Instituição</p>
           <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
             {meta.label}
           </p>
@@ -129,7 +129,7 @@ function AccountDetailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // ✅ PEGA O ID CORRETAMENTE E FAZ VALIDAÇÃO
+  //  PEGA O ID CORRETAMENTE E FAZ VALIDAÇÃO
   const rawId = searchParams?.get('id')
   const accountId = useMemo(() => {
     if (!rawId || rawId === 'null' || rawId === 'undefined') return null
@@ -143,7 +143,7 @@ function AccountDetailContent() {
   const { user } = useAuth()
   const { safeDelete } = useSafeDb()
 
-  // ✅ SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
+  //  SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
   const { data: accountData, loading, notFound } = useAccountById(accountId)
   const { data: transactions, loading: txLoading } = useAccountTransactions(accountId)
   const { data: allAccounts } = useLocalData({
@@ -180,7 +180,7 @@ function AccountDetailContent() {
     }
   }, [refreshing, vibrate])
 
-  // ✅ TRATAMENTO DE ID AUSENTE - MAIS ROBUSTO
+  //  TRATAMENTO DE ID AUSENTE - MAIS ROBUSTO
   if (!accountId) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f8f9fa] p-6 dark:bg-slate-950">
@@ -204,7 +204,7 @@ function AccountDetailContent() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
+      <div className="flex min-h-[100dvh] flex-col bg-[#f6f7f8] dark:bg-slate-950">
         <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-white/90 px-4 pb-4 pt-5 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
           <div className="h-10 w-10 animate-pulse rounded-[16px] bg-gray-200 dark:bg-slate-800" />
         </div>
@@ -253,7 +253,7 @@ function AccountDetailContent() {
 
     if (!adjustAmount || isNaN(amount) || amount === 0) {
       errorHaptic()
-      showToast("⚠️ Informe um valor para ajuste", "warning")
+      showToast("Informe um valor para ajuste", "warning")
       return
     }
 
@@ -268,14 +268,14 @@ function AccountDetailContent() {
       })
 
       success()
-      showToast("✅ Saldo ajustado com sucesso!", "success")
+      showToast("Saldo ajustado com sucesso!", "success")
       setShowAdjustModal(false)
       setAdjustAmount("")
       setAdjustNotes("")
     } catch (err: any) {
       errorHaptic()
       showToast(
-        `❌ ${err?.message || "Erro ao ajustar saldo"}`,
+        `${err?.message || "Erro ao ajustar saldo"}`,
         "error"
       )
     } finally {
@@ -290,13 +290,13 @@ function AccountDetailContent() {
 
     if (!transferAmount || isNaN(amount) || amount <= 0) {
       errorHaptic()
-      showToast("⚠️ Informe um valor válido", "warning")
+      showToast("Informe um valor válido", "warning")
       return
     }
 
     if (!transferToAccount) {
       errorHaptic()
-      showToast("⚠️ Selecione a conta de destino", "warning")
+      showToast("Selecione a conta de destino", "warning")
       return
     }
 
@@ -312,7 +312,7 @@ function AccountDetailContent() {
       })
 
       success()
-      showToast("✅ Transferência realizada com sucesso!", "success")
+      showToast("Transferência realizada com sucesso!", "success")
       setShowTransferModal(false)
       setTransferAmount("")
       setTransferToAccount("")
@@ -320,7 +320,7 @@ function AccountDetailContent() {
     } catch (err: any) {
       errorHaptic()
       showToast(
-        `❌ ${err?.message || "Erro ao transferir"}`,
+        `${err?.message || "Erro ao transferir"}`,
         "error"
       )
     } finally {
@@ -342,11 +342,11 @@ function AccountDetailContent() {
       }
 
       success()
-      showToast("🗑️ Conta excluída com sucesso!", "success")
+      showToast("Conta excluída com sucesso!", "success")
       router.push('/accounts')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro ao excluir: ${err.message}`, "error")
+      showToast(` Erro ao excluir: ${err.message}`, "error")
     }
   }
 
@@ -379,24 +379,24 @@ function AccountDetailContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-30 border-b border-gray-200/60 bg-white/90 px-4 pt-4 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="mx-auto flex w-full max-w-2xl items-center justify-between rounded-[24px] border border-black/5 bg-white px-4 py-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
+      <div className="sticky top-0 z-30 border-b border-black/5 bg-[#f6f7f8]/92 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/92">
+        <div className="mx-auto flex w-full max-w-2xl items-center justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => {
                 vibrate([5])
                 router.push('/accounts')
               }}
-              className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-black/5 bg-gray-50 text-gray-700 transition-transform active:scale-95 dark:border-white/10 dark:bg-slate-800 dark:text-gray-200"
+              className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-600 shadow-sm transition-transform active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
             >
               <ArrowLeft size={20} />
             </button>
 
             <div className="min-w-0">
-              <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
+              <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">
                 Detalhes da conta
               </p>
-              <h1 className="truncate text-[20px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+              <h1 className="truncate text-[18px] font-semibold tracking-tight text-gray-950 dark:text-white">
                 {account.name}
               </h1>
             </div>
@@ -408,14 +408,14 @@ function AccountDetailContent() {
                 vibrate([5])
                 router.push(`/accounts/new?edit=${accountId}`)
               }}
-              className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-black/5 bg-gray-50 text-gray-700 transition-all active:scale-95 dark:border-white/10 dark:bg-slate-800 dark:text-gray-200"
+              className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-black/5 bg-white text-gray-600 shadow-sm transition-all active:scale-95 dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
             >
               <Pencil size={17} />
             </button>
 
             <button
               onClick={handleDelete}
-              className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-red-100 bg-red-50 text-red-500 transition-all active:scale-95 dark:border-red-900/30 dark:bg-red-950/40"
+              className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-red-100 bg-white text-red-500 shadow-sm transition-all active:scale-95 dark:border-red-900/30 dark:bg-slate-900"
             >
               <Trash2 size={17} />
             </button>
@@ -427,21 +427,21 @@ function AccountDetailContent() {
         ref={scrollRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        className="flex-1 overflow-y-auto px-4 pb-28 pt-5"
+        className="flex-1 overflow-y-auto px-4 pb-28 pt-3"
       >
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-          <section className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
-            <div className="relative overflow-hidden px-5 pb-5 pt-5">
-              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-transparent dark:from-teal-500/10" />
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
+          <section className="overflow-hidden rounded-[22px] bg-slate-950 text-white shadow-sm dark:bg-slate-900">
+            <div className="relative overflow-hidden px-5 pb-4 pt-4">
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-400/10 via-transparent to-transparent" />
               <div className="relative">
-                <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <BankLogo color={account.color} name={account.name} size="lg" />
                     <div className="min-w-0">
                       <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
                         Saldo atual
                       </p>
-                      <p className="mt-1 text-[34px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                      <p className="mt-1 text-[32px] font-semibold tracking-tight text-white">
                         {formatCurrency(balance)}
                       </p>
                     </div>
@@ -449,7 +449,7 @@ function AccountDetailContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-gray-100 px-3 py-1.5 text-[12px] font-medium text-gray-600 dark:bg-slate-800 dark:text-gray-300">
+                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300">
                     {ACCOUNT_LABELS[account.type] || account.type}
                   </span>
 
@@ -458,13 +458,13 @@ function AccountDetailContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-t border-black/5 p-4 dark:border-white/10">
+            <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-3">
               <button
                 onClick={() => {
                   vibrate([5])
                   setShowAdjustModal(true)
                 }}
-                className="flex items-center justify-center gap-2 rounded-[18px] bg-teal-600 px-4 py-3.5 text-[14px] font-semibold text-white shadow-lg shadow-teal-600/15 transition-transform active:scale-[0.98]"
+                className="flex items-center justify-center gap-2 rounded-[15px] bg-teal-500 px-3 py-3 text-[13px] font-semibold text-white transition-transform active:scale-[0.98]"
               >
                 <ArrowUpCircle size={18} />
                 Ajustar saldo
@@ -475,7 +475,7 @@ function AccountDetailContent() {
                   vibrate([5])
                   setShowTransferModal(true)
                 }}
-                className="flex items-center justify-center gap-2 rounded-[18px] border border-blue-200 bg-blue-50 px-4 py-3.5 text-[14px] font-semibold text-blue-700 transition-transform active:scale-[0.98] dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300"
+                className="flex items-center justify-center gap-2 rounded-[15px] border border-white/10 bg-white/10 px-3 py-3 text-[13px] font-semibold text-white transition-transform active:scale-[0.98]"
               >
                 <ArrowRightLeft size={18} />
                 Transferir
@@ -483,9 +483,9 @@ function AccountDetailContent() {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
-            <div className="px-5 pb-2 pt-5">
-              <h2 className="text-[16px] font-semibold text-gray-900 dark:text-gray-100">
+          <section className="rounded-[22px] border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
+            <div className="px-4 pb-2 pt-4">
+              <h2 className="text-[15px] font-semibold text-gray-950 dark:text-gray-100">
                 Transações recentes
               </h2>
               <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
@@ -516,7 +516,7 @@ function AccountDetailContent() {
                     return (
                       <div
                         key={tx.id}
-                        className="flex items-center justify-between gap-3 rounded-[20px] px-3 py-3 transition-colors hover:bg-gray-50 active:scale-[0.99] dark:hover:bg-slate-800"
+                        className="flex items-center justify-between gap-3 rounded-[16px] px-3 py-2.5 transition-colors active:bg-gray-50 dark:active:bg-slate-800"
                       >
                         <div className="flex min-w-0 flex-1 items-center gap-3">
                           <div
