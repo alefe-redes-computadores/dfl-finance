@@ -188,20 +188,22 @@ function AccountFormContent() {
 
     setSaving(true)
     try {
-      const payload = {
+      const basePayload = {
         name: formData.name.trim(),
         type: formData.type,
         bank: formData.bank.trim() || null,
-        balance: amount,
         color: formData.color || "#0f766e",
         icon: formData.icon || "wallet",
-        context,
         user_id: user.id,
         updated_at: new Date().toISOString(),
       }
 
       if (editId) {
-        const result = await safeUpdate("accounts", editId, { ...payload, id: editId })
+        const result = await safeUpdate("accounts", editId, {
+          ...basePayload,
+          id: editId,
+          context: accountData?.context || context,
+        })
         if (!result.success) {
           throw new Error(result.error || "Erro ao atualizar conta")
         }
@@ -210,8 +212,10 @@ function AccountFormContent() {
       } else {
         const newId = crypto.randomUUID()
         const newPayload = {
-          ...payload,
+          ...basePayload,
           id: newId,
+          balance: amount,
+          context,
           created_at: new Date().toISOString(),
           sync_status: "pending",
           sync_attempts: 0,

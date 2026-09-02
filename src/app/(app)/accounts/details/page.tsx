@@ -13,6 +13,7 @@ import { useLocalData } from "@/hooks/useLocalData"
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { useAccountById } from "@/hooks/useAccountById"
 import { useAccountTransactions } from "@/hooks/useAccountTransactions"
+import { useSafeDb } from "@/hooks/useSafeDb"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
@@ -137,13 +138,14 @@ function AccountDetailContent() {
   const { pendingCount } = useLocalSync()
   const { context } = useContext_()
   const { user } = useAuth()
+  const { safeDelete } = useSafeDb()
 
   // ✅ SÓ CHAMA O HOOK SE TIVER ID VÁLIDO
   const { data: accountData, loading, notFound } = useAccountById(accountId)
   const { data: transactions, loading: txLoading } = useAccountTransactions(accountId)
   const { data: allAccounts } = useLocalData({
     table: 'accounts' as any,
-    filters: { context },
+    filters: { context: accountData?.context },
   })
 
   const [refreshing, setRefreshing] = useState(false)
@@ -273,7 +275,7 @@ function AccountDetailContent() {
           account_id: accountId,
           date: new Date().toISOString().split("T")[0],
           status: "done",
-          context,
+          context: acc.context || context,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           sync_status: 'pending',
@@ -317,6 +319,7 @@ function AccountDetailContent() {
     try {
       const fromTxId = crypto.randomUUID()
       const toTxId = crypto.randomUUID()
+      const transferGroupId = crypto.randomUUID()
       const today = new Date().toISOString().split("T")[0]
 
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
@@ -325,6 +328,14 @@ function AccountDetailContent() {
 
         if (!fromAcc) throw new Error('Conta origem não encontrada')
         if (!toAcc) throw new Error('Conta destino não encontrada')
+
+        if (fromAcc.user_id !== user.id || toAcc.user_id !== user.id) {
+          throw new Error('Conta de origem ou destino não pertence ao usuário')
+        }
+
+        if (fromAcc.id === toAcc.id) {
+          throw new Error('As contas de origem e destino devem ser diferentes')
+        }
 
         const fromTx = {
           id: fromTxId,
@@ -336,7 +347,8 @@ function AccountDetailContent() {
           transfer_to: transferToAccount,
           date: today,
           status: 'done',
-          context,
+          context: fromAcc.context || context,
+          transfer_group_id: transferGroupId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           sync_status: 'pending',
@@ -356,7 +368,8 @@ function AccountDetailContent() {
           transfer_from: accountId,
           date: today,
           status: 'done',
-          context,
+          context: toAcc.context || context,
+          transfer_group_id: transferGroupId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           sync_status: 'pending',
@@ -396,8 +409,12 @@ function AccountDetailContent() {
     if (!confirm("Tem certeza que deseja excluir esta conta?")) return
 
     try {
-      await db.table('accounts').delete(accountId)
-      await addToSyncQueue(user.id, 'accounts', 'delete', accountId, { id: accountId })
+      const result = await safeDelete('accounts', accountId)
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao excluir conta')
+      }
+
       success()
       showToast("🗑️ Conta excluída com sucesso!", "success")
       router.push('/accounts')

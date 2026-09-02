@@ -60,10 +60,20 @@ export async function safeAdd<T extends Record<string, any>>(
       })
     }
 
+    if (data.user_id && data.user_id !== userId) {
+      return logOperation('add', table, recordId, {
+        success: false,
+        error: `Usuário não autorizado a criar registro em ${table}`,
+        operation: 'add' as const,
+        table,
+        id: recordId,
+      })
+    }
+
     const finalRecord = {
       ...data,
       id: recordId,
-      user_id: data.user_id ?? userId,
+      user_id: userId,
       created_at: data.created_at ?? new Date().toISOString(),
       updated_at: new Date().toISOString(),
       sync_status: 'pending',
@@ -108,11 +118,21 @@ export async function safeUpdate(
       })
     }
 
+    if (existing.user_id && existing.user_id !== userId) {
+      return logOperation('update', table, id, {
+        success: false,
+        error: `Usuário não autorizado a atualizar registro em ${table}`,
+        operation: 'update' as const,
+        table,
+        id,
+      })
+    }
+
     const finalRecord = {
       ...existing,
       ...data,
       id,
-      user_id: existing.user_id ?? userId,
+      user_id: userId,
       updated_at: new Date().toISOString(),
       sync_status: 'pending',
     }
@@ -155,6 +175,34 @@ export async function safeDelete(
         table,
         id,
       })
+    }
+
+    if (existing.user_id && existing.user_id !== userId) {
+      return logOperation('delete', table, id, {
+        success: false,
+        error: `Usuário não autorizado a excluir registro em ${table}`,
+        operation: 'delete' as const,
+        table,
+        id,
+      })
+    }
+
+    if (table === 'accounts') {
+      const transactionsCount = await db.transactions
+        .where('account_id')
+        .equals(id)
+        .and((tx: any) => tx.user_id === userId)
+        .count()
+
+      if (transactionsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta conta possui movimentações e não pode ser excluída. Preserve o histórico financeiro.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
     }
 
     await db.table(table).delete(id)
