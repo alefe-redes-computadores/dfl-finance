@@ -444,7 +444,15 @@ function AccountsContent() {
                 <p className="mb-1 text-[11px] font-medium text-slate-400">
                   Saldo consolidado
                 </p>
-                <p className="text-[29px] font-semibold leading-none tracking-tight text-white">
+                <p
+                  className={`text-[29px] font-semibold leading-none tracking-tight ${
+                    totalBalance > 0
+                      ? "text-emerald-400"
+                      : totalBalance < 0
+                        ? "text-red-400"
+                        : "text-slate-400"
+                  }`}
+                >
                   {formatCurrency(totalBalance)}
                 </p>
                 <p className="mt-2 text-[11px] font-medium text-slate-400">
@@ -533,11 +541,15 @@ function AccountsContent() {
                             </>
                           )}
                         </div>
-                        <p className={`mt-1 text-[14px] font-semibold tracking-tight ${
-                          isPositive
-                            ? "text-teal-600 dark:text-teal-400"
-                            : "text-red-500 dark:text-red-400"
-                        }`}>
+                        <p
+                          className={`mt-1 text-[14px] font-semibold tracking-tight ${
+                            (acc.balance || 0) > 0
+                              ? "text-emerald-500 dark:text-emerald-400"
+                              : (acc.balance || 0) < 0
+                                ? "text-red-500 dark:text-red-400"
+                                : "text-gray-400 dark:text-slate-500"
+                          }`}
+                        >
                           {formatCurrency(acc.balance || 0)}
                         </p>
                       </div>
