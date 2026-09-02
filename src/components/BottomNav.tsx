@@ -13,6 +13,7 @@ import {
   Plus,
 } from 'lucide-react'
 import TransferModal from './TransferModal'
+import FAB from './FAB'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
 
@@ -29,6 +30,8 @@ export default function BottomNav() {
   const { vibrate } = useHapticFeedback()
   const [isOpen, setIsOpen] = useState(false)
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
+  const [quickActionOpen, setQuickActionOpen] = useState(false)
+  const [quickActionType, setQuickActionType] = useState<'expense' | 'income'>('expense')
 
   // ✅ CORRIGIDO: visibilidade agora vem de um hook compartilhado
   // (useBottomNavVisible), a mesma fonte de verdade usada pelo AppLayout
@@ -73,84 +76,100 @@ export default function BottomNav() {
       />
 
       <div
-        className={`fixed bottom-[95px] left-1/2 -translate-x-1/2 z-[60] flex justify-center w-full max-w-md pointer-events-none transition-all duration-300 ${
-          isOpen ? 'opacity-100' : 'opacity-0 scale-50'
+        className={`fixed bottom-[82px] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 ${
+          isOpen
+            ? 'translate-y-0 scale-100 opacity-100 pointer-events-auto'
+            : 'translate-y-3 scale-[0.97] opacity-0 pointer-events-none'
         }`}
         aria-hidden={!isOpen}
       >
-        <div className="relative w-full h-full flex justify-center items-end">
-          <button
-            type="button"
-            onClick={() => handleNavigate('/transactions/new?type=income')}
-            className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 active:scale-[0.95] ${
-              isOpen ? '-translate-x-[75px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'
-            }`}
-            aria-label="Nova receita"
-          >
-            <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg">
-              <ArrowUp size={24} className="text-emerald-500" />
-            </div>
-            <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Receita</span>
-          </button>
+        <div className="rounded-[24px] border border-gray-200/80 bg-white/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.20)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
+          <div className="grid grid-cols-4 gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                vibrate([10])
+                setIsOpen(false)
+                setQuickActionType('income')
+                setQuickActionOpen(true)
+              }}
+              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              aria-label="Nova receita"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-emerald-50 dark:bg-emerald-950/40">
+                <ArrowUp size={21} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                Receita
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handleCardClick}
-            className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-75 active:scale-[0.95] ${
-              isOpen ? 'translate-x-[75px] -translate-y-[85px]' : 'translate-x-0 translate-y-0'
-            }`}
-            aria-label="Lançar cartão"
-          >
-            <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg">
-              <CreditCard size={24} className="text-orange-400" />
-            </div>
-            <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Cartão</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                vibrate([10])
+                setIsOpen(false)
+                setQuickActionType('expense')
+                setQuickActionOpen(true)
+              }}
+              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              aria-label="Nova despesa"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-red-50 dark:bg-red-950/40">
+                <ArrowDown size={21} className="text-red-500 dark:text-red-400" />
+              </div>
+              <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                Despesa
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handleOpenTransfer}
-            className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-100 active:scale-[0.95] ${
-              isOpen ? '-translate-x-[130px] -translate-y-[15px]' : 'translate-x-0 translate-y-0'
-            }`}
-            aria-label="Transferir"
-          >
-            <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg">
-              <ArrowLeftRight size={24} className="text-teal-600" />
-            </div>
-            <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Transferir</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleCardClick}
+              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              aria-label="Lançar cartão"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-orange-50 dark:bg-orange-950/40">
+                <CreditCard size={21} className="text-orange-500 dark:text-orange-400" />
+              </div>
+              <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                Cartão
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleNavigate('/transactions/new?type=expense')}
-            className={`absolute pointer-events-auto flex flex-col items-center gap-2 transition-all duration-300 delay-150 active:scale-[0.95] ${
-              isOpen ? 'translate-x-[130px] -translate-y-[15px]' : 'translate-x-0 translate-y-0'
-            }`}
-            aria-label="Nova despesa"
-          >
-            <div className="w-[52px] h-[52px] bg-white dark:bg-slate-800 rounded-[20px] flex items-center justify-center shadow-lg">
-              <ArrowDown size={24} className="text-red-500" />
-            </div>
-            <span className="text-[11px] font-bold text-white tracking-wide whitespace-nowrap drop-shadow-md">Despesa</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleOpenTransfer}
+              className="flex min-w-0 flex-col items-center gap-2 rounded-[18px] px-1 py-3 transition-colors active:scale-[0.96] active:bg-gray-100 dark:active:bg-slate-700"
+              aria-label="Transferir"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-teal-50 dark:bg-teal-950/40">
+                <ArrowLeftRight size={21} className="text-teal-700 dark:text-teal-400" />
+              </div>
+              <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                Transferir
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-[0_-8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.2)] z-[40] pb-safe h-[68px] transition-colors duration-300">
-        <div className="flex items-center justify-around h-full max-w-md mx-auto relative px-2">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[45]">
-            <div className="bg-[#f8f9fa] dark:bg-slate-900 p-1.5 rounded-full">
+      <div className="fixed bottom-0 left-0 right-0 z-[40] h-[72px] border-t border-gray-200/70 bg-white/95 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 dark:border-slate-700/80 dark:bg-slate-800/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.18)]">
+        <div className="relative mx-auto flex h-full max-w-md items-center justify-around px-2">
+          <div className="absolute left-1/2 top-0 z-[45] -translate-x-1/2 -translate-y-[42%]">
+            <div className="rounded-full border border-gray-200/70 bg-gray-50 p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <button
                 type="button"
                 onClick={toggleMenu}
-                className={`relative w-[56px] h-[56px] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.15)] transition-all duration-300 active:scale-[0.90] ${
-                  isOpen ? 'bg-gray-800 dark:bg-slate-600 rotate-45' : 'bg-teal-700 rotate-0'
+                className={`relative flex h-[54px] w-[54px] items-center justify-center rounded-full text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] ${
+                  isOpen
+                    ? 'rotate-45 bg-slate-700 dark:bg-slate-600'
+                    : 'rotate-0 bg-teal-700 dark:bg-teal-600'
                 }`}
                 aria-label={isOpen ? 'Fechar menu' : 'Abrir menu'}
                 aria-expanded={isOpen}
               >
-                <Plus className="text-white" size={28} />
+                <Plus size={26} />
               </button>
             </div>
           </div>
@@ -166,10 +185,29 @@ export default function BottomNav() {
                     type="button"
                     onClick={() => handleNavigate(tab.href)}
                     title={tab.label}
-                    className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative active:scale-[0.95] transition-transform"
+                    className="group relative flex min-w-[56px] flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-[0.95]"
                   >
-                    <Icon size={22} className={active ? 'text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'} />
-                    <span className={active ? 'text-teal-700 dark:text-teal-400 font-bold text-[10px]' : 'text-gray-400 dark:text-gray-500 font-medium text-[10px]'}>
+                    <div
+                      className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
+                        active ? 'bg-teal-50 dark:bg-teal-950/40' : ''
+                      }`}
+                    >
+                      <Icon
+                        size={20}
+                        className={
+                          active
+                            ? 'text-teal-700 dark:text-teal-400'
+                            : 'text-gray-400 dark:text-gray-500'
+                        }
+                      />
+                    </div>
+                    <span
+                      className={
+                        active
+                          ? 'text-[9.5px] font-semibold text-teal-700 dark:text-teal-400'
+                          : 'text-[9.5px] font-medium text-gray-400 dark:text-gray-500'
+                      }
+                    >
                       {tab.label}
                     </span>
                   </button>
@@ -184,10 +222,29 @@ export default function BottomNav() {
                 key={tab.href}
                 onClick={() => handleNavigate(tab.href)}
                 title={tab.label}
-                className="flex flex-col items-center gap-1 px-3 py-1 min-w-[56px] group relative active:scale-[0.95] transition-transform"
+                className="group relative flex min-w-[56px] flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-[0.95]"
               >
-                <Icon size={22} className={active ? 'text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'} />
-                <span className={active ? 'text-teal-700 dark:text-teal-400 font-bold text-[10px]' : 'text-gray-400 dark:text-gray-500 font-medium text-[10px]'}>
+                <div
+                      className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
+                        active ? 'bg-teal-50 dark:bg-teal-950/40' : ''
+                      }`}
+                    >
+                      <Icon
+                        size={20}
+                        className={
+                          active
+                            ? 'text-teal-700 dark:text-teal-400'
+                            : 'text-gray-400 dark:text-gray-500'
+                        }
+                      />
+                    </div>
+                <span
+                  className={
+                    active
+                      ? 'text-[9.5px] font-semibold text-teal-700 dark:text-teal-400'
+                      : 'text-[9.5px] font-medium text-gray-400 dark:text-gray-500'
+                  }
+                >
                   {tab.label}
                 </span>
               </button>
@@ -195,6 +252,12 @@ export default function BottomNav() {
           })}
         </div>
       </div>
+
+      <FAB
+        isOpen={quickActionOpen}
+        initialType={quickActionType}
+        onClose={() => setQuickActionOpen(false)}
+      />
 
       <TransferModal
         isOpen={isTransferModalOpen}

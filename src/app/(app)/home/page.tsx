@@ -28,7 +28,6 @@ import SyncButton from '@/components/SyncButton'
 import SyncStatusModal from '@/components/SyncStatusModal'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
-import FAB from '@/components/FAB'
 import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
@@ -81,7 +80,7 @@ function HomeContent() {
   const { context, appMode, effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { success: hapticSuccess, vibrate } = useHapticFeedback()
-  
+
   const [hideBalance, setHideBalance] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
 
@@ -117,30 +116,30 @@ function HomeContent() {
     setNotificationsEnabled(saved !== 'false')
   }, [])
 
-  const { data: rawTransactions, loading: txLoading, reload: reloadTxs } = useLocalData({ 
-    table: 'transactions' as any, 
+  const { data: rawTransactions, loading: txLoading } = useLocalData({
+    table: 'transactions' as any,
     filters: { context: effectiveContext },
   })
-  const { data: rawCategories, loading: catLoading } = useLocalData({ 
-    table: 'categories' as any, 
+  const { data: rawCategories, loading: catLoading } = useLocalData({
+    table: 'categories' as any,
     filters: { context: effectiveContext }
   })
-  const { data: rawAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({ 
-    table: 'accounts' as any, 
-    filters: { context: effectiveContext }
-  })
-
-  const { data: rawDebts, loading: debtsLoading, reload: reloadDebts } = useLocalData({ 
-    table: 'debts' as any, 
+  const { data: rawAccounts, loading: accLoading, reload: reloadAccounts } = useLocalData({
+    table: 'accounts' as any,
     filters: { context: effectiveContext }
   })
 
-  const { data: rawFinancings, loading: finLoading } = useLocalData({ 
-    table: 'financings' as any, 
+  const { data: rawDebts, loading: debtsLoading, reload: reloadDebts } = useLocalData({
+    table: 'debts' as any,
+    filters: { context: effectiveContext }
+  })
+
+  const { data: rawFinancings, loading: finLoading } = useLocalData({
+    table: 'financings' as any,
     filters: { context: effectiveContext, status: 'active' }
   })
-  const { data: rawCards, loading: cardsLoading } = useLocalData({ 
-    table: 'credit_cards' as any, 
+  const { data: rawCards, loading: cardsLoading } = useLocalData({
+    table: 'credit_cards' as any,
     filters: { context: effectiveContext, is_archived: false }
   })
   const { data: rawBudgets, loading: budgetsLoading } = useLocalData({
@@ -296,7 +295,7 @@ function HomeContent() {
     })
   }, [localTransactions, localCategories, localAccountsData])
 
-  const monthTransactions = useMemo(() => 
+  const monthTransactions = useMemo(() =>
     transactionsWithJoin
       .filter((t: any) => t.date >= start && t.date <= end)
       .sort((a: any, b: any) => {
@@ -350,17 +349,17 @@ function HomeContent() {
 
   const pendings = useMemo(() => {
     const allPending = localTransactions.filter((t: any) => t.status === 'pending')
-    
+
     const toPay = allPending
       .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && !t.credit_card_id)
       .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-      
+
     const toReceive = allPending
       .filter((t: any) => t.type === 'income')
       .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-      
+
     const faturas = cards.reduce((acc: number, c: any) => acc + (c.faturaAtual || 0), 0)
-    
+
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
@@ -371,10 +370,10 @@ function HomeContent() {
       const totalAmount = safeNumber(debt.total_amount)
       const isEffectivelyPaid = totalAmount > 0 && paidAmount >= totalAmount
       const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
-      
-      return { 
-        ...debt, 
-        paid_amount: paidAmount, 
+
+      return {
+        ...debt,
+        paid_amount: paidAmount,
         percent: Math.min(percent, 100),
         status: isEffectivelyPaid ? 'paid' : debt.status
       }
@@ -392,14 +391,14 @@ function HomeContent() {
         .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
       const remaining = safeNumber(budget.amount) - spent
       const percent = safeNumber(budget.amount) > 0 ? (spent / safeNumber(budget.amount)) * 100 : 0
-      return { 
-        ...budget, 
+      return {
+        ...budget,
         name: cat?.name ?? budget.name,
         icon: cat?.icon ?? budget.icon,
         color: cat?.color ?? budget.color,
-        spent, 
-        remaining, 
-        percent: Math.min(percent, 100) 
+        spent,
+        remaining,
+        percent: Math.min(percent, 100)
       }
     })
     return budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3)
@@ -564,11 +563,11 @@ function HomeContent() {
       setRefreshing(true)
       isPulling.current = false
       vibrate(10)
-      
+
       console.log('🔄 Pull-to-refresh: forçando sync...')
-      
+
       await forceSync()
-      
+
       setRefreshing(false)
       showToast('✅ Dados atualizados!', 'success')
       hapticSuccess()
@@ -597,7 +596,7 @@ function HomeContent() {
 
   const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const totalAccountsBalance = accounts.reduce((acc, curr) => acc + safeNumber(curr.balance), 0)
-  
+
   const openCards = cards.filter(
     (card: any) => safeNumber(card.faturaAtual) > 0
   )
@@ -617,11 +616,11 @@ function HomeContent() {
     cards.length > 0 &&
     openCards.length === 0
 
-  const getAttachmentIcon = (url: string | null) => { 
-    if (!url) return null; 
-    const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase()); 
-    if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />; 
-    return <Image size={12} className="text-blue-500 shrink-0" />; 
+  const getAttachmentIcon = (url: string | null) => {
+    if (!url) return null;
+    const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase());
+    if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />;
+    return <Image size={12} className="text-blue-500 shrink-0" />;
   }
 
   const handleHideCard = (sectionId: string, sectionLabel: string) => {
@@ -766,10 +765,10 @@ function HomeContent() {
                 <EyeOff size={13} />
               </button>
             )}
-            
-            <ProjectionChart 
-              hideBalance={hideBalance} 
-              formatCurrency={formatCurrency} 
+
+            <ProjectionChart
+              hideBalance={hideBalance}
+              formatCurrency={formatCurrency}
             />
           </div>
         )
@@ -804,8 +803,8 @@ function HomeContent() {
 
               <div className="flex flex-col">
                 {loans.slice(0, 3).map((loan: any, index: number) => {
-                  const progress = safeNumber(loan.total_amount) > 0 
-                    ? ((safeNumber(loan.total_amount) - safeNumber(loan.remaining_amount)) / safeNumber(loan.total_amount)) * 100 
+                  const progress = safeNumber(loan.total_amount) > 0
+                    ? ((safeNumber(loan.total_amount) - safeNumber(loan.remaining_amount)) / safeNumber(loan.total_amount)) * 100
                     : 0;
                   const dueDate = safeDate(loan.due_date)
                   const isOverdue = dueDate ? differenceInDays(dueDate, today) < 0 : false;
@@ -1753,7 +1752,7 @@ function HomeContent() {
           </div>
           <ContextToggle />
         </div>
-        
+
         <div className="flex shrink-0 flex-col items-end gap-2.5">
           <div className="flex items-center gap-2">
             {isClient ? (
@@ -1772,7 +1771,7 @@ function HomeContent() {
               <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
             )}
           </div>
-          
+
           <div className="flex items-center gap-1.5 rounded-full border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 px-1.5 py-1 shadow-sm backdrop-blur-sm">
             <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronLeft size={14} /></button>
             <span className="min-w-[82px] text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
@@ -1791,8 +1790,7 @@ function HomeContent() {
         <span className="font-semibold text-[15px]">Personalizar Dashboard</span>
       </button>
 
-      <FAB onSave={() => reloadTxs()} />
-      
+
       <PersonalizeModal
         isOpen={showPersonalizeModal}
         onClose={() => setShowPersonalizeModal(false)}

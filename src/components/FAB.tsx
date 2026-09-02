@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Plus, X, Zap, ArrowDown, ArrowUp, Wallet, Check,
+  Plus, X, Zap, Wallet, Check,
   Coffee, ShoppingCart, Car, Home, Smartphone, Utensils, Heart,
   Briefcase, Gamepad2, BookOpen, Loader2, ChevronRight,
   TrendingUp, PiggyBank, Gift, Repeat, Coins, Shield
@@ -11,7 +11,6 @@ import { format } from 'date-fns'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
-import { useBottomNavOverlay } from '@/contexts/BottomNavOverlayContext'
 import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -48,22 +47,28 @@ type QuickContext = 'dfl' | 'personal'
 
 type Props = {
   onSave?: () => void
+  isOpen?: boolean
+  onClose?: () => void
+  initialType?: QuickType
 }
 
-export default function FAB({ onSave }: Props) {
+export default function FAB({
+  onSave,
+  isOpen = false,
+  onClose,
+  initialType = 'expense',
+}: Props) {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { safeAdd, safeUpdate } = useSafeDb()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
-  const { setHidden: setNavHidden } = useBottomNavOverlay()
 
-  const [mounted, setMounted] = useState(false)
-  const [showModal, setShowModal] = useState(false)
+  const [showModal, setShowModal] = useState(isOpen)
   const [showAccModal, setShowAccModal] = useState(false)
   const [showIconPicker, setShowIconPicker] = useState(false)
 
-  const [quickType, setQuickType] = useState<QuickType>('expense')
+  const [quickType, setQuickType] = useState<QuickType>(initialType)
   const [quickContext, setQuickContext] = useState<QuickContext>('dfl')
   const [amount, setAmount] = useState<number>(0)
   const [category, setCategory] = useState('')
@@ -71,23 +76,17 @@ export default function FAB({ onSave }: Props) {
   const [saving, setSaving] = useState(false)
 
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
   // ✅ HOOK ESPECÍFICO
-  const { data: allAccounts, loading: accountsLoading } = useAccountsList(effectiveContext)
+  const { data: allAccounts } = useAccountsList(effectiveContext)
 
   useEffect(() => {
-    if (!showModal) return
-    setQuickContext(context === 'personal' ? 'personal' : 'dfl')
-  }, [showModal, context])
+    setShowModal(isOpen)
 
-  // ✅ NOVO: oculta o BottomNav enquanto o modal do FAB estiver aberto
-  useEffect(() => {
-    setNavHidden(showModal)
-    return () => setNavHidden(false)
-  }, [showModal, setNavHidden])
+    if (isOpen) {
+      setQuickType(initialType)
+      setQuickContext(context === 'personal' ? 'personal' : 'dfl')
+    }
+  }, [isOpen, initialType, context])
 
   const accounts = useMemo(() => {
     return (allAccounts || [])
@@ -120,7 +119,8 @@ export default function FAB({ onSave }: Props) {
     setShowAccModal(false)
     setShowIconPicker(false)
     setShowModal(false)
-  }, [])
+    onClose?.()
+  }, [onClose])
 
   const save = async () => {
     if (!user?.id) {
@@ -228,26 +228,8 @@ export default function FAB({ onSave }: Props) {
     }
   }
 
-  if (!mounted) return null
-
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          vibrate([10])
-          setShowModal(true)
-        }}
-        className={`fixed bottom-[112px] right-4 z-[500] flex h-[52px] w-[52px] items-center justify-center rounded-full border border-white/10 text-white shadow-xl transition-all active:scale-90 ${
-          quickType === 'expense'
-            ? 'bg-red-500 shadow-red-500/25'
-            : 'bg-emerald-500 shadow-emerald-500/25'
-        }`}
-        aria-label={quickType === 'expense' ? 'Nova despesa' : 'Nova receita'}
-      >
-        {quickType === 'expense' ? <ArrowDown size={24} /> : <ArrowUp size={24} />}
-      </button>
-
       {showModal && (
         <div
           className="fixed inset-0 z-[600] flex items-end justify-center"
