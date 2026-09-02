@@ -12,7 +12,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  AlertTriangle, Image, Paperclip, TrendingUp, TrendingDown,
+  AlertTriangle, Image, Paperclip,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
   SearchX,
 } from 'lucide-react'
@@ -73,18 +73,6 @@ function getGreeting(): { text: string; icon: React.ReactNode } {
   if (hour >= 12 && hour < 18) return { text: 'Boa tarde', icon: <Sun size={18} className="text-amber-500 shrink-0" /> }
   if (hour >= 18 && hour < 22) return { text: 'Boa noite', icon: <Sunset size={18} className="text-indigo-400 shrink-0" /> }
   return { text: 'Boa noite', icon: <Moon size={18} className="text-indigo-400 shrink-0" /> }
-}
-
-// FUNÇÃO DEFENSIVA PARA CALCULAR PORCENTAGEM
-const calculateVariation = (current: number, previous: number): number => {
-  if (Math.abs(previous) < 0.01) {
-    if (Math.abs(current) < 0.01) return 0
-    return current > 0 ? 100 : -100
-  }
-  
-  let diff = ((current - previous) / Math.abs(previous)) * 100
-  diff = Math.min(Math.max(diff, -100), 100)
-  return Math.round(diff * 10) / 10
 }
 
 function HomeContent() {
@@ -327,25 +315,6 @@ function HomeContent() {
       .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
     return { income, expense, balance: income - expense }
   }, [monthTransactions])
-
-  const { previousBalance, balanceVariation } = useMemo(() => {
-    const prevMonthDate = subMonths(currentDate, 1)
-    const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd')
-    const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd')
-    const prevMonthTxs = transactionsWithJoin.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
-    
-    const prevInc = prevMonthTxs
-      .filter((t: any) => t.type === 'income' && t.status === 'done')
-      .reduce((a, t) => a + safeNumber(t.amount), 0)
-    const prevExp = prevMonthTxs
-      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((a, t) => a + safeNumber(t.amount), 0)
-    const prevBal = prevInc - prevExp
-    
-    const variation = calculateVariation(summary.balance, prevBal)
-    
-    return { previousBalance: prevBal, balanceVariation: variation }
-  }, [transactionsWithJoin, currentDate, summary.balance])
 
   const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
 
@@ -720,18 +689,6 @@ function HomeContent() {
                   {hideBalance ? "••••" : formatCurrency(totalAccountsBalance)}
                 </h1>
 
-                {!hideBalance && previousBalance !== 0 && (
-                  <div
-                    className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                      balanceVariation >= 0
-                        ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                        : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-                    }`}
-                  >
-                    {balanceVariation >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                    {safeNumber(balanceVariation).toFixed(1)}% vs. mês anterior
-                  </div>
-                )}
               </button>
             </div>
           </div>
