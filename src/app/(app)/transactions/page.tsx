@@ -318,15 +318,17 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
             {amountPrefix}{formatCurrency(amount)}
           </p>
 
-          <p className="mt-0.5 text-[10.5px] font-medium text-gray-400 dark:text-gray-500">
-            {isPending
-              ? 'Aguardando'
-              : isIncome
-                ? 'Entrada'
-                : isExpense
-                  ? 'Saída'
-                  : 'Transferência'}
-          </p>
+          {(isPending || isTransfer) && (
+            <p
+              className={`mt-0.5 text-[10.5px] font-medium ${
+                isPending
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-blue-500 dark:text-blue-400'
+              }`}
+            >
+              {isPending ? 'Aguardando' : 'Transferência'}
+            </p>
+          )}
         </div>
       </div>
     </button>
@@ -598,7 +600,7 @@ export default function TransactionsPage() {
             </button>
           </div>
 
-          <div className="mb-2.5 rounded-[15px] border border-gray-200/80 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="mb-2.5">
             <ContextToggle />
           </div>
 
