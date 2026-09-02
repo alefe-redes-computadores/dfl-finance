@@ -25,6 +25,7 @@ const VISIBLE_ROUTES = ['/home', '/transactions', '/analysis', '/more']
 // nav nunca escondia.
 const HIDDEN_SUBROUTES = [
   '/transactions/new',
+  '/transactions/details',
   '/transactions/edit',
   '/transactions/card-expense',
 ]

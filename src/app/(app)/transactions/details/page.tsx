@@ -247,7 +247,7 @@ function EditTransactionContent() {
     } finally {
       setSaving(false)
     }
-  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, vibrate, showToast, router, safeAdd, safeUpdate, id, hapticError, categories])
+  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, date, vibrate, showToast, router, safeAdd, safeUpdate, id, hapticError, categories])
 
   // CARREGA DADOS AUXILIARES (useEffect também deve estar antes dos returns)
   useEffect(() => {
