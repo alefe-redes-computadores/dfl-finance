@@ -9,9 +9,8 @@ import {
 } from 'lucide-react'
 import BankLogo from '@/components/BankLogo'
 import { useAccountsList } from '@/hooks/useAccountsList' // ✅ HOOK ESPECÍFICO
-import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { db } from '@/lib/db'
+import { transferBetweenAccounts } from '@/lib/accountOperations'
 
 interface TransferModalProps {
   isOpen: boolean
@@ -24,7 +23,6 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { safeAdd, safeUpdate } = useSafeDb()
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
 
   const [fromContext, setFromContext] = useState<'dfl' | 'personal'>(forcedContext || 'dfl')
@@ -97,85 +95,13 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
     setLoading(true)
 
-    const transferGroup = crypto.randomUUID()
-    const now = new Date().toISOString()
-
     try {
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        const freshFrom: any = await db.accounts.get(fromAccountId)
-        const freshTo: any = await db.accounts.get(toAccountId)
-
-        if (!freshFrom || !freshTo) {
-          throw new Error('Conta de origem ou destino inválida.')
-        }
-
-        if (freshFrom.user_id !== user.id || freshTo.user_id !== user.id) {
-          throw new Error('Conta de origem ou destino não pertence ao usuário.')
-        }
-
-        if (freshFrom.id === freshTo.id) {
-          throw new Error('As contas de origem e destino devem ser diferentes.')
-        }
-
-        const fromBalance = Number(freshFrom.balance || 0)
-        const toBalance = Number(freshTo.balance || 0)
-
-        if (!Number.isFinite(fromBalance) || !Number.isFinite(toBalance)) {
-          throw new Error('Não foi possível ler os saldos das contas.')
-        }
-
-        const res1 = await safeUpdate('accounts', freshFrom.id, {
-          balance: fromBalance - amountNum,
-        })
-        if (!res1.success) {
-          throw new Error(res1.error || 'Erro ao atualizar conta de origem')
-        }
-
-        const res2 = await safeUpdate('accounts', freshTo.id, {
-          balance: toBalance + amountNum,
-        })
-        if (!res2.success) {
-          throw new Error(res2.error || 'Erro ao atualizar conta de destino')
-        }
-
-        const basePayload = {
-          user_id: user.id,
-          type: 'transfer',
-          amount: amountNum,
-          status: 'done',
-          transfer_group_id: transferGroup,
-          date: now.split('T')[0],
-          created_at: now,
-          updated_at: now,
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-
-        const resTx1 = await safeAdd('transactions', {
-          id: crypto.randomUUID(),
-          ...basePayload,
-          account_id: freshFrom.id,
-          context: freshFrom.context || fromContext,
-          description:
-            description ||
-            `Transferência para ${freshTo.name} (${freshTo.context === 'dfl' ? 'DFL' : 'Pessoal'})`,
-        })
-        if (!resTx1.success) {
-          throw new Error(resTx1.error || 'Erro ao criar saída da transferência')
-        }
-
-        const resTx2 = await safeAdd('transactions', {
-          id: crypto.randomUUID(),
-          ...basePayload,
-          account_id: freshTo.id,
-          context: freshTo.context || toContext,
-          description:
-            description ||
-            `Transferência de ${freshFrom.name} (${freshFrom.context === 'dfl' ? 'DFL' : 'Pessoal'})`,
-        })
-        if (!resTx2.success) {
-          throw new Error(resTx2.error || 'Erro ao criar entrada da transferência')
-        }
+      await transferBetweenAccounts({
+        userId: user.id,
+        fromAccountId,
+        toAccountId,
+        amount: amountNum,
+        description,
       })
 
       hapticSuccess()

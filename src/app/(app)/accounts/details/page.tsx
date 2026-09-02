@@ -17,8 +17,11 @@ import { useSafeDb } from "@/hooks/useSafeDb"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
-import { db, addToSyncQueue } from '@/lib/db'
 import BankLogo from '@/components/BankLogo'
+import {
+  adjustAccountBalance,
+  transferBetweenAccounts,
+} from '@/lib/accountOperations'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -245,6 +248,7 @@ function AccountDetailContent() {
 
   const handleAdjustBalance = async () => {
     if (!user) return
+
     const amount = parseFloat(adjustAmount.replace(',', '.'))
 
     if (!adjustAmount || isNaN(amount) || amount === 0) {
@@ -254,36 +258,13 @@ function AccountDetailContent() {
     }
 
     setSaving(true)
+
     try {
-      const txId = crypto.randomUUID()
-      let newBalance = 0
-
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        const acc = await db.table('accounts').get(accountId)
-        if (!acc) throw new Error('Conta não encontrada')
-
-        newBalance = safeNum(acc.balance) + amount
-        await db.table('accounts').update(accountId, { balance: newBalance })
-        await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newBalance })
-
-        const newTx = {
-          id: txId,
-          user_id: acc.user_id,
-          description: adjustNotes || "Ajuste de saldo",
-          amount: Math.abs(amount),
-          type: amount >= 0 ? "income" : "expense",
-          account_id: accountId,
-          date: new Date().toISOString().split("T")[0],
-          status: "done",
-          context: acc.context || context,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-
-        await db.table('transactions').add(newTx)
-        await addToSyncQueue(user.id, 'transactions', 'create', txId, newTx)
+      await adjustAccountBalance({
+        userId: user.id,
+        accountId,
+        amount,
+        description: adjustNotes,
       })
 
       success()
@@ -293,7 +274,10 @@ function AccountDetailContent() {
       setAdjustNotes("")
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ ${err?.message || "Erro ao ajustar saldo"}`, "error")
+      showToast(
+        `❌ ${err?.message || "Erro ao ajustar saldo"}`,
+        "error"
+      )
     } finally {
       setSaving(false)
     }
@@ -301,6 +285,7 @@ function AccountDetailContent() {
 
   const handleTransfer = async () => {
     if (!user) return
+
     const amount = parseFloat(transferAmount.replace(',', '.'))
 
     if (!transferAmount || isNaN(amount) || amount <= 0) {
@@ -316,76 +301,14 @@ function AccountDetailContent() {
     }
 
     setSaving(true)
+
     try {
-      const fromTxId = crypto.randomUUID()
-      const toTxId = crypto.randomUUID()
-      const transferGroupId = crypto.randomUUID()
-      const today = new Date().toISOString().split("T")[0]
-
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        const fromAcc = await db.table('accounts').get(accountId)
-        const toAcc = await db.table('accounts').get(transferToAccount)
-
-        if (!fromAcc) throw new Error('Conta origem não encontrada')
-        if (!toAcc) throw new Error('Conta destino não encontrada')
-
-        if (fromAcc.user_id !== user.id || toAcc.user_id !== user.id) {
-          throw new Error('Conta de origem ou destino não pertence ao usuário')
-        }
-
-        if (fromAcc.id === toAcc.id) {
-          throw new Error('As contas de origem e destino devem ser diferentes')
-        }
-
-        const fromTx = {
-          id: fromTxId,
-          user_id: fromAcc.user_id,
-          description: transferNotes || `Transferência para ${toAcc.name}`,
-          amount,
-          type: 'transfer',
-          account_id: accountId,
-          transfer_to: transferToAccount,
-          date: today,
-          status: 'done',
-          context: fromAcc.context || context,
-          transfer_group_id: transferGroupId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-
-        await db.table('transactions').add(fromTx)
-        await addToSyncQueue(user.id, 'transactions', 'create', fromTxId, fromTx)
-
-        const toTx = {
-          id: toTxId,
-          user_id: toAcc.user_id,
-          description: transferNotes || `Transferência de ${fromAcc.name}`,
-          amount,
-          type: 'transfer',
-          account_id: transferToAccount,
-          transfer_from: accountId,
-          date: today,
-          status: 'done',
-          context: toAcc.context || context,
-          transfer_group_id: transferGroupId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-
-        await db.table('transactions').add(toTx)
-        await addToSyncQueue(user.id, 'transactions', 'create', toTxId, toTx)
-
-        const newFromBalance = safeNum(fromAcc.balance) - amount
-        await db.table('accounts').update(accountId, { balance: newFromBalance })
-        await addToSyncQueue(user.id, 'accounts', 'update', accountId, { balance: newFromBalance })
-
-        const newToBalance = safeNum(toAcc.balance) + amount
-        await db.table('accounts').update(transferToAccount, { balance: newToBalance })
-        await addToSyncQueue(user.id, 'accounts', 'update', transferToAccount, { balance: newToBalance })
+      await transferBetweenAccounts({
+        userId: user.id,
+        fromAccountId: accountId,
+        toAccountId: transferToAccount,
+        amount,
+        description: transferNotes,
       })
 
       success()
@@ -396,7 +319,10 @@ function AccountDetailContent() {
       setTransferNotes("")
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ ${err?.message || "Erro ao transferir"}`, "error")
+      showToast(
+        `❌ ${err?.message || "Erro ao transferir"}`,
+        "error"
+      )
     } finally {
       setSaving(false)
     }
