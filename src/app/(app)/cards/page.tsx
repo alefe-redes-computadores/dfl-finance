@@ -184,7 +184,8 @@ export default function CardsPage() {
         tx.credit_card_id &&
         tx.date >= startOfCurrentMonth &&
         tx.date <= endOfCurrentMonth &&
-        tx.type === 'expense'
+        tx.type === 'expense' &&
+        tx.affects_balance !== true
     )
     .reduce((acc: Record<string, number>, tx: any) => {
       const cardId = tx.credit_card_id

@@ -221,9 +221,20 @@ function CardDetailContent() {
       .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
   }, [allTransactions, start, end])
 
+  const openTransactions = useMemo(
+    () =>
+      transactions.filter(
+        (t: any) => t.type === 'expense' && t.affects_balance !== true
+      ),
+    [transactions]
+  )
+
   const totalFatura = useMemo(() => {
-    return transactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-  }, [transactions])
+    return openTransactions.reduce(
+      (sum: number, t: any) => sum + (Number(t.amount) || 0),
+      0
+    )
+  }, [openTransactions])
 
   const limitPercent = useMemo(
     () => getLimitPercent(totalFatura, Number(card?.limit_amount) || 0),
@@ -260,7 +271,7 @@ function CardDetailContent() {
         return
       }
 
-      const cardTxs = transactions
+      const cardTxs = openTransactions
 
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
         const freshAccount = await db.table('accounts').get(targetAccount.id)
@@ -285,7 +296,7 @@ function CardDetailContent() {
           amount: totalFatura,
           description: `Pagamento fatura ${card.name}`,
           account_id: targetAccount.id,
-          credit_card_id: card.id,
+          credit_card_id: null,
           date: format(new Date(), 'yyyy-MM-dd'),
           status: 'done',
           context: card.context,

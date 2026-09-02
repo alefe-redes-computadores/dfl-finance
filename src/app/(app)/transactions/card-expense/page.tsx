@@ -7,7 +7,7 @@ import {
   ChevronLeft, Calendar, Edit3, Tag, CreditCard, Check, Loader2, ChevronRight, Hash,
   X, Plus
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { addMonths, format } from 'date-fns'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import MoneyInput from '@/components/MoneyInput'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
@@ -15,6 +15,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useToast } from '@/contexts/ToastContext'
+import { db } from '@/lib/db'
 
 export default function CardExpensePage() {
   const router = useRouter()
@@ -88,35 +89,49 @@ export default function CardExpensePage() {
     }
 
     setIsSubmitting(true)
-    const idempotencyKey = crypto.randomUUID()
 
     const parcelasTexto = installments > 1 ? `[Parcelado em ${installments}x] ` : ''
     const finalNotes = `${parcelasTexto}${notes}`.trim()
     const selectedCat = categories.find((c: any) => c.id === categoryId)
     const finalDescription = description.trim() || selectedCat?.name || 'Despesa no Cartão'
-
-    const payload = {
-      id: idempotencyKey,
-      user_id: user.id,
-      amount: amountNum,
-      status: 'pending',
-      date,
-      description: finalDescription,
-      category_id: categoryId || null,
-      credit_card_id: creditCardId,
-      tag_ids: tagId ? [tagId] : null,
-      notes: finalNotes || null,
-      type: 'expense',
-      context: effectiveContext,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      sync_status: 'pending',
-      sync_attempts: 0
-    }
+    const recurringGroupId = installments > 1 ? crypto.randomUUID() : null
+    const installmentAmount = installments > 1 ? amountNum / installments : amountNum
+    const baseDate = new Date(`${date}T12:00:00`)
 
     try {
-      const res = await safeAdd('transactions', payload)
-      if (!res.success) throw new Error(res.error)
+      await db.transaction('rw', db.transactions, db.syncQueue, async () => {
+        for (let i = 0; i < installments; i++) {
+          const installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
+          const txId = crypto.randomUUID()
+
+          const payload = {
+            id: txId,
+            user_id: user.id,
+            amount: installmentAmount,
+            status: 'pending',
+            date: installmentDate,
+            description: finalDescription,
+            category_id: categoryId || null,
+            credit_card_id: creditCardId,
+            tag_ids: tagId ? [tagId] : null,
+            notes: finalNotes || null,
+            type: 'expense',
+            context: effectiveContext,
+            recurring_group_id: recurringGroupId,
+            installment_index: installments > 1 ? i + 1 : 1,
+            total_installments: installments,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
+          }
+
+          const res = await safeAdd('transactions', payload)
+          if (!res.success) {
+            throw new Error(res.error || `Erro ao salvar parcela ${i + 1}`)
+          }
+        }
+      })
 
       setSaved(true)
       hapticSuccess()

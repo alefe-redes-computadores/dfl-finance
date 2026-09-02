@@ -578,23 +578,37 @@ function NewTransactionContent() {
           if (!res.success) throw new Error(res.error)
 
           if (accountId && !creditCardId && isPaid) {
-            const acc = (accounts || []).find((a: any) => a.id === accountId)
-            if (acc) {
-               const newBal = type === 'income' ? safeNum(acc.balance) + installmentAmount : safeNum(acc.balance) - installmentAmount
-               await safeUpdate('accounts', accountId, { balance: newBal })
+            const freshAccount = await db.accounts.get(accountId)
+            if (!freshAccount) {
+              throw new Error('Conta selecionada não encontrada')
+            }
+
+            const currentBalance = safeNum(freshAccount.balance)
+            const newBal =
+              type === 'income'
+                ? currentBalance + installmentAmount
+                : currentBalance - installmentAmount
+
+            const balanceResult = await safeUpdate('accounts', accountId, { balance: newBal })
+            if (!balanceResult.success) {
+              throw new Error(balanceResult.error || 'Erro ao atualizar saldo da conta')
             }
           }
 
           if (isReimbursable && i === 0) {
              const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
              const reimbTxId = crypto.randomUUID()
-             await safeAdd('transactions', {
+
+             const reimbResult = await safeAdd('transactions', {
                id: reimbTxId, user_id: user.id, type: type === 'expense' ? 'income' : 'expense', amount: installmentAmount,
                description: `Reembolso: ${finalDescription}`, date: installmentDate, status: 'pending', context: otherContext,
                category_id: null, linked_transaction_id: txId, is_reimbursable: true,
                created_at: new Date().toISOString(), updated_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0,
              })
-             await safeUpdate('transactions', txId, { linked_transaction_id: reimbTxId })
+             if (!reimbResult.success) throw new Error(reimbResult.error || 'Erro ao criar reembolso vinculado')
+
+             const linkResult = await safeUpdate('transactions', txId, { linked_transaction_id: reimbTxId })
+             if (!linkResult.success) throw new Error(linkResult.error || 'Erro ao vincular reembolso')
           }
         }
       })

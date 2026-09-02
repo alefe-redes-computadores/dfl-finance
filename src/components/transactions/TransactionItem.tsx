@@ -56,7 +56,7 @@ const getAttachmentIcon = (url: string | null | undefined) => {
   if (!url) return null
 
   const normalized = safeString(url).toLowerCase()
-  const isDocument = /.(pdf|doc|docx|xls|xlsx|csv|txt)(?|$)/i.test(normalized)
+  const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(normalized)
 
   if (isDocument) {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />

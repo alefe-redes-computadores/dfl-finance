@@ -157,7 +157,11 @@ function EditTransactionContent() {
     const selectedCat = categories.find((c) => c.id === categoryId) || Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
     const finalDescription = description.trim() || selectedCat?.name || 'Transação sem nome'
 
+    // Remove flags antigas antes de reconstruí-las para não duplicar a cada edição.
     let finalNotes = notes
+      .replace(/\[(Devolução\/Estorno|Financiamento|Empréstimo)\]\s*/g, '')
+      .trim()
+
     if (txType === 'expense') {
       const flags = []
       if (isRefund) flags.push('[Devolução/Estorno]')
@@ -183,57 +187,173 @@ function EditTransactionContent() {
       financing_id: financingId,
       debt_id: debtId,
       is_reimbursable: isReimbursable,
+      context: isNew ? effectiveContext : (tx?.context || effectiveContext),
       updated_at: new Date().toISOString(),
+    }
+
+    const requireSuccess = (result: any, fallback: string) => {
+      if (!result?.success) throw new Error(result?.error || fallback)
+      return result
     }
 
     try {
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
+        // 1) Reverte exatamente o efeito financeiro antigo.
         if (!isNew && tx?.status === 'done' && tx?.account_id) {
-          const oldAcc = await db.table('accounts').get(tx.account_id)
-          if (oldAcc) {
-            const revertedBalance = tx.type === 'income' ? safeNum(oldAcc.balance) - safeNum(tx.amount) : safeNum(oldAcc.balance) + safeNum(tx.amount)
-            await safeUpdate('accounts', tx.account_id, { balance: revertedBalance })
-          }
+          const oldAcc = await db.accounts.get(tx.account_id)
+          if (!oldAcc) throw new Error('Conta original da transação não encontrada')
+
+          const revertedBalance =
+            tx.type === 'income'
+              ? safeNum(oldAcc.balance) - safeNum(tx.amount)
+              : safeNum(oldAcc.balance) + safeNum(tx.amount)
+
+          requireSuccess(
+            await safeUpdate('accounts', tx.account_id, { balance: revertedBalance }),
+            'Erro ao reverter saldo antigo'
+          )
         }
 
-        if (isPaid && accountId && !creditCardId) {
-          const newAcc = await db.table('accounts').get(accountId)
-          if (newAcc) {
-            const updatedBalance = txType === 'income' ? safeNum(newAcc.balance) + rawAmount : safeNum(newAcc.balance) - rawAmount
-            await safeUpdate('accounts', accountId, { balance: updatedBalance })
-          }
+        // 2) Aplica exatamente o novo efeito financeiro.
+        if (payload.status === 'done' && payload.account_id) {
+          const newAcc = await db.accounts.get(payload.account_id)
+          if (!newAcc) throw new Error('Conta selecionada não encontrada')
+
+          const updatedBalance =
+            txType === 'income'
+              ? safeNum(newAcc.balance) + rawAmount
+              : safeNum(newAcc.balance) - rawAmount
+
+          requireSuccess(
+            await safeUpdate('accounts', payload.account_id, { balance: updatedBalance }),
+            'Erro ao aplicar novo saldo'
+          )
         }
+
+        let primaryId = id as string
 
         if (isNew) {
-          const txId = crypto.randomUUID()
-          const fullPayload = { id: txId, ...payload, created_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0 }
-          await safeAdd('transactions', fullPayload)
-
-          if (isReimbursable) {
-            const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
-            const reimbTxId = crypto.randomUUID()
-            await safeAdd('transactions', {
-              id: reimbTxId, user_id: user.id, type: txType === 'expense' ? 'income' : 'expense', amount: rawAmount,
-              description: `Reembolso: ${finalDescription}`, date, status: 'pending', context: otherContext,
-              category_id: null, linked_transaction_id: txId, is_reimbursable: true,
-              created_at: new Date().toISOString(), updated_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0,
-            })
-            await safeUpdate('transactions', txId, { linked_transaction_id: reimbTxId })
+          primaryId = crypto.randomUUID()
+          const fullPayload = {
+            id: primaryId,
+            ...payload,
+            created_at: new Date().toISOString(),
+            sync_status: 'pending',
+            sync_attempts: 0,
           }
+
+          requireSuccess(
+            await safeAdd('transactions', fullPayload),
+            'Erro ao criar transação'
+          )
         } else {
-          await safeUpdate('transactions', id as string, payload)
+          requireSuccess(
+            await safeUpdate('transactions', primaryId, payload),
+            'Erro ao atualizar transação'
+          )
+        }
 
-          if (isReimbursable && !tx?.is_reimbursable) {
-            const otherContext = effectiveContext === 'dfl' ? 'personal' : 'dfl'
-            const reimbTxId = crypto.randomUUID()
-            await safeAdd('transactions', {
-              id: reimbTxId, user_id: user.id, type: txType === 'expense' ? 'income' : 'expense', amount: rawAmount,
-              description: `Reembolso: ${finalDescription}`, date, status: 'pending', context: otherContext,
-              category_id: null, linked_transaction_id: id, is_reimbursable: true,
-              created_at: new Date().toISOString(), updated_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0,
-            })
-            await safeUpdate('transactions', id as string, { linked_transaction_id: reimbTxId })
+        const otherContext = payload.context === 'dfl' ? 'personal' : 'dfl'
+        const linkedId = !isNew ? tx?.linked_transaction_id : null
+        const existingLinked = linkedId ? await db.transactions.get(linkedId) : null
+
+        if (isReimbursable) {
+          const linkedPayload: any = {
+            user_id: user.id,
+            type: txType === 'expense' ? 'income' : 'expense',
+            amount: rawAmount,
+            description: `Reembolso: ${finalDescription}`,
+            date,
+            context: otherContext,
+            category_id: null,
+            linked_transaction_id: primaryId,
+            is_reimbursable: true,
           }
+
+          if (existingLinked) {
+            // Se o reembolso já afetou saldo, recalcula esse efeito antes de alterar valor/tipo.
+            if (existingLinked.status === 'done' && existingLinked.account_id) {
+              const linkedAcc = await db.accounts.get(existingLinked.account_id)
+              if (!linkedAcc) throw new Error('Conta do reembolso vinculado não encontrada')
+
+              const revertedLinked =
+                existingLinked.type === 'income'
+                  ? safeNum(linkedAcc.balance) - safeNum(existingLinked.amount)
+                  : safeNum(linkedAcc.balance) + safeNum(existingLinked.amount)
+
+              const reappliedLinked =
+                linkedPayload.type === 'income'
+                  ? revertedLinked + rawAmount
+                  : revertedLinked - rawAmount
+
+              requireSuccess(
+                await safeUpdate('accounts', existingLinked.account_id, { balance: reappliedLinked }),
+                'Erro ao recalcular saldo do reembolso vinculado'
+              )
+            }
+
+            requireSuccess(
+              await safeUpdate('transactions', existingLinked.id, linkedPayload),
+              'Erro ao atualizar reembolso vinculado'
+            )
+
+            // Garante o vínculo nos dois sentidos.
+            requireSuccess(
+              await safeUpdate('transactions', primaryId, {
+                linked_transaction_id: existingLinked.id,
+                is_reimbursable: true,
+              }),
+              'Erro ao manter vínculo do reembolso'
+            )
+          } else {
+            const reimbTxId = crypto.randomUUID()
+
+            requireSuccess(
+              await safeAdd('transactions', {
+                id: reimbTxId,
+                ...linkedPayload,
+                status: 'pending',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                sync_status: 'pending',
+                sync_attempts: 0,
+              }),
+              'Erro ao criar reembolso vinculado'
+            )
+
+            requireSuccess(
+              await safeUpdate('transactions', primaryId, {
+                linked_transaction_id: reimbTxId,
+                is_reimbursable: true,
+              }),
+              'Erro ao vincular reembolso'
+            )
+          }
+        } else if (existingLinked) {
+          // Se o par ainda é apenas uma pendência automática, pode ser removido.
+          // Se já virou movimentação efetiva, preserva o histórico e apenas desfaz o vínculo.
+          if (existingLinked.status === 'pending' && !existingLinked.account_id) {
+            requireSuccess(
+              await safeDelete('transactions', existingLinked.id),
+              'Erro ao remover reembolso pendente'
+            )
+          } else {
+            requireSuccess(
+              await safeUpdate('transactions', existingLinked.id, {
+                linked_transaction_id: null,
+                is_reimbursable: false,
+              }),
+              'Erro ao desvincular reembolso realizado'
+            )
+          }
+
+          requireSuccess(
+            await safeUpdate('transactions', primaryId, {
+              linked_transaction_id: null,
+              is_reimbursable: false,
+            }),
+            'Erro ao remover vínculo da transação'
+          )
         }
       })
 
@@ -247,7 +367,7 @@ function EditTransactionContent() {
     } finally {
       setSaving(false)
     }
-  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, date, vibrate, showToast, router, safeAdd, safeUpdate, id, hapticError, categories])
+  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, date, vibrate, showToast, router, safeAdd, safeUpdate, safeDelete, id, hapticError, categories])
 
   // CARREGA DADOS AUXILIARES (useEffect também deve estar antes dos returns)
   useEffect(() => {
@@ -542,32 +662,85 @@ function EditTransactionContent() {
     setSaving(true)
     setShowDeleteModal(false)
 
+    const requireSuccess = (result: any, fallback: string) => {
+      if (!result?.success) throw new Error(result?.error || fallback)
+      return result
+    }
+
     try {
       let idsToDelete: string[] = []
 
       if (mode === 'single' || !hasInstallments) {
         idsToDelete = [id as string]
       } else if (mode === 'future' && tx?.recurring_group_id) {
-        const futureTxs = await db.table('transactions').where('recurring_group_id').equals(tx.recurring_group_id).and((t: any) => t.date >= tx.date).toArray()
-        idsToDelete = futureTxs.map((t: any) => t.id)
+        // recurring_group_id não é índice no Dexie v5; filter evita WhereClause inválida.
+        const futureTxs = await db.transactions
+          .filter((item: any) =>
+            item.user_id === user.id &&
+            item.recurring_group_id === tx.recurring_group_id &&
+            item.date >= tx.date
+          )
+          .toArray()
+        idsToDelete = futureTxs.map((item: any) => item.id)
       } else if (mode === 'all' && tx?.recurring_group_id) {
-        const allTxs = await db.table('transactions').where('recurring_group_id').equals(tx.recurring_group_id).toArray()
-        idsToDelete = allTxs.map((t: any) => t.id)
+        const allTxs = await db.transactions
+          .filter((item: any) =>
+            item.user_id === user.id &&
+            item.recurring_group_id === tx.recurring_group_id
+          )
+          .toArray()
+        idsToDelete = allTxs.map((item: any) => item.id)
       }
+
+      idsToDelete = Array.from(new Set(idsToDelete.filter(Boolean)))
+      const deleteSet = new Set(idsToDelete)
 
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
         for (const txId of idsToDelete) {
-          const txRecord = await db.table('transactions').get(txId)
+          const txRecord: any = await db.transactions.get(txId)
           if (!txRecord) continue
 
-          if (txRecord.status === 'done' && txRecord.account_id) {
-            const acc = await db.table('accounts').get(txRecord.account_id)
-            if (acc) {
-              const newBalance = txRecord.type === 'income' ? safeNum(acc.balance) - safeNum(txRecord.amount) : safeNum(acc.balance) + safeNum(txRecord.amount)
-              await safeUpdate('accounts', txRecord.account_id, { balance: newBalance })
+          // Trata o par de reembolso sem apagar histórico financeiro já efetivado.
+          if (txRecord.linked_transaction_id && !deleteSet.has(txRecord.linked_transaction_id)) {
+            const linked: any = await db.transactions.get(txRecord.linked_transaction_id)
+
+            if (linked) {
+              if (linked.status === 'pending' && !linked.account_id) {
+                requireSuccess(
+                  await safeDelete('transactions', linked.id),
+                  'Erro ao remover reembolso pendente vinculado'
+                )
+              } else {
+                requireSuccess(
+                  await safeUpdate('transactions', linked.id, {
+                    linked_transaction_id: null,
+                    is_reimbursable: false,
+                  }),
+                  'Erro ao preservar/desvincular reembolso realizado'
+                )
+              }
             }
           }
-          await safeDelete('transactions', txId)
+
+          if (txRecord.status === 'done' && txRecord.account_id) {
+            const acc = await db.accounts.get(txRecord.account_id)
+            if (!acc) throw new Error('Conta vinculada à transação não encontrada')
+
+            const newBalance =
+              txRecord.type === 'income'
+                ? safeNum(acc.balance) - safeNum(txRecord.amount)
+                : safeNum(acc.balance) + safeNum(txRecord.amount)
+
+            requireSuccess(
+              await safeUpdate('accounts', txRecord.account_id, { balance: newBalance }),
+              'Erro ao reverter saldo da transação'
+            )
+          }
+
+          requireSuccess(
+            await safeDelete('transactions', txId),
+            'Erro ao excluir transação'
+          )
         }
       })
 

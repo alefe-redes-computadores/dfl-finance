@@ -386,7 +386,7 @@ export default function TransactionsPage() {
   const grouped = groupByDate(displayTxs)
 
   const sortedDates = Object.keys(grouped).sort((a, b) => {
-    return advFilters.sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(a);
+    return advFilters.sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b);
   })
 
   // ✅ REMOVIDO useEffect com reload
