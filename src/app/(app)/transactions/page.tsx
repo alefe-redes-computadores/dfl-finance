@@ -1,3 +1,4 @@
+// src/app/(app)/transactions/page.tsx
 'use client'
 export const dynamic = 'force-dynamic'
 
@@ -5,8 +6,8 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  Search, SlidersHorizontal, ChevronLeft, ChevronRight, ReceiptText, Loader2,
-  ArrowLeftRight, Download, ArrowDown, ArrowUp, Layers, Clock, ChevronDown,
+  Search, ChevronLeft, ChevronRight, ReceiptText, Loader2,
+  ArrowLeftRight, Download, ArrowDown, ArrowUp, Clock, ChevronDown,
   Check, Image as ImageIcon, Paperclip, CheckCircle, X, SortDesc, SortAsc,
   Filter
 } from 'lucide-react'
@@ -16,8 +17,6 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useTransactionsList } from '@/hooks/useTransactionsList'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
-import { useSafeDb } from '@/hooks/useSafeDb'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
@@ -190,94 +189,147 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
 
   const isPending = transaction.status === 'pending'
   const amount = safeNum(transaction.amount)
-  const IconComp = transaction.type === 'transfer' ? ArrowLeftRight : getDynamicIcon(transaction.categories?.icon)
+  const IconComp =
+    transaction.type === 'transfer'
+      ? ArrowLeftRight
+      : getDynamicIcon(transaction.categories?.icon)
+
   const attachmentIcon = getAttachmentIcon(transaction.receipt_url)
 
-  const isIncome = transaction.type === 'income';
-  const isExpense = transaction.type === 'expense' || transaction.type === 'sangria';
-  const isTransfer = transaction.type === 'transfer';
+  const isIncome = transaction.type === 'income'
+  const isExpense = transaction.type === 'expense' || transaction.type === 'sangria'
+  const isTransfer = transaction.type === 'transfer'
 
-  let amountColorClass = 'text-gray-900 dark:text-gray-100';
-  let amountPrefix = '';
-  let defaultName = 'Transação';
+  let amountColorClass = 'text-gray-900 dark:text-gray-100'
+  let amountPrefix = ''
+  let defaultName = 'Transação'
+  let typeLabel = 'Movimentação'
 
   if (isIncome) {
-    amountColorClass = 'text-emerald-600 dark:text-emerald-400';
-    amountPrefix = '+';
-    defaultName = 'Receita';
+    amountColorClass = 'text-emerald-600 dark:text-emerald-400'
+    amountPrefix = '+'
+    defaultName = 'Receita'
+    typeLabel = 'Receita'
   } else if (isExpense) {
-    amountColorClass = 'text-gray-900 dark:text-gray-100';
-    amountPrefix = '-';
-    defaultName = 'Despesa';
+    amountColorClass = 'text-rose-600 dark:text-rose-400'
+    amountPrefix = '−'
+    defaultName = transaction.type === 'sangria' ? 'Sangria' : 'Despesa'
+    typeLabel = transaction.type === 'sangria' ? 'Sangria' : 'Despesa'
   } else if (isTransfer) {
-    amountColorClass = 'text-blue-600 dark:text-blue-400';
-    amountPrefix = transaction.description?.toLowerCase().includes('de ') ? '+' : '-';
-    defaultName = 'Transferência';
+    amountColorClass = 'text-blue-600 dark:text-blue-400'
+    amountPrefix = transaction.description?.toLowerCase().includes('de ') ? '+' : '−'
+    defaultName = 'Transferência'
+    typeLabel = 'Transferência'
   }
 
-  return (
-    <div
-      onClick={() => transaction.id && router.push(`/transactions/details?id=${transaction.id}`)}
-      className={`mx-2 my-2 rounded-[18px] p-3 cursor-pointer transition-colors active:scale-[0.995] hover:bg-gray-50/80 dark:hover:bg-slate-700/40 ${
-        isPending ? 'bg-amber-50/50 dark:bg-amber-900/10' : 'bg-transparent'
-      } ${index !== totalItems - 1 ? 'border-b border-gray-100 dark:border-slate-700/60' : ''}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div className="relative shrink-0">
-            <div
-              className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm"
-              style={{ backgroundColor: `${transaction.categories?.color || '#94a3b8'}15`, color: transaction.categories?.color || '#64748b' }}
-            >
-              <IconComp size={18} strokeWidth={2.3} />
-            </div>
+  const categoryColor = transaction.categories?.color || '#64748b'
+  const title =
+    transaction.description ||
+    transaction.categories?.name ||
+    defaultName
 
-            {isPending ? (
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-white dark:border-slate-800 flex items-center justify-center">
-                <Clock size={8} className="text-white" />
-              </div>
-            ) : (
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-800 flex items-center justify-center">
-                <Check size={8} className="text-white" strokeWidth={3} />
-              </div>
+  const secondaryParts = [
+    transaction.categories?.name,
+    transaction.accounts?.name,
+  ].filter(Boolean)
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (transaction.id) {
+          router.push(`/transactions/details?id=${transaction.id}`)
+        }
+      }}
+      className={`group relative w-full px-4 py-3.5 text-left transition-colors active:bg-gray-100/80 dark:active:bg-slate-700/70 ${
+        isPending
+          ? 'bg-amber-50/45 dark:bg-amber-950/10'
+          : 'bg-transparent hover:bg-gray-50/80 dark:hover:bg-slate-700/35'
+      } ${
+        index !== totalItems - 1
+          ? 'border-b border-gray-100 dark:border-slate-700/55'
+          : ''
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0">
+          <div
+            className="flex h-11 w-11 items-center justify-center rounded-[15px]"
+            style={{
+              backgroundColor: `${categoryColor}14`,
+              color: categoryColor,
+            }}
+          >
+            <IconComp size={20} strokeWidth={2.15} />
+          </div>
+
+          {isPending && (
+            <div className="absolute -bottom-1 -right-1 flex h-[17px] w-[17px] items-center justify-center rounded-full border-2 border-white bg-amber-500 dark:border-slate-800">
+              <Clock size={8} strokeWidth={2.8} className="text-white" />
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate text-[14px] font-semibold leading-5 text-gray-900 dark:text-gray-100">
+              {title}
+            </p>
+
+            {attachmentIcon && (
+              <span className="shrink-0">
+                {attachmentIcon}
+              </span>
             )}
           </div>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                {transaction.description || transaction.categories?.name || defaultName}
-              </p>
-              {attachmentIcon}
-            </div>
-
-            <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[12px] text-gray-400 dark:text-gray-500">
-              <span className="truncate max-w-[120px]">
-                {transaction.categories?.name || 'Sem categoria'}
-              </span>
-              <span className="text-gray-300 dark:text-slate-600">•</span>
-              <span className="shrink-0">
-                {format(new Date(transaction.date), "dd/MM")}
-              </span>
-            </div>
-
-            {isPending && (
-              <div className="mt-1.5">
-                <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                  Pendente
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-gray-400 dark:text-gray-500">
+            {secondaryParts.length > 0 ? (
+              <>
+                <span className="truncate">
+                  {secondaryParts.join(' · ')}
                 </span>
-              </div>
+
+                {isPending && (
+                  <>
+                    <span className="shrink-0 text-gray-300 dark:text-slate-600">
+                      ·
+                    </span>
+                    <span className="shrink-0 font-medium text-amber-600 dark:text-amber-400">
+                      Pendente
+                    </span>
+                  </>
+                )}
+              </>
+            ) : (
+              <span className={isPending ? 'text-amber-600 dark:text-amber-400' : ''}>
+                {isPending ? 'Pendente' : typeLabel}
+              </span>
             )}
           </div>
         </div>
 
-        <div className="shrink-0 text-right pl-2">
-          <p className={`text-[14px] font-semibold tabular-nums ${amountColorClass} ${isPending ? 'opacity-70' : ''}`}>
-            {amountPrefix} {formatCurrency(amount)}
+        <div className="shrink-0 pl-2 text-right">
+          <p
+            className={`whitespace-nowrap text-[14px] font-bold tabular-nums tracking-[-0.01em] ${amountColorClass} ${
+              isPending ? 'opacity-75' : ''
+            }`}
+          >
+            {amountPrefix}{formatCurrency(amount)}
+          </p>
+
+          <p className="mt-0.5 text-[10.5px] font-medium text-gray-400 dark:text-gray-500">
+            {isPending
+              ? 'Aguardando'
+              : isIncome
+                ? 'Entrada'
+                : isExpense
+                  ? 'Saída'
+                  : 'Transferência'}
           </p>
         </div>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -381,7 +433,6 @@ export default function TransactionsPage() {
   });
 
   const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
-  const doneTxs = filtered.filter((t: any) => t.status === 'done')
   const displayTxs = filtered;
   const grouped = groupByDate(displayTxs)
 
@@ -402,8 +453,6 @@ export default function TransactionsPage() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
 
   const handleExport = async (range: string) => {
     setShowExportMenu(false)
@@ -446,67 +495,52 @@ export default function TransactionsPage() {
 
       <ExportFeedbackOverlay status={exportStatus} onClose={() => setExportStatus('idle')} />
 
-      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="sticky top-0 z-40 border-b border-gray-200/70 bg-[#f8f9fa]/95 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="mx-auto max-w-md">
+          <div className="mb-3 flex items-center justify-between">
             <div className="min-w-0">
-              <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+              <h1 className="text-[25px] font-bold tracking-[-0.035em] text-gray-950 dark:text-white">
                 Transações
               </h1>
-              <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                Histórico detalhado do período
+              <p className="mt-0.5 text-[11.5px] font-medium text-gray-400 dark:text-gray-500">
+                Movimentações do seu financeiro
               </p>
-            </div>
-
-            <div className="flex items-center gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-1.5 py-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors"
-              >
-                <ChevronLeft size={17} />
-              </button>
-
-              <span className="min-w-[86px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">
-                {format(currentDate, 'MMM yyyy', { locale: ptBR })}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors"
-              >
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="min-w-0 flex-1 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2">
-              <ContextToggle />
             </div>
 
             <div className="relative shrink-0" ref={exportMenuRef}>
               <button
                 type="button"
+                aria-label="Exportar transações"
+                title="Exportar"
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="h-11 px-4 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 text-gray-700 dark:text-gray-200 flex items-center justify-center gap-2 text-[13px] font-semibold shadow-sm hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                className={`flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all active:scale-95 ${
+                  showExportMenu
+                    ? 'border-teal-600 bg-teal-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'
+                }`}
               >
-                <Download size={16} />
-                Exportar
+                <Download size={17} />
               </button>
 
               {showExportMenu && (
-                <div className="absolute right-0 top-[50px] w-44 rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                  <p className="px-3 py-2 text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                    Exportar extrato
-                  </p>
-                  {[{ key: '7', label: 'Últimos 7 dias' }, { key: '14', label: '14 dias' }, { key: '30', label: '30 dias' }, { key: 'total', label: 'Todo período' }].map(opt => (
+                <div className="absolute right-0 top-[46px] z-50 w-48 rounded-[20px] border border-gray-200/80 bg-white p-2 shadow-xl shadow-black/10 animate-in fade-in zoom-in-95 duration-150 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="px-3 pb-1.5 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+                      Exportar extrato
+                    </p>
+                  </div>
+
+                  {[
+                    { key: '7', label: 'Últimos 7 dias' },
+                    { key: '14', label: 'Últimos 14 dias' },
+                    { key: '30', label: 'Últimos 30 dias' },
+                    { key: 'total', label: 'Todo o período' },
+                  ].map(opt => (
                     <button
                       type="button"
                       key={opt.key}
                       onClick={() => handleExport(opt.key)}
-                      className="w-full text-left px-3 py-2.5 rounded-[16px] text-[13px] font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors active:scale-[0.99]"
+                      className="flex w-full items-center rounded-[13px] px-3 py-2.5 text-left text-[13px] font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100 dark:text-gray-200 dark:hover:bg-slate-700"
                     >
                       {opt.label}
                     </button>
@@ -516,63 +550,134 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          <div className="flex gap-2.5 mb-3">
-            <div className="flex-1 flex items-center gap-2 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-3 py-2.5 shadow-sm focus-within:ring-2 focus-within:ring-teal-500/15 transition-all">
-              <Search size={17} className="text-gray-400 shrink-0" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar transação..."
-                className="flex-1 bg-transparent text-[14px] font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400 outline-none"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="h-7 w-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-slate-800 transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              )}
+          <div className="mb-2.5 flex items-center gap-2">
+            <div className="flex h-11 min-w-0 flex-1 items-center rounded-[15px] border border-gray-200/80 bg-white px-1 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <button
+                type="button"
+                aria-label="Mês anterior"
+                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 active:scale-95 dark:hover:bg-slate-700 dark:hover:text-gray-200"
+              >
+                <ChevronLeft size={17} />
+              </button>
+
+              <div className="min-w-0 flex-1 text-center">
+                <p className="truncate text-[13px] font-semibold capitalize text-gray-800 dark:text-gray-100">
+                  {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Próximo mês"
+                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 active:scale-95 dark:hover:bg-slate-700 dark:hover:text-gray-200"
+              >
+                <ChevronRight size={17} />
+              </button>
             </div>
 
             <button
               type="button"
-              onClick={() => { setTempFilters(advFilters); setShowFilterDrawer(true); }}
-              className={`relative h-[46px] w-[46px] rounded-[18px] border shadow-sm flex items-center justify-center transition-all active:scale-[0.98] ${
+              aria-label="Filtros avançados"
+              onClick={() => {
+                setTempFilters(advFilters)
+                setShowFilterDrawer(true)
+              }}
+              className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] border shadow-sm transition-all active:scale-95 ${
                 hasAdvancedFilters
-                  ? 'bg-teal-600 border-teal-600 text-white'
-                  : 'bg-gray-50/80 dark:bg-slate-900/40 border-gray-200/70 dark:border-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+                  ? 'border-teal-600 bg-teal-600 text-white'
+                  : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'
               }`}
             >
-              <Filter size={18} />
+              <Filter size={17} />
+
               {hasAdvancedFilters && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white dark:border-slate-900" />
+                <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-[#f8f9fa] bg-amber-500 dark:border-slate-900" />
               )}
             </button>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
-            {[
-              { key: 'all', label: 'Todas', icon: null },
-              { key: 'income', label: 'Receitas', icon: <ArrowUp size={13} className={quickFilter === 'income' ? 'text-emerald-100' : 'text-emerald-500'} /> },
-              { key: 'expense', label: 'Despesas', icon: <ArrowDown size={13} className={quickFilter === 'expense' ? 'text-red-100' : 'text-red-500'} /> },
-              { key: 'transfer', label: 'Transf.', icon: <ArrowLeftRight size={13} className={quickFilter === 'transfer' ? 'text-blue-100' : 'text-blue-500'} /> },
-              { key: 'pending', label: 'Pendentes', icon: <Clock size={13} className={quickFilter === 'pending' ? 'text-amber-100' : 'text-amber-500'} /> },
-            ].map(f => (
+          <div className="mb-2.5 rounded-[15px] border border-gray-200/80 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <ContextToggle />
+          </div>
+
+          <div className="mb-2.5 flex h-11 items-center gap-2 rounded-[15px] border border-gray-200/80 bg-white px-3 shadow-sm transition-all focus-within:border-teal-500/50 focus-within:ring-2 focus-within:ring-teal-500/10 dark:border-slate-700 dark:bg-slate-800">
+            <Search size={17} className="shrink-0 text-gray-400" />
+
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por nome ou categoria"
+              className="min-w-0 flex-1 bg-transparent text-[13.5px] font-medium text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-100"
+            />
+
+            {search && (
               <button
                 type="button"
-                key={f.key}
-                onClick={() => setQuickFilter(f.key as QuickFilter)}
-                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 flex items-center gap-1.5 text-[13px] font-semibold transition-colors ${
-                  quickFilter === f.key
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-sm'
-                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-                }`}
+                aria-label="Limpar busca"
+                onClick={() => setSearch('')}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
               >
-                {f.icon}
-                {f.label}
+                <X size={14} />
               </button>
-            ))}
+            )}
+          </div>
+
+          <div className="grid grid-cols-5 gap-1.5">
+            {[
+              {
+                key: 'all',
+                label: 'Todas',
+                icon: ReceiptText,
+                active: 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-gray-900 dark:border-white',
+              },
+              {
+                key: 'income',
+                label: 'Receitas',
+                icon: ArrowUp,
+                active: 'bg-emerald-600 text-white border-emerald-600',
+              },
+              {
+                key: 'expense',
+                label: 'Despesas',
+                icon: ArrowDown,
+                active: 'bg-rose-600 text-white border-rose-600',
+              },
+              {
+                key: 'transfer',
+                label: 'Transf.',
+                icon: ArrowLeftRight,
+                active: 'bg-blue-600 text-white border-blue-600',
+              },
+              {
+                key: 'pending',
+                label: 'Pend.',
+                icon: Clock,
+                active: 'bg-amber-500 text-white border-amber-500',
+              },
+            ].map(f => {
+              const QuickIcon = f.icon
+              const selected = quickFilter === f.key
+
+              return (
+                <button
+                  type="button"
+                  key={f.key}
+                  onClick={() => setQuickFilter(f.key as QuickFilter)}
+                  className={`flex h-[48px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[14px] border text-[9.5px] font-semibold transition-all active:scale-[0.97] ${
+                    selected
+                      ? f.active
+                      : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <QuickIcon size={15} strokeWidth={2.25} />
+                  <span className="max-w-full truncate px-0.5">
+                    {f.label}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -596,17 +701,17 @@ export default function TransactionsPage() {
               <PendingCard txs={pendingTxs} loading={false} />
             )}
 
-            <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="space-y-5 animate-in fade-in duration-500">
               {sortedDates.map(date => (
                 <div key={date} className="relative">
-                  <div className="sticky top-[188px] z-30 bg-[#f8f9fa] dark:bg-slate-900 py-2 mb-2">
-                    <p className="flex items-center gap-2 text-[12px] font-semibold text-gray-400 dark:text-gray-500">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-slate-600" />
+                  <div className="mb-2 flex items-center gap-2 px-1 pt-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-300 dark:bg-slate-600" />
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
                       {dateLabel(date)}
                     </p>
                   </div>
 
-                  <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+                  <div className="overflow-hidden rounded-[20px] border border-gray-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     {grouped[date].map((t, index) => (
                       <TransactionItem
                         key={t.id}
