@@ -1,8 +1,8 @@
+// src/app/(app)/analysis/page.tsx
 'use client'
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
 import {
   ChevronLeft,
   ChevronRight,
@@ -51,7 +51,6 @@ import KPICard from '@/components/dashboard/KPICard'
 import ComparisonChart from '@/components/dashboard/ComparisonChart'
 import ProjectionChart from '@/components/dashboard/ProjectionChart'
 import CategoryPie from '@/components/dashboard/CategoryPie'
-import { useSafeDb } from '@/hooks/useSafeDb'
 
 import { useToast } from '@/contexts/ToastContext'
 
@@ -135,7 +134,6 @@ function AnalysisContent() {
   const { user } = useAuth()
   const { context, effectiveContext } = useContext_()
   const { showToast } = useToast()
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
   
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 })
@@ -215,13 +213,15 @@ function AnalysisContent() {
 
       const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
       const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-      const prevTxs = txs.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
+      let prevTxs = txs.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
+      if (filterAccount) prevTxs = prevTxs.filter((t: any) => t.account_id === filterAccount)
+      if (filterCategory) prevTxs = prevTxs.filter((t: any) => t.category_id === filterCategory)
       const prevIncome = prevTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
       const prevExpense = prevTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
       setPreviousSummary({ income: prevIncome, expense: prevExpense, balance: prevIncome - prevExpense })
 
       const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-      currentTxs.filter((t: any) => t.type === 'expense' || t.type === 'sangria').forEach((t: any) => {
+      currentTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').forEach((t: any) => {
         const key = t.category_id ?? 'sem'
         if (!catMap[key]) {
           catMap[key] = { name: t.categories?.name ?? 'Sem categoria', color: t.categories?.color ?? '#64748b', icon: t.categories?.icon ?? 'other', total: 0 }
@@ -244,28 +244,54 @@ function AnalysisContent() {
       }
       setMonthlyFlow(flowData)
 
-      const currentBalance = (localAccounts || []).reduce((a: number, c: any) => a + (Number(c.balance) || 0), 0)
+      const activeAccounts = (localAccounts || []).filter((account: any) => !account.is_archived && (!filterAccount || account.id === filterAccount))
+      const currentBalance = activeAccounts.reduce((a: number, account: any) => a + (Number(account.balance) || 0), 0)
+      const todayISO = format(new Date(), 'yyyy-MM-dd')
+
+      const balanceEffect = (t: any) => {
+        if (t.status !== 'done' || !t.account_id || t.affects_balance === false) return 0
+
+        const amount = Number(t.amount || 0)
+
+        if (t.type === 'income') return amount
+        if (t.type === 'expense' || t.type === 'sangria') return -amount
+
+        // Transferencia entre contas e neutra no patrimonio consolidado,
+        // mas altera o saldo historico quando uma conta especifica esta filtrada.
+        if (t.type === 'transfer') {
+          if (!filterAccount) return 0
+
+          if (t.transfer_to && t.account_id === filterAccount) return -amount
+          if (t.transfer_from && t.account_id === filterAccount) return amount
+        }
+
+        return 0
+      }
 
       const patrimData: any[] = []
-      let cumulative = 0
       for (let i = 11; i >= 0; i--) {
         const d = subMonths(currentDate, i)
-        const s = format(startOfMonth(d), 'yyyy-MM-dd')
-        const e = format(endOfMonth(d), 'yyyy-MM-dd')
-        const monthTxs = txs.filter((t: any) => t.date >= s && t.date <= e)
-        const inc = monthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-        const exp = monthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-        cumulative += inc - exp
-        patrimData.push({ name: format(d, 'MMM', { locale: ptBR }).toUpperCase(), Patrimônio: currentBalance + cumulative })
+        const monthEnd = format(endOfMonth(d), 'yyyy-MM-dd')
+        const effectsAfterMonth = transactionsWithJoin
+          .filter((t: any) => {
+            if (filterAccount && t.account_id !== filterAccount) return false
+            return t.date > monthEnd && t.date <= todayISO
+          })
+          .reduce((sum: number, t: any) => sum + balanceEffect(t), 0)
+
+        patrimData.push({
+          name: format(d, 'MMM', { locale: ptBR }).toUpperCase(),
+          Patrimônio: currentBalance - effectsAfterMonth,
+        })
       }
       setPatrimony(patrimData)
 
       const first = patrimData[0]?.Patrimônio || 0
       const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
-      setPatrimonyGrowth(first > 0 ? ((last - first) / first) * 100 : 0)
+      setPatrimonyGrowth(first !== 0 ? ((last - first) / Math.abs(first)) * 100 : 0)
 
-      const prevCatIds = new Set(prevTxs.map((t: any) => t.category_id).filter(Boolean))
-      const newOnes = currentTxs.filter((t: any) => t.category_id && !prevCatIds.has(t.category_id))
+      const prevCatIds = new Set(prevTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').map((t: any) => t.category_id).filter(Boolean))
+      const newOnes = currentTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done' && t.category_id && !prevCatIds.has(t.category_id))
 
       const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
       newOnes.forEach((t: any) => {

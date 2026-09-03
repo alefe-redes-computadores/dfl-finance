@@ -1,3 +1,4 @@
+// src/hooks/useDashboardMetrics.ts
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -163,8 +164,9 @@ export function useDashboardMetrics(currentDate: Date) {
         const monthDate = subMonths(currentDate, -idx)
         const name = format(monthDate, 'MMM', { locale: ptBR }).toUpperCase()
         
-        const baseBurn = burnRate || currentExpense || 1000
-        const baseInc = currentIncome || 1000
+        // Sem historico suficiente, nao inventamos valores para a projecao.
+        const baseBurn = burnRate > 0 ? burnRate : currentExpense
+        const baseInc = currentIncome
 
         // 🔥 CORREÇÃO 3: Projeção com saldo inicial ajustado
         const saldoInicial = totalBalance
