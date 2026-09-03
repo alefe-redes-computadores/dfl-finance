@@ -1,3 +1,4 @@
+// src/app/(app)/transactions/new/page.tsx
 'use client'
 
 import { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react'
@@ -10,7 +11,7 @@ import {
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight, Trash2, Loader2, Paperclip,
   Image as ImageIcon, CreditCard, Calendar, RefreshCw, Users,
-  Edit3, FileText, Layers
+  Edit3, FileText, Layers, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -93,12 +94,25 @@ function NewTransactionContent() {
   const applySuggestion = (s: SmartSearchSuggestion) => {
     vibrate([10])
     setDesc(s.description)
-    if (s.category_id) setCategoryId(s.category_id)
-    if (s.credit_card_id) {
+
+    if (s.category_id) {
+      const categoryIsValid = (localCategories || []).some(
+        (category: any) =>
+          category.id === s.category_id &&
+          category.type === (type === 'income' ? 'income' : 'expense')
+      )
+
+      setCategoryId(categoryIsValid ? s.category_id : '')
+    }
+
+    if (s.credit_card_id && type === 'expense') {
       setCreditCardId(s.credit_card_id)
+      setAccountId('')
     } else if (s.account_id) {
       setAccountId(s.account_id)
+      setCreditCardId('')
     }
+
     setShowSuggestions(false)
   }
 
@@ -163,8 +177,16 @@ function NewTransactionContent() {
   const { data: contacts } = useLocalData({ table: 'contacts' as any, filters: { context: effectiveContext } })
   const { data: budgets } = useLocalData({ table: 'budgets' as any, filters: { context: effectiveContext } })
 
+  const validCategories = useMemo(() => {
+    const expectedType = type === 'income' ? 'income' : 'expense'
+
+    return (localCategories || []).filter(
+      (category: any) => category.type === expectedType
+    )
+  }, [localCategories, type])
+
   const mainCategories = useMemo(() => {
-    return (localCategories || [])
+    return validCategories
       .filter((c: any) => !c.parent_id)
       .sort((a: any, b: any) => {
         const orderA = a.order_index ?? 9999
@@ -172,19 +194,22 @@ function NewTransactionContent() {
         if (orderA !== orderB) return orderA - orderB
         return (a.name || '').localeCompare(b.name || '')
       })
-  }, [localCategories])
+  }, [validCategories])
 
   const subcategories = useMemo(() => {
-    const subCats = (localCategories || []).filter((c: any) => c.parent_id)
+    const subCats = validCategories.filter((c: any) => c.parent_id)
     const subsMap: Record<string, any[]> = {}
     subCats.forEach((sub: any) => {
       if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
       subsMap[sub.parent_id].push(sub)
     })
     return subsMap
-  }, [localCategories])
+  }, [validCategories])
 
-  const allCategoriesFlat = useMemo(() => localCategories || [], [localCategories])
+  const allCategoriesFlat = useMemo(
+    () => validCategories,
+    [validCategories]
+  )
 
   useEffect(() => {
     setContext(effectiveContext as Context)
@@ -208,6 +233,32 @@ function NewTransactionContent() {
   }
 
   const isIncome = type === 'income'
+
+  const handleTypeChange = useCallback((nextType: 'income' | 'expense') => {
+    if (type === nextType) return
+
+    vibrate([10])
+
+    setType(nextType)
+
+    // Categoria é vinculada semanticamente ao tipo da transação.
+    // Nunca preservamos uma categoria de Receita em Despesa ou vice-versa.
+    setCategoryId('')
+    setShowCatModal(false)
+    setSelectedParentCat(null)
+    setShowSuggestions(false)
+    setBudgetAlert(null)
+
+    // Campos exclusivamente de despesa não podem sobreviver
+    // quando o usuário transforma o lançamento em Receita.
+    if (nextType === 'income') {
+      setCreditCardId('')
+      setFinancingId(null)
+      setDebtId(null)
+      setIsRefund(false)
+    }
+  }, [type, vibrate])
+
   const themeColor = isIncome ? 'text-emerald-500' : 'text-red-500'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-500' : 'bg-teal-600') : 'bg-gray-200 dark:bg-slate-700'
   const toggleTracks = isPaid ? 'translate-x-7' : 'translate-x-1'
@@ -697,6 +748,39 @@ function NewTransactionContent() {
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-40">
         <div className="space-y-4">
           
+          {/* TIPO DA TRANSAÇÃO */}
+          <div className="rounded-[20px] border border-gray-200/70 bg-white p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleTypeChange('expense')}
+                aria-pressed={type === 'expense'}
+                className={`flex h-11 items-center justify-center gap-2 rounded-[15px] text-[13px] font-bold transition-all active:scale-[0.98] ${
+                  type === 'expense'
+                    ? 'bg-red-50 text-red-600 shadow-sm ring-1 ring-red-100 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20'
+                    : 'text-gray-400 hover:bg-gray-50 dark:text-gray-500 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                <ArrowDown size={17} />
+                Despesa
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTypeChange('income')}
+                aria-pressed={type === 'income'}
+                className={`flex h-11 items-center justify-center gap-2 rounded-[15px] text-[13px] font-bold transition-all active:scale-[0.98] ${
+                  type === 'income'
+                    ? 'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20'
+                    : 'text-gray-400 hover:bg-gray-50 dark:text-gray-500 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                <ArrowUp size={17} />
+                Receita
+              </button>
+            </div>
+          </div>
+
           {/* VALOR */}
           <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center">
             <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2">

@@ -1,3 +1,4 @@
+// src/components/BottomNav.tsx
 'use client'
 
 import React, { useState } from 'react'
@@ -64,6 +65,21 @@ export default function BottomNav() {
     vibrate([15])
     setIsOpen((v) => !v)
   }
+
+  const handleCentralAction = () => {
+    // Em Transações, o botão principal abre o lançamento completo.
+    // Nas demais telas, preserva o menu rápido existente.
+    if (pathname === '/transactions') {
+      vibrate([15])
+      setIsOpen(false)
+      router.push('/transactions/new')
+      return
+    }
+
+    toggleMenu()
+  }
+
+  const isTransactionsRoot = pathname === '/transactions'
 
   return (
     <>
@@ -160,14 +176,20 @@ export default function BottomNav() {
             <div className="rounded-full border border-gray-200/70 bg-gray-50 p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <button
                 type="button"
-                onClick={toggleMenu}
+                onClick={handleCentralAction}
                 className={`relative flex h-[54px] w-[54px] items-center justify-center rounded-full text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] ${
-                  isOpen
+                  !isTransactionsRoot && isOpen
                     ? 'rotate-45 bg-slate-700 dark:bg-slate-600'
                     : 'rotate-0 bg-teal-700 dark:bg-teal-600'
                 }`}
-                aria-label={isOpen ? 'Fechar menu' : 'Abrir menu'}
-                aria-expanded={isOpen}
+                aria-label={
+                  isTransactionsRoot
+                    ? 'Nova transação'
+                    : isOpen
+                      ? 'Fechar menu'
+                      : 'Abrir menu'
+                }
+                aria-expanded={isTransactionsRoot ? false : isOpen}
               >
                 <Plus size={26} />
               </button>
