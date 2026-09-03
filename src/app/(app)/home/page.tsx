@@ -41,6 +41,10 @@ import {
   safeNavigate,
 } from '@/lib/safe'
 import EmptyState from '@/components/EmptyState'
+import {
+  getCardBillingCycleForMonth,
+  isTransactionInCardCycle,
+} from '@/lib/cardOperations'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -333,19 +337,36 @@ function HomeContent() {
 
   const cards = useMemo(() => {
     return localCards.map((card: any) => {
-      const cardTxs = monthTransactions.filter(
+      const cycle = getCardBillingCycleForMonth(
+        card,
+        currentDate
+      )
+
+      const cardTxs = localTransactions.filter(
         (t: any) =>
           t.credit_card_id === card.id &&
           t.type === 'expense' &&
-          t.affects_balance !== true
+          t.affects_balance !== true &&
+          isTransactionInCardCycle(
+            card,
+            t.date,
+            cycle.closingDate
+          )
       )
+
       const faturaAtual = cardTxs.reduce(
-        (acc: number, t: any) => acc + safeNumber(t.amount),
+        (acc: number, t: any) =>
+          acc + safeNumber(t.amount),
         0
       )
-      return { ...card, faturaAtual }
+
+      return {
+        ...card,
+        faturaAtual,
+        billingCycle: cycle,
+      }
     })
-  }, [localCards, monthTransactions])
+  }, [localCards, localTransactions, currentDate])
 
   const pendings = useMemo(() => {
     const allPending = localTransactions.filter((t: any) => t.status === 'pending')
@@ -425,29 +446,23 @@ function HomeContent() {
     const generateNotifs = async () => {
       const now = new Date()
 
-      const realStart = format(
-        startOfMonth(now),
-        'yyyy-MM-dd'
-      )
-
-      const realEnd = format(
-        endOfMonth(now),
-        'yyyy-MM-dd'
-      )
-
-      const realMonthTransactions = localTransactions.filter(
-        (t: any) =>
-          t.date >= realStart &&
-          t.date <= realEnd
-      )
-
       const realCards = localCards.map((card: any) => {
-        const faturaAtual = realMonthTransactions
+        const cycle = getCardBillingCycleForMonth(
+          card,
+          now
+        )
+
+        const faturaAtual = localTransactions
           .filter(
             (t: any) =>
               t.credit_card_id === card.id &&
               t.type === 'expense' &&
-              t.affects_balance !== true
+              t.affects_balance !== true &&
+              isTransactionInCardCycle(
+                card,
+                t.date,
+                cycle.closingDate
+              )
           )
           .reduce(
             (acc: number, t: any) =>
@@ -457,7 +472,8 @@ function HomeContent() {
 
         return {
           ...card,
-          faturaAtual
+          faturaAtual,
+          billingCycle: cycle,
         }
       })
 
@@ -466,14 +482,23 @@ function HomeContent() {
       for (const card of realCards) {
         if (safeNumber(card.faturaAtual) <= 0) continue
 
-        const dueDate = getNextCardDueDate(
-          card.due_day,
-          now
+        const dueDate = new Date(
+          `${card.billingCycle.dueDate}T12:00:00`
         )
 
-        const days = getDaysUntilCardDue(
-          card.due_day,
-          now
+        const referenceDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          12,
+          0,
+          0,
+          0
+        )
+
+        const days = differenceInDays(
+          dueDate,
+          referenceDate
         )
 
         if (days > 3) continue

@@ -172,14 +172,24 @@ export interface LocalCreditCard {
   user_id: string
   context: 'dfl' | 'personal'
   name: string
-  brand?: string
+
+  // `brand` é mantido por compatibilidade com cartões antigos.
+  brand?: string | null
+  flag?: string | null
+  institution?: string | null
+  last_four?: string | null
+  payment_account_id?: string | null
+  color?: string | null
+
   limit_amount: number
   due_day: number
   closing_day: number
   is_archived: boolean
+
   created_at: string
   updated_at: string
   sync_status: 'synced' | 'pending' | 'failed'
+  sync_attempts?: number
 }
 
 export interface LocalCreditInvoice {
@@ -187,13 +197,24 @@ export interface LocalCreditInvoice {
   user_id: string
   context: 'dfl' | 'personal'
   credit_card_id: string
-  amount: number
-  due_date: string
+
+  start_date: string
+  end_date: string
   closing_date: string
+  due_date: string
+
+  total_amount: number
+  paid_amount: number
+
   status: 'open' | 'paid' | 'overdue'
+  notes?: string | null
+  paid_at?: string | null
+
   created_at: string
   updated_at: string
+
   sync_status: 'synced' | 'pending' | 'failed'
+  sync_attempts?: number
 }
 
 export interface LocalNotification {

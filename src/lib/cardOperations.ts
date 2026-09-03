@@ -230,8 +230,8 @@ export async function reconcileCardInvoiceCycle({
       context: card.context,
       credit_card_id: card.id,
 
-      amount: total,
       total_amount: total,
+      paid_amount: 0,
 
       start_date: cycle.startDate,
       end_date: cycle.closingDate,
@@ -260,8 +260,8 @@ export async function reconcileCardInvoiceCycle({
     const updatedInvoice = {
       ...invoice,
 
-      amount: total,
       total_amount: total,
+      paid_amount: Number(invoice.paid_amount || 0),
 
       start_date: cycle.startDate,
       end_date: cycle.closingDate,
@@ -618,8 +618,9 @@ export async function payCardInvoice({
         const paidInvoice = {
           ...invoice,
 
-          amount: totalPaid,
-          total_amount: totalPaid,
+          total_amount:
+            Number(invoice.total_amount || totalPaid),
+          paid_amount: totalPaid,
 
           status: 'paid',
           paid_at: now,
