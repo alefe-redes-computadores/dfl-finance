@@ -1,6 +1,7 @@
+// src/app/(app)/reports/page.tsx
 'use client'
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
@@ -8,7 +9,7 @@ import {
   Download, FileText, FileSpreadsheet, CheckCircle,
   BarChart3, Loader2, X
 } from 'lucide-react'
-import { format, subMonths, eachDayOfInterval } from 'date-fns'
+import { differenceInCalendarDays, eachDayOfInterval, format, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
@@ -148,48 +149,78 @@ export default function ReportsPage() {
 
   const transactions = localTransactions || []
 
+  const isExpense = (t: any) => t.type === 'expense' || t.type === 'sangria'
+  const isRealized = (t: any) => t.status === 'done'
+  const amountOf = (t: any) => {
+    const value = Number(t.amount)
+    return Number.isFinite(value) ? value : 0
+  }
+
   const endDate = new Date()
-  const startDate = subMonths(endDate, parseInt(period))
-  const filteredByPeriod = transactions.filter((t: any) => {
-    const txDate = new Date(t.date)
-    return txDate >= startDate && txDate <= endDate
-  })
+  const startDate = subMonths(endDate, parseInt(period, 10))
+  const startISO = format(startDate, 'yyyy-MM-dd')
+  const endISO = format(endDate, 'yyyy-MM-dd')
+
+  const realizedByPeriod = transactions.filter((t: any) =>
+    isRealized(t) &&
+    typeof t.date === 'string' &&
+    t.date >= startISO &&
+    t.date <= endISO
+  )
 
   const filteredTransactions = filterType === 'all'
-    ? filteredByPeriod
-    : filteredByPeriod.filter((t: any) => t.type === filterType)
+    ? realizedByPeriod
+    : filterType === 'income'
+      ? realizedByPeriod.filter((t: any) => t.type === 'income')
+      : realizedByPeriod.filter((t: any) => isExpense(t))
 
-  const totalIncome = filteredByPeriod.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + Number(t.amount), 0)
-  const totalExpense = filteredByPeriod.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + Number(t.amount), 0)
+  const totalIncome = filteredTransactions
+    .filter((t: any) => t.type === 'income')
+    .reduce((acc: number, t: any) => acc + amountOf(t), 0)
+
+  const totalExpense = filteredTransactions
+    .filter((t: any) => isExpense(t))
+    .reduce((acc: number, t: any) => acc + amountOf(t), 0)
+
   const balance = totalIncome - totalExpense
 
-  const categoryData = filteredTransactions.reduce((acc: any[], t: any) => {
-    const categoryName = t.categories?.name || 'Outros'
-    const existing = acc.find(item => item.name === categoryName)
-    if (existing) {
-      existing.value += Number(t.amount)
-    } else {
-      acc.push({ name: categoryName, value: Number(t.amount) })
-    }
-    return acc
-  }, []).sort((a, b) => b.value - a.value).slice(0, 6)
+  const categoryData = filteredTransactions
+    .filter((t: any) => isExpense(t))
+    .reduce((acc: any[], t: any) => {
+      const categoryName = t.categories?.name || 'Outros'
+      const existing = acc.find(item => item.name === categoryName)
+      if (existing) {
+        existing.value += amountOf(t)
+      } else {
+        acc.push({ name: categoryName, value: amountOf(t) })
+      }
+      return acc
+    }, [])
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6)
 
   const COLORS = ['#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-  const monthlyData = filteredByPeriod.reduce((acc: any[], t: any) => {
-    const monthKey = format(new Date(t.date), 'yyyy-MM')
+  const monthlyData = filteredTransactions.reduce((acc: any[], t: any) => {
+    const monthKey = t.date.slice(0, 7)
     const existing = acc.find(item => item.month === monthKey)
+    const income = t.type === 'income' ? amountOf(t) : 0
+    const expense = isExpense(t) ? amountOf(t) : 0
+
     if (existing) {
-      if (t.type === 'income') existing.income += Number(t.amount)
-      else existing.expense += Number(t.amount)
+      existing.income += income
+      existing.expense += expense
     } else {
+      const [year, month] = monthKey.split('-').map(Number)
+      const localMonth = new Date(year, month - 1, 1)
       acc.push({
         month: monthKey,
-        label: format(new Date(t.date), 'MMM/yy', { locale: ptBR }),
-        income: t.type === 'income' ? Number(t.amount) : 0,
-        expense: t.type === 'expense' ? Number(t.amount) : 0,
+        label: format(localMonth, 'MMM/yy', { locale: ptBR }),
+        income,
+        expense,
       })
     }
+
     return acc
   }, []).sort((a, b) => a.month.localeCompare(b.month))
 
@@ -200,10 +231,20 @@ export default function ReportsPage() {
 
     return days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd')
-      const dayTransactions = filteredByPeriod.filter((t: any) => t.date === dayStr)
-      const income = dayTransactions.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + Number(t.amount), 0)
-      const expense = dayTransactions.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + Number(t.amount), 0)
-      return { date: format(day, 'dd/MM'), income, expense, balance: income - expense }
+      const dayTransactions = filteredTransactions.filter((t: any) => t.date === dayStr)
+      const income = dayTransactions
+        .filter((t: any) => t.type === 'income')
+        .reduce((acc: number, t: any) => acc + amountOf(t), 0)
+      const expense = dayTransactions
+        .filter((t: any) => isExpense(t))
+        .reduce((acc: number, t: any) => acc + amountOf(t), 0)
+
+      return {
+        date: format(day, 'dd/MM'),
+        income,
+        expense,
+        balance: income - expense,
+      }
     })
   })()
 
@@ -217,7 +258,7 @@ export default function ReportsPage() {
 
     setExportStatus('exporting')
     try {
-      const daysRange = (parseInt(period) * 30).toString()
+      const daysRange = differenceInCalendarDays(endDate, startDate).toString()
       const { csv, filename } = await exportTransactionsToCSV(user.id, effectiveContext, daysRange)
 
       downloadCSV(csv, filename)
@@ -283,7 +324,9 @@ export default function ReportsPage() {
             <button
               type="button"
               onClick={() => {
-                vibrate([10])
+                if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                  navigator.vibrate(10)
+                }
                 setLoadingPulse(true)
                 setTimeout(() => setLoadingPulse(false), 500)
               }}
@@ -338,7 +381,7 @@ export default function ReportsPage() {
       <div className="px-4 pt-3 space-y-4">
         {loading ? (
           <ReportsSkeleton />
-        ) : filteredByPeriod.length === 0 ? (
+        ) : filteredTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
             <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
               <BarChart3 size={28} className="text-gray-400 dark:text-gray-500" />
@@ -347,7 +390,7 @@ export default function ReportsPage() {
               Nenhum dado disponível
             </h3>
             <p className="text-gray-500 dark:text-gray-400 text-[12px] max-w-[250px]">
-              Não há transações no período selecionado.
+              Não há transações realizadas para os filtros selecionados.
             </p>
           </div>
         ) : (
@@ -421,10 +464,10 @@ export default function ReportsPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
                   <div className="mb-3">
                     <h3 className="font-semibold text-[14px] text-gray-900 dark:text-gray-100">
-                      Categorias
+                      Categorias de despesas
                     </h3>
                     <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                      Distribuição por valor
+                      Distribuição das despesas realizadas
                     </p>
                   </div>
 
