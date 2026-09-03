@@ -1,129 +1,110 @@
+// src/components/reports/FixedVsVariable.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Lock, Repeat, Download, Scale } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { ReportFilterValues } from './ReportFilters'
+import { useEffect, useMemo, useState } from 'react'
+import { Download, Lock, Repeat, Scale } from 'lucide-react'
 import { BlobProvider } from '@react-pdf/renderer'
+import { ReportFilterValues } from './ReportFilters'
 import ReportPDF from '@/components/reports/ReportPDF'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { safeNumber, safeDate, safeFormatDate } from '@/lib/safe'
+import { useReportTransactions } from '@/hooks/useReportTransactions'
+import { safeNumber } from '@/lib/safe'
 
-const FIXED_CATEGORIES = ['Moradia', 'Assinaturas', 'Educação', 'Saúde', 'Financiamento']
-
-interface TransactionItem {
-  id: string
-  date: string
-  amount: number | string
-  description?: string | null
-  is_fixed?: boolean | null
-  category?: string | null
-  category_id?: string | null
-  categories?: { name?: string | null } | null
-  type: string
-  account_id?: string | null
-  credit_card_id?: string | null
-  tag_ids?: string[] | null
-  context?: string | null
-}
+const FIXED_CATEGORIES = [
+  'Moradia',
+  'Assinaturas',
+  'Educação',
+  'Saúde',
+  'Financiamento',
+]
 
 interface FixedVsVariableProps {
   filters: ReportFilterValues
 }
 
-export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
-  const { user } = useAuth()
+function isExpense(transaction: any) {
+  return transaction?.type === 'expense' || transaction?.type === 'sangria'
+}
+
+function isFixedTransaction(transaction: any) {
+  if (typeof transaction?.is_fixed === 'boolean') {
+    return transaction.is_fixed
+  }
+
+  return FIXED_CATEGORIES.includes(
+    transaction?.categoryLabel || ''
+  )
+}
+
+export default function FixedVsVariable({
+  filters,
+}: FixedVsVariableProps) {
   const { vibrate, success } = useHapticFeedback()
   const [isClient, setIsClient] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [transactions, setTransactions] = useState<TransactionItem[]>([])
 
   useEffect(() => {
     setIsClient(true)
   }, [])
 
   const { start, end } = filters.dateRange
-  const { context, tags = [], accounts = [], creditCards = [] } = filters
+  const {
+    context,
+    tags = [],
+    accounts = [],
+    creditCards = [],
+  } = filters
 
-  // 🔥 SUBSTITUÍDO: useEffect com query com join e dependências quebradas
-  useEffect(() => {
-    if (!user?.id || !start || !end) {
-      setTransactions([])
-      setLoading(false)
-      return
-    }
+  const {
+    data: reportTransactions,
+    loading,
+  } = useReportTransactions({
+    context,
+    startDate: start,
+    endDate: end,
+    tags,
+    accounts,
+    creditCards,
+  })
 
-    let cancelled = false
-    setLoading(true)
+  const transactions = useMemo(
+    () =>
+      reportTransactions
+        .filter((transaction: any) => isExpense(transaction))
+        .map((transaction: any) => ({
+          ...transaction,
+          amountValue: safeNumber(transaction.amount),
+        })),
+    [reportTransactions]
+  )
 
-    const load = async () => {
-      let query = supabase
-        .from('transactions')
-        .select(`
-          id,
-          date,
-          amount,
-          description,
-          is_fixed,
-          category,
-          category_id,
-          type,
-          account_id,
-          credit_card_id,
-          tag_ids,
-          context,
-          categories(name)
-        `)
-        .eq('user_id', user.id)
-        .eq('type', 'expense')
-        .gte('date', start)
-        .lte('date', end)
-        .order('date', { ascending: false })
+  const fixed = useMemo(
+    () => transactions.filter(isFixedTransaction),
+    [transactions]
+  )
 
-      if (context) query = query.eq('context', context)
-      if (tags?.length) query = query.overlaps('tag_ids', tags)
-      if (accounts?.length) query = query.in('account_id', accounts)
-      if (creditCards?.length) query = query.in('credit_card_id', creditCards)
+  const variable = useMemo(
+    () =>
+      transactions.filter(
+        (transaction: any) => !isFixedTransaction(transaction)
+      ),
+    [transactions]
+  )
 
-      const { data, error } = await query
+  const totalFixed = fixed.reduce(
+    (sum: number, transaction: any) =>
+      sum + transaction.amountValue,
+    0
+  )
 
-      if (cancelled) return
+  const totalVar = variable.reduce(
+    (sum: number, transaction: any) =>
+      sum + transaction.amountValue,
+    0
+  )
 
-      if (error) {
-        console.error('FixedVsVariable:', error)
-        setTransactions([])
-      } else {
-        setTransactions((data as TransactionItem[]) || [])
-      }
-
-      setLoading(false)
-    }
-
-    load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [user?.id, context, start, end, tags, accounts, creditCards])
-
-  // 🔥 SUBSTITUÍDO: lógica de classificação com fallback
-  const getCategoryName = (t: TransactionItem) =>
-    t.categories?.name || t.category || ''
-
-  const isFixedTransaction = (t: TransactionItem) => {
-    if (typeof t.is_fixed === 'boolean') return t.is_fixed
-    return FIXED_CATEGORIES.includes(getCategoryName(t))
-  }
-
-  const fixed = transactions.filter(isFixedTransaction)
-  const variable = transactions.filter((t) => !isFixedTransaction(t))
-
-  const totalFixed = fixed.reduce((s, t) => s + (Number(t.amount) || 0), 0)
-  const totalVar = variable.reduce((s, t) => s + (Number(t.amount) || 0), 0)
   const total = totalFixed + totalVar
-  const fixedPerc = total ? (totalFixed / total) * 100 : 0
-  const varPerc = total ? (totalVar / total) * 100 : 0
+  const fixedPerc = total > 0 ? (totalFixed / total) * 100 : 0
+  const varPerc = total > 0 ? (totalVar / total) * 100 : 0
 
   return (
     <div className="flex-1 animate-in fade-in duration-300">
@@ -136,7 +117,9 @@ export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
           <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
             <Scale size={24} className="text-gray-400" />
           </div>
-          <p className="text-gray-500 text-sm font-medium">Nenhuma despesa para comparar.</p>
+          <p className="text-gray-500 text-sm font-medium">
+            Nenhuma despesa realizada para comparar.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -145,29 +128,45 @@ export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
               <div className="bg-amber-50 dark:bg-amber-500/10 p-4 rounded-[20px] border border-amber-100 dark:border-amber-500/20">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Lock size={14} className="text-amber-600" />
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600/80">Fixas</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600/80">
+                    Fixas
+                  </p>
                 </div>
                 <p className="text-[18px] font-black text-amber-600">
                   R$ {totalFixed.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[11px] font-bold text-amber-600/60 mt-0.5">{fixedPerc.toFixed(1)}% do total</p>
+                <p className="text-[11px] font-bold text-amber-600/60 mt-0.5">
+                  {fixedPerc.toFixed(1)}% do total
+                </p>
               </div>
+
               <div className="bg-blue-50 dark:bg-blue-500/10 p-4 rounded-[20px] border border-blue-100 dark:border-blue-500/20">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Repeat size={14} className="text-blue-600" />
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-blue-600/80">Variáveis</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-blue-600/80">
+                    Variáveis
+                  </p>
                 </div>
                 <p className="text-[18px] font-black text-blue-600">
                   R$ {totalVar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[11px] font-bold text-blue-600/60 mt-0.5">{varPerc.toFixed(1)}% do total</p>
+                <p className="text-[11px] font-bold text-blue-600/60 mt-0.5">
+                  {varPerc.toFixed(1)}% do total
+                </p>
               </div>
             </div>
 
             <div className="bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden shadow-inner flex">
-              <div className="h-full bg-amber-500 transition-all duration-700 ease-out" style={{ width: `${fixedPerc}%` }} />
-              <div className="h-full bg-blue-500 transition-all duration-700 ease-out" style={{ width: `${varPerc}%` }} />
+              <div
+                className="h-full bg-amber-500 transition-all duration-700 ease-out"
+                style={{ width: `${fixedPerc}%` }}
+              />
+              <div
+                className="h-full bg-blue-500 transition-all duration-700 ease-out"
+                style={{ width: `${varPerc}%` }}
+              />
             </div>
+
             <div className="flex justify-between px-1 mt-2 text-[10px] font-bold text-gray-400">
               <span>Fixas</span>
               <span>Variáveis</span>
@@ -177,16 +176,21 @@ export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
           {fixed.length > 0 && (
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50">
               <h3 className="font-bold text-[14px] text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-amber-500" /> Despesas Fixas ({fixed.length})
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                Despesas Fixas ({fixed.length})
               </h3>
+
               <div className="space-y-2 bg-gray-50 dark:bg-slate-700/30 p-3 rounded-[16px]">
-                {fixed.slice(0, 5).map((t) => (
-                  <div key={t.id} className="flex justify-between items-center text-[12px]">
+                {fixed.slice(0, 5).map((transaction: any) => (
+                  <div
+                    key={transaction.id}
+                    className="flex justify-between items-center text-[12px]"
+                  >
                     <span className="font-medium text-gray-600 dark:text-gray-400 truncate max-w-[70%]">
-                      {t.description}
+                      {transaction.description || 'Sem descrição'}
                     </span>
                     <span className="font-bold text-gray-800 dark:text-gray-300">
-                      R$ {(Number(t.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {transaction.amountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 ))}
@@ -197,16 +201,21 @@ export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
           {variable.length > 0 && (
             <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50">
               <h3 className="font-bold text-[14px] text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500" /> Despesas Variáveis ({variable.length})
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                Despesas Variáveis ({variable.length})
               </h3>
+
               <div className="space-y-2 bg-gray-50 dark:bg-slate-700/30 p-3 rounded-[16px]">
-                {variable.slice(0, 5).map((t) => (
-                  <div key={t.id} className="flex justify-between items-center text-[12px]">
+                {variable.slice(0, 5).map((transaction: any) => (
+                  <div
+                    key={transaction.id}
+                    className="flex justify-between items-center text-[12px]"
+                  >
                     <span className="font-medium text-gray-600 dark:text-gray-400 truncate max-w-[70%]">
-                      {t.description}
+                      {transaction.description || 'Sem descrição'}
                     </span>
                     <span className="font-bold text-gray-800 dark:text-gray-300">
-                      R$ {(Number(t.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {transaction.amountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 ))}
@@ -229,6 +238,7 @@ export default function FixedVsVariable({ filters }: FixedVsVariableProps) {
             >
               {({ url, loading: pdfLoading }: any) => (
                 <button
+                  type="button"
                   onClick={() => {
                     vibrate([10])
                     if (url && isClient) {
