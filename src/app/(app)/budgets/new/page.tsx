@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import * as Icons from 'lucide-react'
 import {
+  getDynamicIcon,
+  normalizeIconName,
+} from '@/lib/iconUtils'
+import {
   ChevronRight,
   Check,
   Loader2,
@@ -114,7 +118,7 @@ function Card({
   return (
     <div
       className={cn(
-        'rounded-[28px] border border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-none',
+        'rounded-[22px] border border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-none',
         className
       )}
     >
@@ -169,8 +173,10 @@ function NewBudgetContent() {
       setAccumulate(!!budgetData.accumulate)
 
       if (budgetData.icon) {
-        const iconName = budgetData.icon.charAt(0).toUpperCase() + budgetData.icon.slice(1)
-        setIcon(iconName)
+        setIcon(
+          normalizeIconName(budgetData.icon) ||
+          'Tag'
+        )
       }
 
       setInitialized(true)
@@ -182,7 +188,7 @@ function NewBudgetContent() {
   }, [editId, budgetData, initialized])
 
   const selectedCat = categories.find((c: any) => c.id === categoryId)
-  const IconComp = (Icons as any)[icon] || Icons.Tag
+  const IconComp = getDynamicIcon(icon)
 
   const previewPeriodLabel = useMemo(() => {
     if (period === 'weekly') return 'Semanal'
@@ -257,7 +263,7 @@ function NewBudgetContent() {
       amount: amountNum,
       category_id: categoryId || null,
       color,
-      icon: icon.toLowerCase(),
+      icon: normalizeIconName(icon) || 'Tag',
       period,
       accumulate,
       context,
@@ -275,10 +281,6 @@ function NewBudgetContent() {
           id,
           user_id: user.id,
           ...payload,
-          spent: 0,
-          remaining: amountNum,
-          percent: 0,
-          status: 'active',
           created_at: new Date().toISOString(),
           sync_status: 'pending',
           sync_attempts: 0,
@@ -332,7 +334,7 @@ function NewBudgetContent() {
           <div className="bg-gradient-to-br from-teal-50/80 via-white/60 to-white/40 px-4 py-3 dark:from-teal-950/30 dark:via-slate-900/80 dark:to-slate-900">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
-                📊 Resumo
+                Resumo
               </p>
               <span
                 className={cn(
@@ -678,10 +680,10 @@ function NewBudgetContent() {
                 </button>
 
                 {categories.map((cat: any) => {
-                  const catIconName = cat.icon
-                    ? cat.icon.charAt(0).toUpperCase() + cat.icon.slice(1)
-                    : 'Tag'
-                  const CatIconComp = (Icons as any)[catIconName] || Icons.Tag
+                  const CatIconComp =
+                    getDynamicIcon(
+                      cat.icon || 'Tag'
+                    )
                   const isActive = cat.id === categoryId
 
                   return (

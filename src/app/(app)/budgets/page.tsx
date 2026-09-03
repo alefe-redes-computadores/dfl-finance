@@ -11,14 +11,14 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import {
+  calculateBudgetMetrics,
+  getBudgetPeriodName,
+} from '@/lib/budgetOperations'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
-import { useToast } from '@/contexts/ToastContext'
 import { useBudgetsList } from '@/hooks/useBudgetsList'
 import { useLocalData } from '@/hooks/useLocalData'
-import { db } from '@/lib/db'
-import { useSafeDb } from '@/hooks/useSafeDb'
-import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const BudgetsSkeleton = () => (
   <div className="space-y-3 animate-pulse">
@@ -53,10 +53,6 @@ function BudgetsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { effectiveContext } = useContext_()
-  const { showToast } = useToast()
-  const { safeDelete, safeUpdate } = useSafeDb()
-  const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
-
   const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [currentMonth, setCurrentMonth] = useState(new Date())
 
@@ -74,66 +70,20 @@ function BudgetsContent() {
     }
   }, [user?.id])
 
-  const monthStart = format(currentMonth, 'yyyy-MM-01')
-  const monthEnd = format(currentMonth, 'yyyy-MM-31')
-
-  const budgetsWithSpent = (localBudgets || []).map((budget: any) => {
-    const spent = (localTransactions || [])
-      .filter((tx: any) =>
-        tx.category_id === budget.category_id &&
-        (tx.type === 'expense' || tx.type === 'sangria') &&
-        tx.status === 'done' &&
-        tx.date >= monthStart &&
-        tx.date <= monthEnd
-      )
-      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-
-    const remaining = Number(budget.amount) - spent
-    const percent = Number(budget.amount) > 0 ? (spent / Number(budget.amount)) * 100 : 0
-
-    return {
-      ...budget,
-      spent,
-      remaining,
-      percent: Math.min(percent, 100)
-    }
-  })
-
-  const handleDelete = async (id: string) => {
-    if (!user) return
-    if (!confirm('Excluir este orçamento?')) return
-    try {
-      await db.transaction('rw', db.budgets, db.syncQueue, async () => {
-        const result = await safeDelete('budgets', id)
-        if (!result.success) throw new Error(result.error || 'Erro desconhecido')
+  const budgetsWithSpent = (localBudgets || []).map(
+    (budget: any) => {
+      const metrics = calculateBudgetMetrics({
+        budget,
+        transactions: localTransactions || [],
+        referenceDate: currentMonth,
       })
-      hapticSuccess()
-      showToast('✅ Orçamento excluído!', 'success')
-    } catch (err: any) {
-      hapticError()
-      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
-    }
-  }
 
-  const handleToggleStatus = async (budget: any) => {
-    if (!user) return
-    try {
-      const newStatus = budget.status === 'active' ? 'inactive' : 'active'
-      const payload = {
-        status: newStatus,
-        updated_at: new Date().toISOString()
+      return {
+        ...budget,
+        ...metrics,
       }
-      await db.transaction('rw', db.budgets, db.syncQueue, async () => {
-        const result = await safeUpdate('budgets', budget.id, payload)
-        if (!result.success) throw new Error(result.error || 'Erro desconhecido')
-      })
-      vibrate([20])
-      showToast(`✅ Orçamento ${newStatus === 'active' ? 'ativado' : 'desativado'}!`, 'success')
-    } catch (err: any) {
-      hapticError()
-      showToast(`❌ Erro: ${err.message}`, 'error')
     }
-  }
+  )
 
   // ✅ NAVEGAÇÃO: CARD → DETALHES
   const goToDetails = (budgetId: string, e?: React.MouseEvent) => {
@@ -162,7 +112,7 @@ function BudgetsContent() {
   return (
     <div
       ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
     >
       {isDataLoading && (
         <div className="fixed top-20 right-4 z-50">
@@ -170,7 +120,7 @@ function BudgetsContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl pb-3 border-b border-gray-200/60 dark:border-slate-800">
+      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
@@ -252,7 +202,6 @@ function BudgetsContent() {
           <div className="space-y-2.5 animate-in fade-in duration-300">
             {budgetsWithSpent.map((budget: any) => {
               const IconComp = getDynamicIcon(budget.icon || 'tag')
-              const isActive = budget.status !== 'inactive'
               const isWarning = budget.percent >= 80 && budget.remaining >= 0
               const isOver = budget.remaining < 0
 
@@ -288,7 +237,7 @@ function BudgetsContent() {
                           {formatCurrency(budget.spent)}
                         </p>
                         <p className="text-[12px] text-gray-400 dark:text-gray-500">
-                          de {formatCurrency(Number(budget.amount))}
+                          de {formatCurrency(budget.availableAmount)}
                         </p>
                       </div>
                     </div>
@@ -298,7 +247,7 @@ function BudgetsContent() {
                         className={`h-full rounded-full transition-all duration-700 ${
                           isOver ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
                         }`}
-                        style={{ width: `${Math.min(budget.percent, 100)}%` }}
+                        style={{ width: `${budget.progressPercent}%` }}
                       />
                     </div>
 
@@ -318,21 +267,10 @@ function BudgetsContent() {
                       </span>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleToggleStatus(budget)
-                          }}
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors active:scale-[0.98] ${
-                            isActive
-                              ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-                          }`}
-                        >
-                          {isActive ? 'Ativo' : 'Inativo'}
-                        </button>
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:bg-slate-800 dark:text-gray-400">
+                          {getBudgetPeriodName(budget.period)}
+                        </span>
 
-                        {/* ✅ LÁPIS → ABRE EDIÇÃO */}
                         <button
                           onClick={(e) => goToEdit(budget.id, e)}
                           className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-teal-600 dark:hover:text-teal-400 transition-colors active:scale-[0.98]"

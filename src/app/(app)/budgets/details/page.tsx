@@ -1,20 +1,26 @@
 'use client'
 
-//FORÇAR DEPLOY
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
   Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown,
-  Trash2, X  // ✅ ADICIONEI Trash2 e X
+  Trash2, X
 } from 'lucide-react'
-import { format, subMonths, addMonths, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useBudgetById } from '@/hooks/useBudgetById'
 import { useBudgetTransactions } from '@/hooks/useBudgetTransactions'
 import { useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import {
+  calculateBudgetMetrics,
+  getBudgetCycleLabel,
+  getBudgetElapsedDays,
+  getBudgetPeriodName,
+  shiftBudgetReferenceDate,
+} from '@/lib/budgetOperations'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useToast } from '@/contexts/ToastContext'
 import { useSafeDb } from '@/hooks/useSafeDb'
@@ -50,7 +56,7 @@ function MetricCard({ label, value, color = 'gray' }: { label: string; value: st
   )
 }
 
-function StatusBadge({ status, isOverBudget, isWarning }: { status: string; isOverBudget: boolean; isWarning: boolean }) {
+function StatusBadge({ isOverBudget, isWarning }: { isOverBudget: boolean; isWarning: boolean }) {
   const config = isOverBudget
     ? { bg: 'bg-red-50 dark:bg-red-500/10', border: 'border-red-200 dark:border-red-500/20', text: 'text-red-600 dark:text-red-400', icon: AlertTriangle, label: 'Orçamento estourado' }
     : isWarning
@@ -185,18 +191,15 @@ function BudgetDetailContent() {
   const rawBudgetId = searchParams?.get('id')
   const budgetId = useMemo(() => rawBudgetId?.trim() || null, [rawBudgetId])
 
-  // ✅ HOOKS NO TOPO
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(budgetId)
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(budgetId)
 
-  // ✅ STATES
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const hasScheduledRedirect = useRef(false)
 
-  // ✅ REDIRECIONAMENTO CONTROLADO
   useEffect(() => {
     if (!budgetId) return
     if (budgetLoading) return
@@ -212,7 +215,6 @@ function BudgetDetailContent() {
     return () => clearTimeout(timer)
   }, [budgetId, budgetLoading, notFound, router])
 
-  // ✅ FUNÇÃO DE EXCLUIR
   const handleDelete = async () => {
     if (!user?.id || !budgetId) return
     setDeleting(true)
@@ -221,85 +223,100 @@ function BudgetDetailContent() {
       const result = await safeDelete('budgets', budgetId)
       if (!result.success) throw new Error(result.error || 'Erro ao excluir')
 
-      showToast('✅ Orçamento excluído com sucesso!', 'success')
+      showToast('Orçamento excluído.', 'success')
       router.replace('/budgets')
     } catch (err: any) {
-      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
       setShowDeleteModal(false)
     } finally {
       setDeleting(false)
     }
   }
 
-  // ✅ useMemo PARA DADOS DERIVADOS
-  const { spent, transactions, remaining, percent, isOverBudget, isWarning, daysLeft, projection } = useMemo(() => {
+  const {
+    spent,
+    transactions,
+    remaining,
+    percent,
+    progressPercent,
+    isOverBudget,
+    isWarning,
+    daysLeft,
+    projection,
+    availableAmount,
+    cycle,
+  } = useMemo(() => {
     if (!budgetData || !budgetTransactions) {
       return {
         spent: 0,
         transactions: [],
         remaining: 0,
         percent: 0,
+        progressPercent: 0,
         isOverBudget: false,
         isWarning: false,
-        daysLeft: null,
-        projection: '⏳ Carregando dados...'
+        daysLeft: null as number | null,
+        projection: 'Carregando dados...',
+        availableAmount: 0,
+        cycle: null,
       }
     }
 
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    const daysPassed = differenceInDays(new Date(), startOfMonth(currentDate)) + 1
+    const metrics = calculateBudgetMetrics({
+      budget: budgetData,
+      transactions: budgetTransactions,
+      referenceDate: currentDate,
+    })
 
-    let filteredTxs = budgetTransactions.filter(
-      (tx: any) => tx && tx.date >= start && tx.date <= end && tx.status === 'done'
+    const daysPassed = getBudgetElapsedDays(
+      metrics.cycle
     )
 
-    if (budgetData.category_id) {
-      filteredTxs = filteredTxs.filter((tx: any) => tx.category_id === budgetData.category_id)
-    }
-
-    const totalSpent = filteredTxs
-      .filter((tx: any) => tx.type === 'expense' || tx.type === 'sangria')
-      .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0)
-
-    const remainingVal = Number(budgetData.amount) - totalSpent
-    const percentVal = Number(budgetData.amount) > 0 ? (totalSpent / Number(budgetData.amount)) * 100 : 0
-    const isOver = remainingVal < 0
-    const isWarn = percentVal >= 75 && percentVal < 100
-
     let daysLeftVal: number | null = null
-    let projectionVal = '✅ Nenhum gasto registrado ainda.'
+    let projectionVal =
+      'Nenhum gasto registrado neste período.'
 
-    if (totalSpent > 0 && remainingVal > 0) {
-      const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
+    if (
+      metrics.spent > 0 &&
+      metrics.remaining > 0
+    ) {
+      const dailyAverage =
+        daysPassed > 0
+          ? metrics.spent / daysPassed
+          : 0
+
       if (dailyAverage > 0) {
-        daysLeftVal = Math.floor(remainingVal / dailyAverage)
+        daysLeftVal = Math.floor(
+          metrics.remaining / dailyAverage
+        )
+
         if (daysLeftVal <= 3) {
-          projectionVal = `⚠️ Neste ritmo, o orçamento acabará em ${daysLeftVal} dia(s)!`
+          projectionVal =
+            `Neste ritmo, o limite pode acabar em ${daysLeftVal} dia(s).`
         } else if (daysLeftVal <= 7) {
-          projectionVal = `⚠️ Neste ritmo, dura mais ${daysLeftVal} dias.`
+          projectionVal =
+            `Neste ritmo, o saldo dura cerca de ${daysLeftVal} dias.`
         } else {
-          projectionVal = `✅ Ritmo tranquilo! Dura mais ${daysLeftVal} dias.`
+          projectionVal =
+            `O ritmo atual está dentro do limite deste período.`
         }
       }
-    } else if (remainingVal <= 0) {
+    } else if (metrics.remaining <= 0) {
       daysLeftVal = 0
-      projectionVal = '🔴 Orçamento estourado!'
+      projectionVal = 'Orçamento estourado neste período.'
     }
 
     return {
-      spent: totalSpent,
-      transactions: filteredTxs,
-      remaining: remainingVal,
-      percent: Math.min(percentVal, 100),
-      isOverBudget: isOver,
-      isWarning: isWarn,
+      ...metrics,
       daysLeft: daysLeftVal,
-      projection: projectionVal
+      projection: projectionVal,
     }
-  }, [budgetData, budgetTransactions, currentDate])
+  }, [
+    budgetData,
+    budgetTransactions,
+    currentDate,
+  ])
 
-  // ✅ RETURNS CONDICIONAIS
   if (!budgetId) {
     router.replace('/budgets')
     return null
@@ -339,7 +356,10 @@ function BudgetDetailContent() {
   }
 
   // ✅ RENDERIZAÇÃO
-  const monthLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR })
+  const monthLabel = getBudgetCycleLabel(
+    currentDate,
+    budgetData?.period
+  )
   const IconComp = getDynamicIcon(budgetData?.icon || 'tag')
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
@@ -413,7 +433,13 @@ function BudgetDetailContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                setCurrentDate(subMonths(currentDate, 1))
+                setCurrentDate(
+                  shiftBudgetReferenceDate(
+                    currentDate,
+                    budgetData.period,
+                    -1
+                  )
+                )
               }}
               className="w-9 h-9 rounded-full bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center active:scale-95 transition-transform"
             >
@@ -427,7 +453,13 @@ function BudgetDetailContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                setCurrentDate(addMonths(currentDate, 1))
+                setCurrentDate(
+                  shiftBudgetReferenceDate(
+                    currentDate,
+                    budgetData.period,
+                    1
+                  )
+                )
               }}
               className="w-9 h-9 rounded-full bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center active:scale-95 transition-transform"
             >
@@ -438,7 +470,10 @@ function BudgetDetailContent() {
       </div>
 
       <div className="mb-4 flex justify-center">
-        <StatusBadge status={budgetData.status} isOverBudget={isOverBudget} isWarning={isWarning} />
+        <StatusBadge
+          isOverBudget={isOverBudget}
+          isWarning={isWarning}
+        />
       </div>
 
       <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
@@ -457,17 +492,15 @@ function BudgetDetailContent() {
               </h2>
               <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">
                 {budgetData.categories?.name || 'Geral'} •{' '}
-                {budgetData.period === 'monthly'
-                  ? 'Mensal'
-                  : budgetData.period === 'biweekly'
-                    ? 'Quinzenal'
-                    : 'Semanal'}
+                {getBudgetPeriodName(
+                  budgetData.period
+                )}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-5">
-            <MetricCard label="Orçado" value={formatCurrency(Number(budgetData.amount))} color="gray" />
+            <MetricCard label="Orçado" value={formatCurrency(availableAmount)} color="gray" />
             <MetricCard label="Gasto" value={formatCurrency(spent)} color="red" />
             <MetricCard
               label="Restante"
@@ -482,7 +515,7 @@ function BudgetDetailContent() {
                 className={`h-full rounded-full transition-all duration-1000 ease-out ${
                   isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
                 }`}
-                style={{ width: `${Math.min(percent, 100)}%` }}
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>

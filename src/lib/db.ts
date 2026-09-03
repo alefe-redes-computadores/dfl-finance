@@ -142,15 +142,17 @@ export interface LocalBudget {
   id: string
   user_id: string
   context: 'dfl' | 'personal'
+  category_id?: string | null
   name: string
   amount: number
-  spent: number
-  remaining: number
-  percent: number
-  category_id?: string
+  color?: string | null
+  icon?: string | null
+  period: 'monthly' | 'biweekly' | 'weekly'
+  accumulate?: boolean | null
   created_at: string
   updated_at: string
   sync_status: 'synced' | 'pending' | 'failed'
+  sync_attempts?: number
 }
 
 export interface LocalGoal {
