@@ -1,14 +1,14 @@
+// src/components/reports/CategoryResult.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { ReportFilterValues } from './ReportFilters'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, PieChart } from 'lucide-react'
 import { BlobProvider } from '@react-pdf/renderer'
+import { ReportFilterValues } from './ReportFilters'
 import ReportPDF from '@/components/reports/ReportPDF'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { safeNumber, safeArray, safeFormatDate } from '@/lib/safe'
+import { useReportTransactions } from '@/hooks/useReportTransactions'
+import { safeNumber } from '@/lib/safe'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Alimentação: '#FF6B6B',
@@ -24,86 +24,62 @@ const CATEGORY_COLORS: Record<string, string> = {
   Vendas: '#FF8B94',
   Serviços: '#B8A9C9',
   Outros: '#95A5A6',
+  Geral: '#95A5A6',
 }
 
 interface CategoryResultProps {
   filters: ReportFilterValues
 }
 
+function isExpense(transaction: any) {
+  return transaction?.type === 'expense' || transaction?.type === 'sangria'
+}
+
 export default function CategoryResult({ filters }: CategoryResultProps) {
-  const { user } = useAuth()
   const { vibrate, success } = useHapticFeedback()
   const [isClient, setIsClient] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [transactions, setTransactions] = useState<any[]>([])
 
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
+  useEffect(() => setIsClient(true), [])
 
   const { start, end } = filters.dateRange
   const { context, tags = [], accounts = [], creditCards = [] } = filters
 
-  useEffect(() => {
-    if (!user?.id || !start || !end) {
-      setLoading(false)
-      return
-    }
+  const { data: reportTransactions, loading } = useReportTransactions({
+    context,
+    startDate: start,
+    endDate: end,
+    tags,
+    accounts,
+    creditCards,
+  })
 
-    const load = async () => {
-      try {
-        setLoading(true)
+  const expenseTransactions = useMemo(
+    () => reportTransactions
+      .filter((t: any) => isExpense(t))
+      .map((t: any) => ({
+        ...t,
+        amountValue: safeNumber(t.amount),
+        categoryLabel: t.categoryLabel || 'Geral',
+      })),
+    [reportTransactions]
+  )
 
-        let query = supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('date', start)
-          .lte('date', end)
-          .order('date', { ascending: false })
-
-        if (context === 'personal') query = query.eq('context', 'personal')
-        if (tags.length > 0) query = query.overlaps('tag_ids', tags)
-        if (accounts.length > 0) query = query.in('account_id', accounts)
-        if (creditCards.length > 0) query = query.in('credit_card_id', creditCards)
-
-        const { data, error } = await query
-        if (error) console.error(error)
-        setTransactions(data || [])
-      } catch (error) {
-        console.error('Erro ao carregar categorias:', error)
-        setTransactions([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    load()
-  }, [user?.id, start, end, context, tags.join(','), accounts.join(','), creditCards.join(',')])
-
-  // Normaliza transações
-  const normalizedTransactions = (Array.isArray(transactions) ? transactions : []).map((t) => ({
-    ...t,
-    amountValue: safeNumber(t?.amount),
-    categoryLabel: t?.category || t?.categories?.name || 'Outros',
-  }))
-
-  const expensesByCategory = normalizedTransactions
-    .filter((t) => t.type === 'expense')
-    .reduce((acc: any, t: any) => {
-      const cat = t.categoryLabel
-      if (!acc[cat]) acc[cat] = { total: 0, count: 0, transactions: [] }
-      acc[cat].total += t.amountValue
-      acc[cat].count += 1
-      acc[cat].transactions.push(t)
+  const categoryArray = useMemo(() => {
+    const grouped = expenseTransactions.reduce((acc: Record<string, any>, t: any) => {
+      const category = t.categoryLabel
+      if (!acc[category]) acc[category] = { total: 0, count: 0, transactions: [] }
+      acc[category].total += t.amountValue
+      acc[category].count += 1
+      acc[category].transactions.push(t)
       return acc
     }, {})
 
-  const categoryArray = Object.entries(expensesByCategory)
-    .map(([name, data]: any) => ({ name, ...data }))
-    .sort((a, b) => b.total - a.total)
+    return Object.entries(grouped)
+      .map(([name, data]: any) => ({ name, ...data }))
+      .sort((a, b) => b.total - a.total)
+  }, [expenseTransactions])
 
-  const totalExpenses = categoryArray.reduce((sum, c) => sum + c.total, 0)
+  const totalExpenses = categoryArray.reduce((sum, category) => sum + category.total, 0)
 
   return (
     <div className="flex-1 animate-in fade-in duration-300">
@@ -116,7 +92,7 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
           <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
             <PieChart size={24} className="text-gray-400" />
           </div>
-          <p className="text-gray-500 text-sm font-medium">Nenhuma despesa no período selecionado.</p>
+          <p className="text-gray-500 text-sm font-medium">Nenhuma despesa realizada no período selecionado.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -128,14 +104,9 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
                 const color = CATEGORY_COLORS[cat.name] || '#94a3b8'
                 return (
                   <div key={cat.name} className="flex items-center gap-3">
-                    <div className="w-[100px] text-[12px] font-bold text-gray-600 dark:text-gray-400 truncate">
-                      {cat.name}
-                    </div>
+                    <div className="w-[100px] text-[12px] font-bold text-gray-600 dark:text-gray-400 truncate">{cat.name}</div>
                     <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden shadow-inner">
-                      <div
-                        className="h-full rounded-full transition-all duration-700 ease-out"
-                        style={{ width: `${Math.min(percent, 100)}%`, backgroundColor: color }}
-                      />
+                      <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${Math.min(percent, 100)}%`, backgroundColor: color }} />
                     </div>
                     <div className="w-[80px] text-right">
                       <p className="text-[12px] font-bold text-gray-800 dark:text-gray-200">
@@ -153,23 +124,20 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
             {categoryArray.map((cat) => {
               const color = CATEGORY_COLORS[cat.name] || '#94a3b8'
               return (
-                <div
-                  key={cat.name}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 hover:shadow-md transition-shadow"
-                >
+                <div key={cat.name} className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-center mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
                       </div>
-                      <div>
-                        <h4 className="font-bold text-[14px] text-gray-800 dark:text-gray-200">{cat.name}</h4>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-[14px] text-gray-800 dark:text-gray-200 truncate">{cat.name}</h4>
                         <p className="text-[11px] font-medium text-gray-400">
                           {cat.count} transação(ões) • {((cat.total / totalExpenses) * 100).toFixed(1)}%
                         </p>
                       </div>
                     </div>
-                    <p className="text-[15px] font-black text-red-500">
+                    <p className="text-[15px] font-black text-red-500 shrink-0 ml-3">
                       R$ {cat.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
@@ -177,9 +145,7 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
                   <div className="space-y-1.5 mt-2 bg-gray-50 dark:bg-slate-700/30 p-3 rounded-[16px]">
                     {cat.transactions.slice(0, 3).map((t: any) => (
                       <div key={t.id} className="flex justify-between items-center text-[12px]">
-                        <span className="font-medium text-gray-600 dark:text-gray-400 truncate max-w-[70%]">
-                          {t.description}
-                        </span>
+                        <span className="font-medium text-gray-600 dark:text-gray-400 truncate max-w-[70%]">{t.description || 'Sem descrição'}</span>
                         <span className="font-bold text-gray-800 dark:text-gray-300">
                           R$ {t.amountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
@@ -196,21 +162,20 @@ export default function CategoryResult({ filters }: CategoryResultProps) {
             })}
           </div>
 
-          {transactions.length > 0 && (
-            <BlobProvider
-              document={
-                <ReportPDF
-                  title="Despesas por Categoria"
-                  period={`${start} a ${end}`}
-                  income={0}
-                  expense={totalExpenses}
-                  balance={-totalExpenses}
-                  transactions={transactions.filter((t) => t.type === 'expense')}
-                />
-              }
-            >
+          {expenseTransactions.length > 0 && (
+            <BlobProvider document={
+              <ReportPDF
+                title="Despesas por Categoria"
+                period={`${start} a ${end}`}
+                income={0}
+                expense={totalExpenses}
+                balance={-totalExpenses}
+                transactions={expenseTransactions}
+              />
+            }>
               {({ url, loading: pdfLoading }: any) => (
                 <button
+                  type="button"
                   onClick={() => {
                     vibrate([10])
                     if (url && isClient) {

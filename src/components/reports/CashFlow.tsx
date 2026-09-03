@@ -1,113 +1,90 @@
+// src/components/reports/CashFlow.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { ReportFilterValues } from './ReportFilters'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, ListCollapse } from 'lucide-react'
 import { BlobProvider } from '@react-pdf/renderer'
+import { ReportFilterValues } from './ReportFilters'
 import ReportPDF from '@/components/reports/ReportPDF'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { safeNumber, safeDate, safeFormatDate } from '@/lib/safe'
+import { useReportTransactions } from '@/hooks/useReportTransactions'
+import { safeNumber } from '@/lib/safe'
 
 interface CashFlowProps {
   filters: ReportFilterValues
 }
 
+function isExpense(transaction: any) {
+  return transaction?.type === 'expense' || transaction?.type === 'sangria'
+}
+
+function formatLocalDate(value: unknown) {
+  if (typeof value !== 'string') return 'Data inválida'
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : 'Data inválida'
+}
+
 export default function CashFlow({ filters }: CashFlowProps) {
-  const { user } = useAuth()
   const { vibrate, success } = useHapticFeedback()
   const [isClient, setIsClient] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [transactions, setTransactions] = useState<any[]>([])
 
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
+  useEffect(() => setIsClient(true), [])
 
   const { start, end } = filters.dateRange
   const { context, tags = [], accounts = [], creditCards = [] } = filters
 
-  useEffect(() => {
-    if (!user?.id || !start || !end) {
-      setLoading(false)
-      return
-    }
-
-    const load = async () => {
-      try {
-        setLoading(true)
-
-        let query = supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('date', start)
-          .lte('date', end)
-          .order('date', { ascending: true })
-
-        if (context === 'personal') query = query.eq('context', 'personal')
-        if (tags.length > 0) query = query.overlaps('tag_ids', tags)
-        if (accounts.length > 0) query = query.in('account_id', accounts)
-        if (creditCards.length > 0) query = query.in('credit_card_id', creditCards)
-
-        const { data, error } = await query
-        if (error) console.error(error)
-        setTransactions(data || [])
-      } catch (error) {
-        console.error('Erro ao carregar fluxo de caixa:', error)
-        setTransactions([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    load()
-  }, [user?.id, start, end, context, tags.join(','), accounts.join(','), creditCards.join(',')])
-
-  // Normaliza transações com data segura
-  const normalizedTransactions = (Array.isArray(transactions) ? transactions : []).map((t) => {
-    const parsedDate = safeDate(t?.date)
-    return {
-      ...t,
-      amountValue: safeNumber(t?.amount),
-      parsedDate,
-      dateLabel: parsedDate ? parsedDate.toLocaleDateString('pt-BR') : 'Data inválida',
-      dateKey: parsedDate ? parsedDate.toISOString().slice(0, 10) : 'invalid-date',
-    }
+  const { data: reportTransactions, loading } = useReportTransactions({
+    context,
+    startDate: start,
+    endDate: end,
+    tags,
+    accounts,
+    creditCards,
   })
 
-  // Agrupa por data (usando chave estável)
-  const groupedByDate = normalizedTransactions.reduce((acc: any, t: any) => {
-    const key = t.dateKey
-    if (!acc[key]) {
-      acc[key] = {
-        key,
-        date: t.dateLabel,
-        transactions: [],
-        totalIncome: 0,
-        totalExpense: 0,
+  const transactions = useMemo(
+    () => reportTransactions.filter((t: any) => t.type === 'income' || isExpense(t)),
+    [reportTransactions]
+  )
+
+  const normalizedTransactions = useMemo(
+    () => transactions.map((t: any) => ({
+      ...t,
+      amountValue: safeNumber(t?.amount),
+      dateLabel: formatLocalDate(t?.date),
+      dateKey: typeof t?.date === 'string' ? t.date : 'invalid-date',
+    })),
+    [transactions]
+  )
+
+  const groupedArray = useMemo(() => {
+    const grouped = normalizedTransactions.reduce((acc: Record<string, any>, t: any) => {
+      if (!acc[t.dateKey]) {
+        acc[t.dateKey] = {
+          key: t.dateKey,
+          date: t.dateLabel,
+          transactions: [],
+          totalIncome: 0,
+          totalExpense: 0,
+        }
       }
-    }
 
-    acc[key].transactions.push(t)
+      acc[t.dateKey].transactions.push(t)
+      if (t.type === 'income') acc[t.dateKey].totalIncome += t.amountValue
+      else if (isExpense(t)) acc[t.dateKey].totalExpense += t.amountValue
+      return acc
+    }, {})
 
-    if (t.type === 'income') acc[key].totalIncome += t.amountValue
-    else if (t.type === 'expense') acc[key].totalExpense += t.amountValue
-
-    return acc
-  }, {})
-
-  // Ordena por data
-  const groupedArray = Object.values(groupedByDate).sort((a: any, b: any) => a.key.localeCompare(b.key))
+    return Object.values(grouped).sort((a: any, b: any) => a.key.localeCompare(b.key))
+  }, [normalizedTransactions])
 
   const totalIncome = normalizedTransactions
-    .filter((t) => t.type === 'income')
-    .reduce((s, t) => s + t.amountValue, 0)
+    .filter((t: any) => t.type === 'income')
+    .reduce((sum: number, t: any) => sum + t.amountValue, 0)
 
   const totalExpense = normalizedTransactions
-    .filter((t) => t.type === 'expense')
-    .reduce((s, t) => s + t.amountValue, 0)
+    .filter((t: any) => isExpense(t))
+    .reduce((sum: number, t: any) => sum + t.amountValue, 0)
 
   return (
     <div className="flex-1 animate-in fade-in duration-300">
@@ -120,7 +97,7 @@ export default function CashFlow({ filters }: CashFlowProps) {
           <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
             <ListCollapse size={24} className="text-gray-400" />
           </div>
-          <p className="text-gray-500 text-sm font-medium">Nenhuma movimentação neste período.</p>
+          <p className="text-gray-500 text-sm font-medium">Nenhuma movimentação realizada neste período.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -141,39 +118,26 @@ export default function CashFlow({ filters }: CashFlowProps) {
 
           <div className="space-y-4">
             {groupedArray.map((group: any) => (
-              <div
-                key={group.key}
-                className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden"
-              >
+              <div key={group.key} className="bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50 overflow-hidden">
                 <div className="flex justify-between items-center p-4 bg-gray-50/50 dark:bg-slate-700/20 border-b border-gray-100 dark:border-slate-700/50">
                   <h3 className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{group.date}</h3>
                   <div className="flex space-x-3 text-[11px] font-bold">
-                    <span className="text-emerald-600">
-                      + R$ {group.totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-red-500">
-                      - R$ {group.totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
+                    <span className="text-emerald-600">+ R$ {group.totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-red-500">- R$ {group.totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
+
                 <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
                   {group.transactions.map((t: any) => (
-                    <div
-                      key={t.id}
-                      className="flex justify-between items-center p-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            t.type === 'income' ? 'bg-emerald-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'
-                          }`}
-                        />
-                        <div>
-                          <p className="font-bold text-gray-800 dark:text-gray-200 text-[13px]">{t.description}</p>
-                          <p className="text-[11px] font-medium text-gray-400 mt-0.5">{t.categoryLabel || 'Geral'}</p>
+                    <div key={t.id} className="flex justify-between items-center p-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-2 h-2 shrink-0 rounded-full ${t.type === 'income' ? 'bg-emerald-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`} />
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-800 dark:text-gray-200 text-[13px] truncate">{t.description || 'Sem descrição'}</p>
+                          <p className="text-[11px] font-medium text-gray-400 mt-0.5 truncate">{t.categoryLabel || 'Geral'}</p>
                         </div>
                       </div>
-                      <span className={`font-bold text-[14px] ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
+                      <span className={`font-bold text-[14px] shrink-0 ml-3 ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
                         {t.type === 'income' ? '+' : '-'} R$ {t.amountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -184,20 +148,19 @@ export default function CashFlow({ filters }: CashFlowProps) {
           </div>
 
           {transactions.length > 0 && (
-            <BlobProvider
-              document={
-                <ReportPDF
-                  title="Fluxo de Caixa"
-                  period={`${start} a ${end}`}
-                  income={totalIncome}
-                  expense={totalExpense}
-                  balance={totalIncome - totalExpense}
-                  transactions={transactions}
-                />
-              }
-            >
+            <BlobProvider document={
+              <ReportPDF
+                title="Fluxo de Caixa"
+                period={`${start} a ${end}`}
+                income={totalIncome}
+                expense={totalExpense}
+                balance={totalIncome - totalExpense}
+                transactions={transactions}
+              />
+            }>
               {({ url, loading: pdfLoading }: any) => (
                 <button
+                  type="button"
                   onClick={() => {
                     vibrate([10])
                     if (url && isClient) {

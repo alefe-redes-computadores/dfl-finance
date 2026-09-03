@@ -1,39 +1,34 @@
+// src/components/reports/ComparePeriods.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Download, BarChart2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { ReportFilterValues } from './ReportFilters'
+import { useEffect, useMemo, useState } from 'react'
+import { BarChart2, Download, TrendingDown, TrendingUp } from 'lucide-react'
 import { BlobProvider } from '@react-pdf/renderer'
+import { differenceInCalendarDays, format, isValid, parseISO, subDays } from 'date-fns'
+import { ReportFilterValues } from './ReportFilters'
 import ReportPDF from '@/components/reports/ReportPDF'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { safeNumber, safeDate, safeFormatDate } from '@/lib/safe'
-import { subDays, differenceInDays } from 'date-fns'
+import { useReportTransactions } from '@/hooks/useReportTransactions'
+import { safeNumber } from '@/lib/safe'
 
 interface ComparePeriodsProps {
   filters: ReportFilterValues
 }
 
+function isExpense(transaction: any) {
+  return transaction?.type === 'expense' || transaction?.type === 'sangria'
+}
+
+function financialTransactions(transactions: any[]) {
+  return transactions.filter((t) => t.type === 'income' || isExpense(t))
+}
+
 export default function ComparePeriods({ filters }: ComparePeriodsProps) {
-  const { user } = useAuth()
   const { vibrate, success } = useHapticFeedback()
   const [isClient, setIsClient] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [currentPeriod, setCurrentPeriod] = useState<any[]>([])
-  const [previousPeriod, setPreviousPeriod] = useState<any[]>([])
 
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
+  useEffect(() => setIsClient(true), [])
 
-  // Cálculo seguro
-  const calc = (arr: any[], type: string) =>
-    (Array.isArray(arr) ? arr : [])
-      .filter((t) => t?.type === type)
-      .reduce((sum, t) => sum + safeNumber(t?.amount), 0)
-
-  // Dependências quebradas
   const {
     dateRange: { start, end },
     context,
@@ -42,75 +37,56 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
     creditCards = [],
   } = filters
 
-  useEffect(() => {
-    if (!user?.id || !start || !end) {
-      setLoading(false)
-      return
+  const previousRange = useMemo(() => {
+    if (!start || !end) return { start: null, end: null }
+
+    const currentStart = parseISO(start)
+    const currentEnd = parseISO(end)
+    if (!isValid(currentStart) || !isValid(currentEnd) || currentEnd < currentStart) {
+      return { start: null, end: null }
     }
 
-    const load = async () => {
-      try {
-        setLoading(true)
+    const diffDays = differenceInCalendarDays(currentEnd, currentStart)
+    const previousEnd = subDays(currentStart, 1)
+    const previousStart = subDays(previousEnd, diffDays)
 
-        const currentStart = start
-        const currentEnd = end
-
-        // Calcula período anterior com diferença exata (mesmo número de dias)
-        const diffDays = differenceInDays(new Date(currentEnd), new Date(currentStart))
-        const prevEnd = subDays(new Date(currentStart), 1)
-        const prevStart = subDays(prevEnd, diffDays)
-
-        const prevStartStr = prevStart.toISOString().split('T')[0]
-        const prevEndStr = prevEnd.toISOString().split('T')[0]
-
-        // Query atual
-        let queryCurr = supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('date', currentStart)
-          .lte('date', currentEnd)
-
-        if (context === 'personal') queryCurr = queryCurr.eq('context', 'personal')
-        if (tags.length > 0) queryCurr = queryCurr.overlaps('tag_ids', tags)
-        if (accounts.length > 0) queryCurr = queryCurr.in('account_id', accounts)
-        if (creditCards.length > 0) queryCurr = queryCurr.in('credit_card_id', creditCards)
-
-        const { data: currData } = await queryCurr
-
-        // Query anterior
-        let queryPrev = supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('date', prevStartStr)
-          .lte('date', prevEndStr)
-
-        if (context === 'personal') queryPrev = queryPrev.eq('context', 'personal')
-        if (tags.length > 0) queryPrev = queryPrev.overlaps('tag_ids', tags)
-        if (accounts.length > 0) queryPrev = queryPrev.in('account_id', accounts)
-        if (creditCards.length > 0) queryPrev = queryPrev.in('credit_card_id', creditCards)
-
-        const { data: prevData } = await queryPrev
-
-        setCurrentPeriod(currData || [])
-        setPreviousPeriod(prevData || [])
-      } catch (error) {
-        console.error('Erro ao carregar comparação:', error)
-        setCurrentPeriod([])
-        setPreviousPeriod([])
-      } finally {
-        setLoading(false)
-      }
+    return {
+      start: format(previousStart, 'yyyy-MM-dd'),
+      end: format(previousEnd, 'yyyy-MM-dd'),
     }
+  }, [start, end])
 
-    load()
-  }, [user?.id, start, end, context, tags.join(','), accounts.join(','), creditCards.join(',')])
+  const { data: currentRaw, loading: currentLoading } = useReportTransactions({
+    context,
+    startDate: start,
+    endDate: end,
+    tags,
+    accounts,
+    creditCards,
+  })
 
-  const curInc = calc(currentPeriod, 'income')
-  const curExp = calc(currentPeriod, 'expense')
-  const prevInc = calc(previousPeriod, 'income')
-  const prevExp = calc(previousPeriod, 'expense')
+  const { data: previousRaw, loading: previousLoading } = useReportTransactions({
+    context,
+    startDate: previousRange.start,
+    endDate: previousRange.end,
+    tags,
+    accounts,
+    creditCards,
+  })
+
+  const currentPeriod = useMemo(() => financialTransactions(currentRaw), [currentRaw])
+  const previousPeriod = useMemo(() => financialTransactions(previousRaw), [previousRaw])
+
+  const calcIncome = (items: any[]) =>
+    items.filter((t) => t.type === 'income').reduce((sum, t) => sum + safeNumber(t.amount), 0)
+
+  const calcExpense = (items: any[]) =>
+    items.filter((t) => isExpense(t)).reduce((sum, t) => sum + safeNumber(t.amount), 0)
+
+  const curInc = calcIncome(currentPeriod)
+  const curExp = calcExpense(currentPeriod)
+  const prevInc = calcIncome(previousPeriod)
+  const prevExp = calcExpense(previousPeriod)
 
   const incDiff = curInc - prevInc
   const expDiff = curExp - prevExp
@@ -118,6 +94,7 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
   const expPerc = prevExp > 0 ? (expDiff / prevExp) * 100 : 0
 
   const allTransactions = [...currentPeriod, ...previousPeriod]
+  const loading = currentLoading || previousLoading
 
   return (
     <div className="flex-1 animate-in fade-in duration-300">
@@ -130,19 +107,15 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
           <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700/50 rounded-[18px] flex items-center justify-center mb-3">
             <BarChart2 size={24} className="text-gray-400" />
           </div>
-          <p className="text-gray-500 text-sm font-medium">Nenhum dado para os períodos comparados.</p>
+          <p className="text-gray-500 text-sm font-medium">Nenhum dado realizado para os períodos comparados.</p>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Receitas Atuais</p>
-              <p className="text-[18px] font-black text-emerald-600">
-                R$ {curInc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
-                incDiff >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-red-50 dark:bg-red-500/10 text-red-500'
-              }`}>
+              <p className="text-[18px] font-black text-emerald-600">R$ {curInc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${incDiff >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
                 {incDiff >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                 {incDiff >= 0 ? '+' : ''}{incPerc.toFixed(1)}% vs anterior
               </div>
@@ -150,12 +123,8 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
 
             <div className="bg-white dark:bg-slate-800 p-5 rounded-[24px] shadow-sm border border-gray-50 dark:border-slate-700/50">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Despesas Atuais</p>
-              <p className="text-[18px] font-black text-red-500">
-                R$ {curExp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
-                expDiff <= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-red-50 dark:bg-red-500/10 text-red-500'
-              }`}>
+              <p className="text-[18px] font-black text-red-500">R$ {curExp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${expDiff <= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
                 {expDiff <= 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
                 {expDiff > 0 ? '+' : ''}{expPerc.toFixed(1)}% vs anterior
               </div>
@@ -167,21 +136,15 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
             <div className="space-y-3 bg-gray-50 dark:bg-slate-700/30 p-4 rounded-[16px]">
               <div className="flex justify-between items-center">
                 <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Receita anterior</span>
-                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                  R$ {prevInc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">R$ {prevInc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Despesa anterior</span>
-                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                  R$ {prevExp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">R$ {prevExp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[12px] font-bold text-gray-500 dark:text-gray-400">Saldo anterior</span>
-                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
-                  R$ {(prevInc - prevExp).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
+                <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">R$ {(prevInc - prevExp).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="h-px bg-gray-200 dark:bg-slate-600 my-2" />
               <div className="flex justify-between items-center">
@@ -193,21 +156,20 @@ export default function ComparePeriods({ filters }: ComparePeriodsProps) {
             </div>
           </div>
 
-          {allTransactions.length > 0 && (
-            <BlobProvider
-              document={
-                <ReportPDF
-                  title="Comparar Períodos"
-                  period={`${start} a ${end}`}
-                  income={curInc}
-                  expense={curExp}
-                  balance={curInc - curExp}
-                  transactions={currentPeriod}
-                />
-              }
-            >
+          {currentPeriod.length > 0 && (
+            <BlobProvider document={
+              <ReportPDF
+                title="Comparar Períodos"
+                period={`${start} a ${end}`}
+                income={curInc}
+                expense={curExp}
+                balance={curInc - curExp}
+                transactions={currentPeriod}
+              />
+            }>
               {({ url, loading: pdfLoading }: any) => (
                 <button
+                  type="button"
                   onClick={() => {
                     vibrate([10])
                     if (url && isClient) {
