@@ -1,3 +1,4 @@
+// src/app/(app)/transactions/card-expense/page.tsx
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
@@ -75,16 +76,16 @@ export default function CardExpensePage() {
   const handleSave = async () => {
     if (isSubmitting || saved) return
     if (!user?.id) {
-      showToast("❌ Sessão expirada. Faça login novamente.", "error")
+      showToast("Sessão expirada. Faça login novamente.", "error")
       return
     }
     if (!creditCardId) {
-      showToast("⚠️ Por favor, selecione um cartão de crédito.", "warning")
+      showToast("Por favor, selecione um cartão de crédito.", "warning")
       hapticError()
       return
     }
     if (amountNum <= 0) {
-      showToast("⚠️ O valor da despesa deve ser maior que zero.", "warning")
+      showToast("O valor da despesa deve ser maior que zero.", "warning")
       hapticError()
       return
     }
@@ -167,14 +168,14 @@ export default function CardExpensePage() {
       setSaved(true)
       hapticSuccess()
       vibrate([50])
-      showToast("✅ Despesa salva com sucesso!", "success")
+      showToast("Despesa salva com sucesso!", "success")
       setTimeout(() => {
         router.push('/home')
       }, 800)
     } catch (err: any) {
       console.error("Erro ao salvar:", err)
       hapticError()
-      showToast(`❌ Erro ao salvar despesa: ${err.message}`, "error")
+      showToast(`Erro ao salvar despesa: ${err.message}`, "error")
     } finally {
       setIsSubmitting(false)
     }
@@ -204,8 +205,8 @@ export default function CardExpensePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] dark:bg-slate-950">
-        <Loader2 className="animate-spin text-orange-500" size={40} />
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f8fa] dark:bg-slate-950">
+        <Loader2 className="animate-spin text-teal-600" size={40} />
       </div>
     )
   }
@@ -215,9 +216,9 @@ export default function CardExpensePage() {
   const selectedTag = (tags || []).find((t: any) => t.id === tagId)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 text-gray-900 dark:text-gray-100 pb-28 relative">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 text-gray-900 dark:text-gray-100 pb-28 relative">
       {/* 🔥 HEADER */}
-      <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f6f7f8]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5">
+      <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#f7f8fa]/90 dark:bg-slate-950/85 border-b border-black/5 dark:border-white/5">
         <div className="flex items-center justify-between px-4 pt-5 pb-4">
           <button
             onClick={() => router.back()}
@@ -240,7 +241,7 @@ export default function CardExpensePage() {
 
       {/* 🔥 VALOR */}
       <div className="px-5 pt-6">
-        <div className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-[0_6px_30px_rgba(15,23,42,0.05)] dark:shadow-none px-5 py-6">
+        <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-sm dark:shadow-none px-5 py-6">
           <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-3">
             Valor
           </p>
@@ -253,7 +254,7 @@ export default function CardExpensePage() {
               onChange={(num) => {
                 setAmountNum(num)
               }}
-              className="text-[44px] leading-none font-bold tracking-[-0.04em] bg-transparent outline-none w-full text-orange-500 dark:text-orange-400"
+              className="text-[40px] leading-none font-bold tracking-[-0.04em] bg-transparent outline-none w-full text-rose-600 dark:text-rose-400"
             />
           </div>
         </div>
@@ -261,14 +262,14 @@ export default function CardExpensePage() {
 
       {/* 🔥 FORMULÁRIO PRINCIPAL */}
       <div className="px-5 pt-5 space-y-4">
-        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden shadow-[0_6px_30px_rgba(15,23,42,0.05)] dark:shadow-none">
+        <section className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden shadow-sm dark:shadow-none">
           {/* Cartão */}
           <button
             onClick={() => { setShowCardModal(true); vibrate([10]) }}
             className="w-full flex items-center gap-4 px-5 py-4 active:scale-[0.99] transition-transform"
           >
-            <div className="w-11 h-11 rounded-2xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
-              <CreditCard size={20} className="text-orange-500" />
+            <div className="w-11 h-11 rounded-2xl bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
+              <CreditCard size={20} className="text-teal-600" />
             </div>
             <div className="flex-1 text-left min-w-0">
               <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
@@ -345,7 +346,7 @@ export default function CardExpensePage() {
         </section>
 
         {/* 🔥 MAIS DETALHES */}
-        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden shadow-[0_6px_30px_rgba(15,23,42,0.04)] dark:shadow-none">
+        <section className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden shadow-sm dark:shadow-none">
           <button
             onClick={() => { setShowDetails(!showDetails); vibrate([10]) }}
             className="w-full flex items-center justify-between px-5 py-4 active:scale-[0.99] transition-transform"
@@ -358,7 +359,7 @@ export default function CardExpensePage() {
                 Parcelas, observações e tags
               </p>
             </div>
-            <span className="text-[13px] font-medium text-orange-500">
+            <span className="text-[13px] font-medium text-teal-600">
               {showDetails ? 'Ocultar' : 'Abrir'}
             </span>
           </button>
@@ -445,10 +446,10 @@ export default function CardExpensePage() {
         <button
           onClick={handleSave}
           disabled={isSubmitting || saved}
-          className={`pointer-events-auto w-[68px] h-[68px] rounded-full flex items-center justify-center text-white shadow-[0_10px_30px_rgba(249,115,22,0.28)] transition-all duration-300 active:scale-[0.92] ${
+          className={`pointer-events-auto w-[68px] h-[68px] rounded-full flex items-center justify-center text-white shadow-lg shadow-rose-600/20 transition-all duration-300 active:scale-[0.92] ${
             saved
               ? 'bg-emerald-500 scale-110'
-              : 'bg-orange-500 hover:bg-orange-600'
+              : 'bg-rose-600 hover:bg-rose-700'
           }`}
         >
           {isSubmitting ? (
@@ -482,7 +483,7 @@ export default function CardExpensePage() {
                     onClick={() => { setCreditCardId(card.id); setShowCardModal(false); vibrate([10]) }}
                     className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] border ${
                       isActive
-                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/70'
+                        ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800/70'
                         : 'bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
@@ -493,7 +494,7 @@ export default function CardExpensePage() {
                       {card.flag ? renderFlagIcon(card.flag) : <CreditCard size={22} />}
                     </div>
                     <div className="flex-1 text-left">
-                      <span className={`font-semibold ${isActive ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                      <span className={`font-semibold ${isActive ? 'text-teal-600 dark:text-teal-400' : 'text-gray-900 dark:text-gray-100'}`}>
                         {card.name}
                       </span>
                       {card.last_four && (
@@ -502,7 +503,7 @@ export default function CardExpensePage() {
                         </span>
                       )}
                     </div>
-                    {isActive && <Check size={22} className="text-orange-600 dark:text-orange-400" />}
+                    {isActive && <Check size={22} className="text-teal-600 dark:text-teal-400" />}
                   </button>
                 )
               })}
@@ -520,7 +521,7 @@ export default function CardExpensePage() {
               <h3 className="font-semibold text-xl text-gray-900 dark:text-gray-100">Categorias</h3>
               <button
                 onClick={() => { setShowCatModal(false); router.push('/categories'); vibrate([10]) }}
-                className="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 p-2.5 rounded-full active:scale-[0.95] transition-transform"
+                className="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 p-2.5 rounded-full active:scale-[0.95] transition-transform"
               >
                 <Plus size={20} />
               </button>
@@ -536,17 +537,17 @@ export default function CardExpensePage() {
                     onClick={() => { setCategoryId(cat.id); setShowCatModal(false); vibrate([10]) }}
                     className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] border ${
                       isActive
-                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/70'
+                        ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800/70'
                         : 'bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
                       <IconComp size={22} />
                     </div>
-                    <span className={`flex-1 text-left font-semibold ${isActive ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                    <span className={`flex-1 text-left font-semibold ${isActive ? 'text-teal-600 dark:text-teal-400' : 'text-gray-900 dark:text-gray-100'}`}>
                       {cat.name}
                     </span>
-                    {isActive && <Check size={22} className="text-orange-600 dark:text-orange-400" />}
+                    {isActive && <Check size={22} className="text-teal-600 dark:text-teal-400" />}
                   </button>
                 )
               })}
@@ -564,7 +565,7 @@ export default function CardExpensePage() {
               <h3 className="font-semibold text-xl text-gray-900 dark:text-gray-100">Tags</h3>
               <button
                 onClick={() => { setShowTagModal(false); router.push('/tags'); vibrate([10]) }}
-                className="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 p-2.5 rounded-full active:scale-[0.95] transition-transform"
+                className="text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 p-2.5 rounded-full active:scale-[0.95] transition-transform"
               >
                 <Plus size={20} />
               </button>
@@ -579,15 +580,15 @@ export default function CardExpensePage() {
                     onClick={() => { setTagId(tag.id); setShowTagModal(false); vibrate([10]) }}
                     className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-colors active:scale-[0.98] border ${
                       isActive
-                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/70'
+                        ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800/70'
                         : 'bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <div className="w-5 h-5 rounded-full shadow-sm" style={{ backgroundColor: tag.color }} />
-                    <span className={`flex-1 text-left font-semibold ${isActive ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                    <span className={`flex-1 text-left font-semibold ${isActive ? 'text-teal-600 dark:text-teal-400' : 'text-gray-900 dark:text-gray-100'}`}>
                       {tag.name}
                     </span>
-                    {isActive && <Check size={22} className="text-orange-600 dark:text-orange-400" />}
+                    {isActive && <Check size={22} className="text-teal-600 dark:text-teal-400" />}
                   </button>
                 )
               })}

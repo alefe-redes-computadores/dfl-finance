@@ -1,3 +1,4 @@
+// src/app/(app)/cards/details/page.tsx
 'use client'
 
 import { useEffect, useState, useCallback, useRef, Suspense, useMemo } from 'react'
@@ -102,7 +103,7 @@ const getBrandLabel = (brand: string | null) => {
 const CardDetailSkeleton = () => (
   <div className="animate-pulse px-4 pt-4 space-y-4">
     <div className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-      <div className="mb-5 flex items-center gap-4">
+      <div className="mb-4 flex items-center gap-4">
         <div className="h-14 w-14 rounded-[18px] bg-gray-200 dark:bg-slate-700" />
         <div className="space-y-2">
           <div className="h-5 w-32 rounded bg-gray-200 dark:bg-slate-700" />
@@ -320,7 +321,7 @@ function CardDetailContent() {
   if (cardLoading) {
     return (
       <div className="mx-auto min-h-screen max-w-md bg-gray-50 pb-20 font-sans transition-colors duration-300 dark:bg-slate-900">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/90 p-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-gray-200/60 bg-[#f7f8fa]/94 px-4 py-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/94">
           <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
           <div className="h-5 w-32 animate-pulse rounded bg-gray-200 dark:bg-slate-700" />
           <div className="w-10" />
@@ -354,7 +355,7 @@ function CardDetailContent() {
   return (
     <div
       ref={containerRef}
-      className="mx-auto min-h-screen max-w-md bg-gray-50 pb-24 font-sans transition-colors duration-300 dark:bg-slate-900"
+      className="mx-auto min-h-screen max-w-md bg-[#f7f8fa] pb-24 font-sans transition-colors duration-300 dark:bg-slate-950"
     >
       {refreshing && (
         <div className="pointer-events-none fixed left-0 right-0 top-0 z-50 flex justify-center pt-6">
@@ -371,7 +372,7 @@ function CardDetailContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/90 p-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-gray-200/60 bg-[#f7f8fa]/94 px-4 py-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/94">
         <button
           onClick={() => {
             vibrate([5])
@@ -397,30 +398,30 @@ function CardDetailContent() {
         </button>
       </div>
 
-      <div className="animate-in space-y-4 px-4 pt-5 fade-in duration-300">
+      <div className="animate-in space-y-3 px-4 pt-4 fade-in duration-300">
         <div
-          className={`relative overflow-hidden rounded-[28px] border bg-white p-6 shadow-sm dark:bg-slate-800 ${
+          className={`relative overflow-hidden rounded-[22px] border bg-white p-4 shadow-sm dark:bg-slate-900 ${
             isNearLimit
               ? 'border-red-200 dark:border-red-800/70'
               : 'border-gray-100 dark:border-slate-700/50'
           }`}
         >
           <div
-            className={`absolute left-0 right-0 top-0 h-1.5 rounded-t-[28px] ${
+            className={`absolute left-0 right-0 top-0 h-1 rounded-t-[22px] ${
               isNearLimit ? 'bg-red-500' : limitPercent >= 70 ? 'bg-orange-500' : 'bg-teal-500'
             }`}
           />
 
-          <div className="mt-1 mb-5 flex items-center gap-4">
+          <div className="mt-1 mb-4 flex items-center gap-3">
             <div
-              className="flex h-14 w-14 items-center justify-center rounded-[18px] text-white shadow-sm"
+              className="flex h-11 w-11 items-center justify-center rounded-[15px] text-white shadow-sm"
               style={{ backgroundColor: card.color || '#f97316' }}
             >
               <CreditCard size={24} />
             </div>
 
             <div className="min-w-0">
-              <p className="truncate text-[18px] font-black leading-tight text-gray-800 dark:text-gray-200">
+              <p className="truncate text-[16px] font-semibold leading-tight text-gray-800 dark:text-gray-200">
                 {card.name}
               </p>
 
@@ -436,13 +437,13 @@ function CardDetailContent() {
             </div>
           </div>
 
-          <div className="mb-5">
+          <div className="mb-4">
             <div className="mb-3 flex items-end justify-between gap-4">
               <div>
                 <p className="mb-1 text-[12px] font-medium text-gray-500 dark:text-gray-400">
                   Fatura atual
                 </p>
-                <p className="leading-none text-[28px] font-black tracking-tight text-gray-900 dark:text-gray-100">
+                <p className="leading-none text-[26px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
                   {formatCurrency(totalFatura)}
                 </p>
               </div>
@@ -480,7 +481,7 @@ function CardDetailContent() {
           </div>
 
           <div
-            className={`mb-5 flex items-center justify-center gap-3 rounded-[18px] border px-3 py-3 text-[12px] ${
+            className={`mb-4 flex items-center justify-center gap-3 rounded-[16px] border px-3 py-2.5 text-[12px] ${
               limitColor.soft
             } ${isNearLimit ? limitColor.border : 'border-gray-100 dark:border-slate-700/50'}`}
           >
@@ -503,7 +504,7 @@ function CardDetailContent() {
                 vibrate([10])
                 setShowPayModal(true)
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] hover:bg-teal-700"
+              className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-teal-600 py-3.5 text-[14px] font-semibold text-white shadow-lg shadow-teal-600/30 transition-transform active:scale-[0.98] hover:bg-teal-700"
             >
               <Wallet size={18} />
               Pagar fatura
@@ -641,7 +642,7 @@ function CardDetailContent() {
               </button>
             </div>
 
-            <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-5 dark:border-slate-700/50 dark:bg-slate-700/40">
+            <div className="mb-4 rounded-[24px] border border-gray-100 bg-gray-50 p-5 dark:border-slate-700/50 dark:bg-slate-700/40">
               <div className="mb-3 flex items-center justify-between gap-4">
                 <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
                   Cartão

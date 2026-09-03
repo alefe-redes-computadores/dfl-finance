@@ -1,3 +1,4 @@
+// src/app/(app)/cards/new/page.tsx
 'use client'
 
 import { useState, Suspense, useMemo, useEffect } from 'react'
@@ -110,12 +111,12 @@ function NewCardContent() {
 
   if (editId && notFound && !cardLoading) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
+      <div className="flex flex-col h-[100dvh] bg-[#f7f8fa] dark:bg-slate-950 items-center justify-center px-4">
         <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
           <CreditCard size={32} className="text-red-500" />
         </div>
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Cartão não encontrado</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-4">
           O cartão que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
         </p>
         <button
@@ -130,7 +131,7 @@ function NewCardContent() {
 
   if (editId && cardLoading) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+      <div className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 transition-colors duration-300">
         <div className="px-4 pt-6">
           <Skeleton count={6} />
         </div>
@@ -140,7 +141,7 @@ function NewCardContent() {
 
   if (!initialized) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+      <div className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 transition-colors duration-300">
         <div className="px-4 pt-6">
           <Skeleton count={6} />
         </div>
@@ -197,7 +198,7 @@ function NewCardContent() {
       if (editId) {
         const result = await safeUpdate('credit_cards', editId, payload)
         if (!result?.success) throw new Error(result?.error || 'Erro ao atualizar cartão')
-        showToast('✅ Cartão atualizado!', 'success')
+        showToast('Cartão atualizado!', 'success')
       } else {
         const newId = crypto.randomUUID()
         const fullPayload = {
@@ -209,13 +210,13 @@ function NewCardContent() {
         }
         const result = await safeAdd('credit_cards', fullPayload)
         if (!result?.success) throw new Error(result?.error || 'Erro ao criar cartão')
-        showToast('✅ Cartão criado!', 'success')
+        showToast('Cartão criado!', 'success')
       }
 
       success()
       router.push('/cards')
     } catch (error: any) {
-      showToast(`❌ ${error?.message || 'Erro inesperado'}`, 'error')
+      showToast(`${error?.message || 'Erro inesperado'}`, 'error')
       errorHaptic()
     } finally {
       setSaving(false)
@@ -245,14 +246,14 @@ function NewCardContent() {
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 text-gray-900 dark:text-white pb-32 transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 text-gray-900 dark:text-white pb-32 transition-colors duration-300">
       <div
-        className="relative px-4 pt-6 pb-8 overflow-hidden"
+        className="relative px-4 pt-4 pb-6 overflow-hidden"
         style={{ background: `linear-gradient(180deg, ${color}, ${color}dd)` }}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_35%)]" />
         <div className="relative">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <button
               onClick={() => {
                 vibrate([5])
@@ -264,7 +265,7 @@ function NewCardContent() {
             </button>
           </div>
 
-          <div className="rounded-[30px] bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-5">
+          <div className="rounded-[24px] bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-5">
             <div className="flex items-start justify-between gap-4 mb-8">
               <div className="min-w-0 flex-1">
                 <p className="text-white/70 text-[12px] font-medium mb-2">
@@ -274,7 +275,7 @@ function NewCardContent() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Nubank, Inter"
-                  className="bg-transparent text-white text-[30px] leading-none font-light outline-none w-full placeholder:text-white/45"
+                  className="bg-transparent text-white text-[26px] leading-none font-semibold outline-none w-full placeholder:text-white/45"
                   autoFocus
                 />
               </div>
@@ -292,7 +293,7 @@ function NewCardContent() {
       </div>
 
       <div className="px-4 -mt-3 relative z-10 space-y-4">
-        <section className="bg-white dark:bg-slate-900 rounded-[28px] p-4 shadow-sm border border-gray-100 dark:border-slate-800">
+        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Dados principais
@@ -354,7 +355,7 @@ function NewCardContent() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-slate-900 rounded-[28px] p-4 shadow-sm border border-gray-100 dark:border-slate-800">
+        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Ciclo da fatura
@@ -392,7 +393,7 @@ function NewCardContent() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-slate-900 rounded-[28px] p-4 shadow-sm border border-gray-100 dark:border-slate-800">
+        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Financeiro
@@ -443,7 +444,7 @@ function NewCardContent() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-slate-900 rounded-[28px] p-4 shadow-sm border border-gray-100 dark:border-slate-800">
+        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Aparência

@@ -1,3 +1,4 @@
+// src/app/(app)/import-invoice/page.tsx
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
@@ -35,7 +36,7 @@ interface ExtractedTransaction {
 // 🔥 EXTRACTION SKELETON ATUALIZADO
 const ExtractionSkeleton = () => (
   <div className="space-y-4 animate-pulse">
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4">
+    <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4">
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-[18px] bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
           <Loader2 size={22} className="animate-spin text-teal-600 dark:text-teal-400" />
@@ -48,7 +49,7 @@ const ExtractionSkeleton = () => (
     </div>
 
     {[1, 2, 3].map((i) => (
-      <div key={i} className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2">
+      <div key={i} className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2">
         <div className="rounded-[18px] p-3">
           <div className="flex items-start justify-between mb-2">
             <div className="h-5 w-28 bg-gray-200 dark:bg-slate-700 rounded" />
@@ -335,9 +336,9 @@ export default function ImportInvoicePage() {
   // 🔥 LOADING STATE ATUALIZADO
   if (loading) {
     return (
-      <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
-        <div className="px-4 pt-4 pb-3 sticky top-0 z-10 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-800">
-          <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+      <div className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 font-sans pb-24 relative transition-colors duration-300">
+        <div className="px-4 pt-4 pb-3 sticky top-0 z-10 bg-[#f7f8fa]/92 dark:bg-slate-950/92 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-800">
+          <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
             <div className="flex items-center justify-between mb-3">
               <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
               <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
@@ -355,15 +356,15 @@ export default function ImportInvoicePage() {
   }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 font-sans pb-24 relative transition-colors duration-300">
+    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 font-sans pb-24 relative transition-colors duration-300">
       
       {/* 🔥 HEADER UNIFICADO */}
-      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+      <div className="sticky top-0 z-30 bg-[#f7f8fa]/92 dark:bg-slate-950/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
+        <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => router.back()}
-              className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
+              className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-950/40 flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
             >
               <ChevronLeft size={20} />
             </button>
@@ -388,10 +389,10 @@ export default function ImportInvoicePage() {
         {/* 🔥 STEP UPLOAD */}
         {step === 'upload' && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full rounded-[20px] border-2 border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/40 px-6 py-10 flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400 hover:border-teal-500/50 hover:bg-teal-50/40 dark:hover:bg-teal-900/10 transition-all active:scale-[0.98]"
+                className="w-full rounded-[20px] border-2 border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-950/40 px-6 py-10 flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400 hover:border-teal-500/50 hover:bg-teal-50/40 dark:hover:bg-teal-900/10 transition-all active:scale-[0.98]"
               >
                 <div className="w-14 h-14 rounded-[18px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center">
                   <FileUp size={28} className="text-teal-600 dark:text-teal-400" />
@@ -422,7 +423,7 @@ export default function ImportInvoicePage() {
         {step === 'preview' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             {/* File info */}
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-[18px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
                   <FileText size={22} className="text-teal-600 dark:text-teal-400" />
@@ -443,14 +444,14 @@ export default function ImportInvoicePage() {
             </div>
 
             {/* Configurações */}
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 overflow-hidden">
               {creditCards.length > 0 && (
                 <button
                   onClick={() => setShowCardModal(true)}
                   className="w-full rounded-[18px] px-3 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98]"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-900/50 flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-950/50 flex items-center justify-center shrink-0">
                       <CreditCard size={18} className="text-gray-500 dark:text-gray-400" />
                     </div>
                     <div className="min-w-0 text-left">
@@ -480,7 +481,7 @@ export default function ImportInvoicePage() {
 
               <div className="px-3 py-3 flex items-center justify-between gap-3">
                 <button onClick={() => setShowCatModal(true)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
-                  <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-900/50 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-950/50 flex items-center justify-center shrink-0">
                     <Tag size={18} className="text-gray-500 dark:text-gray-400" />
                   </div>
                   <div className="min-w-0">
@@ -505,7 +506,7 @@ export default function ImportInvoicePage() {
 
               <div className="px-3 py-3 flex items-center justify-between gap-3">
                 <button onClick={() => setShowAccModal(true)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
-                  <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-900/50 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-950/50 flex items-center justify-center shrink-0">
                     <Wallet size={18} className="text-gray-500 dark:text-gray-400" />
                   </div>
                   <div className="min-w-0">
@@ -532,7 +533,7 @@ export default function ImportInvoicePage() {
               {transactions.map((tx, index) => (
                 <div
                   key={index}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
+                  className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
                 >
                   <div className="rounded-[18px] p-3">
                     <div className="flex items-start justify-between gap-3 mb-2">
@@ -592,7 +593,7 @@ export default function ImportInvoicePage() {
             </button>
 
             {showDetails && (
-              <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="rounded-[18px] p-3 space-y-4">
                   <button
                     onClick={() => setShowTagModal(true)}
@@ -612,7 +613,7 @@ export default function ImportInvoicePage() {
                     <ChevronRight size={16} className="text-gray-300 dark:text-gray-500" />
                   </button>
 
-                  <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3">
+                  <div className="rounded-[16px] bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 px-4 py-3">
                     <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
                       Observações gerais
                     </label>
@@ -625,7 +626,7 @@ export default function ImportInvoicePage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3">
+                  <div className="flex items-center justify-between rounded-[16px] bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 px-4 py-3">
                     <div className="flex items-center gap-3">
                       <ArrowRightLeft size={18} className="text-gray-400 dark:text-gray-500" />
                       <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
@@ -641,7 +642,7 @@ export default function ImportInvoicePage() {
                   </div>
 
                   <div
-                    className="flex items-center justify-between rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 cursor-pointer"
+                    className="flex items-center justify-between rounded-[16px] bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 px-4 py-3 cursor-pointer"
                     onClick={() => setShowFinancingModal(true)}
                   >
                     <div className="flex items-center gap-3">
@@ -656,7 +657,7 @@ export default function ImportInvoicePage() {
                   </div>
 
                   <div
-                    className="flex items-center justify-between rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 cursor-pointer"
+                    className="flex items-center justify-between rounded-[16px] bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 px-4 py-3 cursor-pointer"
                     onClick={() => setShowLoanModal(true)}
                   >
                     <div className="flex items-center gap-3">
