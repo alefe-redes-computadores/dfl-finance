@@ -67,8 +67,8 @@ function SectionHeader({
   description?: string
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400">
+    <div className="flex items-start gap-2.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400">
         <Icon size={18} />
       </div>
 
@@ -118,7 +118,7 @@ function Card({
   return (
     <div
       className={cn(
-        'rounded-[22px] border border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-none',
+        'rounded-[18px] border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none',
         className
       )}
     >
@@ -205,7 +205,7 @@ function NewBudgetContent() {
             <div className="h-6 w-40 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse" />
             <div className="h-11 w-20 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
           </div>
-          <Card className="p-5">
+          <Card className="p-4">
             <Skeleton count={6} />
           </Card>
         </div>
@@ -241,7 +241,7 @@ function NewBudgetContent() {
     return (
       <div className="min-h-screen bg-[#f6f7f8] dark:bg-slate-950 px-4 pt-6">
         <div className="mx-auto max-w-md">
-          <Card className="p-5">
+          <Card className="p-4">
             <Skeleton count={6} />
           </Card>
         </div>
@@ -303,13 +303,12 @@ function NewBudgetContent() {
 
   return (
     <div className="min-h-screen bg-[#f6f7f8] pb-28 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto w-full max-w-md px-4 pt-4">
-        {/* HEADER - SEM BOTÃO REDUNDANTE */}
-        <div className="mb-4 flex items-start gap-3">
+      <div className="mx-auto w-full max-w-md px-4 pt-3">
+        <div className="mb-3 flex items-start gap-3">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-all active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-slate-200 bg-white text-slate-700 shadow-sm transition-all active:scale-[0.97] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           >
             <ArrowLeft size={18} />
           </button>
@@ -318,10 +317,10 @@ function NewBudgetContent() {
             <p className="text-[12px] font-extrabold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
               Orçamentos
             </p>
-            <h1 className="mt-1 text-[30px] font-black tracking-[-0.04em] text-slate-900 dark:text-slate-100">
+            <h1 className="mt-0.5 text-[27px] font-black tracking-[-0.04em] text-slate-900 dark:text-slate-100">
               {isEditing ? 'Editar orçamento' : 'Novo orçamento'}
             </h1>
-            <p className="mt-1 text-[14px] leading-5 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-[13px] leading-5 text-slate-500 dark:text-slate-400">
               {isEditing
                 ? 'Atualize os detalhes visuais e regras do orçamento.'
                 : 'Crie um orçamento com identidade visual clara e configuração completa.'}
@@ -329,8 +328,7 @@ function NewBudgetContent() {
           </div>
         </div>
 
-        {/* CARD DE RESUMO — VERSÃO COMPACTA COM FUNDO DIFERENCIADO */}
-        <Card className="mb-4 overflow-hidden border-teal-200/60 dark:border-teal-900/40">
+        <Card className="mb-3 overflow-hidden border-teal-200/60 dark:border-teal-900/40">
           <div className="bg-gradient-to-br from-teal-50/80 via-white/60 to-white/40 px-4 py-3 dark:from-teal-950/30 dark:via-slate-900/80 dark:to-slate-900">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
@@ -387,7 +385,7 @@ function NewBudgetContent() {
           }}
           className="space-y-4"
         >
-          <Card className="p-5">
+          <Card className="p-4">
             <div className="space-y-5">
               <SectionHeader
                 icon={WalletCards}
@@ -401,7 +399,7 @@ function NewBudgetContent() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Alimentação, Moradia..."
-                  className="h-14 w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-[15px] font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400"
+                  className="h-12 w-full rounded-[16px] border border-slate-200 bg-slate-50 px-4 text-[15px] font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400"
                 />
               </FieldShell>
 
@@ -412,7 +410,7 @@ function NewBudgetContent() {
                     lightTap()
                     setShowCatModal(true)
                   }}
-                  className="flex h-14 w-full items-center justify-between rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-left transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-950"
+                  className="flex h-12 w-full items-center justify-between rounded-[16px] border border-slate-200 bg-slate-50 px-4 text-left transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-950"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[15px] font-semibold text-slate-900 dark:text-slate-100">
@@ -427,7 +425,7 @@ function NewBudgetContent() {
                 label="Valor do orçamento"
                 helper="Informe o valor total previsto para este orçamento."
               >
-                <div className="flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 transition focus-within:border-teal-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950">
+                <div className="flex h-12 items-center gap-3 rounded-[16px] border border-slate-200 bg-slate-50 px-4 transition focus-within:border-teal-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950">
                   <span className="text-[15px] font-black text-slate-400 dark:text-slate-500">R$</span>
                   <MoneyInput
                     value={amountNum}
@@ -442,7 +440,7 @@ function NewBudgetContent() {
             </div>
           </Card>
 
-          <Card className="p-5">
+          <Card className="p-4">
             <div className="space-y-5">
               <SectionHeader
                 icon={Palette}
@@ -485,7 +483,7 @@ function NewBudgetContent() {
                     lightTap()
                     setShowIconModal(true)
                   }}
-                  className="flex h-14 w-full items-center justify-between rounded-[20px] border border-slate-200 bg-slate-50 px-4 text-left transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-950"
+                  className="flex h-12 w-full items-center justify-between rounded-[16px] border border-slate-200 bg-slate-50 px-4 text-left transition active:scale-[0.98] dark:border-slate-800 dark:bg-slate-950"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div
@@ -506,7 +504,7 @@ function NewBudgetContent() {
             </div>
           </Card>
 
-          <Card className="p-5">
+          <Card className="p-4">
             <div className="space-y-5">
               <SectionHeader
                 icon={CalendarRange}
@@ -515,7 +513,7 @@ function NewBudgetContent() {
               />
 
               <FieldShell label="Período" helper="Como esse orçamento será renovado.">
-                <div className="grid grid-cols-3 gap-2 rounded-[24px] bg-slate-100 p-1.5 dark:bg-slate-800">
+                <div className="grid grid-cols-3 gap-1.5 rounded-[18px] bg-slate-100 p-1 dark:bg-slate-800">
                   {[
                     { key: 'monthly' as const, label: 'Mensal' },
                     { key: 'biweekly' as const, label: '15 dias' },
@@ -529,7 +527,7 @@ function NewBudgetContent() {
                         setPeriod(p.key)
                       }}
                       className={cn(
-                        'h-11 rounded-[18px] px-2 text-[13px] font-black tracking-[-0.01em] transition-all active:scale-[0.98]',
+                        'h-10 rounded-[14px] px-2 text-[12px] font-black tracking-[-0.01em] transition-all active:scale-[0.98]',
                         period === p.key
                           ? 'bg-white text-teal-700 shadow-sm dark:bg-slate-900 dark:text-teal-400'
                           : 'text-slate-500 dark:text-slate-400'
@@ -545,7 +543,7 @@ function NewBudgetContent() {
                 label="Acumular saldo"
                 helper="Quando ativo, o valor não utilizado continua para o próximo ciclo."
               >
-                <div className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3.5 dark:border-slate-800 dark:bg-slate-950">
+                <div className="flex items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex min-w-0 items-center gap-3 pr-4">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800">
                       <Sparkles size={16} />
@@ -587,12 +585,12 @@ function NewBudgetContent() {
         </form>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
         <div className="mx-auto flex w-full max-w-md items-center gap-3">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex h-14 flex-1 items-center justify-center rounded-[22px] border border-slate-200 bg-white text-[14px] font-bold text-slate-700 transition-all active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            className="flex h-12 flex-1 items-center justify-center rounded-[17px] border border-slate-200 bg-white text-[14px] font-bold text-slate-700 transition-all active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           >
             Cancelar
           </button>
@@ -601,7 +599,7 @@ function NewBudgetContent() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex h-14 flex-[1.3] items-center justify-center gap-2 rounded-[22px] bg-teal-600 px-5 text-[14px] font-black text-white shadow-[0_12px_30px_rgba(20,184,166,0.28)] transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-12 flex-[1.3] items-center justify-center gap-2 rounded-[17px] bg-teal-600 px-5 text-[14px] font-black text-white shadow-[0_12px_30px_rgba(20,184,166,0.28)] transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
             {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar orçamento'}
@@ -617,7 +615,7 @@ function NewBudgetContent() {
             onClick={() => setShowCatModal(false)}
           >
             <div
-              className="h-[68vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white dark:bg-slate-950"
+              className="h-[68vh] w-full max-w-lg overflow-y-auto rounded-t-[26px] bg-white dark:bg-slate-950"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 pb-4 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
@@ -650,13 +648,13 @@ function NewBudgetContent() {
                     setShowCatModal(false)
                   }}
                   className={cn(
-                    'flex w-full items-center gap-4 rounded-[24px] border p-4 text-left transition-all active:scale-[0.98]',
+                    'flex w-full items-center gap-3 rounded-[18px] border p-3.5 text-left transition-all active:scale-[0.98]',
                     !categoryId
                       ? 'border-teal-200 bg-teal-50 dark:border-teal-900/60 dark:bg-teal-500/10'
                       : 'border-transparent bg-slate-50 dark:bg-slate-900'
                   )}
                 >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] border border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
                     <Icons.Tag size={18} />
                   </div>
 
@@ -695,14 +693,14 @@ function NewBudgetContent() {
                         setShowCatModal(false)
                       }}
                       className={cn(
-                        'flex w-full items-center gap-4 rounded-[24px] border p-4 text-left transition-all active:scale-[0.98]',
+                        'flex w-full items-center gap-3 rounded-[18px] border p-3.5 text-left transition-all active:scale-[0.98]',
                         isActive
                           ? 'border-teal-200 bg-teal-50 dark:border-teal-900/60 dark:bg-teal-500/10'
                           : 'border-transparent bg-slate-50 dark:bg-slate-900'
                       )}
                     >
                       <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px]"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px]"
                         style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
                       >
                         <CatIconComp size={18} />

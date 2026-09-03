@@ -112,7 +112,7 @@ function BudgetsContent() {
   return (
     <div
       ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
+      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 pb-28 font-sans px-4 pt-2 transition-colors duration-300"
     >
       {isDataLoading && (
         <div className="fixed top-20 right-4 z-50">
@@ -120,69 +120,69 @@ function BudgetsContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <button
-                onClick={() => router.push('/more')}
-                className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.98] shrink-0"
-              >
-                <ChevronLeft size={20} />
-              </button>
-
-              <div className="min-w-0">
-                <h2 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                  Orçamentos
-                </h2>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  Controle por categoria
-                </p>
-              </div>
-            </div>
-
+      <div className="sticky top-0 z-30 -mx-4 bg-[#f8f9fa]/94 px-4 pb-3 backdrop-blur-xl dark:bg-slate-950/94">
+        <div className="flex items-center justify-between gap-3 py-2">
+          <div className="flex min-w-0 items-center gap-2.5">
             <button
-              onClick={() => router.push('/budgets/new')}
-              className="h-11 w-11 rounded-[18px] bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 hover:bg-teal-800 transition-all active:scale-[0.98] shrink-0"
+              onClick={() => router.push('/more')}
+              aria-label="Voltar"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-gray-200/70 bg-white text-gray-500 shadow-sm transition-transform active:scale-[0.97] dark:border-slate-800 dark:bg-slate-900 dark:text-gray-300"
             >
-              <Plus size={20} />
+              <ChevronLeft size={20} />
             </button>
-          </div>
 
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="min-w-0 flex-1">
-              <ContextToggle />
+            <div className="min-w-0">
+              <h2 className="text-[22px] font-bold tracking-[-0.025em] text-gray-900 dark:text-gray-100">
+                Orçamentos
+              </h2>
+              <p className="mt-0.5 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                Limites para manter os gastos sob controle
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 px-2 py-1">
-            <button
-              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-              className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
-              ‹
-            </button>
+          <button
+            onClick={() => router.push('/budgets/new')}
+            aria-label="Novo orçamento"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-600 text-white shadow-sm shadow-teal-600/20 transition-transform active:scale-[0.97]"
+          >
+            <Plus size={19} />
+          </button>
+        </div>
 
-            <span className="flex-1 text-center text-[13px] font-semibold text-gray-700 dark:text-gray-300 capitalize">
-              {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-            </span>
+        <div className="mb-2.5">
+          <ContextToggle />
+        </div>
 
-            <button
-              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-              className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
-              ›
-            </button>
-          </div>
+        <div className="flex items-center gap-1 rounded-[16px] border border-gray-200/70 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <button
+            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+            aria-label="Mês anterior"
+            className="flex h-8 w-8 items-center justify-center rounded-[11px] text-gray-400 transition-colors active:scale-[0.97] hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+          >
+            ‹
+          </button>
+
+          <span className="flex-1 text-center text-[12px] font-bold capitalize text-gray-700 dark:text-gray-300">
+            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+          </span>
+
+          <button
+            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+            aria-label="Próximo mês"
+            className="flex h-8 w-8 items-center justify-center rounded-[11px] text-gray-400 transition-colors active:scale-[0.97] hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+          >
+            ›
+          </button>
         </div>
       </div>
 
-      <div className="pt-3">
+      <div className="pt-2.5">
         {isDataLoading ? (
           <BudgetsSkeleton />
         ) : budgetsWithSpent.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
-            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-full border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-300">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <Tag size={28} className="text-gray-400 dark:text-gray-500" />
             </div>
             <h3 className="font-semibold text-[16px] text-gray-800 dark:text-gray-100 mb-1">
@@ -193,92 +193,89 @@ function BudgetsContent() {
             </p>
             <button
               onClick={() => router.push('/budgets/new')}
-              className="bg-teal-700 text-white px-6 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-800 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
+              className="rounded-[16px] bg-teal-600 px-5 py-3 text-[13px] font-bold text-white shadow-sm shadow-teal-600/20 transition-transform active:scale-[0.98]"
             >
               Criar orçamento
             </button>
           </div>
         ) : (
-          <div className="space-y-2.5 animate-in fade-in duration-300">
+          <div className="space-y-2 animate-in fade-in duration-300">
             {budgetsWithSpent.map((budget: any) => {
               const IconComp = getDynamicIcon(budget.icon || 'tag')
               const isWarning = budget.percent >= 80 && budget.remaining >= 0
               const isOver = budget.remaining < 0
 
               return (
-                // ✅ CARD INTEIRO CLICÁVEL → ABRE DETALHES
                 <div
                   key={budget.id}
                   onClick={(e) => goToDetails(budget.id, e)}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer transition-transform active:scale-[0.98] hover:shadow-md"
+                  className="cursor-pointer rounded-[20px] border border-gray-200/70 bg-white p-4 shadow-sm transition-transform active:scale-[0.985] dark:border-slate-800 dark:bg-slate-900"
                 >
-                  <div className="rounded-[18px] p-3">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div
-                          className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: `${budget.color}20`, color: budget.color }}
-                        >
-                          <IconComp size={18} />
-                        </div>
-
-                        <div className="min-w-0">
-                          <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {budget.name}
-                          </p>
-                          <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
-                            {budget.categories?.name || 'Geral'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-                          {formatCurrency(budget.spent)}
-                        </p>
-                        <p className="text-[12px] text-gray-400 dark:text-gray-500">
-                          de {formatCurrency(budget.availableAmount)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden mb-2">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${
-                          isOver ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
-                        }`}
-                        style={{ width: `${budget.progressPercent}%` }}
-                      />
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px]"
+                        style={{ backgroundColor: `${budget.color}20`, color: budget.color }}
+                      >
+                        <IconComp size={18} />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                          {budget.name}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                          {budget.categories?.name || 'Geral'}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className={`text-[12px] font-medium ${
-                          isOver
-                            ? 'text-red-500'
-                            : isWarning
-                            ? 'text-orange-500'
-                            : 'text-gray-500 dark:text-gray-400'
-                        }`}
-                      >
-                        {isOver
-                          ? `Estourado ${formatCurrency(Math.abs(budget.remaining))}`
-                          : `Restam ${formatCurrency(budget.remaining)}`}
+                    <div className="shrink-0 text-right">
+                      <p className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                        {formatCurrency(budget.spent)}
+                      </p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                        de {formatCurrency(budget.availableAmount)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mb-2.5 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        isOver ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
+                      }`}
+                      style={{ width: `${budget.progressPercent}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className={`text-[12px] font-semibold ${
+                        isOver
+                          ? 'text-red-500'
+                          : isWarning
+                          ? 'text-orange-500'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {isOver
+                        ? `Estourado ${formatCurrency(Math.abs(budget.remaining))}`
+                        : `Restam ${formatCurrency(budget.remaining)}`}
+                    </span>
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500 dark:bg-slate-800 dark:text-gray-400">
+                        {getBudgetPeriodName(budget.period)}
                       </span>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:bg-slate-800 dark:text-gray-400">
-                          {getBudgetPeriodName(budget.period)}
-                        </span>
-
-                        <button
-                          onClick={(e) => goToEdit(budget.id, e)}
-                          className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-teal-600 dark:hover:text-teal-400 transition-colors active:scale-[0.98]"
-                          aria-label="Editar orçamento"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={(e) => goToEdit(budget.id, e)}
+                        aria-label="Editar orçamento"
+                        className="flex h-8 w-8 items-center justify-center rounded-[10px] text-gray-400 transition-colors active:scale-[0.97] hover:bg-gray-50 hover:text-teal-600 dark:hover:bg-slate-800 dark:hover:text-teal-400"
+                      >
+                        <Edit2 size={15} />
+                      </button>
                     </div>
                   </div>
                 </div>

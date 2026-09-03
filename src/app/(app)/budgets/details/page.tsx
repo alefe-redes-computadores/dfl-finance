@@ -49,7 +49,7 @@ function MetricCard({ label, value, color = 'gray' }: { label: string; value: st
   }
 
   return (
-    <div className={`rounded-[20px] border p-3.5 ${colorMap[color]}`}>
+    <div className={`rounded-[16px] border px-3 py-3 ${colorMap[color]}`}>
       <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</p>
       <p className="text-[15px] font-bold">{value}</p>
     </div>
@@ -385,43 +385,41 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-4 bg-[#f8f9fa]/92 dark:bg-slate-950/92 backdrop-blur-xl">
-        <div className="flex items-center justify-between mb-4">
+      <div className="sticky top-0 z-20 -mx-4 bg-[#f8f9fa]/94 px-4 pb-3 pt-2 backdrop-blur-xl dark:bg-slate-950/94">
+        <div className="mb-3 flex items-center justify-between">
           <button
             onClick={() => {
               vibrate([5])
               router.push('/budgets')
             }}
-            className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-gray-800 dark:text-gray-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            className="h-10 w-10 rounded-[14px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-gray-800 dark:text-gray-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
           >
             <ArrowLeft size={22} />
           </button>
 
-          <div className="px-4 text-center min-w-0">
+          <div className="min-w-0 px-3 text-center">
             <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.16em]">
               Detalhes do orçamento
             </p>
-            <h1 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 truncate">
+            <h1 className="truncate text-[17px] font-bold tracking-[-0.015em] text-gray-900 dark:text-gray-100">
               {budgetData.name}
             </h1>
           </div>
 
           <div className="flex items-center gap-1">
-            {/* ✅ BOTÃO EXCLUIR */}
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-red-500 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+              className="h-10 w-10 rounded-[14px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-red-500 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
             >
               <Trash2 size={18} />
             </button>
 
-            {/* ✅ BOTÃO EDITAR */}
             <button
               onClick={() => {
                 vibrate([5])
                 router.push(`/budgets/new?edit=${budgetData.id}`)
               }}
-              className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+              className="h-10 w-10 rounded-[14px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
             >
               <Edit2 size={18} />
             </button>
@@ -429,7 +427,7 @@ function BudgetDetailContent() {
         </div>
 
         <div className="flex items-center justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-1.5 shadow-sm">
+          <div className="inline-flex items-center gap-1 rounded-[16px] border border-gray-100 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <button
               onClick={() => {
                 vibrate([5])
@@ -441,7 +439,7 @@ function BudgetDetailContent() {
                   )
                 )
               }}
-              className="w-9 h-9 rounded-full bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center active:scale-95 transition-transform"
+              className="flex h-8 w-8 items-center justify-center rounded-[11px] bg-gray-50 text-gray-500 transition-transform active:scale-95 dark:bg-slate-800 dark:text-gray-400"
             >
               <ChevronLeft size={16} />
             </button>
@@ -461,7 +459,7 @@ function BudgetDetailContent() {
                   )
                 )
               }}
-              className="w-9 h-9 rounded-full bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 flex items-center justify-center active:scale-95 transition-transform"
+              className="flex h-8 w-8 items-center justify-center rounded-[11px] bg-gray-50 text-gray-500 transition-transform active:scale-95 dark:bg-slate-800 dark:text-gray-400"
             >
               <ChevronRight size={16} />
             </button>
@@ -469,25 +467,25 @@ function BudgetDetailContent() {
         </div>
       </div>
 
-      <div className="mb-4 flex justify-center">
+      <div className="mb-3 flex justify-center">
         <StatusBadge
           isOverBudget={isOverBudget}
           isWarning={isWarning}
         />
       </div>
 
-      <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] mb-4 overflow-hidden">
-        <div className="p-5 pb-4">
-          <div className="flex items-center gap-4 mb-5">
+      <section className="mb-3 overflow-hidden rounded-[22px] border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="p-4">
+          <div className="mb-4 flex items-center gap-3">
             <div
-              className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm"
+              className="flex h-11 w-11 items-center justify-center rounded-[14px]"
               style={{ backgroundColor: `${budgetData.color}18`, color: budgetData.color }}
             >
-              <IconComp size={24} />
+              <IconComp size={20} />
             </div>
 
             <div className="min-w-0">
-              <h2 className="text-[19px] font-bold text-gray-900 dark:text-gray-100 leading-tight">
+              <h2 className="text-[18px] font-bold leading-tight tracking-[-0.02em] text-gray-900 dark:text-gray-100">
                 {budgetData.name}
               </h2>
               <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">
@@ -499,7 +497,7 @@ function BudgetDetailContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="mb-4 grid grid-cols-3 gap-2">
             <MetricCard label="Orçado" value={formatCurrency(availableAmount)} color="gray" />
             <MetricCard label="Gasto" value={formatCurrency(spent)} color="red" />
             <MetricCard
@@ -510,7 +508,7 @@ function BudgetDetailContent() {
           </div>
 
           <div className="mb-2">
-            <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
               <div
                 className={`h-full rounded-full transition-all duration-1000 ease-out ${
                   isOverBudget ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-teal-500'
@@ -535,7 +533,7 @@ function BudgetDetailContent() {
 
       {projection && (
         <div
-          className={`rounded-[24px] p-4 mb-4 border flex items-start gap-3 ${
+          className={`mb-3 flex items-start gap-3 rounded-[20px] border px-4 py-3.5 ${
             isOverBudget
               ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400'
               : isWarning || (daysLeft !== null && daysLeft <= 7)
@@ -555,9 +553,9 @@ function BudgetDetailContent() {
         </div>
       )}
 
-      <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-800">
-          <h3 className="text-[16px] font-bold text-gray-900 dark:text-gray-100">
+      <section className="overflow-hidden rounded-[22px] border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="border-b border-gray-100 px-4 pb-3 pt-4 dark:border-slate-800">
+          <h3 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
             Transações deste orçamento
           </h3>
           <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">
@@ -594,12 +592,12 @@ function BudgetDetailContent() {
                     vibrate([5])
                     router.push(`/transactions/details?id=${tx.id}`)
                   }}
-                  className={`w-full text-left px-5 py-4 flex items-center gap-3 active:scale-[0.99] transition-transform ${
+                  className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition-transform active:scale-[0.99] ${
                     isPending ? 'bg-amber-50/60 dark:bg-amber-900/10' : 'bg-transparent'
                   }`}
                 >
                   <div
-                    className={`w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0 ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] ${
                       isPending
                         ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500'
                         : 'bg-red-50 dark:bg-red-900/30 text-red-500'
