@@ -159,6 +159,104 @@ export async function safeUpdate(
   }
 }
 
+export async function safeReorderCategories(
+  firstId: string,
+  secondId: string,
+  firstOrder: number,
+  secondOrder: number,
+  userId: string
+): Promise<SafeResult> {
+  try {
+    const [first, second] = await Promise.all([
+      db.categories.get(firstId),
+      db.categories.get(secondId),
+    ])
+
+    if (!first || !second) {
+      return logOperation('update', 'categories', firstId, {
+        success: false,
+        error: 'Não foi possível localizar as categorias para reordenar.',
+        operation: 'update' as const,
+        table: 'categories',
+        id: firstId,
+      })
+    }
+
+    if (first.user_id !== userId || second.user_id !== userId) {
+      return logOperation('update', 'categories', firstId, {
+        success: false,
+        error: 'Usuário não autorizado a reordenar estas categorias.',
+        operation: 'update' as const,
+        table: 'categories',
+        id: firstId,
+      })
+    }
+
+    if (first.context !== second.context || first.type !== second.type) {
+      return logOperation('update', 'categories', firstId, {
+        success: false,
+        error: 'Só é possível reordenar categorias do mesmo contexto e tipo.',
+        operation: 'update' as const,
+        table: 'categories',
+        id: firstId,
+      })
+    }
+
+    const now = new Date().toISOString()
+
+    const firstRecord = {
+      ...first,
+      order_index: secondOrder,
+      updated_at: now,
+      sync_status: 'pending',
+    }
+
+    const secondRecord = {
+      ...second,
+      order_index: firstOrder,
+      updated_at: now,
+      sync_status: 'pending',
+    }
+
+    await db.transaction('rw', db.categories, db.syncQueue, async () => {
+      await db.categories.put(firstRecord)
+      await db.categories.put(secondRecord)
+
+      await addToSyncQueue(
+        userId,
+        'categories',
+        'update',
+        firstId,
+        firstRecord
+      )
+
+      await addToSyncQueue(
+        userId,
+        'categories',
+        'update',
+        secondId,
+        secondRecord
+      )
+    })
+
+    return logOperation('update', 'categories', firstId, {
+      success: true,
+      operation: 'update' as const,
+      table: 'categories',
+      id: firstId,
+      affected: 2,
+    })
+  } catch (error: any) {
+    return logOperation('update', 'categories', firstId, {
+      success: false,
+      error: error?.message || 'Erro ao reordenar categorias',
+      operation: 'update' as const,
+      table: 'categories',
+      id: firstId,
+    })
+  }
+}
+
 export async function safeDelete(
   table: TableName,
   id: string,
@@ -185,6 +283,50 @@ export async function safeDelete(
         table,
         id,
       })
+    }
+
+    if (table === 'categories') {
+      if (existing.is_default) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Categorias padrão não podem ser excluídas.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+
+      const transactionsCount = await db.transactions
+        .where('category_id')
+        .equals(id)
+        .and((tx: any) => tx.user_id === userId)
+        .count()
+
+      if (transactionsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta categoria possui movimentações e não pode ser excluída. Preserve o histórico financeiro.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+
+      const budgetsCount = await db.budgets
+        .where('category_id')
+        .equals(id)
+        .and((budget: any) => budget.user_id === userId)
+        .count()
+
+      if (budgetsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta categoria está vinculada a um orçamento e não pode ser excluída.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
     }
 
     if (table === 'accounts') {

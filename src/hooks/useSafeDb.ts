@@ -1,8 +1,9 @@
+// src/hooks/useSafeDb.ts
 'use client'
 
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { safeAdd, safeUpdate, safeDelete } from '@/lib/safeDb'
+import { safeAdd, safeUpdate, safeDelete, safeReorderCategories } from '@/lib/safeDb'
 
 type TableName = 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications' | 'chat_history' | 'chat_sessions'
 
@@ -66,6 +67,51 @@ export function useSafeDb() {
     }
   }, [user])
 
+  const safeReorderCategoriesWrapper = useCallback(async (
+    firstId: string,
+    secondId: string,
+    firstOrder: number,
+    secondOrder: number
+  ) => {
+    if (!user?.id) {
+      return {
+        success: false,
+        error: 'Usuário não autenticado'
+      }
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const result = await safeReorderCategories(
+        firstId,
+        secondId,
+        firstOrder,
+        secondOrder,
+        user.id
+      )
+
+      if (!result.success) {
+        setError(
+          result.error ||
+          'Erro ao reordenar categorias'
+        )
+      }
+
+      return result
+    } catch (err: any) {
+      setError(err.message)
+
+      return {
+        success: false,
+        error: err.message
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
   const safeDeleteWrapper = useCallback(async (
     table: TableName,
     id: string
@@ -97,6 +143,7 @@ export function useSafeDb() {
     safeAdd: safeAddWrapper,
     safeUpdate: safeUpdateWrapper,
     safeDelete: safeDeleteWrapper,
+    safeReorderCategories: safeReorderCategoriesWrapper,
     loading,
     error
   }

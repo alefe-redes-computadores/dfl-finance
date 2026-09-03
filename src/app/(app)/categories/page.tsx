@@ -21,7 +21,7 @@ export default function CategoriesPage() {
   const { context, appMode } = useContext_() 
   const { showToast } = useToast()
   
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  const { safeDelete, safeUpdate, safeAdd, safeReorderCategories } = useSafeDb()
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
@@ -36,6 +36,7 @@ export default function CategoriesPage() {
   const [icon, setIcon] = useState('Tag')
   const [color, setColor] = useState('#16a34a')
   const [saving, setSaving] = useState(false)
+  const [reorderingId, setReorderingId] = useState<string | null>(null)
 
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
@@ -77,16 +78,27 @@ export default function CategoriesPage() {
   }
 
   async function handleSave() {
-    if (!name || !user) return
-    
-    const cleanedName = name.trim().toLowerCase()
+    if (!user) return
+
+    const trimmedName = name.trim()
+
+    if (!trimmedName) {
+      showToast(
+        'Informe um nome para a categoria.',
+        'warning'
+      )
+      hapticError()
+      return
+    }
+
+    const cleanedName = trimmedName.toLowerCase()
     const exists = (allLocalCategories || []).find((c: any) => 
       (c.name || '').trim().toLowerCase() === cleanedName && 
       c.id !== editingCategory?.id 
     )
 
     if (exists) {
-      showToast('⚠️ Já existe uma categoria com este nome!', 'warning')
+      showToast('Já existe uma categoria com este nome.', 'warning')
       hapticError()
       return
     }
@@ -96,7 +108,7 @@ export default function CategoriesPage() {
     try {
       if (editingCategory) {
         const updatePayload = {
-          name: name.trim(),
+          name: trimmedName,
           icon: normalizeIconName(icon) || 'Tag',
           color,
           updated_at: new Date().toISOString()
@@ -105,7 +117,7 @@ export default function CategoriesPage() {
         const result = await safeUpdate('categories', editingCategory.id, updatePayload)
         if (!result.success) throw new Error(result.error)
         
-        showToast('✅ Categoria atualizada!', 'success')
+        showToast('Categoria atualizada.', 'success')
       } else {
         const id = crypto.randomUUID()
         const newOrderIndex = categories.length > 0 
@@ -115,7 +127,7 @@ export default function CategoriesPage() {
         const fullPayload = {
           id,
           user_id: user.id,
-          name: name.trim(),
+          name: trimmedName,
           icon: normalizeIconName(icon) || 'Tag',
           color,
           type: tab,
@@ -130,7 +142,7 @@ export default function CategoriesPage() {
         const result = await safeAdd('categories', fullPayload)
         if (!result.success) throw new Error(result.error)
         
-        showToast('✅ Categoria criada!', 'success')
+        showToast('Categoria criada.', 'success')
       }
 
       hapticSuccess()
@@ -140,7 +152,7 @@ export default function CategoriesPage() {
       await reloadCategories()
     } catch (err: any) {
       console.error("Erro ao salvar:", err)
-      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
+      showToast(`Erro ao salvar: ${err.message}`, 'error')
       hapticError()
     } finally {
       setSaving(false)
@@ -156,44 +168,86 @@ export default function CategoriesPage() {
       const result = await safeDelete('categories', id)
       if (!result.success) throw new Error(result.error)
       
-      showToast('✅ Categoria excluída!', 'success')
+      showToast('Categoria excluída.', 'success')
       hapticSuccess()
       await reloadCategories()
     } catch (err: any) {
-      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
       hapticError()
     }
   }
 
   const handleMove = async (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return
-    if (direction === 'down' && index === categories.length - 1) return
+    if (reorderingId) return
 
-    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    if (
+      direction === 'up' &&
+      index === 0
+    ) return
+
+    if (
+      direction === 'down' &&
+      index === categories.length - 1
+    ) return
+
+    const swapIndex =
+      direction === 'up'
+        ? index - 1
+        : index + 1
+
     const itemA = categories[index]
     const itemB = categories[swapIndex]
 
-    const orderA = itemA.order_index ?? index
-    const orderB = itemB.order_index ?? swapIndex
+    const orderA =
+      itemA.order_index ?? index
+
+    const orderB =
+      itemB.order_index ?? swapIndex
 
     vibrate([10])
+    setReorderingId(itemA.id)
 
     try {
-      await safeUpdate('categories', itemA.id, { order_index: orderB, updated_at: new Date().toISOString() })
-      await safeUpdate('categories', itemB.id, { order_index: orderA, updated_at: new Date().toISOString() })
+      const result =
+        await safeReorderCategories(
+          itemA.id,
+          itemB.id,
+          orderA,
+          orderB
+        )
+
+      if (!result.success) {
+        throw new Error(
+          result.error ||
+          'Erro ao reordenar categorias'
+        )
+      }
+
       await reloadCategories()
-    } catch (err) {
-      console.error("Erro ao reordenar:", err)
-      showToast('❌ Erro ao reordenar', 'error')
+    } catch (err: any) {
+      console.error(
+        'Erro ao reordenar:',
+        err
+      )
+
+      showToast(
+        err?.message ||
+        'Erro ao reordenar categorias.',
+        'error'
+      )
+
+      hapticError()
+    } finally {
+      setReorderingId(null)
     }
   }
 
   const FormIconComp = getDynamicIcon(icon)
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300">
+    <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 pb-28 font-sans px-4 pt-4 transition-colors duration-300">
       
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER */}
       <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm px-4 py-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -222,6 +276,11 @@ export default function CategoriesPage() {
                   setShowForm(false)
                   vibrate([10])
                 }}
+                aria-label={
+                  isReordering
+                    ? 'Encerrar reordenação'
+                    : 'Reordenar categorias'
+                }
                 className={`h-10 w-10 rounded-[16px] border transition-all active:scale-[0.98] ${
                   isReordering
                     ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/40 text-orange-600'
@@ -234,6 +293,7 @@ export default function CategoriesPage() {
 
             <button
               onClick={() => openNew()}
+              aria-label="Nova categoria"
               className="h-10 w-10 bg-teal-600 rounded-[16px] flex items-center justify-center transition-transform active:scale-[0.98] shadow-lg shadow-teal-600/20 hover:bg-teal-700"
             >
               <Plus size={20} className="text-white" />
@@ -267,7 +327,7 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      {/* 🔥 FORMULÁRIO */}
+      {/* FORMULÁRIO */}
       {showForm && (
         <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4 animate-in fade-in slide-in-from-top-4 duration-200">
           <div className="flex justify-between items-center mb-4">
@@ -333,7 +393,7 @@ export default function CategoriesPage() {
 
           <button
             onClick={handleSave}
-            disabled={saving || !name}
+            disabled={saving || !name.trim()}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-[20px] py-3.5 text-[14px] font-bold disabled:opacity-50 transition-all active:scale-[0.98] shadow-lg shadow-teal-600/20"
           >
             {saving ? 'Salvando...' : 'Salvar categoria'}
@@ -341,7 +401,7 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      {/* 🔥 LISTA DE CATEGORIAS */}
+      {/* LISTA DE CATEGORIAS */}
       {catLoading && categories.length === 0 ? (
         <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm py-10 text-center text-gray-500 text-sm font-medium animate-pulse">
           Carregando categorias...
@@ -366,7 +426,7 @@ export default function CategoriesPage() {
             return (
               <div
                 key={cat.id}
-                className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 transition-all"
+                className="bg-white dark:bg-slate-900 rounded-[20px] border border-gray-200/70 dark:border-slate-800 shadow-sm p-1.5 transition-all"
               >
                 <div className="rounded-[18px] p-3 flex items-center gap-3">
                   <div
@@ -387,14 +447,16 @@ export default function CategoriesPage() {
                       <>
                         <button
                           onClick={() => handleMove(index, 'up')}
-                          disabled={index === 0}
+                          aria-label={`Mover ${cat.name} para cima`}
+                          disabled={index === 0 || Boolean(reorderingId)}
                           className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-30 active:scale-[0.98]"
                         >
                           <ArrowUp size={16} />
                         </button>
                         <button
                           onClick={() => handleMove(index, 'down')}
-                          disabled={index === categories.length - 1}
+                          aria-label={`Mover ${cat.name} para baixo`}
+                          disabled={index === categories.length - 1 || Boolean(reorderingId)}
                           className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-30 active:scale-[0.98]"
                         >
                           <ArrowDown size={16} />
@@ -404,6 +466,7 @@ export default function CategoriesPage() {
                       <>
                         <button
                           onClick={() => openEdit(cat)}
+                          aria-label={`Editar ${cat.name}`}
                           className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors active:scale-[0.98]"
                         >
                           <Edit3 size={16} />
@@ -412,6 +475,7 @@ export default function CategoriesPage() {
                         {!cat.is_default && (
                           <button
                             onClick={(e) => handleDelete(cat.id, e)}
+                            aria-label={`Excluir ${cat.name}`}
                             className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors active:scale-[0.98]"
                           >
                             <Trash2 size={16} />
