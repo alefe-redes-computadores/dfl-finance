@@ -20,8 +20,6 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDay
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useLocalSync } from '@/hooks/useLocalSync'
-import InvoiceAlert from '@/components/InvoiceAlert'
-import DebtAlert from '@/components/DebtAlert'
 import NotificationBell from '@/components/NotificationBell'
 import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
@@ -57,18 +55,17 @@ const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparkl
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },
   { id: 'income-expense', label: 'Receitas e despesas', description: 'Entradas e saídas do mês' },
+  { id: 'pendings', label: 'Pendências', description: 'Prioridades, contas e vencimentos' },
+  { id: 'accounts', label: 'Contas', description: 'Suas contas bancárias' },
   { id: 'projection', label: 'Projeção de Saldo', description: 'Previsão para os próximos 30 dias' },
-  { id: 'loans', label: 'Empréstimos entre Contextos', description: 'Transferências entre PF e PJ' },
+  { id: 'recent', label: 'Transações Recentes', description: 'Últimas movimentações' },
   { id: 'next-card', label: 'Próxima Fatura', description: 'Próximo vencimento do cartão' },
-  { id: 'pendings', label: 'Pendências', description: 'Contas a pagar e a receber' },
   { id: 'receivables', label: 'A Receber', description: 'Valores a receber de terceiros' },
   { id: 'financings', label: 'Financiamentos', description: 'Parcelas de financiamentos ativos' },
   { id: 'budgets', label: 'Orçamentos', description: 'Acompanhamento de orçamentos' },
-  { id: 'accounts', label: 'Contas', description: 'Suas contas bancárias' },
   { id: 'cards', label: 'Cartões', description: 'Cartões de crédito' },
-  { id: 'recent', label: 'Transações Recentes', description: 'Últimas movimentações' },
+  { id: 'loans', label: 'Empréstimos entre Contextos', description: 'Transferências entre PF e PJ' },
 ]
-
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
 const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
 
@@ -346,7 +343,7 @@ function HomeContent() {
     )
   }, [monthTransactions])
 
-  const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
+  const recentTransactions = useMemo(() => monthTransactions.slice(0, 4), [monthTransactions])
 
   const pendingByAccount = useMemo(() => {
     const result = new Map<string, { income: number; expense: number }>()
@@ -461,6 +458,82 @@ function HomeContent() {
       })
       .filter((debt: any) => debt.status !== 'paid' && debt.status !== 'cancelled')
   }, [localDebts, debtPaymentsById])
+
+  const homePriorityAlerts = useMemo(() => {
+    type HomePriorityAlert = {
+      id: string
+      kind: 'debt' | 'card'
+      title: string
+      subtitle: string
+      amount: number
+      severity: number
+      targetId: string
+    }
+
+    const alerts: HomePriorityAlert[] = []
+
+    for (const debt of debtsList) {
+      const dueState = getDebtDueState(debt.due_date)
+
+      if (!dueState.isOverdue && !dueState.isToday) continue
+
+      const remaining = Math.max(
+        0,
+        safeNumber(debt.total_amount) - safeNumber(debt.paid_amount)
+      )
+
+      const daysOverdue = Math.abs(dueState.daysUntilDue || 0)
+
+      alerts.push({
+        id: `debt-${debt.id}`,
+        kind: 'debt',
+        title: debt.person_name || 'Valor a receber',
+        subtitle: dueState.isToday
+          ? 'Vence hoje'
+          : `Atrasado há ${daysOverdue} dia${daysOverdue === 1 ? '' : 's'}`,
+        amount: remaining,
+        severity: dueState.isOverdue ? 0 : 1,
+        targetId: debt.id,
+      })
+    }
+
+    for (const card of cards) {
+      const amount = safeNumber(card.faturaAtual)
+
+      if (amount <= 0) continue
+
+      const days = getDaysUntilCardDue(card.due_day, today)
+
+      if (days < 0 || days > 5) continue
+
+      alerts.push({
+        id: `card-${card.id}`,
+        kind: 'card',
+        title: card.name || 'Cartão',
+        subtitle:
+          days === 0
+            ? 'Vence hoje'
+            : days === 1
+              ? 'Vence amanhã'
+              : `Vence em ${days} dias`,
+        amount,
+        severity: days === 0 ? 1 : days <= 2 ? 2 : 3,
+        targetId: card.id,
+      })
+    }
+
+    return alerts.sort(
+      (a, b) =>
+        a.severity - b.severity ||
+        b.amount - a.amount
+    )
+  }, [debtsList, cards, today])
+
+  const visiblePriorityAlerts = homePriorityAlerts.slice(0, 3)
+  const hiddenPriorityAlertsCount = Math.max(
+    0,
+    homePriorityAlerts.length - visiblePriorityAlerts.length
+  )
 
   const financings = localFinancings
 
@@ -1079,20 +1152,26 @@ function HomeContent() {
           safeNumber(pendings.toReceive) > 0 ||
           safeNumber(pendings.faturas) > 0
 
+        const hasPriorities = visiblePriorityAlerts.length > 0
+
         return (
           <div key="pendings" className="mb-5">
             <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <div className="flex items-center justify-between px-4 pt-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+              <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
                     Atenção agora
                   </p>
                   <h3 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
-                    Pendências
+                    {hasPriorities ? 'Prioridades' : 'Pendências'}
                   </h3>
                 </div>
 
-                {hasPendingItems ? (
+                {hasPriorities ? (
+                  <div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-orange-50 px-2 text-[11px] font-bold text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">
+                    {homePriorityAlerts.length}
+                  </div>
+                ) : hasPendingItems ? (
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400">
                     <Clock size={15} />
                   </div>
@@ -1103,74 +1182,162 @@ function HomeContent() {
                 )}
               </div>
 
-              {hasPendingItems ? (
-                <div className="grid grid-cols-3 gap-1 px-2 pb-2 pt-3">
+              {hasPriorities && (
+                <div className="border-t border-gray-100 dark:border-slate-700/60">
+                  {visiblePriorityAlerts.map((alert, index) => {
+                    const isDebt = alert.kind === 'debt'
+                    const isCritical = alert.severity === 0
+                    const isToday = alert.subtitle === 'Vence hoje'
+
+                    return (
+                      <button
+                        key={alert.id}
+                        type="button"
+                        onClick={() =>
+                          isDebt
+                            ? goToDebt(alert.targetId)
+                            : goToCard(alert.targetId)
+                        }
+                        className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/50 ${
+                          index !== visiblePriorityAlerts.length - 1
+                            ? 'border-b border-gray-100 dark:border-slate-700/50'
+                            : ''
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${
+                              isCritical
+                                ? 'bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400'
+                                : isToday
+                                  ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400'
+                                  : 'bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400'
+                            }`}
+                          >
+                            {isDebt ? (
+                              <User size={16} />
+                            ) : (
+                              <CreditCard size={16} />
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                              {alert.title}
+                            </p>
+                            <p
+                              className={`mt-0.5 text-[11px] font-medium ${
+                                isCritical
+                                  ? 'text-red-500 dark:text-red-400'
+                                  : isToday
+                                    ? 'text-orange-500 dark:text-orange-400'
+                                    : 'text-amber-500 dark:text-amber-400'
+                              }`}
+                            >
+                              {alert.subtitle}
+                            </p>
+                          </div>
+                        </div>
+
+                        <p
+                          className={`shrink-0 text-[14px] font-bold ${
+                            isCritical
+                              ? 'text-red-500 dark:text-red-400'
+                              : isToday
+                                ? 'text-orange-500 dark:text-orange-400'
+                                : 'text-amber-500 dark:text-amber-400'
+                          }`}
+                        >
+                          {hideBalance ? '••••' : formatCurrency(alert.amount)}
+                        </p>
+                      </button>
+                    )
+                  })}
+
+                  {hiddenPriorityAlertsCount > 0 && (
+                    <div className="border-t border-gray-100 px-4 py-2.5 text-center text-[11px] font-medium text-gray-400 dark:border-slate-700/50 dark:text-gray-500">
+                      +{hiddenPriorityAlertsCount}{' '}
+                      {hiddenPriorityAlertsCount === 1
+                        ? 'prioridade fora do resumo'
+                        : 'prioridades fora do resumo'}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasPendingItems && (
+                <div
+                  className={`grid grid-cols-3 gap-1 px-2 pb-2 pt-2 ${
+                    hasPriorities
+                      ? 'border-t border-gray-100 dark:border-slate-700/60'
+                      : ''
+                  }`}
+                >
                   <button
                     type="button"
-                    onClick={() => router.push("/transactions?filter=expense")}
-                    className="min-w-0 rounded-[18px] px-2 py-3 text-left transition-colors hover:bg-red-50/60 active:scale-[0.97] dark:hover:bg-red-500/5"
+                    onClick={() => router.push('/transactions?filter=expense')}
+                    className="min-w-0 rounded-[16px] px-2 py-2.5 text-left transition-colors hover:bg-red-50/60 active:scale-[0.97] dark:hover:bg-red-500/5"
                   >
-                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
-                      <ArrowDown size={15} />
-                    </div>
                     <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
                       A pagar
                     </p>
-                    <p className={`mt-1 truncate text-[13px] font-bold ${
-                      safeNumber(pendings.toPay) > 0
-                        ? "text-red-500 dark:text-red-400"
-                        : "text-gray-300 dark:text-gray-600"
-                    }`}>
-                      {hideBalance ? "•••" : formatCurrency(pendings.toPay)}
+                    <p
+                      className={`mt-1 truncate text-[12px] font-bold ${
+                        safeNumber(pendings.toPay) > 0
+                          ? 'text-red-500 dark:text-red-400'
+                          : 'text-gray-300 dark:text-gray-600'
+                      }`}
+                    >
+                      {hideBalance ? '•••' : formatCurrency(pendings.toPay)}
                     </p>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => router.push("/transactions?filter=income")}
-                    className="min-w-0 rounded-[18px] px-2 py-3 text-left transition-colors hover:bg-emerald-50/60 active:scale-[0.97] dark:hover:bg-emerald-500/5"
+                    onClick={() => router.push('/transactions?filter=income')}
+                    className="min-w-0 rounded-[16px] px-2 py-2.5 text-left transition-colors hover:bg-emerald-50/60 active:scale-[0.97] dark:hover:bg-emerald-500/5"
                   >
-                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10">
-                      <ArrowUp size={15} />
-                    </div>
                     <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
                       A receber
                     </p>
-                    <p className={`mt-1 truncate text-[13px] font-bold ${
-                      safeNumber(pendings.toReceive) > 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-gray-300 dark:text-gray-600"
-                    }`}>
-                      {hideBalance ? "•••" : formatCurrency(pendings.toReceive)}
+                    <p
+                      className={`mt-1 truncate text-[12px] font-bold ${
+                        safeNumber(pendings.toReceive) > 0
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-gray-300 dark:text-gray-600'
+                      }`}
+                    >
+                      {hideBalance ? '•••' : formatCurrency(pendings.toReceive)}
                     </p>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => router.push("/cards")}
-                    className="min-w-0 rounded-[18px] px-2 py-3 text-left transition-colors hover:bg-orange-50/60 active:scale-[0.97] dark:hover:bg-orange-500/5"
+                    onClick={() => router.push('/cards')}
+                    className="min-w-0 rounded-[16px] px-2 py-2.5 text-left transition-colors hover:bg-orange-50/60 active:scale-[0.97] dark:hover:bg-orange-500/5"
                   >
-                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-orange-500 dark:bg-orange-500/10">
-                      <CreditCard size={15} />
-                    </div>
                     <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
                       Faturas
                     </p>
-                    <p className={`mt-1 truncate text-[13px] font-bold ${
-                      safeNumber(pendings.faturas) > 0
-                        ? "text-orange-500 dark:text-orange-400"
-                        : "text-gray-300 dark:text-gray-600"
-                    }`}>
-                      {hideBalance ? "•••" : formatCurrency(pendings.faturas)}
+                    <p
+                      className={`mt-1 truncate text-[12px] font-bold ${
+                        safeNumber(pendings.faturas) > 0
+                          ? 'text-orange-500 dark:text-orange-400'
+                          : 'text-gray-300 dark:text-gray-600'
+                      }`}
+                    >
+                      {hideBalance ? '•••' : formatCurrency(pendings.faturas)}
                     </p>
                   </button>
                 </div>
-              ) : (
-                <div className="px-4 pb-4 pt-3">
+              )}
+
+              {!hasPriorities && !hasPendingItems && (
+                <div className="border-t border-gray-100 px-4 py-3 dark:border-slate-700/60">
                   <div className="flex items-center gap-2 rounded-[16px] bg-emerald-50/60 px-3 py-3 dark:bg-emerald-500/5">
                     <Check size={15} className="shrink-0 text-emerald-500" />
                     <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                      Tudo em dia. Nenhuma pendência financeira aberta.
+                      Tudo em dia. Nenhuma prioridade financeira aberta.
                     </p>
                   </div>
                 </div>
@@ -1487,12 +1654,12 @@ function HomeContent() {
                     />
                   </div>
                 ) : (
-                  accounts.map((acc: any, index: number) => (
+                  accounts.slice(0, 4).map((acc: any, index: number) => (
                     <div
                       key={acc.id}
                       onClick={() => goToAccount(acc.id)}
                       className={`flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
-                        index !== accounts.length - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
+                        index !== Math.min(accounts.length, 4) - 1 ? "border-b border-gray-100 dark:border-slate-700/50" : ""
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -1521,6 +1688,17 @@ function HomeContent() {
                       </div>
                     </div>
                   ))
+                )}
+
+                {accounts.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => router.push('/accounts')}
+                    className="flex w-full items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-3 text-[12px] font-semibold text-gray-500 transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-slate-700/60 dark:text-gray-400 dark:hover:bg-slate-700/40"
+                  >
+                    Ver todas as {accounts.length} contas
+                    <ChevronRight size={14} />
+                  </button>
                 )}
               </div>
             </div>
@@ -1714,7 +1892,7 @@ function HomeContent() {
   }
 
   return (
-    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] max-w-md bg-gray-50 px-4 pb-28 pt-[max(1rem,env(safe-area-inset-top))] font-sans transition-colors duration-300 dark:bg-slate-900">
+    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] max-w-md bg-gray-50 px-4 pb-28 pt-[max(0.75rem,env(safe-area-inset-top))] font-sans transition-colors duration-300 dark:bg-slate-900">
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-md shadow-teal-500/40" />
@@ -1730,7 +1908,7 @@ function HomeContent() {
         />
       )}
 
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-3.5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             {greeting.icon}
@@ -1767,181 +1945,6 @@ function HomeContent() {
           </div>
         </div>
       </div>
-
-      {(() => {
-        const cardsWithInvoice = cards.filter((card: any) => (card.faturaAtual || 0) > 0)
-
-        const upcomingCards = cardsWithInvoice.filter(
-          (card: any) => {
-            const days = getDaysUntilCardDue(
-              card.due_day,
-              today
-            )
-
-            return days >= 0 && days <= 5
-          }
-        )
-
-        // Sem competência/ciclo real da fatura, due_day sozinho
-        // não é suficiente para declarar atraso com segurança.
-        const overdueCards: any[] = []
-
-        const urgentDebts = debtsList
-          .map((debt: any) => ({
-            ...debt,
-            dueState: getDebtDueState(debt.due_date),
-          }))
-          .filter(
-            (debt: any) =>
-              debt.status !== 'paid' &&
-              (debt.dueState.isOverdue || debt.dueState.isToday)
-          )
-
-        const hasAlerts =
-          upcomingCards.length > 0 ||
-          overdueCards.length > 0 ||
-          urgentDebts.length > 0
-
-        if (!hasAlerts) return null
-
-        const overdueDebtCount = urgentDebts.filter(
-          (debt: any) => debt.dueState.isOverdue
-        ).length
-        const totalAlerts = overdueCards.length + overdueDebtCount
-
-        return (
-          <div className="mb-5">
-            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/50">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                  totalAlerts > 0
-                    ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                }`}>
-                  <AlertTriangle size={16} />
-                </div>
-                <div>
-                  <p className={`text-[13px] font-semibold ${
-                    totalAlerts > 0
-                      ? 'text-red-700 dark:text-red-300'
-                      : 'text-amber-700 dark:text-amber-300'
-                  }`}>
-                    {totalAlerts > 0 ? '⚠️ Atenção necessária' : '📅 Próximos vencimentos'}
-                  </p>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                    {totalAlerts > 0
-                      ? `${totalAlerts} item(ns) pendente(s)`
-                      : `${upcomingCards.length} fatura(s) próxima(s)`}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col">
-                {upcomingCards.map((card: any, index: number) => {
-                  const days = getDaysUntilCardDue(
-                    card.due_day,
-                    today
-                  )
-
-                  const isUrgent = days <= 2
-
-                  return (
-                    <div
-                      key={`upcoming-${card.id}`}
-                      onClick={() => goToCard(card.id)}
-                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
-                        index !== 0 || overdueCards.length > 0 ? "border-t border-gray-100 dark:border-slate-700/50" : ""
-                      }`}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${
-                          isUrgent
-                            ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
-                            : 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
-                        }`}>
-                          <CreditCard size={16} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {card.name}
-                          </p>
-                          <p className={`text-[11px] font-medium ${
-                            isUrgent ? 'text-orange-500' : 'text-amber-500'
-                          }`}>
-                            {days === 0
-                              ? 'Vence hoje'
-                              : days === 1
-                              ? 'Vence amanhã'
-                              : `Vence em ${days} dias`}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className={`text-[14px] font-bold ${
-                          isUrgent ? 'text-orange-500' : 'text-amber-500'
-                        }`}>
-                          {formatCurrency(card.faturaAtual)}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {urgentDebts.map((debt: any, index: number) => {
-                  const daysOverdue = Math.abs(debt.dueState.daysUntilDue || 0)
-                  const isDueToday = debt.dueState.isToday
-                  const remaining = safeNumber(debt.total_amount) - safeNumber(debt.paid_amount)
-
-                  return (
-                    <div
-                      key={`debt-${debt.id}`}
-                      onClick={() => goToDebt(debt.id)}
-                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50 active:bg-gray-100 ${
-                        index !== 0 || overdueCards.length > 0 || upcomingCards.length > 0
-                          ? "border-t border-gray-100 dark:border-slate-700/50"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${
-                          isDueToday
-                            ? 'bg-orange-50 text-orange-500 dark:bg-orange-900/20 dark:text-orange-400'
-                            : 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
-                        }`}>
-                          <User size={16} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {debt.person_name}
-                          </p>
-                          <p className={`text-[11px] font-medium ${
-                            isDueToday
-                              ? 'text-orange-500 dark:text-orange-400'
-                              : 'text-red-500 dark:text-red-400'
-                          }`}>
-                            {isDueToday
-                              ? 'Vence hoje'
-                              : `Atrasado há ${daysOverdue} dia${daysOverdue === 1 ? '' : 's'}`}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className={`text-[14px] font-bold ${
-                          isDueToday
-                            ? 'text-orange-500 dark:text-orange-400'
-                            : 'text-red-500 dark:text-red-400'
-                        }`}>
-                          {formatCurrency(remaining)}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {enabledSections.map(sectionId => renderSection(sectionId))}
 

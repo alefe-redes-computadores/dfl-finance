@@ -5,6 +5,7 @@ import './globals.css'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { BottomNavOverlayProvider } from '@/contexts/BottomNavOverlayContext'
+import CapacitorStatusBar from '@/components/CapacitorStatusBar'
 
 // Configuração oficial da Fonte Poppins
 const poppins = Poppins({
@@ -63,6 +64,7 @@ export default function RootLayout({
       <body className="min-h-[100dvh] bg-gray-50 text-gray-900 selection:bg-teal-500/30 transition-colors duration-300 dark:bg-slate-900 dark:text-gray-100">
         {/* ✅ ENVELOPADO NO THEME PROVIDER */}
         <ThemeProvider>
+          <CapacitorStatusBar />
           <ToastProvider>
             {/* ✅ NOVO: overlay compartilhado entre FAB e BottomNav */}
             <BottomNavOverlayProvider>
