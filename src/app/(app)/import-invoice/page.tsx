@@ -23,6 +23,7 @@ import MoneyInput from '@/components/MoneyInput'
 import { useLocalData } from '@/hooks/useLocalData'
 import { db, addToSyncQueue } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
 
 interface ExtractedTransaction {
   date: string
@@ -193,73 +194,33 @@ export default function ImportInvoicePage() {
     setImporting(true)
 
     try {
-      let invoiceId: string | null = null
+      await db.transaction(
+        'rw',
+        [
+          'credit_cards',
+          'credit_invoices',
+          'transactions',
+          'notifications',
+          'syncQueue',
+        ],
+        async () => {
 
-      await db.transaction('rw', ['credit_invoices', 'transactions', 'notifications', 'syncQueue'], async () => {
+        let freshCreditCard: any = null
 
         if (creditCardId) {
-          const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+          freshCreditCard =
+            await db.credit_cards.get(creditCardId)
 
-          const allInvoices = await db.table('credit_invoices')
-            .where('credit_card_id').equals(creditCardId)
-            .toArray()
-          
-          const existingInvoice = allInvoices.find((inv: any) => inv.status === 'open')
+          if (!freshCreditCard) {
+            throw new Error(
+              'Cartão selecionado não encontrado'
+            )
+          }
 
-          if (existingInvoice) {
-            invoiceId = existingInvoice.id
-
-            const newTotal = (Number(existingInvoice.total_amount) || 0) + totalAmount
-
-            const updateData = {
-              total_amount: newTotal,
-              updated_at: new Date().toISOString(),
-            }
-            await db.table('credit_invoices').update(invoiceId, updateData)
-            await addToSyncQueue(user.id, 'credit_invoices', 'update', invoiceId, updateData)
-
-          } else {
-            const today = new Date()
-            const closingDay = 10
-            const dueDay = 15
-
-            const closingDate = new Date(today.getFullYear(), today.getMonth(), closingDay)
-            if (today > closingDate) {
-              closingDate.setMonth(closingDate.getMonth() + 1)
-            }
-
-            const startDate = new Date(closingDate)
-            startDate.setMonth(startDate.getMonth() - 1)
-            startDate.setDate(closingDay + 1)
-
-            const dueDate = new Date(closingDate)
-            dueDate.setDate(dueDay)
-            if (dueDate <= closingDate) {
-              dueDate.setMonth(dueDate.getMonth() + 1)
-            }
-
-            const newInvoiceId = crypto.randomUUID()
-            const invoicePayload = {
-              id: newInvoiceId,
-              user_id: user.id,
-              credit_card_id: creditCardId,
-              closing_date: closingDate.toISOString().split('T')[0],
-              due_date: dueDate.toISOString().split('T')[0],
-              start_date: startDate.toISOString().split('T')[0],
-              end_date: closingDate.toISOString().split('T')[0],
-              total_amount: totalAmount,
-              status: 'open',
-              context: effectiveContext,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              sync_status: 'pending',
-              sync_attempts: 0,
-            }
-
-            await db.table('credit_invoices').add(invoicePayload)
-            await addToSyncQueue(user.id, 'credit_invoices', 'create', newInvoiceId, invoicePayload)
-
-            invoiceId = newInvoiceId
+          if (freshCreditCard.user_id !== user.id) {
+            throw new Error(
+              'Usuário não autorizado a importar para este cartão'
+            )
           }
         }
 
@@ -277,9 +238,9 @@ export default function ImportInvoicePage() {
             amount: tx.amount,
             description: tx.description,
             category_id: catId,
-            account_id: accId,
+            account_id: creditCardId ? null : accId,
             credit_card_id: creditCardId || null,
-            invoice_id: invoiceId,
+            invoice_id: null,
             tag_ids: selectedTags.length > 0 ? selectedTags : null,
             date: tx.date,
             status: creditCardId ? 'done' : (accId ? 'done' : 'pending'),
@@ -287,7 +248,7 @@ export default function ImportInvoicePage() {
             notes: finalNotes || null,
             financing_id: financingId,
             debt_id: debtId,
-            affects_balance: true,
+            affects_balance: creditCardId ? false : Boolean(accId),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             sync_status: 'pending',
@@ -297,7 +258,34 @@ export default function ImportInvoicePage() {
 
         for (const tx of payload) {
           await db.table('transactions').add(tx)
-          await addToSyncQueue(user.id, 'transactions', 'create', tx.id, tx)
+
+          await addToSyncQueue(
+            user.id,
+            'transactions',
+            'create',
+            tx.id,
+            tx
+          )
+        }
+
+        /*
+         * As transações podem atravessar vários ciclos.
+         * Cada data é reconciliada com a fatura correta.
+         */
+        if (freshCreditCard) {
+          const cycleDates = Array.from(
+            new Set(
+              payload.map((tx) => tx.date)
+            )
+          )
+
+          for (const transactionDate of cycleDates) {
+            await reconcileCardInvoiceCycle({
+              userId: user.id,
+              card: freshCreditCard,
+              transactionDate,
+            })
+          }
         }
 
         const notifId = crypto.randomUUID()

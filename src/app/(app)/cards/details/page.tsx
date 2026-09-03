@@ -18,14 +18,18 @@ import {
   X,
   CheckCircle2,
 } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, addMonths } from 'date-fns'
+import { format, addMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useToast } from '@/contexts/ToastContext'
 import { useContext_ } from '@/components/ContextToggle'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useCardById } from '@/hooks/useCardById'
 import { useCardTransactions } from '@/hooks/useCardTransactions'
-import { db, addToSyncQueue } from '@/lib/db'
+import {
+  getCardBillingCycleForMonth,
+  isTransactionInCardCycle,
+  payCardInvoice,
+} from '@/lib/cardOperations'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 const safeNum = (val: any): number => {
@@ -212,14 +216,31 @@ function CardDetailContent() {
 
   const card = cardData
 
-  const start = useMemo(() => format(startOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
-  const end = useMemo(() => format(endOfMonth(currentMonth), 'yyyy-MM-dd'), [currentMonth])
+  const selectedCycle = useMemo(
+    () =>
+      card
+        ? getCardBillingCycleForMonth(card, currentMonth)
+        : null,
+    [card, currentMonth]
+  )
 
   const transactions = useMemo(() => {
+    if (!card || !selectedCycle) return []
+
     return (allTransactions || [])
-      .filter((t: any) => t.date >= start && t.date <= end)
-      .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
-  }, [allTransactions, start, end])
+      .filter((t: any) =>
+        isTransactionInCardCycle(
+          card,
+          t.date,
+          selectedCycle.closingDate
+        )
+      )
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.date || 0).getTime() -
+          new Date(a.date || 0).getTime()
+      )
+  }, [allTransactions, card, selectedCycle])
 
   const openTransactions = useMemo(
     () =>
@@ -258,68 +279,35 @@ function CardDetailContent() {
   const handlePayFatura = async () => {
     if (!user?.id || !card) return
 
+    if (totalFatura <= 0 || openTransactions.length === 0) {
+      showToast('Esta fatura não possui compras abertas.', 'warning')
+      hapticError()
+      return
+    }
+
     setPaying(true)
 
     try {
       const accounts = (localAccounts || []) as any[]
-      const targetAccount = accounts.find((a) => a.id === card.payment_account_id) || accounts[0]
+      const targetAccount =
+        accounts.find((account) => account.id === card.payment_account_id) ||
+        accounts[0]
 
       if (!targetAccount) {
         showToast('Crie uma conta primeiro.', 'warning')
         hapticError()
-        setPaying(false)
         return
       }
 
-      const cardTxs = openTransactions
-
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        const freshAccount = await db.table('accounts').get(targetAccount.id)
-        if (!freshAccount) throw new Error('Conta de pagamento não encontrada')
-
-        const newBalance = safeNum(freshAccount.balance) - totalFatura
-        const accUpdated = await db.table('accounts').update(targetAccount.id, {
-          balance: newBalance,
-        })
-
-        if (!accUpdated) throw new Error('Falha ao debitar a conta')
-
-        await addToSyncQueue(user.id, 'accounts', 'update', targetAccount.id, {
-          balance: newBalance,
-        })
-
-        const txId = crypto.randomUUID()
-        const txPayload = {
-          id: txId,
-          user_id: user.id,
-          type: 'expense',
-          amount: totalFatura,
-          description: `Pagamento fatura ${card.name}`,
-          account_id: targetAccount.id,
-          credit_card_id: null,
-          date: format(new Date(), 'yyyy-MM-dd'),
-          status: 'done',
-          context: card.context,
-          affects_balance: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          sync_status: 'pending',
-          sync_attempts: 0,
-        }
-
-        await db.table('transactions').add(txPayload)
-        await addToSyncQueue(user.id, 'transactions', 'create', txId, txPayload)
-
-        for (const tx of cardTxs) {
-          await db.table('transactions').update(tx.id, { affects_balance: true })
-          await addToSyncQueue(user.id, 'transactions', 'update', tx.id, {
-            affects_balance: true,
-          })
-        }
+      await payCardInvoice({
+        userId: user.id,
+        cardId: card.id,
+        accountId: targetAccount.id,
+        transactionIds: openTransactions.map((transaction: any) => transaction.id),
       })
 
       success()
-      showToast('✅ Fatura paga com sucesso!', 'success')
+      showToast('Fatura paga com sucesso!', 'success')
       setShowPayModal(false)
     } catch (err: any) {
       hapticError()

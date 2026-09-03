@@ -18,10 +18,14 @@ import {
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useCardsList } from '@/hooks/useCardsList'
 import { useLocalData } from '@/hooks/useLocalData'
-import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
+import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createPortal } from 'react-dom'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import {
+  getCardBillingCycleForMonth,
+  isTransactionInCardCycle,
+} from '@/lib/cardOperations'
 
 // ========== CHAVE PARA LOCALSTORAGE ==========
 const STORAGE_KEY = 'dfl_cards_order'
@@ -175,23 +179,54 @@ export default function CardsPage() {
   }, [user?.id, cardsLoading, txLoading])
 
   const monthLabel = format(currentDate, 'MMM yyyy', { locale: ptBR })
-  const startOfCurrentMonth = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-  const endOfCurrentMonth = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+
+  const cardsById = new Map(
+    (localCards || []).map(
+      (card: any) => [card.id, card]
+    )
+  )
 
   const transactionsByCard = (localTransactions || [])
     .filter(
       (tx: any) =>
         tx.credit_card_id &&
-        tx.date >= startOfCurrentMonth &&
-        tx.date <= endOfCurrentMonth &&
         tx.type === 'expense' &&
         tx.affects_balance !== true
     )
-    .reduce((acc: Record<string, number>, tx: any) => {
-      const cardId = tx.credit_card_id
-      acc[cardId] = (acc[cardId] || 0) + Number(tx.amount || 0)
-      return acc
-    }, {})
+    .reduce(
+      (
+        acc: Record<string, number>,
+        tx: any
+      ) => {
+        const card: any =
+          cardsById.get(tx.credit_card_id)
+
+        if (!card) return acc
+
+        const cycle =
+          getCardBillingCycleForMonth(
+            card,
+            currentDate
+          )
+
+        if (
+          !isTransactionInCardCycle(
+            card,
+            tx.date,
+            cycle.closingDate
+          )
+        ) {
+          return acc
+        }
+
+        acc[card.id] =
+          (acc[card.id] || 0) +
+          Number(tx.amount || 0)
+
+        return acc
+      },
+      {}
+    )
 
   const cardsWithInvoice = (localCards || []).map((card: any) => ({
     ...card,

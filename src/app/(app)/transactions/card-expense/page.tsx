@@ -16,6 +16,7 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useToast } from '@/contexts/ToastContext'
 import { db } from '@/lib/db'
+import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
 
 export default function CardExpensePage() {
   const router = useRouter()
@@ -99,7 +100,28 @@ export default function CardExpensePage() {
     const baseDate = new Date(`${date}T12:00:00`)
 
     try {
-      await db.transaction('rw', db.transactions, db.syncQueue, async () => {
+      await db.transaction(
+        'rw',
+        db.credit_cards,
+        db.credit_invoices,
+        db.transactions,
+        db.syncQueue,
+        async () => {
+        const freshCard: any =
+          await db.credit_cards.get(creditCardId)
+
+        if (!freshCard) {
+          throw new Error(
+            'Cartão selecionado não encontrado'
+          )
+        }
+
+        if (freshCard.user_id !== user.id) {
+          throw new Error(
+            'Usuário não autorizado a usar este cartão'
+          )
+        }
+
         for (let i = 0; i < installments; i++) {
           const installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
           const txId = crypto.randomUUID()
@@ -128,8 +150,17 @@ export default function CardExpensePage() {
 
           const res = await safeAdd('transactions', payload)
           if (!res.success) {
-            throw new Error(res.error || `Erro ao salvar parcela ${i + 1}`)
+            throw new Error(
+              res.error ||
+                `Erro ao salvar parcela ${i + 1}`
+            )
           }
+
+          await reconcileCardInvoiceCycle({
+            userId: user.id,
+            card: freshCard,
+            transactionDate: installmentDate,
+          })
         }
       })
 

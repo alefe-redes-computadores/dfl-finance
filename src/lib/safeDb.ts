@@ -205,6 +205,39 @@ export async function safeDelete(
       }
     }
 
+    if (table === 'credit_cards') {
+      const transactionsCount = await db.transactions
+        .where('credit_card_id')
+        .equals(id)
+        .and((tx: any) => tx.user_id === userId)
+        .count()
+
+      if (transactionsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Este cartão possui movimentações e não pode ser excluído. Preserve o histórico financeiro.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+
+      const invoicesCount = await db.credit_invoices
+        .where('[user_id+credit_card_id]')
+        .equals([userId, id])
+        .count()
+
+      if (invoicesCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Este cartão possui faturas e não pode ser excluído. Preserve o histórico financeiro.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+    }
+
     await db.table(table).delete(id)
     await addToSyncQueue(userId, table, 'delete', id, {
       id,
