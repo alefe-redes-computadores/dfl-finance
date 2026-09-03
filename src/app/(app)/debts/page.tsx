@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
-import { differenceInDays } from 'date-fns'
+import { getDebtDueState, isDebtPayment } from '@/lib/debtOperations'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useDebtsList } from '@/hooks/useDebtsList' // ✅ HOOK ESPECÍFICO
@@ -39,8 +39,10 @@ function DebtsContent() {
     const paymentsByDebt: Record<string, number> = {}
 
     localTransactions.forEach((tx: any) => {
-      if (tx.debt_id) {
-        paymentsByDebt[tx.debt_id] = (paymentsByDebt[tx.debt_id] || 0) + Number(tx.amount || 0)
+      if (isDebtPayment(tx) && tx.debt_id) {
+        const amountCents = Math.round(Number(tx.amount || 0) * 100)
+        paymentsByDebt[tx.debt_id] =
+          (paymentsByDebt[tx.debt_id] || 0) + amountCents
       }
     })
 
@@ -49,21 +51,21 @@ function DebtsContent() {
     if (filter === 'active') {
       filtered = localDebts.filter((d: any) => {
         const total = Number(d.total_amount) || 0
-        const paid = paymentsByDebt[d.id] || 0
+        const paid = (paymentsByDebt[d.id] || 0) / 100
         const isEffectivelyPaid = total > 0 && paid >= total
         return !isEffectivelyPaid && d.status !== 'cancelled'
       })
     } else {
       filtered = localDebts.filter((d: any) => {
         const total = Number(d.total_amount) || 0
-        const paid = paymentsByDebt[d.id] || 0
+        const paid = (paymentsByDebt[d.id] || 0) / 100
         const isEffectivelyPaid = total > 0 && paid >= total
         return isEffectivelyPaid || d.status === 'paid'
       })
     }
 
     return filtered.map((debt: any) => {
-      const paid = paymentsByDebt[debt.id] || 0
+      const paid = (paymentsByDebt[debt.id] || 0) / 100
       const total = Number(debt.total_amount) || 0
 
       return {
@@ -290,11 +292,11 @@ function DebtsContent() {
               const IconComp = getDynamicIcon(debt.icon || 'user')
               const isPaid = debt.status === 'paid'
               const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
-              const daysUntilDue = debt.due_date
-                ? differenceInDays(new Date(debt.due_date), new Date())
-                : null
-              const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
-              const isNearDue = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 7 && !isPaid
+              const dueState = getDebtDueState(debt.due_date)
+              const daysUntilDue = dueState.daysUntilDue
+              const isOverdue = dueState.isOverdue && !isPaid
+              const isDueToday = dueState.isToday && !isPaid
+              const isNearDue = dueState.isNearDue && !isPaid
 
               return (
                 <div
@@ -336,6 +338,11 @@ function DebtsContent() {
                         {isOverdue && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-900/30 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400">
                             <AlertTriangle size={10} /> Atrasado {Math.abs(daysUntilDue)}d
+                          </span>
+                        )}
+                        {isDueToday && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-900/30 px-2 py-0.5 text-[11px] font-medium text-orange-600 dark:text-orange-400">
+                            <Clock size={10} /> Vence hoje
                           </span>
                         )}
                         {isNearDue && (

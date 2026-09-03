@@ -1,8 +1,10 @@
+// src/hooks/useDebtPayments.ts
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, LocalTransaction } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { isDebtPayment } from '@/lib/debtOperations'
 
 export function useDebtPayments(debtId?: string | null) {
   const { user } = useAuth()
@@ -10,19 +12,17 @@ export function useDebtPayments(debtId?: string | null) {
   const data = useLiveQuery(async () => {
     if (!user?.id || !debtId) return []
 
-    // ✅ USA ÍNDICE SIMPLES 'user_id' + FILTRO EM MEMÓRIA
-    let results = await db.transactions
-      .where('user_id')
-      .equals(user.id)
+    const results = await db.transactions
+      .where('[user_id+debt_id]')
+      .equals([user.id, debtId])
+      .and(isDebtPayment)
       .toArray()
 
-    // ✅ FILTRA POR debt_id EM MEMÓRIA
-    results = results.filter((tx) => tx.debt_id === debtId)
-
     return results.sort((a: LocalTransaction, b: LocalTransaction) => {
-      const aTime = a.date ? new Date(a.date).getTime() : 0
-      const bTime = b.date ? new Date(b.date).getTime() : 0
-      return bTime - aTime
+      const byDate = (b.date || '').localeCompare(a.date || '')
+      if (byDate !== 0) return byDate
+
+      return (b.updated_at || '').localeCompare(a.updated_at || '')
     })
   }, [user?.id, debtId])
 

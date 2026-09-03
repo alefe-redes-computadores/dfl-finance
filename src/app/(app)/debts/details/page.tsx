@@ -18,7 +18,7 @@ import {
   AlertTriangle,
   Clock3,
 } from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
@@ -27,45 +27,19 @@ import { formatCurrency } from '@/lib/utils'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
 import { useDebtPayments } from '@/hooks/useDebtPayments'
-import { db } from '@/lib/db'
+import { db, LocalAccount, LocalDebt, LocalTransaction } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
+import {
+  getDebtDueState,
+  getDebtStatusFromAmounts,
+} from '@/lib/debtOperations'
 
 type DebtStatus = 'pending' | 'partial' | 'paid'
 
-interface Debt {
-  id: string
-  person_name: string
-  total_amount: number
-  paid_amount?: number
-  description?: string
-  due_date?: string
-  status?: DebtStatus
-  context?: string
-  icon?: string
-  color?: string
-  account_id?: string | null
-  phone?: string
-  whatsapp?: string
-  user_id?: string
-}
-
-interface Account {
-  id: string
-  name: string
-  balance?: number
-  color?: string
-  context?: string
-}
-
-interface PaymentTransaction {
-  id: string
-  amount: number
-  date: string
-  description?: string
-  account_id?: string | null
-  debt_id?: string
-}
+type Debt = LocalDebt
+type Account = LocalAccount
+type PaymentTransaction = LocalTransaction
 
 function SectionCard({
   children,
@@ -289,19 +263,29 @@ function DebtDetailContent() {
   const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
   const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
 
-  const totalPaid = useMemo(
-    () => payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0),
+  const totalPaidCents = useMemo(
+    () =>
+      payments.reduce(
+        (acc, p) => acc + Math.round(Number(p.amount || 0) * 100),
+        0
+      ),
     [payments]
   )
 
+  const totalPaid = totalPaidCents / 100
   const totalAmountCents = Math.round(Number(debt?.total_amount || 0) * 100)
-  const totalPaidCents = Math.round(totalPaid * 100)
   const remainingCents = totalAmountCents - totalPaidCents
   const remaining = remainingCents / 100
-  const percent = totalAmountCents > 0 ? (totalPaidCents / totalAmountCents) * 100 : 0
-  const isPaid = debt?.status === 'paid' || remainingCents <= 0
-  const daysUntilDue = debt?.due_date ? differenceInDays(new Date(debt.due_date), new Date()) : null
-  const isOverdue = daysUntilDue !== null && daysUntilDue < 0 && !isPaid
+  const percent =
+    totalAmountCents > 0
+      ? (totalPaidCents / totalAmountCents) * 100
+      : 0
+  const isPaid = totalAmountCents > 0 && remainingCents <= 0
+
+  const dueState = getDebtDueState(debt?.due_date)
+  const daysUntilDue = dueState.daysUntilDue
+  const isOverdue = dueState.isOverdue && !isPaid
+  const isDueToday = dueState.isToday && !isPaid
 
   const IconComp = getDynamicIcon(debt?.icon || 'user')
   const selectedAcc = accounts.find((a) => a.id === payAccountId)
@@ -381,7 +365,7 @@ function DebtDetailContent() {
         Number(debt.total_amount)
       )}. Você pode verificar?`
     )
-    setWhatsAppNumber(debt.phone || debt.whatsapp || '')
+    setWhatsAppNumber('')
   }, [debt])
 
   if (!debtId) {
@@ -456,14 +440,25 @@ function DebtDetailContent() {
     try {
       await db.transaction('rw', db.debts, db.transactions, db.accounts, db.syncQueue, async () => {
         for (const payment of payments) {
-          if (payment.account_id) {
-            const account = await db.table('accounts').get(payment.account_id)
-            if (account) {
-              const reversedBalance = Number(account.balance) - Number(payment.amount)
-              const result = await safeUpdate('accounts', payment.account_id, {
-                balance: reversedBalance,
-              })
-              if (!result.success) throw new Error(`Erro ao reverter conta: ${result.error}`)
+          if (payment.affects_balance && payment.account_id) {
+            const account = await db.accounts.get(payment.account_id)
+
+            if (account && account.user_id === user.id) {
+              const reversedBalance =
+                (
+                  Math.round(Number(account.balance || 0) * 100) -
+                  Math.round(Number(payment.amount || 0) * 100)
+                ) / 100
+
+              const result = await safeUpdate(
+                'accounts',
+                payment.account_id,
+                { balance: reversedBalance }
+              )
+
+              if (!result.success) {
+                throw new Error(`Erro ao reverter conta: ${result.error}`)
+              }
             }
           }
 
@@ -477,11 +472,11 @@ function DebtDetailContent() {
 
       success()
       setShowDeleteDebtConfirm(false)
-      showToast('🗑️ Registro excluído com sucesso.', 'success')
+      showToast('Registro excluído com sucesso.', 'success')
       router.replace('/debts')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, 'error')
+      showToast(`Erro: ${err.message}`, 'error')
     } finally {
       setDeleteDebtLoading(false)
     }
@@ -493,14 +488,25 @@ function DebtDetailContent() {
 
     try {
       await db.transaction('rw', db.transactions, db.debts, db.accounts, db.syncQueue, async () => {
-        if (paymentToDelete.account_id) {
-          const account = await db.table('accounts').get(paymentToDelete.account_id)
-          if (account) {
-            const reversedBalance = Number(account.balance) - Number(paymentToDelete.amount)
-            const result = await safeUpdate('accounts', paymentToDelete.account_id, {
-              balance: reversedBalance,
-            })
-            if (!result.success) throw new Error(`Erro ao reverter conta: ${result.error}`)
+        if (paymentToDelete.affects_balance && paymentToDelete.account_id) {
+          const account = await db.accounts.get(paymentToDelete.account_id)
+
+          if (account && account.user_id === user.id) {
+            const reversedBalance =
+              (
+                Math.round(Number(account.balance || 0) * 100) -
+                Math.round(Number(paymentToDelete.amount || 0) * 100)
+              ) / 100
+
+            const result = await safeUpdate(
+              'accounts',
+              paymentToDelete.account_id,
+              { balance: reversedBalance }
+            )
+
+            if (!result.success) {
+              throw new Error(`Erro ao reverter conta: ${result.error}`)
+            }
           }
         }
 
@@ -511,12 +517,10 @@ function DebtDetailContent() {
         const nextTotalPaid = updatedPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
         const nextTotalPaidCents = Math.round(nextTotalPaid * 100)
 
-        const nextStatus: DebtStatus =
-          nextTotalPaidCents >= totalAmountCents
-            ? 'paid'
-            : nextTotalPaidCents > 0
-            ? 'partial'
-            : 'pending'
+        const nextStatus: DebtStatus = getDebtStatusFromAmounts(
+          totalAmountCents,
+          nextTotalPaidCents
+        )
 
         const debtResult = await safeUpdate('debts', debtId, {
           status: nextStatus,
@@ -529,11 +533,11 @@ function DebtDetailContent() {
 
       success()
       setPaymentToDelete(null)
-      showToast('🗑️ Pagamento removido.', 'success')
+      showToast('Pagamento removido.', 'success')
       loadData()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, 'error')
+      showToast(`Erro: ${err.message}`, 'error')
     } finally {
       setDeletePaymentLoading(false)
     }
@@ -543,7 +547,7 @@ function DebtDetailContent() {
     if (isSubmitting || !user?.id || !debt) return
 
     if (payAmountNum <= 0) {
-      showToast('⚠️ Digite um valor válido.', 'warning')
+      showToast('Digite um valor válido.', 'warning')
       errorHaptic()
       return
     }
@@ -551,7 +555,13 @@ function DebtDetailContent() {
     const payAmountCents = Math.round(payAmountNum * 100)
 
     if (payAmountCents > remainingCents) {
-      showToast(`⚠️ O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
+      showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
+      errorHaptic()
+      return
+    }
+
+    if (!payDate) {
+      showToast('Informe a data do recebimento.', 'warning')
       errorHaptic()
       return
     }
@@ -566,13 +576,13 @@ function DebtDetailContent() {
         id: txId,
         user_id: user.id,
         type: 'income',
-        amount: payAmountNum,
+        amount: payAmountCents / 100,
         description: payNote || `Pagamento de ${debt.person_name}`,
         account_id: targetAccountId,
         debt_id: debtId,
         date: payDate,
         status: 'done',
-        affects_balance: true,
+        affects_balance: Boolean(targetAccountId),
         context: debt.context,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -585,18 +595,40 @@ function DebtDetailContent() {
         if (!txResult.success) throw new Error(`Erro ao criar pagamento: ${txResult.error}`)
 
         if (targetAccountId) {
-          const account = await db.table('accounts').get(targetAccountId)
-          if (account) {
-            const newBalance = Number(account.balance) + payAmountNum
-            const accResult = await safeUpdate('accounts', targetAccountId, {
-              balance: newBalance,
-            })
-            if (!accResult.success) throw new Error(`Erro ao atualizar conta: ${accResult.error}`)
+          const account = await db.accounts.get(targetAccountId)
+
+          if (
+            !account ||
+            account.user_id !== user.id ||
+            account.context !== debt.context
+          ) {
+            throw new Error(
+              'A conta selecionada não é válida para este empréstimo.'
+            )
+          }
+
+          const newBalance =
+            (
+              Math.round(Number(account.balance || 0) * 100) +
+              payAmountCents
+            ) / 100
+
+          const accResult = await safeUpdate(
+            'accounts',
+            targetAccountId,
+            { balance: newBalance }
+          )
+
+          if (!accResult.success) {
+            throw new Error(`Erro ao atualizar conta: ${accResult.error}`)
           }
         }
 
         const newTotalPaidCents = totalPaidCents + payAmountCents
-        const newStatus: DebtStatus = newTotalPaidCents >= totalAmountCents ? 'paid' : 'partial'
+        const newStatus: DebtStatus = getDebtStatusFromAmounts(
+          totalAmountCents,
+          newTotalPaidCents
+        )
 
         const debtResult = await safeUpdate('debts', debtId, {
           status: newStatus,
@@ -610,11 +642,11 @@ function DebtDetailContent() {
       success()
       setShowPaymentModal(false)
       resetPaymentForm()
-      showToast('✅ Pagamento registrado com sucesso!', 'success')
+      showToast('Pagamento registrado com sucesso!', 'success')
       loadData()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, 'error')
+      showToast(`Erro: ${err.message}`, 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -624,7 +656,7 @@ function DebtDetailContent() {
     const number = whatsAppNumber.replace(/\D/g, '')
 
     if (!number) {
-      showToast('⚠️ Informe o número do WhatsApp.', 'warning')
+      showToast('Informe o número do WhatsApp.', 'warning')
       errorHaptic()
       return
     }
@@ -772,10 +804,15 @@ function DebtDetailContent() {
                 <AlertTriangle size={10} />
                 Atrasado {Math.abs(daysUntilDue || 0)} dia(s)
               </span>
+            ) : isDueToday ? (
+              <span className="flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
+                <Calendar size={10} />
+                Vence hoje
+              </span>
             ) : !isPaid && debt.due_date ? (
               <span className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 dark:text-gray-500">
                 <Calendar size={12} />
-                Vence {format(new Date(debt.due_date), 'dd/MM')}
+                Vence {format(new Date(`${debt.due_date}T12:00:00`), 'dd/MM')}
               </span>
             ) : (
               <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">

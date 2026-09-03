@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { ChevronLeft, AlertTriangle, Check, Loader2, X, Wallet, Calendar, User, FileText, Tag } from 'lucide-react'
 import { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import IconPicker from '@/components/IconPicker'
-import { getDynamicIcon } from '@/lib/iconUtils'
+import { getDynamicIcon, normalizeIconName } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
@@ -15,6 +15,7 @@ import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
+import { getDebtStatusFromAmounts, isDebtPayment } from '@/lib/debtOperations'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -52,12 +53,12 @@ function NewDebtContent() {
 
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context, type: 'expense' },
+    filters: { context: debtContext, type: 'expense' },
   })
 
   const { data: localAccounts } = useLocalData({
     table: 'accounts' as any,
-    filters: { context },
+    filters: { context: debtContext },
   })
 
   useEffect(() => {
@@ -70,7 +71,7 @@ function NewDebtContent() {
     if (debtLoading) return
 
     if (debtNotFound) {
-      showToast('⚠️ Registro não encontrado para edição.', 'warning')
+      showToast('Registro não encontrado para edição.', 'warning')
       router.replace('/debts')
       return
     }
@@ -84,7 +85,7 @@ function NewDebtContent() {
       setCategoryId(localDebt.category_id || '')
       setAccountId(localDebt.account_id || '')
       setColor(localDebt.color || '#14b8a6')
-      setIcon(localDebt.icon ? localDebt.icon.charAt(0).toUpperCase() + localDebt.icon.slice(1) : 'User')
+      setIcon(normalizeIconName(localDebt.icon) || 'User')
       setDebtContext((localDebt.context as 'dfl' | 'personal') || 'dfl')
       setInitialized(true)
     }
@@ -93,7 +94,7 @@ function NewDebtContent() {
   const handleSave = async () => {
     if (!user?.id || !personName.trim() || amountNum <= 0 || isNaN(amountNum)) {
       errorHaptic()
-      showToast('⚠️ Preencha nome e um valor válido.', 'warning')
+      showToast('Preencha nome e um valor válido.', 'warning')
       return
     }
 
@@ -110,21 +111,64 @@ function NewDebtContent() {
       category_id: categoryId || null,
       account_id: accountId || null,
       color,
-      icon: icon.toLowerCase(),
+      icon: normalizeIconName(icon) || 'User',
       context: debtContext,
       updated_at: now,
     }
 
     try {
       if (editId) {
-        await db.transaction('rw', db.debts, db.syncQueue, async () => {
-          const result = await safeUpdate('debts', editId, payload)
+        await db.transaction('rw', db.debts, db.transactions, db.syncQueue, async () => {
+          const paymentTransactions = await db.transactions
+            .where('[user_id+debt_id]')
+            .equals([user.id, editId])
+            .and(isDebtPayment)
+            .toArray()
+
+          const paidAmountCents = paymentTransactions.reduce(
+            (sum, tx) => sum + Math.round(Number(tx.amount || 0) * 100),
+            0
+          )
+
+          const finalAmountCents = Math.round(finalAmount * 100)
+
+          if (
+            paymentTransactions.length > 0 &&
+            localDebt &&
+            debtContext !== localDebt.context
+          ) {
+            throw new Error(
+              'Não é possível alterar o contexto de um empréstimo que já possui recebimentos.'
+            )
+          }
+
+          if (finalAmountCents < paidAmountCents) {
+            throw new Error(
+              'O valor total não pode ser menor que o valor já recebido.'
+            )
+          }
+
+          const nextStatus =
+            localDebt?.status === 'cancelled'
+              ? 'cancelled'
+              : getDebtStatusFromAmounts(
+                  finalAmountCents,
+                  paidAmountCents
+                )
+
+          const result = await safeUpdate('debts', editId, {
+            ...payload,
+            paid_amount: paidAmountCents / 100,
+            status: nextStatus,
+          })
+
           if (!result.success) {
             throw new Error(result.error || 'Falha ao atualizar débito')
           }
         })
+
         success()
-        showToast('✅ Empréstimo atualizado!', 'success')
+        showToast('Empréstimo atualizado!', 'success')
       } else {
         const id = crypto.randomUUID()
 
@@ -146,13 +190,13 @@ function NewDebtContent() {
           }
         })
         success()
-        showToast('✅ Empréstimo registrado!', 'success')
+        showToast('Empréstimo registrado!', 'success')
       }
 
       router.replace('/debts')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err?.message || 'Erro desconhecido ao salvar'}`, 'error')
+      showToast(`Erro: ${err?.message || 'Erro desconhecido ao salvar'}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -232,7 +276,12 @@ function NewDebtContent() {
                   type="button"
                   onClick={() => {
                     vibrate([5])
-                    setDebtContext(c)
+
+                    if (c !== debtContext) {
+                      setDebtContext(c)
+                      setCategoryId('')
+                      setAccountId('')
+                    }
                   }}
                   className={`rounded-full py-3 text-[13px] font-bold transition-all active:scale-95 ${
                     debtContext === c

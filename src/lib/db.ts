@@ -57,16 +57,19 @@ export interface LocalDebt {
   user_id: string
   context: 'dfl' | 'personal'
   person_name: string
-  description?: string
+  description?: string | null
   total_amount: number
   paid_amount: number
-  due_date: string
+  due_date?: string | null
   status: 'pending' | 'partial' | 'paid' | 'cancelled'
+  category_id?: string | null
+  account_id?: string | null
   icon: string
   color: string
   created_at: string
   updated_at: string
   sync_status: 'synced' | 'pending' | 'failed'
+  sync_attempts?: number
 }
 
 export interface LocalLoan {
