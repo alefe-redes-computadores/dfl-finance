@@ -45,6 +45,11 @@ import {
   getCardBillingCycleForMonth,
   isTransactionInCardCycle,
 } from '@/lib/cardOperations'
+import {
+  getDebtDueState,
+  getDebtStatusFromAmounts,
+  isDebtPayment,
+} from '@/lib/debtOperations'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -287,17 +292,32 @@ function HomeContent() {
     )
   }
 
+  const categoryById = useMemo(
+    () => new Map(localCategories.map((category: any) => [category.id, category])),
+    [localCategories]
+  )
+
+  const accountById = useMemo(
+    () => new Map(localAccountsData.map((account: any) => [account.id, account])),
+    [localAccountsData]
+  )
+
   const transactionsWithJoin = useMemo(() => {
     return localTransactions.map((tx: any) => {
-      const category = localCategories.find((c: any) => c.id === tx.category_id) as any
-      const account = localAccountsData.find((a: any) => a.id === tx.account_id) as any
+      const category = categoryById.get(tx.category_id) as any
+      const account = accountById.get(tx.account_id) as any
+
       return {
         ...tx,
-        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-        accounts: account ? { name: account.name, color: account.color } : null,
+        categories: category
+          ? { name: category.name, icon: category.icon, color: category.color }
+          : null,
+        accounts: account
+          ? { name: account.name, color: account.color }
+          : null,
       }
     })
-  }, [localTransactions, localCategories, localAccountsData])
+  }, [localTransactions, categoryById, accountById])
 
   const monthTransactions = useMemo(() =>
     transactionsWithJoin
@@ -310,30 +330,49 @@ function HomeContent() {
   [transactionsWithJoin, start, end])
 
   const summary = useMemo(() => {
-    const income = monthTransactions
-      .filter((t: any) => t.type === 'income' && t.status === 'done')
-      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-    const expense = monthTransactions
-      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-    return { income, expense, balance: income - expense }
+    return monthTransactions.reduce(
+      (acc: { income: number; expense: number; balance: number }, tx: any) => {
+        if (tx.status !== 'done') return acc
+
+        const amount = safeNumber(tx.amount)
+
+        if (tx.type === 'income') acc.income += amount
+        if (tx.type === 'expense' || tx.type === 'sangria') acc.expense += amount
+
+        acc.balance = acc.income - acc.expense
+        return acc
+      },
+      { income: 0, expense: 0, balance: 0 }
+    )
   }, [monthTransactions])
 
   const recentTransactions = useMemo(() => monthTransactions.slice(0, 5), [monthTransactions])
 
+  const pendingByAccount = useMemo(() => {
+    const result = new Map<string, { income: number; expense: number }>()
+
+    for (const tx of monthTransactions) {
+      if (!tx.account_id || tx.status !== 'pending') continue
+
+      const current = result.get(tx.account_id) || { income: 0, expense: 0 }
+      const amount = safeNumber(tx.amount)
+
+      if (tx.type === 'income') current.income += amount
+      if (tx.type === 'expense' || tx.type === 'sangria') current.expense += amount
+
+      result.set(tx.account_id, current)
+    }
+
+    return result
+  }, [monthTransactions])
+
   const accounts = useMemo(() => {
     return localAccountsData.map((acc: any) => {
-      const accTxs = monthTransactions.filter((t: any) => t.account_id === acc.id && t.status === 'pending')
-      const pendingIncome = accTxs
-        .filter((t: any) => t.type === 'income')
-        .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-      const pendingExpense = accTxs
-        .filter((t: any) => t.type === 'expense' || t.type === 'sangria')
-        .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-      const previsto = safeNumber(acc.balance) + pendingIncome - pendingExpense
+      const pending = pendingByAccount.get(acc.id) || { income: 0, expense: 0 }
+      const previsto = safeNumber(acc.balance) + pending.income - pending.expense
       return { ...acc, previsto }
     })
-  }, [localAccountsData, monthTransactions])
+  }, [localAccountsData, pendingByAccount])
 
   const cards = useMemo(() => {
     return localCards.map((card: any) => {
@@ -384,34 +423,74 @@ function HomeContent() {
     return { toPay, toReceive, faturas }
   }, [localTransactions, cards])
 
-  const debtsList = useMemo(() => {
-    const allDebts = localDebts.map((debt: any) => {
-      const payments = localTransactions.filter((t: any) => t.debt_id === debt.id && t.type === 'income')
-      const paidAmount = payments.reduce((sum: number, p: any) => sum + safeNumber(p.amount), 0)
-      const totalAmount = safeNumber(debt.total_amount)
-      const isEffectivelyPaid = totalAmount > 0 && paidAmount >= totalAmount
-      const percent = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0
+  const debtPaymentsById = useMemo(() => {
+    const result = new Map<string, number>()
 
-      return {
-        ...debt,
-        paid_amount: paidAmount,
-        percent: Math.min(percent, 100),
-        status: isEffectivelyPaid ? 'paid' : debt.status
-      }
-    })
-    return allDebts.filter(d => d.status !== 'paid' && d.status !== 'cancelled')
-  }, [localDebts, localTransactions])
+    for (const tx of localTransactions) {
+      if (!isDebtPayment(tx) || !tx.debt_id) continue
+
+      result.set(
+        tx.debt_id,
+        (result.get(tx.debt_id) || 0) + Math.round(safeNumber(tx.amount) * 100)
+      )
+    }
+
+    return result
+  }, [localTransactions])
+
+  const debtsList = useMemo(() => {
+    return localDebts
+      .map((debt: any) => {
+        const totalAmountCents = Math.round(safeNumber(debt.total_amount) * 100)
+        const paidAmountCents = debtPaymentsById.get(debt.id) || 0
+        const status =
+          debt.status === 'cancelled'
+            ? 'cancelled'
+            : getDebtStatusFromAmounts(totalAmountCents, paidAmountCents)
+        const percent =
+          totalAmountCents > 0
+            ? (paidAmountCents / totalAmountCents) * 100
+            : 0
+
+        return {
+          ...debt,
+          paid_amount: paidAmountCents / 100,
+          percent: Math.min(percent, 100),
+          status,
+        }
+      })
+      .filter((debt: any) => debt.status !== 'paid' && debt.status !== 'cancelled')
+  }, [localDebts, debtPaymentsById])
 
   const financings = localFinancings
 
+  const spentByCategory = useMemo(() => {
+    const result = new Map<string, number>()
+
+    for (const tx of monthTransactions) {
+      if (
+        !tx.category_id ||
+        tx.status !== 'done' ||
+        (tx.type !== 'expense' && tx.type !== 'sangria')
+      ) continue
+
+      result.set(
+        tx.category_id,
+        (result.get(tx.category_id) || 0) + safeNumber(tx.amount)
+      )
+    }
+
+    return result
+  }, [monthTransactions])
+
   const budgets = useMemo(() => {
     const budgetsWithSpent = localBudgets.map((budget: any) => {
-      const cat = localCategories.find((c: any) => c.id === budget.category_id) as any
-      const spent = monthTransactions
-        .filter((t: any) => t.category_id === budget.category_id && (t.type === 'expense' || t.type === 'sangria') && t.status === 'done')
-        .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-      const remaining = safeNumber(budget.amount) - spent
-      const percent = safeNumber(budget.amount) > 0 ? (spent / safeNumber(budget.amount)) * 100 : 0
+      const cat = categoryById.get(budget.category_id) as any
+      const spent = spentByCategory.get(budget.category_id) || 0
+      const amount = safeNumber(budget.amount)
+      const remaining = amount - spent
+      const percent = amount > 0 ? (spent / amount) * 100 : 0
+
       return {
         ...budget,
         name: cat?.name ?? budget.name,
@@ -419,11 +498,14 @@ function HomeContent() {
         color: cat?.color ?? budget.color,
         spent,
         remaining,
-        percent: Math.min(percent, 100)
+        percent: Math.min(percent, 100),
       }
     })
-    return budgetsWithSpent.sort((a: any, b: any) => b.percent - a.percent).slice(0, 3)
-  }, [localBudgets, localCategories, monthTransactions])
+
+    return budgetsWithSpent
+      .sort((a: any, b: any) => b.percent - a.percent)
+      .slice(0, 3)
+  }, [localBudgets, categoryById, spentByCategory])
 
   const loans = useMemo(() => {
     return localLoans
@@ -594,7 +676,7 @@ function HomeContent() {
       await forceSync()
 
       setRefreshing(false)
-      showToast('✅ Dados atualizados!', 'success')
+      showToast('Dados atualizados!', 'success')
       hapticSuccess()
     }
   }
@@ -616,7 +698,7 @@ function HomeContent() {
 
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
-  const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('✅ Tela inicial personalizada!', 'success'); hapticSuccess() }
+  const handleSavePersonalize = () => { const finalOrder = personalizeOrder.filter(s => personalizeEnabled.has(s.id)).map(s => s.id); saveLayout(finalOrder); setShowPersonalizeModal(false); showToast('Tela inicial personalizada!', 'success'); hapticSuccess() }
   const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
   const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -653,7 +735,7 @@ function HomeContent() {
     const removedLabel = sectionLabel
     setEnabledSections(prev => prev.filter(id => id !== removedSection))
     vibrate(10)
-    setUndoToast({ message: `"${removedLabel}" ocultado`, onUndo: () => { setEnabledSections(prev => { const restored = [...prev, removedSection]; return restored.sort((a, b) => { const idxA = ALL_SECTIONS.findIndex(s => s.id === a); const idxB = ALL_SECTIONS.findIndex(s => s.id === b); return idxA - idxB }) }); showToast(`✅ "${removedLabel}" restaurado`, 'success'); setUndoToast(null) } })
+    setUndoToast({ message: `"${removedLabel}" ocultado`, onUndo: () => { setEnabledSections(prev => { const restored = [...prev, removedSection]; return restored.sort((a, b) => { const idxA = ALL_SECTIONS.findIndex(s => s.id === a); const idxB = ALL_SECTIONS.findIndex(s => s.id === b); return idxA - idxB }) }); showToast(`"${removedLabel}" restaurado`, 'success'); setUndoToast(null) } })
     setTimeout(() => { setEnabledSections(current => { if (!current.includes(removedSection)) saveLayout(current); return current }); setUndoToast(null) }, 3500)
   }
 
@@ -675,7 +757,7 @@ function HomeContent() {
       case 'balance':
         return (
           <div key="balance" className="mb-5">
-            <div className="relative overflow-hidden rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-5 shadow-sm">
+            <div className="relative overflow-hidden rounded-[22px] border border-gray-200/80 bg-white px-5 py-5 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-slate-800 dark:shadow-none">
               <div className="pointer-events-none absolute -right-4 -top-4 opacity-[0.04]">
                 <Wallet size={92} />
               </div>
@@ -706,7 +788,7 @@ function HomeContent() {
                 className="relative z-10 w-full text-left group transition-transform active:scale-[0.98]"
               >
                 <h1
-                  className={`text-[32px] leading-none font-light ${
+                  className={`text-[34px] leading-none font-semibold ${
                     hideBalance
                       ? "text-gray-900 dark:text-gray-50 tracking-[0.18em]"
                       : totalAccountsBalance > 0
@@ -726,7 +808,7 @@ function HomeContent() {
       case 'income-expense':
         return (
           <div key="income-expense" className="mb-5">
-            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="overflow-hidden rounded-[22px] border border-gray-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div className="px-4 pt-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
                   Movimentação do mês
@@ -772,6 +854,33 @@ function HomeContent() {
                   </div>
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={() => router.push('/analysis')}
+                className="flex w-full items-center justify-between border-t border-gray-100 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-slate-700/70 dark:hover:bg-slate-700/40 dark:active:bg-slate-700"
+              >
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
+                    Resultado do mês
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                    Receitas menos despesas
+                  </p>
+                </div>
+
+                <p
+                  className={`text-[15px] font-bold ${
+                    summary.balance > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : summary.balance < 0
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {hideBalance ? '••••' : formatCurrency(summary.balance)}
+                </p>
+              </button>
             </div>
           </div>
         )
@@ -1102,9 +1211,10 @@ function HomeContent() {
                 {debtsList.slice(0, 3).map((debt: any, index: number) => {
                   const IconComp = getDynamicIcon(debt.icon || "user");
                   const remaining = safeNumber(debt.total_amount) - safeNumber(debt.paid_amount);
-                  const dueDate = safeDate(debt.due_date);
-                  const daysUntilDue = dueDate ? differenceInDays(dueDate, today) : null;
-                  const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
+                  const dueState = getDebtDueState(debt.due_date);
+                  const daysUntilDue = dueState.daysUntilDue;
+                  const isOverdue = dueState.isOverdue;
+                  const isDueToday = dueState.isToday;
                   const percent = Math.min(debt.percent, 100);
 
                   return (
@@ -1134,7 +1244,9 @@ function HomeContent() {
                               }`}
                             >
                               {isOverdue
-                                ? `Atrasado ${Math.abs(daysUntilDue)} dias`
+                                ? `Atrasado ${Math.abs(daysUntilDue || 0)} dia${Math.abs(daysUntilDue || 0) === 1 ? '' : 's'}`
+                                : isDueToday
+                                ? 'Vence hoje'
                                 : debt.due_date
                                 ? `Vence ${safeFormatDate(debt.due_date, 'dd/MM')}`
                                 : "Sem prazo"}
@@ -1602,7 +1714,7 @@ function HomeContent() {
   }
 
   return (
-    <div ref={containerRef} className="max-w-md mx-auto min-h-screen bg-gray-50 dark:bg-slate-900 pb-24 font-sans relative px-4 pt-4 transition-colors duration-300">
+    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] max-w-md bg-gray-50 px-4 pb-28 pt-[max(1rem,env(safe-area-inset-top))] font-sans transition-colors duration-300 dark:bg-slate-900">
       {loadingPulse && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-md shadow-teal-500/40" />
@@ -1617,6 +1729,44 @@ function HomeContent() {
           duration={3000}
         />
       )}
+
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            {greeting.icon}
+            <p className="text-sm font-semibold truncate">
+              {greeting.text}, <span className="text-gray-900 dark:text-gray-100">{firstName}</span>
+            </p>
+          </div>
+          <ContextToggle />
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-2.5">
+          <div className="flex items-center gap-2">
+            {isClient ? (
+              <SyncButton
+                pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
+                isSyncing={!!isSyncing}
+                isOnline={!!isOnline}
+                onSync={forceSync}
+                onClick={() => setIsSyncModalOpen(true)}
+              />
+            ) : (
+              <div className="w-10 h-10 animate-pulse bg-gray-200 dark:bg-slate-700 rounded-full" />
+            )}
+
+            {notificationsEnabled && (
+              <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-full border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 px-1.5 py-1 shadow-sm backdrop-blur-sm">
+            <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronLeft size={14} /></button>
+            <span className="min-w-[82px] text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
+            <button onClick={() => { setCurrentDate(addMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronRight size={14} /></button>
+          </div>
+        </div>
+      </div>
 
       {(() => {
         const cardsWithInvoice = cards.filter((card: any) => (card.faturaAtual || 0) > 0)
@@ -1636,16 +1786,28 @@ function HomeContent() {
         // não é suficiente para declarar atraso com segurança.
         const overdueCards: any[] = []
 
-        const overdueDebts = debtsList.filter((d: any) => {
-          const due = safeDate(d.due_date)
-          return due && differenceInDays(today, due) >= 0 && d.status !== 'paid'
-        })
+        const urgentDebts = debtsList
+          .map((debt: any) => ({
+            ...debt,
+            dueState: getDebtDueState(debt.due_date),
+          }))
+          .filter(
+            (debt: any) =>
+              debt.status !== 'paid' &&
+              (debt.dueState.isOverdue || debt.dueState.isToday)
+          )
 
-        const hasAlerts = upcomingCards.length > 0 || overdueCards.length > 0 || overdueDebts.length > 0
+        const hasAlerts =
+          upcomingCards.length > 0 ||
+          overdueCards.length > 0 ||
+          urgentDebts.length > 0
 
         if (!hasAlerts) return null
 
-        const totalAlerts = overdueCards.length + overdueDebts.length
+        const overdueDebtCount = urgentDebts.filter(
+          (debt: any) => debt.dueState.isOverdue
+        ).length
+        const totalAlerts = overdueCards.length + overdueDebtCount
 
         return (
           <div className="mb-5">
@@ -1725,9 +1887,9 @@ function HomeContent() {
                   )
                 })}
 
-                {overdueDebts.map((debt: any, index: number) => {
-                  const due = safeDate(debt.due_date)
-                  const daysOverdue = due ? differenceInDays(today, due) : 0
+                {urgentDebts.map((debt: any, index: number) => {
+                  const daysOverdue = Math.abs(debt.dueState.daysUntilDue || 0)
+                  const isDueToday = debt.dueState.isToday
                   const remaining = safeNumber(debt.total_amount) - safeNumber(debt.paid_amount)
 
                   return (
@@ -1741,20 +1903,34 @@ function HomeContent() {
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-red-50 dark:bg-red-900/20 text-red-500">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${
+                          isDueToday
+                            ? 'bg-orange-50 text-orange-500 dark:bg-orange-900/20 dark:text-orange-400'
+                            : 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400'
+                        }`}>
                           <User size={16} />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate">
                             {debt.person_name}
                           </p>
-                          <p className="text-[11px] font-medium text-red-500">
-                            Atrasado há {daysOverdue} dia{daysOverdue > 1 ? 's' : ''}
+                          <p className={`text-[11px] font-medium ${
+                            isDueToday
+                              ? 'text-orange-500 dark:text-orange-400'
+                              : 'text-red-500 dark:text-red-400'
+                          }`}>
+                            {isDueToday
+                              ? 'Vence hoje'
+                              : `Atrasado há ${daysOverdue} dia${daysOverdue === 1 ? '' : 's'}`}
                           </p>
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[14px] font-bold text-red-500">
+                        <p className={`text-[14px] font-bold ${
+                          isDueToday
+                            ? 'text-orange-500 dark:text-orange-400'
+                            : 'text-red-500 dark:text-red-400'
+                        }`}>
                           {formatCurrency(remaining)}
                         </p>
                       </div>
@@ -1767,52 +1943,14 @@ function HomeContent() {
         )
       })()}
 
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-            {greeting.icon}
-            <p className="text-sm font-semibold truncate">
-              {greeting.text}, <span className="text-gray-900 dark:text-gray-100">{firstName}</span>
-            </p>
-          </div>
-          <ContextToggle />
-        </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-2.5">
-          <div className="flex items-center gap-2">
-            {isClient ? (
-              <SyncButton
-                pendingCount={typeof pendingCount === 'number' ? pendingCount : 0}
-                isSyncing={!!isSyncing}
-                isOnline={!!isOnline}
-                onSync={forceSync}
-                onClick={() => setIsSyncModalOpen(true)}
-              />
-            ) : (
-              <div className="w-10 h-10 animate-pulse bg-gray-200 dark:bg-slate-700 rounded-full" />
-            )}
-
-            {notificationsEnabled && (
-              <NotificationBell count={unreadNotifications} hasCritical={criticalCount > 0} onClick={() => setShowNotifications(true)} />
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 rounded-full border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 px-1.5 py-1 shadow-sm backdrop-blur-sm">
-            <button onClick={() => { setCurrentDate(subMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronLeft size={14} /></button>
-            <span className="min-w-[82px] text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-700 dark:text-gray-200">{monthLabel}</span>
-            <button onClick={() => { setCurrentDate(addMonths(currentDate, 1)); vibrate(10) }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-200 active:scale-95"><ChevronRight size={14} /></button>
-          </div>
-        </div>
-      </div>
-
       {enabledSections.map(sectionId => renderSection(sectionId))}
 
       <button
         onClick={openPersonalize}
-        className="w-full mt-2 flex items-center justify-center gap-2 py-4 rounded-[24px] bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-100 dark:border-slate-700 shadow-sm transition-all active:scale-[0.98]"
+        className="mt-1 flex w-full items-center justify-center gap-2 rounded-[18px] border border-gray-200/80 bg-white py-3 text-[13px] font-semibold text-gray-500 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700"
       >
         <Settings2 size={20} />
-        <span className="font-semibold text-[15px]">Personalizar Dashboard</span>
+        <span>Personalizar início</span>
       </button>
 
 
