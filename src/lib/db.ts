@@ -1,3 +1,4 @@
+// src/lib/db.ts
 import Dexie, { Table } from 'dexie'
 
 // ============================================================
@@ -16,6 +17,7 @@ export interface LocalTransaction {
   category_id?: string | null
   account_id?: string | null
   credit_card_id?: string | null
+  tag_ids?: string[] | null
   debt_id?: string | null
   receipt_url?: string | null
   created_at: string
