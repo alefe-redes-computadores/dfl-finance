@@ -13,11 +13,19 @@ export interface LocalTransaction {
   description: string
   date: string
   status: 'pending' | 'done'
-  affects_balance: boolean
+  affects_balance?: boolean
   category_id?: string | null
   account_id?: string | null
   credit_card_id?: string | null
   tag_ids?: string[] | null
+  contact_id?: string | null
+  notes?: string | null
+  recurring_group_id?: string | null
+  installment_index?: number
+  total_installments?: number
+  financing_id?: string | null
+  is_reimbursable?: boolean
+  linked_transaction_id?: string | null
   debt_id?: string | null
   receipt_url?: string | null
   created_at: string
