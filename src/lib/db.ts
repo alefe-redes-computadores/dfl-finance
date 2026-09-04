@@ -291,6 +291,7 @@ export interface LocalSyncQueue {
   data: any
   created_at: string
   attempts: number
+  revision?: number
   last_error?: string | null
 }
 
@@ -412,6 +413,46 @@ export async function getPendingSyncItems(userId: string) {
     .sortBy('created_at')
 }
 
+function isQueuePayloadObject(value: any): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function mergeQueuePayload(previous: any, incoming: any) {
+  if (isQueuePayloadObject(previous) && isQueuePayloadObject(incoming)) {
+    return { ...previous, ...incoming }
+  }
+
+  return incoming ?? previous
+}
+
+function coalesceQueueOperation(
+  previous: LocalSyncQueue['operation'],
+  incoming: LocalSyncQueue['operation']
+): LocalSyncQueue['operation'] {
+  if (incoming === 'delete') return 'delete'
+  if (previous === 'delete') return incoming
+  if (previous === 'create') return 'create'
+  if (incoming === 'create') return 'create'
+  return 'update'
+}
+
+function coalesceQueueData(
+  previousOperation: LocalSyncQueue['operation'],
+  previousData: any,
+  incomingOperation: LocalSyncQueue['operation'],
+  incomingData: any
+) {
+  if (incomingOperation === 'delete') {
+    return incomingData
+  }
+
+  if (previousOperation === 'delete') {
+    return incomingData
+  }
+
+  return mergeQueuePayload(previousData, incomingData)
+}
+
 export async function addToSyncQueue(
   userId: string,
   table: LocalSyncQueue['table'],
@@ -419,20 +460,103 @@ export async function addToSyncQueue(
   recordId: string,
   data: any
 ) {
-  return db.syncQueue.add({
-    id: crypto.randomUUID(),
-    user_id: userId,
-    table,
-    operation,
-    record_id: recordId,
-    data,
-    created_at: new Date().toISOString(),
-    attempts: 0,
+  return db.transaction('rw', db.syncQueue, async () => {
+    const existingItems = await db.syncQueue
+      .where('[user_id+table]')
+      .equals([userId, table])
+      .filter((item) => item.record_id === recordId)
+      .sortBy('created_at')
+
+    if (existingItems.length === 0) {
+      const id = crypto.randomUUID()
+
+      await db.syncQueue.add({
+        id,
+        user_id: userId,
+        table,
+        operation,
+        record_id: recordId,
+        data,
+        created_at: new Date().toISOString(),
+        attempts: 0,
+        revision: 0,
+      })
+
+      return id
+    }
+
+    const target = existingItems[0]
+    let mergedOperation = target.operation
+    let mergedData = target.data
+
+    for (const item of existingItems.slice(1)) {
+      mergedData = coalesceQueueData(
+        mergedOperation,
+        mergedData,
+        item.operation,
+        item.data
+      )
+      mergedOperation = coalesceQueueOperation(
+        mergedOperation,
+        item.operation
+      )
+    }
+
+    mergedData = coalesceQueueData(
+      mergedOperation,
+      mergedData,
+      operation,
+      data
+    )
+    mergedOperation = coalesceQueueOperation(
+      mergedOperation,
+      operation
+    )
+
+    const nextRevision = (target.revision ?? 0) + 1
+
+    await db.syncQueue.update(target.id, {
+      operation: mergedOperation,
+      data: mergedData,
+      attempts: 0,
+      last_error: null,
+      revision: nextRevision,
+    })
+
+    const duplicateIds = existingItems
+      .slice(1)
+      .map((item) => item.id)
+
+    if (duplicateIds.length > 0) {
+      await db.syncQueue.bulkDelete(duplicateIds)
+    }
+
+    return target.id
   })
 }
 
 export async function removeFromSyncQueue(id: string) {
   return db.syncQueue.delete(id)
+}
+
+export async function removeFromSyncQueueIfCurrent(
+  id: string,
+  expectedRevision: number
+) {
+  return db.transaction('rw', db.syncQueue, async () => {
+    const current = await db.syncQueue.get(id)
+
+    if (!current) {
+      return false
+    }
+
+    if ((current.revision ?? 0) !== expectedRevision) {
+      return false
+    }
+
+    await db.syncQueue.delete(id)
+    return true
+  })
 }
 
 export async function markSyncFailed(id: string, error: string) {
@@ -443,4 +567,29 @@ export async function markSyncFailed(id: string, error: string) {
       last_error: error,
     })
   }
+}
+
+export async function markSyncFailedIfCurrent(
+  id: string,
+  expectedRevision: number,
+  error: string
+) {
+  return db.transaction('rw', db.syncQueue, async () => {
+    const current = await db.syncQueue.get(id)
+
+    if (!current) {
+      return false
+    }
+
+    if ((current.revision ?? 0) !== expectedRevision) {
+      return false
+    }
+
+    await db.syncQueue.update(id, {
+      attempts: (current.attempts || 0) + 1,
+      last_error: error,
+    })
+
+    return true
+  })
 }

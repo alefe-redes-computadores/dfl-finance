@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { db, addToSyncQueue, getPendingSyncItems, removeFromSyncQueue, markSyncFailed } from '@/lib/db'
+import { db, addToSyncQueue, getPendingSyncItems, removeFromSyncQueueIfCurrent, markSyncFailedIfCurrent } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
 import { useIsAdmin } from '@/hooks/useAdmin'
 
@@ -185,6 +185,7 @@ export function useLocalSync() {
             }
 
             const { table, operation, record_id, data } = item
+            const itemRevision = item.revision ?? 0
             
             let supabaseTable: string = table
             if (table === 'credit_cards') supabaseTable = 'credit_cards'
@@ -210,22 +211,48 @@ export function useLocalSync() {
               throw new Error(error.message)
             }
 
-            renderLog(`Sucesso no ID ${record_id}. Removendo da fila local...`, 'success')
-            console.log(`✅ [SYNC] Item ${item.id} sincronizado com sucesso.`)
-            await removeFromSyncQueue(item.id)
+            const removed = await removeFromSyncQueueIfCurrent(
+              item.id,
+              itemRevision
+            )
+
+            if (removed) {
+              renderLog(`Sucesso no ID ${record_id}. Item removido da fila local.`, 'success')
+              console.log(`✅ [SYNC] Item ${item.id} sincronizado com sucesso.`)
+            } else {
+              renderLog(
+                `Sucesso remoto no ID ${record_id}, mas existe uma revisao local mais nova. Mantendo item na fila.`,
+                'info'
+              )
+              console.log(
+                `[SYNC] Item ${item.id} mudou durante o envio e permanecera pendente.`
+              )
+            }
+
             await updatePendingCount()
 
           } catch (err: any) {
             renderLog(`Falha no item: ${err.message}`, 'error')
             console.error(`❌ [SYNC] Falha no item ${item.id}:`, err)
             
-            const newAttempts = (item.attempts || 0) + 1
-            await markSyncFailed(item.id, err.message)
-
-            renderLog(
-              `Item mantido na fila apos ${newAttempts} tentativa(s) para evitar perda silenciosa de sincronizacao.`,
-              'error'
+            const failureRecorded = await markSyncFailedIfCurrent(
+              item.id,
+              item.revision ?? 0,
+              err.message
             )
+
+            if (failureRecorded) {
+              const newAttempts = (item.attempts || 0) + 1
+              renderLog(
+                `Item mantido na fila apos ${newAttempts} tentativa(s) para evitar perda silenciosa de sincronizacao.`,
+                'error'
+              )
+            } else {
+              renderLog(
+                `Falha pertence a uma revisao antiga do item ${item.id}; uma revisao mais nova continua pendente.`,
+                'info'
+              )
+            }
           }
         }
       }
