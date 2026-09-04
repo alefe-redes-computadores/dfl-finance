@@ -79,8 +79,10 @@ export async function safeAdd<T extends Record<string, any>>(
       sync_status: 'pending',
     }
 
-    await db.table(table).add(finalRecord)
-    await addToSyncQueue(userId, table, 'create', recordId, finalRecord)
+    await db.transaction('rw', db.table(table), db.syncQueue, async () => {
+      await db.table(table).add(finalRecord)
+      await addToSyncQueue(userId, table, 'create', recordId, finalRecord)
+    })
 
     return logOperation('add', table, recordId, {
       success: true,
@@ -137,8 +139,10 @@ export async function safeUpdate(
       sync_status: 'pending',
     }
 
-    await db.table(table).put(finalRecord)
-    await addToSyncQueue(userId, table, 'update', id, finalRecord)
+    await db.transaction('rw', db.table(table), db.syncQueue, async () => {
+      await db.table(table).put(finalRecord)
+      await addToSyncQueue(userId, table, 'update', id, finalRecord)
+    })
 
     return logOperation('update', table, id, {
       success: true,
@@ -380,11 +384,13 @@ export async function safeDelete(
       }
     }
 
-    await db.table(table).delete(id)
-    await addToSyncQueue(userId, table, 'delete', id, {
-      id,
-      user_id: existing.user_id ?? userId,
-      deleted_at: new Date().toISOString(),
+    await db.transaction('rw', db.table(table), db.syncQueue, async () => {
+      await db.table(table).delete(id)
+      await addToSyncQueue(userId, table, 'delete', id, {
+        id,
+        user_id: existing.user_id ?? userId,
+        deleted_at: new Date().toISOString(),
+      })
     })
 
     return logOperation('delete', table, id, {

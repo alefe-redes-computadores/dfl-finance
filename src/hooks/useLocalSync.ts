@@ -38,9 +38,15 @@ export function useLocalSync() {
   }
 
   const updatePendingCount = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      setPendingCount(0)
+      return 0
+    }
+
     const items = await getPendingSyncItems(user.id)
-    setPendingCount(items.length)
+    const count = items.length
+    setPendingCount(count)
+    return count
   }, [user?.id])
 
   // ✅ NOVA LÓGICA: Puxar dados remotos (do Bot/Supabase) para o celular
@@ -63,6 +69,7 @@ export function useLocalSync() {
       const lastPullKey = `dfl_last_pull_${user.id}`
       const storedLastPull = localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
       const syncTime = new Date().toISOString()
+      const failedTables: AllTables[] = []
 
       // ✅ Lista ampliada — agora cobre todas as tabelas sincronizáveis do app.
       // chat_history e chat_sessions ficam de fora de propósito: são
@@ -109,6 +116,7 @@ export function useLocalSync() {
           .gt('updated_at', effectiveLastPull)
 
         if (error) {
+          failedTables.push(tableName)
           renderLog(`Erro ao puxar ${tableName}: ${error.message}`, 'error')
           continue
         }
@@ -130,9 +138,16 @@ export function useLocalSync() {
         }
       }
 
-      // Atualiza a marcação de tempo para o próximo pull
-      localStorage.setItem(lastPullKey, syncTime)
-      renderLog('PULL finalizado com sucesso.', 'success')
+      // So avanca o cutoff se todas as tabelas concluirem.
+      if (failedTables.length === 0) {
+        localStorage.setItem(lastPullKey, syncTime)
+        renderLog('PULL finalizado com sucesso.', 'success')
+      } else {
+        renderLog(
+          `PULL parcial: ${failedTables.length} tabela(s) falharam. lastPull preservado para nova tentativa.`,
+          'error'
+        )
+      }
 
     } catch (err: any) {
       renderLog(`Erro crítico no PULL: ${err?.message}`, 'error')
@@ -163,11 +178,10 @@ export function useLocalSync() {
           try {
             const attempts = item.attempts || 0
             if (attempts >= 3) {
-              renderLog(`⚠️ Item ${item.id} atingiu limite de 3 tentativas. Removendo da fila para desbloquear.`, 'error')
-              console.error(`⚠️ [SYNC] Item corrompido removido da fila: ${item.table}/${item.record_id} após ${attempts} tentativas.`)
-              await removeFromSyncQueue(item.id)
-              await updatePendingCount()
-              continue
+              renderLog(
+                `Item ${item.id} ja falhou ${attempts} vezes e continuara pendente para nova tentativa.`,
+                'error'
+              )
             }
 
             const { table, operation, record_id, data } = item
@@ -207,13 +221,11 @@ export function useLocalSync() {
             
             const newAttempts = (item.attempts || 0) + 1
             await markSyncFailed(item.id, err.message)
-            
-            if (newAttempts >= 3) {
-              renderLog(`⚠️ Item ${item.id} atingiu limite de 3 tentativas. Removendo da fila.`, 'error')
-              console.error(`⚠️ [SYNC] Item removido após 3 falhas: ${item.table}/${item.record_id}`)
-              await removeFromSyncQueue(item.id)
-              await updatePendingCount()
-            }
+
+            renderLog(
+              `Item mantido na fila apos ${newAttempts} tentativa(s) para evitar perda silenciosa de sincronizacao.`,
+              'error'
+            )
           }
         }
       }
@@ -222,7 +234,7 @@ export function useLocalSync() {
       await pullRemoteChanges(forcePull)
 
       await updatePendingCount()
-      if (pendingCount === 0) setSyncStatus(isOnline ? 'online' : 'offline')
+      setSyncStatus(isOnline ? 'online' : 'offline')
 
     } catch (err: any) {
       renderLog(`Erro crítico na fila: ${err?.message}`, 'error')
@@ -231,7 +243,7 @@ export function useLocalSync() {
       isSyncing.current = false
       renderLog('Ciclo de sincronização finalizado.', 'info')
     }
-  }, [user?.id, isOnline, pendingCount, updatePendingCount, pullRemoteChanges])
+  }, [user?.id, isOnline, updatePendingCount, pullRemoteChanges])
 
   useEffect(() => {
     const handleOnline = () => {
