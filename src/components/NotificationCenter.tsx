@@ -1,3 +1,4 @@
+// src/components/NotificationCenter.tsx
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -17,9 +18,8 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { db } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
-import { useOfflineQueue } from '@/hooks/useOfflineQueue'
+import { safeUpdate } from '@/lib/safeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { clearAllNotifications } from '@/lib/notificationUtils'
 import { useIsAdmin } from '@/hooks/useAdmin'
@@ -98,7 +98,6 @@ export default function NotificationCenter({
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { addToSyncQueue } = useOfflineQueue()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { isAdmin } = useIsAdmin()
 
@@ -156,8 +155,10 @@ export default function NotificationCenter({
           updated_at: new Date().toISOString()
         }
 
-        await db.table('notifications').update(notifId, updateData)
-        await addToSyncQueue(user.id, 'notifications', 'update', notifId, updateData)
+        const result = await safeUpdate('notifications', notifId, updateData, user.id)
+        if (!result.success) {
+          throw new Error(result.error || 'Falha ao atualizar notificação')
+        }
       }
 
       // Atualiza a interface otimisticamente (instantâneo)
@@ -175,7 +176,7 @@ export default function NotificationCenter({
     } finally {
       setProcessing(false)
     }
-  }, [user?.id, processing, localNotifs, addToSyncQueue, emitReadChange, showToast])
+  }, [user?.id, processing, localNotifs, emitReadChange, showToast])
 
   const markAllAsRead = useCallback(async () => {
     if (!user?.id) return

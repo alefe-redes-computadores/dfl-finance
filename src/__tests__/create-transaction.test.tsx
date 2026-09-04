@@ -18,8 +18,8 @@ jest.mock('next/navigation', () => ({
     get: jest.fn(),
   }),
 }))
-jest.mock('@/hooks/useOfflineQueue', () => ({
-  useOfflineQueue: () => ({
+jest.mock('@/hooks/useLocalSync', () => ({
+  useLocalSync: () => ({
     isOnline: true,
     saveToQueue: jest.fn(),
   }),

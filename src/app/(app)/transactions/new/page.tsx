@@ -17,7 +17,7 @@ import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
-import { useOfflineQueue } from '@/hooks/useOfflineQueue'
+import { useLocalSync } from '@/hooks/useLocalSync'
 import IconPicker from '@/components/IconPicker'
 import MoneyInput from '@/components/MoneyInput'
 import BankLogo from '@/components/BankLogo'
@@ -167,7 +167,7 @@ function NewTransactionContent() {
   const [newTagColor, setNewTagColor] = useState('#22c55e')
   const [savingTag, setSavingTag] = useState(false)
 
-  const { isOnline } = useOfflineQueue()
+  const { isOnline } = useLocalSync()
 
   // ✅ DADOS AUXILIARES (useLocalData mantido para joins)
   const { data: accounts } = useLocalData({ table: 'accounts' as any, filters: { context: effectiveContext } })
