@@ -1,3 +1,4 @@
+// src/app/(app)/more/page.tsx
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -15,7 +16,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
-import { useSafeDb } from '@/hooks/useSafeDb'
+import { useUserSettings } from '@/hooks/useUserSettings'
 
 // 🔥 SERVIÇOS DE EXPORTAÇÃO
 import { exportTransactionsToCSV, exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService'
@@ -276,6 +277,7 @@ export default function MorePage() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const { appMode, setAppMode, effectiveContext } = useContext_()
+  const { settings: userSettings, updateSettings } = useUserSettings()
 
   const [isClient, setIsClient] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -294,16 +296,16 @@ export default function MorePage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => setIsClient(true), [])
 
   useEffect(() => {
-    const saved = localStorage.getItem('dfl_notifications_enabled')
-    setNotificationsEnabled(saved !== 'false')
     setExportContext(effectiveContext)
   }, [effectiveContext])
+
+  const notificationsEnabled =
+    userSettings?.preferences.push_notifications ?? true
 
   useEffect(() => {
     if (user?.id) {
@@ -319,24 +321,46 @@ export default function MorePage() {
 
   // ✅ Removido toggleTheme daqui – agora está dentro do modal
 
-  const toggleNotifications = () => {
+  const toggleNotifications = async () => {
+    if (!user?.id) return
+
     const newValue = !notificationsEnabled
-    setNotificationsEnabled(newValue)
-    localStorage.setItem('dfl_notifications_enabled', String(newValue))
-    showToast(newValue ? 'Notificações ativadas' : 'Notificações desativadas', 'success')
+
+    try {
+      const result = await updateSettings({
+        preferences: {
+          push_notifications: newValue,
+        },
+      })
+
+      showToast(
+        result.synced
+          ? newValue
+            ? 'Notificações ativadas.'
+            : 'Notificações desativadas.'
+          : 'Preferência salva neste dispositivo e aguardando sincronização.',
+        result.synced ? 'success' : 'info'
+      )
+    } catch (error: any) {
+      showToast(
+        error?.message || 'Não foi possível atualizar as notificações.',
+        'error'
+      )
+    }
   }
 
-  const toggleAppMode = async () => {
+  const toggleAppMode = () => {
     if (!user?.id) return
+
     const newMode = appMode === 'full' ? 'personal_only' : 'full'
     setAppMode(newMode)
-    localStorage.setItem('dfl_app_mode', newMode)
-    try {
-      await supabase.from('user_settings').upsert({ user_id: user.id, app_mode: newMode, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-      showToast(newMode === 'full' ? 'Modo PF e PJ Ativado!' : 'Modo Apenas PF Ativado!', 'success')
-    } catch (err: any) {
-      showToast('Alterado apenas localmente.', 'info')
-    }
+
+    showToast(
+      newMode === 'full'
+        ? 'Modo PF e PJ ativado.'
+        : 'Modo apenas PF ativado.',
+      'success'
+    )
   }
 
   const isGoogleLogin = user?.app_metadata?.provider === 'google'

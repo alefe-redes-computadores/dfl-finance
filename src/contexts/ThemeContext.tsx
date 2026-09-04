@@ -1,9 +1,17 @@
+// src/contexts/ThemeContext.tsx
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import {
+  getCachedUserSettings,
+  loadUserSettings,
+  saveUserSettings,
+  subscribeToUserSettings,
+  type ThemePreference,
+} from '@/lib/userSettings'
 
-type Theme = 'light' | 'dark'
+type Theme = ThemePreference
 
 interface ThemeContextType {
   theme: Theme
@@ -15,77 +23,104 @@ const ThemeContext = createContext<ThemeContextType>({
   toggleTheme: () => {},
 })
 
+function applyTheme(theme: Theme) {
+  if (typeof document === 'undefined') return
+
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Começamos sempre assumindo light (o script no layout.tsx segura a aparência)
   const [theme, setTheme] = useState<Theme>('light')
   const [userId, setUserId] = useState<string | null>(null)
 
-  // Identifica o usuário logado
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data?.session?.user?.id) {
-        setUserId(data.session.user.id)
-      }
-    })
+    const initialTheme: Theme =
+      typeof document !== 'undefined' &&
+      document.documentElement.classList.contains('dark')
+        ? 'dark'
+        : 'light'
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id || null)
-    })
-
-    return () => listener.subscription.unsubscribe()
+    setTheme(initialTheme)
   }, [])
 
-  // Inicializa o tema baseado no navegador ou banco de dados
   useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark')
-    setTheme(isDark ? 'dark' : 'light')
+    let active = true
 
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return
+      setUserId(data?.session?.user?.id || null)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUserId(session?.user?.id || null)
+      }
+    )
+
+    return () => {
+      active = false
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
     if (!userId) return
 
-    supabase
-      .from('user_settings')
-      .select('theme')
-      .eq('user_id', userId)
-      .single()
-      .then(({ data }) => {
-        if (data?.theme) {
-          const dbTheme = data.theme as Theme
-          setTheme(dbTheme)
-          localStorage.setItem('theme', dbTheme)
-          if (dbTheme === 'dark') {
-            document.documentElement.classList.add('dark')
-          } else {
-            document.documentElement.classList.remove('dark')
-          }
-        }
+    const cached = getCachedUserSettings(userId)
+    setTheme(cached.theme)
+    applyTheme(cached.theme)
+
+    let active = true
+
+    loadUserSettings(userId).then((result) => {
+      if (!active) return
+      setTheme(result.settings.theme)
+      applyTheme(result.settings.theme)
+    })
+
+    const unsubscribe = subscribeToUserSettings((settings) => {
+      if (settings.user_id !== userId) return
+      setTheme(settings.theme)
+      applyTheme(settings.theme)
+    })
+
+    const handleOnline = () => {
+      loadUserSettings(userId).then((result) => {
+        if (!active) return
+        setTheme(result.settings.theme)
+        applyTheme(result.settings.theme)
       })
+    }
+
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      active = false
+      unsubscribe()
+      window.removeEventListener('online', handleOnline)
+    }
   }, [userId])
 
-  // Função cirúrgica para trocar o tema sem stales
   const toggleTheme = () => {
     setTheme((currentTheme) => {
-      const newTheme = currentTheme === 'light' ? 'dark' : 'light'
-      
-      // 1. Aplica na tela instantaneamente
-      if (newTheme === 'dark') {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
-      
-      // 2. Salva no celular
-      localStorage.setItem('theme', newTheme)
+      const nextTheme: Theme =
+        currentTheme === 'light' ? 'dark' : 'light'
 
-      // 3. Salva na nuvem (em background para não travar o botão)
+      applyTheme(nextTheme)
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('theme', nextTheme)
+      }
+
       if (userId) {
-        supabase.from('user_settings').upsert({
-          user_id: userId,
-          theme: newTheme,
-          updated_at: new Date().toISOString()
-        }).then()
+        void saveUserSettings(userId, { theme: nextTheme })
       }
 
-      return newTheme
+      return nextTheme
     })
   }
 

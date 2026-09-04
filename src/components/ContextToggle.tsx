@@ -1,15 +1,24 @@
+// src/components/ContextToggle.tsx
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { supabase } from '@/lib/supabase'
+import {
+  getCachedUserSettings,
+  loadUserSettings,
+  saveUserSettings,
+  subscribeToUserSettings,
+  type AppMode,
+} from '@/lib/userSettings'
 
 type Context = 'dfl' | 'personal'
 
 interface ContextCtx {
   context: Context
   setContext: (c: Context) => void
-  appMode: 'personal_only' | 'full' | null
-  setAppMode: (m: 'personal_only' | 'full') => void
+  appMode: AppMode | null
+  setAppMode: (m: AppMode) => void
   effectiveContext: Context
 }
 
@@ -24,34 +33,113 @@ const ContextCtx = createContext<ContextCtx>({
 export const useContext_ = () => useContext(ContextCtx)
 
 export function ContextProvider({ children }: { children: React.ReactNode }) {
-  const [appMode, setAppModeState] = useState<'personal_only' | 'full' | null>(null)
+  const [appMode, setAppModeState] = useState<AppMode | null>(null)
   const [context, setContextState] = useState<Context>('dfl')
+  const [userId, setUserId] = useState<string | null>(null)
+
+  const applyAppMode = (mode: AppMode, resetContext = false) => {
+    setAppModeState(mode)
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dfl_app_mode', mode)
+    }
+
+    setContextState((current) => {
+      if (mode === 'personal_only') return 'personal'
+      if (resetContext) return 'dfl'
+      return current
+    })
+  }
 
   useEffect(() => {
-    const cached = localStorage.getItem('dfl_app_mode') as 'personal_only' | 'full' | null
-    if (cached) {
-      setAppModeState(cached)
-      setContextState(cached === 'personal_only' ? 'personal' : 'dfl')
-    } else {
-      setAppModeState('full')
-      setContextState('dfl')
+    const cachedMode =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('dfl_app_mode')
+        : null
+
+    const initialMode: AppMode =
+      cachedMode === 'personal_only' ? 'personal_only' : 'full'
+
+    applyAppMode(initialMode, true)
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return
+      setUserId(data?.session?.user?.id || null)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUserId(session?.user?.id || null)
+      }
+    )
+
+    return () => {
+      active = false
+      listener.subscription.unsubscribe()
     }
   }, [])
 
-  const effectiveContext: Context = appMode === 'personal_only' ? 'personal' : context
+  useEffect(() => {
+    if (!userId) return
+
+    const cached = getCachedUserSettings(userId)
+    applyAppMode(cached.app_mode, true)
+
+    let active = true
+
+    loadUserSettings(userId).then((result) => {
+      if (!active) return
+      applyAppMode(result.settings.app_mode, true)
+    })
+
+    const unsubscribe = subscribeToUserSettings((settings) => {
+      if (settings.user_id !== userId) return
+      applyAppMode(settings.app_mode)
+    })
+
+    const handleOnline = () => {
+      loadUserSettings(userId).then((result) => {
+        if (!active) return
+        applyAppMode(result.settings.app_mode)
+      })
+    }
+
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      active = false
+      unsubscribe()
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [userId])
+
+  const effectiveContext: Context =
+    appMode === 'personal_only' ? 'personal' : context
 
   return (
-    <ContextCtx.Provider value={{
-      context,
-      setContext: (c) => appMode !== 'personal_only' && setContextState(c),
-      appMode,
-      setAppMode: (mode) => {
-        setAppModeState(mode)
-        localStorage.setItem('dfl_app_mode', mode)
-        setContextState(mode === 'personal_only' ? 'personal' : 'dfl')
-      },
-      effectiveContext,
-    }}>
+    <ContextCtx.Provider
+      value={{
+        context,
+        setContext: (nextContext) => {
+          if (appMode !== 'personal_only') {
+            setContextState(nextContext)
+          }
+        },
+        appMode,
+        setAppMode: (mode) => {
+          applyAppMode(mode)
+
+          if (userId) {
+            void saveUserSettings(userId, { app_mode: mode })
+          }
+        },
+        effectiveContext,
+      }}
+    >
       {children}
     </ContextCtx.Provider>
   )
@@ -73,8 +161,7 @@ export default function ContextToggle() {
     }
   }
 
-  // 🔥 Skeleton atualizado
-  if (!mounted) {
+  if (!mounted || appMode === null) {
     return (
       <div className="h-10 w-[148px] rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm animate-pulse" />
     )
@@ -82,10 +169,10 @@ export default function ContextToggle() {
 
   if (appMode === 'personal_only') return null
 
-  // 🔥 Seletor refatorado
   return (
     <div className="inline-flex h-10 items-center rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 shadow-sm shrink-0 transition-colors duration-300">
       <button
+        type="button"
         onClick={() => handleToggle('dfl')}
         className={`h-8 px-3 rounded-[14px] text-[13px] font-semibold transition-all duration-200 active:scale-[0.98] ${
           context === 'dfl'
@@ -97,6 +184,7 @@ export default function ContextToggle() {
       </button>
 
       <button
+        type="button"
         onClick={() => handleToggle('personal')}
         className={`h-8 px-3 rounded-[14px] text-[13px] font-semibold transition-all duration-200 active:scale-[0.98] ${
           context === 'personal'
