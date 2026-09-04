@@ -10,6 +10,19 @@ import { useIsAdmin } from '@/hooks/useAdmin'
 
 type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline'
 
+type PullResult = {
+  success: boolean
+  failedTables: AllTables[]
+}
+
+type SyncCycleResult = {
+  success: boolean
+  pushFailures: number
+  pendingCount: number
+  pullSuccess: boolean
+  pullFailedTables: AllTables[]
+}
+
 type AllTables = 
   | 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' 
   | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' 
@@ -22,6 +35,7 @@ export function useLocalSync() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [pendingCount, setPendingCount] = useState(0)
+  const [isSyncingState, setIsSyncingState] = useState(false)
   const isSyncing = useRef(false)
 
   const renderLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
@@ -61,8 +75,13 @@ export function useLocalSync() {
   // notifications NUNCA fossem puxadas da nuvem — mesmo existindo lá, com
   // schema correto e sem erro de RLS. Agora a lista cobre todas as tabelas
   // do app que fazem sentido sincronizar via pull.
-  const pullRemoteChanges = useCallback(async (force = false) => {
-    if (!user?.id || !isOnline) return
+  const pullRemoteChanges = useCallback(async (force = false): Promise<PullResult> => {
+    if (!user?.id || !isOnline) {
+      return {
+        success: false,
+        failedTables: [],
+      }
+    }
     renderLog(`Iniciando PULL da nuvem${force ? ' (FORÇADO / FULL RESYNC)' : ''}...`, 'info')
 
     try {
@@ -235,28 +254,77 @@ export function useLocalSync() {
       if (failedTables.length === 0) {
         localStorage.setItem(lastPullKey, syncTime)
         renderLog('PULL finalizado com sucesso.', 'success')
-      } else {
-        renderLog(
-          `PULL parcial: ${failedTables.length} tabela(s) falharam. lastPull preservado para nova tentativa.`,
-          'error'
-        )
+
+        return {
+          success: true,
+          failedTables: [],
+        }
       }
 
+      renderLog(
+        `PULL parcial: ${failedTables.length} tabela(s) falharam. lastPull preservado para nova tentativa.`,
+        'error'
+      )
+
+      return {
+        success: false,
+        failedTables,
+      }
     } catch (err: any) {
       renderLog(`Erro crítico no PULL: ${err?.message}`, 'error')
       console.error('❌ [SYNC PULL] Erro:', err)
+
+      return {
+        success: false,
+        failedTables: [],
+      }
     }
   }, [user?.id, isOnline, isAdmin])
 
-  const processSyncQueue = useCallback(async (forcePull = false) => {
+  const processSyncQueue = useCallback(async (forcePull = false): Promise<SyncCycleResult> => {
     renderLog('Iniciando processSyncQueue...', 'info')
-    
-    if (!user?.id) { renderLog('Cancelado: Usuário sem ID logado', 'error'); return }
-    if (isSyncing.current) { renderLog('Cancelado: Já existe uma fila rodando', 'info'); return }
-    if (!isOnline) { renderLog('Cancelado: Dispositivo detectado como Offline', 'error'); return }
+
+    if (!user?.id) {
+      renderLog('Cancelado: Usuário sem ID logado', 'error')
+
+      return {
+        success: false,
+        pushFailures: 0,
+        pendingCount: 0,
+        pullSuccess: false,
+        pullFailedTables: [],
+      }
+    }
+
+    if (isSyncing.current) {
+      renderLog('Cancelado: Já existe uma fila rodando', 'info')
+
+      return {
+        success: false,
+        pushFailures: 0,
+        pendingCount: await updatePendingCount(),
+        pullSuccess: false,
+        pullFailedTables: [],
+      }
+    }
+
+    if (!isOnline) {
+      renderLog('Cancelado: Dispositivo detectado como Offline', 'error')
+
+      return {
+        success: false,
+        pushFailures: 0,
+        pendingCount: await updatePendingCount(),
+        pullSuccess: false,
+        pullFailedTables: [],
+      }
+    }
 
     isSyncing.current = true
+    setIsSyncingState(true)
     setSyncStatus('syncing')
+
+    let pushFailures = 0
 
     try {
       renderLog('Buscando itens pendentes no Dexie...', 'info')
@@ -335,6 +403,7 @@ export function useLocalSync() {
             )
 
             if (failureRecorded) {
+              pushFailures += 1
               const newAttempts = (item.attempts || 0) + 1
               renderLog(
                 `Item mantido na fila apos ${newAttempts} tentativa(s) para evitar perda silenciosa de sincronizacao.`,
@@ -351,16 +420,55 @@ export function useLocalSync() {
       }
 
       // PASSO 2: PUXAR (PULL) OS DADOS DO WHATSAPP / NUVEM PARA O CELULAR
-      await pullRemoteChanges(forcePull)
+      const pullResult = await pullRemoteChanges(forcePull)
+      const remainingPendingCount = await updatePendingCount()
 
-      await updatePendingCount()
+      const success =
+        pushFailures === 0 &&
+        remainingPendingCount === 0 &&
+        pullResult.success
+
       setSyncStatus(isOnline ? 'online' : 'offline')
 
+      if (success) {
+        renderLog(
+          'Ciclo de sincronização concluído sem pendências.',
+          'success'
+        )
+      } else {
+        renderLog(
+          `Ciclo concluído com pendências: ${pushFailures} falha(s) de PUSH, ` +
+            `${remainingPendingCount} item(ns) na fila e ` +
+            `${pullResult.failedTables.length} tabela(s) com falha no PULL.`,
+          'error'
+        )
+      }
+
+      return {
+        success,
+        pushFailures,
+        pendingCount: remainingPendingCount,
+        pullSuccess: pullResult.success,
+        pullFailedTables: pullResult.failedTables,
+      }
     } catch (err: any) {
       renderLog(`Erro crítico na fila: ${err?.message}`, 'error')
       console.error('❌ [SYNC] Erro crítico:', err)
+
+      const remainingPendingCount = await updatePendingCount()
+
+      setSyncStatus(isOnline ? 'online' : 'offline')
+
+      return {
+        success: false,
+        pushFailures: pushFailures + 1,
+        pendingCount: remainingPendingCount,
+        pullSuccess: false,
+        pullFailedTables: [],
+      }
     } finally {
       isSyncing.current = false
+      setIsSyncingState(false)
       renderLog('Ciclo de sincronização finalizado.', 'info')
     }
   }, [user?.id, isOnline, updatePendingCount, pullRemoteChanges])
@@ -406,16 +514,53 @@ export function useLocalSync() {
   // útil como botão de emergência ("Ressincronizar tudo").
   const forceFullResync = useCallback(async () => {
     renderLog('Ação manual: Ressincronização COMPLETA acionada.', 'info')
+
     if (!isOnline) {
-      showToast('📡 Sem conexão.', 'warning')
+      showToast('Sem conexão.', 'warning')
       return
     }
+
     if (user?.id) {
       localStorage.removeItem(`dfl_last_pull_${user.id}`)
     }
-    await processSyncQueue(true)
-    showToast('✅ Ressincronização completa concluída.', 'success')
+
+    const result = await processSyncQueue(true)
+
+    if (result.success) {
+      showToast(
+        'Ressincronização completa concluída.',
+        'success'
+      )
+      return
+    }
+
+    if (result.pendingCount > 0) {
+      showToast(
+        `Ressincronização incompleta: ${result.pendingCount} item(ns) ainda aguardando sincronização.`,
+        'warning'
+      )
+      return
+    }
+
+    if (!result.pullSuccess) {
+      const pullMessage =
+        result.pullFailedTables.length > 0
+          ? `${result.pullFailedTables.length} tabela(s) falharam no recebimento.`
+          : 'O recebimento remoto não foi concluído.'
+
+      showToast(
+        `Ressincronização incompleta: ${pullMessage}`,
+        'warning'
+      )
+      return
+    }
+
+    showToast(
+      'Ressincronização incompleta. Algumas operações precisam de nova tentativa.',
+      'warning'
+    )
   }, [isOnline, processSyncQueue, user?.id, showToast])
+
 
   const refreshPendingCount = useCallback(async () => {
     await updatePendingCount()
@@ -425,7 +570,7 @@ export function useLocalSync() {
     syncStatus,
     isOnline,
     pendingCount,
-    isSyncing: isSyncing.current,
+    isSyncing: isSyncingState,
     queueOperation,
     forceSync,
     forceFullResync,
