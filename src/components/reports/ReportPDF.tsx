@@ -1,17 +1,11 @@
-import React from 'react'
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
-
-// 🔥 SUBSTITUÍDO: Fonte Poppins (opcional)
-Font.register({
-  family: 'Poppins',
-  src: 'https://fonts.gstatic.com/s/poppins/v20/pxiEyp8kv8JHgFVrJJfecg.ttf',
-})
+// src/components/reports/ReportPDF.tsx
+import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontSize: 10,
-    fontFamily: 'Poppins',
+    fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
   },
   header: {
@@ -120,12 +114,12 @@ const styles = StyleSheet.create({
   },
 })
 
-// 🔥 SUBSTITUÍDO: interface com campos opcionais
 interface Transaction {
   id?: string
   date?: string
   description?: string | null
   category?: string | null
+  categoryLabel?: string | null
   categories?: { name?: string | null } | null
   type: string
   amount: number | string
@@ -141,18 +135,40 @@ interface ReportPDFProps {
   transactions: Transaction[]
 }
 
-// 🔥 SUBSTITUÍDO: safeNum com Number
-const safeNum = (val: unknown) => Number(val) || 0
-
-// 🔥 SUBSTITUÍDO: formatDate com validação
-function formatDate(dateStr: string) {
-  if (!dateStr) return ''
-  const d = new Date(`${dateStr}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('pt-BR')
+const safeNum = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
-export default function ReportPDF({ title, period, income, expense, balance, transactions }: ReportPDFProps) {
+function formatDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '')
+  if (!match) return ''
+
+  return `${match[3]}/${match[2]}/${match[1]}`
+}
+
+function transactionAppearance(type: string) {
+  if (type === 'income') {
+    return { prefix: '+ ', color: '#10b981' }
+  }
+
+  if (type === 'expense' || type === 'sangria') {
+    return { prefix: '- ', color: '#ef4444' }
+  }
+
+  return { prefix: '', color: '#64748b' }
+}
+
+export default function ReportPDF({
+  title,
+  period,
+  income,
+  expense,
+  balance,
+  transactions,
+}: ReportPDFProps) {
+  const generatedAt = new Date().toLocaleDateString('pt-BR')
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -165,24 +181,35 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Receitas</Text>
             <Text style={[styles.summaryValue, styles.income]}>
-              + R$ {safeNum(income).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              + R$ {safeNum(income).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+              })}
             </Text>
           </View>
+
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Despesas</Text>
             <Text style={[styles.summaryValue, styles.expense]}>
-              - R$ {safeNum(expense).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              - R$ {safeNum(expense).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+              })}
             </Text>
           </View>
+
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Saldo</Text>
             <Text style={[styles.summaryValue, styles.balance]}>
-              R$ {safeNum(balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {safeNum(balance).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+              })}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Transações do Período</Text>
+        <Text style={styles.sectionTitle}>
+          Transações do Período
+        </Text>
+
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={styles.cellDate}>DATA</Text>
@@ -191,20 +218,48 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
             <Text style={styles.cellAmount}>VALOR</Text>
           </View>
 
-          {/* 🔥 SUBSTITUÍDO: map com fallbacks robustos */}
-          {transactions.map((tx, index) => {
-            const categoryName = tx.categories?.name || tx.category || 'Geral'
-            const description = tx.description || categoryName || 'Sem descrição'
-            const amount = safeNum(tx.amount)
+          {transactions.map((transaction, index) => {
+            const categoryName =
+              transaction.categoryLabel ||
+              transaction.categories?.name ||
+              transaction.category ||
+              'Geral'
+
+            const description =
+              transaction.description ||
+              categoryName ||
+              'Sem descrição'
+
+            const amount = safeNum(transaction.amount)
+            const appearance = transactionAppearance(transaction.type)
 
             return (
-              <View key={tx.id || index} style={styles.tableRow}>
-                <Text style={styles.cellDate}>{formatDate(tx.date || '')}</Text>
-                <Text style={styles.cellDesc}>{description}</Text>
-                <Text style={styles.cellCategory}>{categoryName}</Text>
-                <Text style={[styles.cellAmount, { color: tx.type === 'income' ? '#10b981' : '#ef4444' }]}>
-                  {tx.type === 'income' ? '+ ' : '- '}
-                  R$ {amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              <View
+                key={transaction.id || index}
+                style={styles.tableRow}
+              >
+                <Text style={styles.cellDate}>
+                  {formatDate(transaction.date || '')}
+                </Text>
+
+                <Text style={styles.cellDesc}>
+                  {description}
+                </Text>
+
+                <Text style={styles.cellCategory}>
+                  {categoryName}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.cellAmount,
+                    { color: appearance.color },
+                  ]}
+                >
+                  {appearance.prefix}
+                  R$ {amount.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                  })}
                 </Text>
               </View>
             )
@@ -212,7 +267,7 @@ export default function ReportPDF({ title, period, income, expense, balance, tra
         </View>
 
         <Text style={styles.footer}>
-          Gerado por DFL Finance em {new Date().toLocaleDateString('pt-BR')}
+          Gerado por DFL Finance em {generatedAt}
         </Text>
       </Page>
     </Document>
