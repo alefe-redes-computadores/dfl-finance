@@ -1,3 +1,4 @@
+// src/hooks/useLocalData.ts
 'use client'
 
 import { useMemo, useState, useCallback } from 'react'
@@ -67,9 +68,12 @@ export function useLocalData<T = any>({
         const valB = b?.[orderBy]
 
         if (['date', 'created_at', 'updated_at', 'due_date'].includes(orderBy)) {
-          const timeA = valA ? new Date(valA).getTime() : 0
-          const timeB = valB ? new Date(valB).getTime() : 0
-          return orderDir === 'desc' ? timeB - timeA : timeA - timeB
+          const dateA = typeof valA === 'string' ? valA : ''
+          const dateB = typeof valB === 'string' ? valB : ''
+
+          return orderDir === 'desc'
+            ? dateB.localeCompare(dateA)
+            : dateA.localeCompare(dateB)
         }
 
         if (typeof valA === 'number' && typeof valB === 'number') {
@@ -96,7 +100,6 @@ export function useLocalData<T = any>({
   return {
     data: data ?? [],
     loading: data === undefined,
-    syncing: false,
     reload,
   }
 }
