@@ -67,6 +67,7 @@ export interface LocalDebt {
   user_id: string
   context: 'dfl' | 'personal'
   person_name: string
+  contact_id?: string | null
   description?: string | null
   total_amount: number
   paid_amount: number
@@ -143,12 +144,30 @@ export interface LocalContact {
   user_id: string
   context: 'dfl' | 'personal'
   name: string
-  type: 'individual' | 'company'
-  email?: string
-  phone?: string
+
+  // `type` continua existindo por compatibilidade com registros antigos.
+  // Novos registros usam `entity_type` + `relationship_type` como contrato explícito.
+  type: string
+  entity_type?: 'individual' | 'company' | null
+  relationship_type?: 'customer' | 'supplier' | 'both' | 'other' | null
+
+  email?: string | null
+  phone?: string | null
+  document?: string | null
+  company?: string | null
+  position?: string | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
+  zip_code?: string | null
+  notes?: string | null
+  color?: string | null
+  icon?: string | null
+
   created_at: string
   updated_at: string
   sync_status: 'synced' | 'pending' | 'failed'
+  sync_attempts?: number
 }
 
 export interface LocalBudget {

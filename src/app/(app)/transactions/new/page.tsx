@@ -167,6 +167,7 @@ function NewTransactionContent() {
   const { data: creditCards } = useLocalData({ table: 'credit_cards' as any, filters: { context: effectiveContext, is_archived: false } })
   const { data: contacts } = useLocalData({ table: 'contacts' as any, filters: { context: effectiveContext } })
   const { data: budgets } = useLocalData({ table: 'budgets' as any, filters: { context: effectiveContext } })
+  const requestedContactId = searchParams.get('contact_id')
 
   const validCategories = useMemo(() => {
     const expectedType = type === 'income' ? 'income' : 'expense'
@@ -209,6 +210,18 @@ function NewTransactionContent() {
     setContactId('')
     setSelectedTags([])
   }, [effectiveContext])
+
+  useEffect(() => {
+    if (!requestedContactId) return
+
+    const existsInCurrentContext = (contacts || []).some(
+      (contact: any) => contact.id === requestedContactId
+    )
+
+    if (existsInCurrentContext) {
+      setContactId(requestedContactId)
+    }
+  }, [contacts, requestedContactId])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 

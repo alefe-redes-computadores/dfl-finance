@@ -2,7 +2,8 @@
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '@/lib/db'
+
+import { db, type LocalContact } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 
 export function useContactsList(context?: 'dfl' | 'personal') {
@@ -21,10 +22,14 @@ export function useContactsList(context?: 'dfl' | 'personal') {
     }
 
     return items.sort((a, b) => {
-      const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0
-      const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0
-      return bTime - aTime
-    })
+      const updatedCompare = String(b.updated_at || '').localeCompare(
+        String(a.updated_at || '')
+      )
+
+      if (updatedCompare !== 0) return updatedCompare
+
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')
+    }) as LocalContact[]
   }, [user?.id, context])
 
   return {

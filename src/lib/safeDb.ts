@@ -379,6 +379,82 @@ export async function safeDelete(
       })
     }
 
+    if (table === 'contacts') {
+      const linkedTransactions = await db.transactions
+        .where('user_id')
+        .equals(userId)
+        .filter((tx: any) => tx.contact_id === id)
+        .toArray()
+
+      const linkedDebts = await db.debts
+        .where('user_id')
+        .equals(userId)
+        .filter((debt: any) => debt.contact_id === id)
+        .toArray()
+
+      const now = new Date().toISOString()
+
+      await db.transaction(
+        'rw',
+        db.contacts,
+        db.transactions,
+        db.debts,
+        db.syncQueue,
+        async () => {
+          for (const tx of linkedTransactions) {
+            const updatedTransaction = {
+              ...tx,
+              contact_id: null,
+              updated_at: now,
+              sync_status: 'pending',
+            }
+
+            await db.transactions.put(updatedTransaction)
+            await addToSyncQueue(
+              userId,
+              'transactions',
+              'update',
+              tx.id,
+              updatedTransaction
+            )
+          }
+
+          for (const debt of linkedDebts) {
+            const updatedDebt = {
+              ...debt,
+              contact_id: null,
+              updated_at: now,
+              sync_status: 'pending',
+            }
+
+            await db.debts.put(updatedDebt)
+            await addToSyncQueue(
+              userId,
+              'debts',
+              'update',
+              debt.id,
+              updatedDebt
+            )
+          }
+
+          await db.contacts.delete(id)
+          await addToSyncQueue(userId, 'contacts', 'delete', id, {
+            id,
+            user_id: existing.user_id ?? userId,
+            deleted_at: now,
+          })
+        }
+      )
+
+      return logOperation('delete', table, id, {
+        success: true,
+        operation: 'delete' as const,
+        table,
+        id,
+        affected: linkedTransactions.length + linkedDebts.length + 1,
+      })
+    }
+
     if (table === 'accounts') {
       const transactionsCount = await db.transactions
         .where('account_id')

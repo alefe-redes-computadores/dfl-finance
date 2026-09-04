@@ -1,27 +1,37 @@
+// src/app/(app)/contacts/new/page.tsx
 'use client'
 
-import { Suspense, useState, useEffect, useMemo } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
+  AlertTriangle,
   ArrowLeft,
+  Building2,
+  ChevronDown,
+  ChevronUp,
   Save,
   Trash2,
-  RefreshCw,
   User,
-  Building2,
-  AlertTriangle,
-} from "lucide-react"
-import { useToast } from "@/contexts/ToastContext"
-import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useContactById } from "@/hooks/useContactById"
-import { useContext_ } from "@/components/ContextToggle"
-import { useAuth } from "@/lib/hooks/useAuth"
-import { useSafeDb } from "@/hooks/useSafeDb"
-import Skeleton from "@/components/Skeleton"
+} from 'lucide-react'
 
-function lightTap() {
-  if (typeof window !== "undefined" && navigator.vibrate) navigator.vibrate(10)
-}
+import Skeleton from '@/components/Skeleton'
+import { useContext_ } from '@/components/ContextToggle'
+import { useToast } from '@/contexts/ToastContext'
+import { useContactById } from '@/hooks/useContactById'
+import { useContactsList } from '@/hooks/useContactsList'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useSafeDb } from '@/hooks/useSafeDb'
+import { useAuth } from '@/lib/hooks/useAuth'
+import {
+  getContactEntityType,
+  getContactRelationshipType,
+  normalizeContactSearch,
+  type ContactEntityType,
+  type ContactRelationshipType,
+} from '@/lib/contactOperations'
+
+const inputBase =
+  'w-full rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3.5 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-teal-500 dark:focus:bg-slate-900'
 
 function FieldLabel({
   children,
@@ -31,319 +41,414 @@ function FieldLabel({
   optional?: boolean
 }) {
   return (
-    <label className="mb-2 block text-[13px] font-semibold text-slate-600 dark:text-slate-300">
-      {children} {optional && <span className="text-slate-400">Opcional</span>}
+    <label className="mb-1.5 ml-1 flex items-center gap-1 text-[12px] font-semibold text-slate-600 dark:text-slate-400">
+      {children}
+      {optional && <span className="font-normal text-slate-400">· opcional</span>}
     </label>
   )
 }
 
 function Section({
   title,
+  subtitle,
   children,
 }: {
   title: string
+  subtitle?: string
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[28px] border border-slate-200/70 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+    <section className="rounded-[26px] border border-slate-200/70 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-4">
-        <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">
+        <h2 className="text-[14px] font-bold text-slate-900 dark:text-slate-100">
           {title}
         </h2>
+        {subtitle && (
+          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+            {subtitle}
+          </p>
+        )}
       </div>
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3">{children}</div>
     </section>
   )
 }
 
-const inputBase =
-  "w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5 text-[15px] font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900"
-
-function NewContactContent() {
+function ContactForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
-  // ✅ useMemo para normalizar o ID
-  const rawEditId = searchParams.get("edit")
+  const rawEditId = searchParams.get('edit')
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
-  
+
   const { showToast } = useToast()
-  const { success, error: errorHaptic } = useHapticFeedback()
+  const { vibrate, success, error: hapticError } = useHapticFeedback()
   const { user } = useAuth()
   const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
-
   const { context, appMode } = useContext_()
-  const effectiveContext = appMode === "personal_only" ? "personal" : context
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const { data: contact, loading, notFound } = useContactById(editId)
+  const recordContext =
+    editId && contact?.context
+      ? contact.context
+      : effectiveContext
+
+  const { data: contacts } = useContactsList(recordContext)
 
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)
   const [showDeleteSheet, setShowDeleteSheet] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showMore, setShowMore] = useState(false)
 
-  const [name, setName] = useState("")
-  const [type, setType] = useState("individual")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [document, setDocument] = useState("")
-  const [company, setCompany] = useState("")
-  const [position, setPosition] = useState("")
-  const [address, setAddress] = useState("")
-  const [city, setCity] = useState("")
-  const [state, setState] = useState("")
-  const [zipCode, setZipCode] = useState("")
-  const [notes, setNotes] = useState("")
+  const [name, setName] = useState('')
+  const [entityType, setEntityType] =
+    useState<ContactEntityType>('individual')
+  const [relationshipType, setRelationshipType] =
+    useState<ContactRelationshipType>('other')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [documentValue, setDocumentValue] = useState('')
+  const [company, setCompany] = useState('')
+  const [position, setPosition] = useState('')
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [zipCode, setZipCode] = useState('')
+  const [notes, setNotes] = useState('')
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO
   useEffect(() => {
-    if (editId && contact && !initialized) {
-      setName(contact.name || "")
-      setType(contact.type || "individual")
-      setEmail(contact.email || "")
-      setPhone(contact.phone || "")
-      setDocument(contact.document || "")
-      setCompany(contact.company || "")
-      setPosition(contact.position || "")
-      setAddress(contact.address || "")
-      setCity(contact.city || "")
-      setState(contact.state || "")
-      setZipCode(contact.zip_code || "")
-      setNotes(contact.notes || "")
-      setInitialized(true)
-    }
-    
-    if (!editId && !initialized) {
-      setInitialized(true)
-    }
-  }, [editId, contact, initialized])
+    if (!editId || !contact || initialized) return
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+    setName(contact.name || '')
+    setEntityType(getContactEntityType(contact))
+    setRelationshipType(getContactRelationshipType(contact))
+    setEmail(contact.email || '')
+    setPhone(contact.phone || '')
+    setDocumentValue(contact.document || '')
+    setCompany(contact.company || '')
+    setPosition(contact.position || '')
+    setAddress(contact.address || '')
+    setCity(contact.city || '')
+    setState(contact.state || '')
+    setZipCode(contact.zip_code || '')
+    setNotes(contact.notes || '')
+    setShowMore(
+      Boolean(
+        contact.company ||
+          contact.position ||
+          contact.address ||
+          contact.city ||
+          contact.state ||
+          contact.zip_code ||
+          contact.notes
+      )
+    )
+    setInitialized(true)
+  }, [contact, editId, initialized])
+
+  const duplicate = useMemo(() => {
+    const normalized = normalizeContactSearch(name)
+    if (!normalized) return null
+
+    return contacts.find(
+      (item) =>
+        item.id !== editId &&
+        normalizeContactSearch(item.name) === normalized
+    )
+  }, [contacts, editId, name])
+
   if (editId && notFound && !loading) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 items-center justify-center px-4">
-        <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
-          <User size={32} className="text-red-500" />
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-slate-50 px-4 text-center dark:bg-slate-950">
+        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/30">
+          <User size={31} className="text-red-500" />
         </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Contato não encontrado</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs mb-6">
-          O contato que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+          Contato não encontrado
+        </h1>
+        <p className="mt-2 max-w-xs text-sm text-slate-500 dark:text-slate-400">
+          Esse contato pode ter sido excluído ou não pertence ao usuário atual.
         </p>
         <button
+          type="button"
           onClick={() => router.push('/contacts')}
-          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
+          className="mt-6 rounded-full bg-teal-600 px-6 py-3 font-semibold text-white"
         >
-          Voltar para listagem
+          Voltar para contatos
         </button>
       </div>
     )
   }
 
-  if (editId && loading) {
+  if ((editId && loading) || !initialized) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-          <div className="flex items-center justify-between">
-            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
-            <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-11 w-11 bg-slate-200 dark:bg-slate-700 rounded-[16px] animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  if (!initialized) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
+      <div className="min-h-[100dvh] bg-slate-50 px-4 pt-5 dark:bg-slate-950">
+        <Skeleton count={7} />
       </div>
     )
   }
 
   const handleSave = async () => {
-    if (!(name || "").trim()) {
-      showToast("Preencha o nome do contato", "warning")
-      errorHaptic()
+    if (saving) return
+
+    if (!user?.id) {
+      hapticError()
+      showToast('Sessão expirada. Entre novamente para salvar.', 'error')
+      return
+    }
+
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      hapticError()
+      showToast('Informe o nome do contato.', 'warning')
+      return
+    }
+
+    if (duplicate) {
+      hapticError()
+      showToast(`Já existe um contato chamado ${duplicate.name}.`, 'warning')
       return
     }
 
     setSaving(true)
+
     try {
       const payload = {
-        name: name.trim(),
-        type,
+        name: trimmedName,
+        type: entityType,
+        entity_type: entityType,
+        relationship_type: relationshipType,
         email: email.trim() || null,
         phone: phone.trim() || null,
-        document: document.trim() || null,
+        document: documentValue.trim() || null,
         company: company.trim() || null,
         position: position.trim() || null,
         address: address.trim() || null,
         city: city.trim() || null,
-        state: state.trim() || null,
+        state: state.trim().toUpperCase() || null,
         zip_code: zipCode.trim() || null,
         notes: notes.trim() || null,
-        context: effectiveContext,
-        updated_at: new Date().toISOString(),
+        color:
+          contact?.color ||
+          (entityType === 'company' ? '#3b82f6' : '#14b8a6'),
+        icon:
+          contact?.icon ||
+          (entityType === 'company' ? 'Building2' : 'User'),
+        context: recordContext,
       }
 
       if (editId) {
-        const result = await safeUpdate("contacts", editId, payload)
+        const result = await safeUpdate('contacts', editId, payload)
         if (!result.success) throw new Error(result.error)
-        showToast("Contato atualizado com sucesso!", "success")
-      } else {
-        const id = crypto.randomUUID()
-        const fullPayload = {
-          id,
-          user_id: user?.id,
-          ...payload,
-          created_at: new Date().toISOString(),
-          sync_status: "pending",
-          sync_attempts: 0,
-        }
-        const result = await safeAdd("contacts", fullPayload)
-        if (!result.success) throw new Error(result.error)
-        showToast("Contato criado com sucesso!", "success")
+
+        success()
+        showToast('Contato atualizado.', 'success')
+        router.replace(`/contacts/details?id=${editId}`)
+        return
       }
 
+      const result = await safeAdd('contacts', {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        ...payload,
+      })
+
+      if (!result.success) throw new Error(result.error)
+
       success()
-      router.back()
-    } catch (err: any) {
-      showToast(err?.message || "Erro ao salvar contato", "error")
-      errorHaptic()
+      showToast('Contato criado.', 'success')
+
+      if (result.id) {
+        router.replace(`/contacts/details?id=${result.id}`)
+      } else {
+        router.replace('/contacts')
+      }
+    } catch (error: any) {
+      hapticError()
+      showToast(error?.message || 'Erro ao salvar contato.', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async () => {
-    if (!editId) return
+    if (!editId || deleting) return
+
     setDeleting(true)
     try {
-      const result = await safeDelete("contacts", editId)
+      const result = await safeDelete('contacts', editId)
       if (!result.success) throw new Error(result.error)
-      showToast("Contato excluído com sucesso!", "success")
+
       success()
+      showToast('Contato excluído. O histórico financeiro foi preservado.', 'success')
       setShowDeleteSheet(false)
-      router.back()
-    } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, "error")
-      errorHaptic()
+      router.replace('/contacts')
+    } catch (error: any) {
+      hapticError()
+      showToast(error?.message || 'Erro ao excluir contato.', 'error')
     } finally {
       setDeleting(false)
     }
   }
 
-  const contextTitle = effectiveContext === "dfl" ? "da Empresa" : "Pessoal"
+  const entityOptions: Array<{
+    key: ContactEntityType
+    label: string
+    icon: typeof User
+  }> = [
+    { key: 'individual', label: 'Pessoa física', icon: User },
+    { key: 'company', label: 'Pessoa jurídica', icon: Building2 },
+  ]
+
+  const relationshipOptions: Array<{
+    key: ContactRelationshipType
+    label: string
+  }> = [
+    { key: 'customer', label: 'Cliente' },
+    { key: 'supplier', label: 'Fornecedor' },
+    { key: 'both', label: 'Cliente e fornecedor' },
+    { key: 'other', label: 'Outro contato' },
+  ]
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-slate-50 dark:bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/92 px-4 pb-3 pt-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+        <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
           <button
+            type="button"
             onClick={() => {
-              lightTap()
+              vibrate([5])
               router.back()
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-slate-100 text-slate-700 transition active:scale-[0.98] dark:bg-slate-800 dark:text-slate-200"
+            className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-slate-100 text-slate-700 transition active:scale-95 dark:bg-slate-800 dark:text-slate-200"
             aria-label="Voltar"
           >
             <ArrowLeft size={20} />
           </button>
 
-          <div className="text-center">
+          <div className="min-w-0 flex-1 text-center">
             <h1 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">
-              {editId ? "Editar contato" : "Novo contato"}
+              {editId ? 'Editar contato' : 'Novo contato'}
             </h1>
-            <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
-              {contextTitle}
+            <p className="text-[11px] text-slate-400">
+              {recordContext === 'dfl' ? 'Empresa' : 'Pessoal'}
+              {editId ? ' · contexto preservado' : ''}
             </p>
           </div>
 
-          <div className="w-11 flex justify-end">
-            {editId ? (
-              <button
-                onClick={() => {
-                  lightTap()
-                  setShowDeleteSheet(true)
-                }}
-                className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-red-50 text-red-500 transition active:scale-[0.98] dark:bg-red-950/30"
-                aria-label="Excluir"
-              >
-                <Trash2 size={19} />
-              </button>
-            ) : (
-              <div className="h-11 w-11" />
-            )}
-          </div>
+          {editId ? (
+            <button
+              type="button"
+              onClick={() => {
+                vibrate([10])
+                setShowDeleteSheet(true)
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-red-50 text-red-500 transition active:scale-95 dark:bg-red-950/30"
+              aria-label="Excluir contato"
+            >
+              <Trash2 size={18} />
+            </button>
+          ) : (
+            <div className="h-11 w-11" />
+          )}
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 pb-32 pt-4">
+      <main className="flex-1 px-4 pb-32 pt-4">
         <div className="mx-auto max-w-xl space-y-4">
-          <Section title="Tipo de contato">
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  lightTap()
-                  setType("individual")
-                }}
-                className={`flex items-center justify-center gap-2 rounded-[20px] px-4 py-3.5 text-[14px] font-semibold transition active:scale-[0.98] ${
-                  type === "individual"
-                    ? "bg-teal-500 text-white shadow-lg shadow-teal-500/20"
-                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                }`}
-              >
-                <User size={16} />
-                Pessoa física
-              </button>
+          <Section
+            title="Como este contato participa do financeiro?"
+            subtitle="Isso ajuda a organizar clientes e fornecedores sem confundir com pessoa física ou jurídica."
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {relationshipOptions.map((option) => {
+                const active = relationshipType === option.key
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => {
+                      vibrate([5])
+                      setRelationshipType(option.key)
+                    }}
+                    className={`rounded-[17px] border px-3 py-3 text-[12px] font-semibold transition active:scale-[0.98] ${
+                      active
+                        ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-500/10 dark:bg-teal-950/30 dark:text-teal-400'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </Section>
 
-              <button
-                type="button"
-                onClick={() => {
-                  lightTap()
-                  setType("company")
-                }}
-                className={`flex items-center justify-center gap-2 rounded-[20px] px-4 py-3.5 text-[14px] font-semibold transition active:scale-[0.98] ${
-                  type === "company"
-                    ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                }`}
-              >
-                <Building2 size={16} />
-                Pessoa jurídica
-              </button>
+          <Section title="Tipo de cadastro">
+            <div className="grid grid-cols-2 gap-3">
+              {entityOptions.map((option) => {
+                const Icon = option.icon
+                const active = entityType === option.key
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => {
+                      vibrate([5])
+                      setEntityType(option.key)
+                    }}
+                    className={`flex items-center justify-center gap-2 rounded-[19px] border px-4 py-3.5 text-[13px] font-semibold transition active:scale-[0.98] ${
+                      active
+                        ? option.key === 'company'
+                          ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                          : 'border-teal-500 bg-teal-500 text-white shadow-lg shadow-teal-500/20'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {option.label}
+                  </button>
+                )
+              })}
             </div>
           </Section>
 
           <Section title="Informações principais">
             <div>
-              <FieldLabel>{type === "company" ? "Razão social" : "Nome completo"}</FieldLabel>
+              <FieldLabel>
+                {entityType === 'company' ? 'Razão social' : 'Nome completo'}
+              </FieldLabel>
               <input
-                type="text"
-                autoComplete="name"
-                autoCapitalize="words"
-                placeholder={type === "company" ? "Nome da empresa" : "Nome da pessoa"}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={
+                  entityType === 'company' ? 'Nome da empresa' : 'Nome da pessoa'
+                }
+                autoCapitalize="words"
+                autoComplete="name"
                 className={inputBase}
               />
+              {duplicate && (
+                <p className="mt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  Já existe um contato com esse nome.
+                </p>
+              )}
             </div>
 
             <div>
-              <FieldLabel optional>{type === "company" ? "CNPJ" : "CPF"}</FieldLabel>
+              <FieldLabel optional>
+                {entityType === 'company' ? 'CNPJ' : 'CPF'}
+              </FieldLabel>
               <input
-                type="text"
+                value={documentValue}
+                onChange={(event) => setDocumentValue(event.target.value)}
+                placeholder={
+                  entityType === 'company'
+                    ? '00.000.000/0000-00'
+                    : '000.000.000-00'
+                }
                 inputMode="numeric"
-                placeholder={type === "company" ? "00.000.000/0000-00" : "000.000.000-00"}
-                value={document}
-                onChange={(e) => setDocument(e.target.value)}
                 className={inputBase}
               />
             </div>
@@ -351,180 +456,212 @@ function NewContactContent() {
 
           <Section title="Contato">
             <div>
-              <FieldLabel optional>Email</FieldLabel>
-              <input
-                type="email"
-                autoComplete="email"
-                inputMode="email"
-                placeholder="email@exemplo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputBase}
-              />
-            </div>
-
-            <div>
               <FieldLabel optional>Telefone</FieldLabel>
               <input
-                type="tel"
-                autoComplete="tel"
-                inputMode="tel"
-                placeholder="(00) 00000-0000"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="(00) 00000-0000"
+                inputMode="tel"
+                autoComplete="tel"
                 className={inputBase}
               />
             </div>
-          </Section>
 
-          {type === "individual" && (
-            <Section title="Profissional">
-              <div>
-                <FieldLabel optional>Empresa</FieldLabel>
-                <input
-                  type="text"
-                  autoCapitalize="words"
-                  placeholder="Onde trabalha"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className={inputBase}
-                />
-              </div>
-
-              <div>
-                <FieldLabel optional>Cargo</FieldLabel>
-                <input
-                  type="text"
-                  autoCapitalize="words"
-                  placeholder="Cargo na empresa"
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  className={inputBase}
-                />
-              </div>
-            </Section>
-          )}
-
-          <Section title="Endereço">
             <div>
-              <FieldLabel optional>Endereço</FieldLabel>
+              <FieldLabel optional>Email</FieldLabel>
               <input
-                type="text"
-                autoComplete="street-address"
-                autoCapitalize="words"
-                placeholder="Rua, número, bairro"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="email@exemplo.com"
+                inputMode="email"
+                autoComplete="email"
                 className={inputBase}
               />
             </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-1">
-                <FieldLabel optional>Cidade</FieldLabel>
-                <input
-                  type="text"
-                  autoComplete="address-level2"
-                  autoCapitalize="words"
-                  placeholder="Cidade"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className={inputBase}
-                />
-              </div>
-
-              <div className="sm:col-span-1">
-                <FieldLabel optional>UF</FieldLabel>
-                <input
-                  type="text"
-                  autoComplete="address-level1"
-                  placeholder="SP"
-                  maxLength={2}
-                  value={state}
-                  onChange={(e) => setState(e.target.value.toUpperCase())}
-                  className={inputBase}
-                />
-              </div>
-
-              <div className="sm:col-span-1">
-                <FieldLabel optional>CEP</FieldLabel>
-                <input
-                  type="text"
-                  autoComplete="postal-code"
-                  inputMode="numeric"
-                  placeholder="00000-000"
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
-                  className={inputBase}
-                />
-              </div>
-            </div>
           </Section>
 
-          <Section title="Observações">
+          <button
+            type="button"
+            onClick={() => {
+              vibrate([5])
+              setShowMore((current) => !current)
+            }}
+            className="flex w-full items-center justify-between rounded-[22px] border border-slate-200/70 bg-white px-4 py-4 text-left shadow-sm transition active:scale-[0.99] dark:border-slate-800 dark:bg-slate-900"
+          >
             <div>
-              <FieldLabel optional>Anotações internas</FieldLabel>
-              <textarea
-                placeholder="Detalhes adicionais..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-                className={`${inputBase} resize-none`}
-              />
+              <p className="text-[13px] font-bold text-slate-800 dark:text-slate-200">
+                Informações complementares
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                Empresa, endereço e observações
+              </p>
             </div>
-          </Section>
+            {showMore ? (
+              <ChevronUp size={18} className="text-slate-400" />
+            ) : (
+              <ChevronDown size={18} className="text-slate-400" />
+            )}
+          </button>
+
+          {showMore && (
+            <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+              <Section
+                title={entityType === 'company' ? 'Empresa' : 'Profissional'}
+              >
+                <div>
+                  <FieldLabel optional>
+                    {entityType === 'company'
+                      ? 'Nome fantasia'
+                      : 'Empresa onde trabalha'}
+                  </FieldLabel>
+                  <input
+                    value={company}
+                    onChange={(event) => setCompany(event.target.value)}
+                    placeholder={
+                      entityType === 'company'
+                        ? 'Nome comercial'
+                        : 'Empresa ou organização'
+                    }
+                    autoCapitalize="words"
+                    className={inputBase}
+                  />
+                </div>
+
+                {entityType === 'individual' && (
+                  <div>
+                    <FieldLabel optional>Cargo</FieldLabel>
+                    <input
+                      value={position}
+                      onChange={(event) => setPosition(event.target.value)}
+                      placeholder="Cargo ou função"
+                      autoCapitalize="words"
+                      className={inputBase}
+                    />
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Endereço">
+                <div>
+                  <FieldLabel optional>Endereço</FieldLabel>
+                  <input
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    placeholder="Rua, número, bairro"
+                    autoComplete="street-address"
+                    autoCapitalize="words"
+                    className={inputBase}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <FieldLabel optional>Cidade</FieldLabel>
+                    <input
+                      value={city}
+                      onChange={(event) => setCity(event.target.value)}
+                      placeholder="Cidade"
+                      autoComplete="address-level2"
+                      autoCapitalize="words"
+                      className={inputBase}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel optional>UF</FieldLabel>
+                    <input
+                      value={state}
+                      onChange={(event) =>
+                        setState(event.target.value.toUpperCase().slice(0, 2))
+                      }
+                      placeholder="MG"
+                      autoComplete="address-level1"
+                      className={inputBase}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel optional>CEP</FieldLabel>
+                    <input
+                      value={zipCode}
+                      onChange={(event) => setZipCode(event.target.value)}
+                      placeholder="00000-000"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      className={inputBase}
+                    />
+                  </div>
+                </div>
+              </Section>
+
+              <Section title="Observações">
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Anotações internas sobre o contato..."
+                  rows={4}
+                  className={`${inputBase} resize-none`}
+                />
+              </Section>
+            </div>
+          )}
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200/80 bg-white/90 px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200/80 bg-white/92 px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
         <div className="mx-auto max-w-xl">
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-500 px-5 py-4 text-[15px] font-bold text-white shadow-xl shadow-teal-600/20 transition active:scale-[0.98] disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-[22px] bg-teal-600 px-5 py-4 text-[15px] font-bold text-white shadow-xl shadow-teal-600/20 transition active:scale-[0.98] disabled:opacity-50"
           >
-            {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-            {editId ? "Atualizar contato" : "Criar contato"}
+            <Save size={18} />
+            {saving
+              ? 'Salvando...'
+              : editId
+                ? 'Salvar alterações'
+                : 'Criar contato'}
           </button>
         </div>
       </div>
 
       {showDeleteSheet && (
         <div
-          className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => !deleting && setShowDeleteSheet(false)}
         >
           <div
-            className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-8 dark:bg-slate-900"
-            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl dark:bg-slate-900"
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="mx-auto mb-6 h-1.5 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
-            <div className="mb-6 flex flex-col items-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/30">
-                <AlertTriangle size={26} className="text-red-500" />
+            <div className="mx-auto mb-6 h-1.5 w-11 rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-950/30">
+                <AlertTriangle size={24} />
               </div>
-              <h3 className="mb-1 text-[18px] font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">
                 Excluir contato?
-              </h3>
-              <p className="max-w-[280px] text-[14px] text-slate-500 dark:text-slate-400">
-                Essa ação não pode ser desfeita. O contato será removido permanentemente.
+              </h2>
+              <p className="mx-auto mt-2 max-w-[300px] text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
+                O cadastro será removido, mas transações, cobranças e histórico
+                continuarão existindo sem o vínculo.
               </p>
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => setShowDeleteSheet(false)}
+                type="button"
                 disabled={deleting}
-                className="flex-1 rounded-[20px] bg-slate-100 px-4 py-3.5 text-[14px] font-semibold text-slate-700 transition active:scale-[0.98] disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300"
+                onClick={() => setShowDeleteSheet(false)}
+                className="flex-1 rounded-[20px] bg-slate-100 px-4 py-3.5 text-[14px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
               >
                 Cancelar
               </button>
               <button
-                onClick={handleDelete}
+                type="button"
                 disabled={deleting}
-                className="flex flex-1 items-center justify-center gap-2 rounded-[20px] bg-red-500 px-4 py-3.5 text-[14px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+                onClick={handleDelete}
+                className="flex-1 rounded-[20px] bg-red-500 px-4 py-3.5 text-[14px] font-bold text-white disabled:opacity-50"
               >
-                {deleting ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                Excluir
+                {deleting ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>
           </div>
@@ -536,12 +673,14 @@ function NewContactContent() {
 
 export default function NewContactPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <RefreshCw className="animate-spin text-teal-600" size={32} />
-      </div>
-    }>
-      <NewContactContent />
+    <Suspense
+      fallback={
+        <div className="min-h-[100dvh] bg-slate-50 px-4 pt-5 dark:bg-slate-950">
+          <Skeleton count={7} />
+        </div>
+      }
+    >
+      <ContactForm />
     </Suspense>
   )
 }
