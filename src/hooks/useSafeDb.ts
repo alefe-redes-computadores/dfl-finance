@@ -105,6 +105,5 @@ export function useSafeDb() {
     safeUpdate: safeUpdateWrapper,
     safeDelete: safeDeleteWrapper,
     safeReorderCategories: safeReorderCategoriesWrapper,
-    error
   }
 }
