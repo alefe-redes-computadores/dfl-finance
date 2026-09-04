@@ -121,20 +121,113 @@ export function useLocalSync() {
           continue
         }
 
-        if (data && data.length > 0) {
-          renderLog(`Baixando ${data.length} atualizações de ${tableName}...`, 'success')
-          
-          // Formata os dados para garantir que entrem como sincronizados no banco local
-          const localData = data.map(item => ({
+        const remoteData = data ?? []
+
+        // Le a fila novamente para esta tabela imediatamente antes de aplicar
+        // os dados remotos. Isso cobre inclusive alteracoes locais criadas
+        // enquanto este ciclo de PULL ja estava em andamento.
+        const currentPendingItems = await getPendingSyncItems(user.id)
+
+        const pendingIds = new Set(
+          currentPendingItems
+            .filter((pendingItem) => pendingItem.table === tableName)
+            .map((pendingItem) => pendingItem.record_id)
+        )
+
+        // Carrega o estado local atual da tabela uma unica vez.
+        // Alem da fila, registros pending/failed tambem sao protegidos para
+        // evitar perda silenciosa em caso de inconsistencia antiga da queue.
+        const localRows = await db
+          .table(tableName)
+          .where('user_id')
+          .equals(user.id)
+          .toArray()
+
+        const localRowsById = new Map(
+          localRows
+            .filter((item: any) => typeof item?.id === 'string')
+            .map((item: any) => [item.id, item])
+        )
+
+        const isLocallyProtected = (id: string) => {
+          if (pendingIds.has(id)) return true
+
+          const localItem: any = localRowsById.get(id)
+
+          return Boolean(
+            localItem &&
+              localItem.sync_status &&
+              localItem.sync_status !== 'synced'
+          )
+        }
+
+        // Um remoto antigo nunca deve sobrescrever uma mudanca local que
+        // ainda nao esta confirmada como sincronizada.
+        const remoteDataSafeToApply = remoteData.filter(
+          (item: any) =>
+            typeof item?.id !== 'string' ||
+            !isLocallyProtected(item.id)
+        )
+
+        const protectedCount =
+          remoteData.length - remoteDataSafeToApply.length
+
+        if (remoteDataSafeToApply.length > 0) {
+          renderLog(
+            `Baixando ${remoteDataSafeToApply.length} atualizacoes de ${tableName}` +
+              `${protectedCount > 0 ? ` (${protectedCount} protegida(s) localmente)` : ''}...`,
+            'success'
+          )
+
+          const localData = remoteDataSafeToApply.map((item: any) => ({
             ...item,
             sync_status: 'synced',
-            sync_attempts: 0
+            sync_attempts: 0,
+            last_sync_error: null,
           }))
-          
-          // bulkPut insere os novos e atualiza os existentes silenciosamente
+
           await db.table(tableName).bulkPut(localData)
+        } else if (remoteData.length > 0) {
+          renderLog(
+            `As ${remoteData.length} atualizacoes remotas de ${tableName} estao protegidas por alteracoes locais pendentes.`,
+            'info'
+          )
         } else {
           renderLog(`Nenhuma atualização em ${tableName}.`, 'info')
+        }
+
+        // DELETE fisico nao aparece em um PULL incremental.
+        // No Full Resync, entretanto, remoteData representa o conjunto remoto
+        // completo da tabela para este usuario. Isso permite remover fantasmas
+        // locais que ja estavam efetivamente sincronizados.
+        if (force) {
+          const remoteIds = new Set(
+            remoteData
+              .map((item: any) => item?.id)
+              .filter(
+                (id: any): id is string =>
+                  typeof id === 'string' && id.length > 0
+              )
+          )
+
+          const staleSyncedIds = localRows
+            .filter((item: any) => {
+              if (typeof item?.id !== 'string') return false
+              if (remoteIds.has(item.id)) return false
+              if (isLocallyProtected(item.id)) return false
+
+              return item.sync_status === 'synced'
+            })
+            .map((item: any) => item.id)
+
+          if (staleSyncedIds.length > 0) {
+            await db.table(tableName).bulkDelete(staleSyncedIds)
+
+            renderLog(
+              `Full Resync removeu ${staleSyncedIds.length} registro(s) local(is) obsoleto(s) de ${tableName}.`,
+              'success'
+            )
+          }
         }
       }
 
