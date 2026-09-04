@@ -1,3 +1,4 @@
+// src/components/transactions/TransactionItem.tsx
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
@@ -15,6 +16,7 @@ import {
   Receipt
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
+import { getTransactionStatusLabel } from '@/lib/pendingOperations'
 import { motion, useMotionValue, useAnimation, useMotionValueEvent } from 'framer-motion'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -93,8 +95,12 @@ export const TransactionItem = React.memo(
 
     const isPending = txStatus === 'pending'
     const isIncome = txType === 'income'
-    const isExpense = txType === 'expense' || txType === 'sangria'
+    const isExpense =
+      txType === 'expense' ||
+      txType === 'sangria'
     const isTransfer = txType === 'transfer'
+    const statusLabel =
+      getTransactionStatusLabel(tx)
 
     const hasInstallments =
       safeNum(tx.total_installments) > 1
@@ -289,6 +295,19 @@ export const TransactionItem = React.memo(
 
             <p className={`text-[15px] font-bold whitespace-nowrap ${amountColorClass}`}>
               {amountPrefix} {safeNum(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            <p
+              className={`mt-0.5 text-[10.5px] font-semibold ${
+                isPending
+                  ? isIncome
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : isExpense
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-blue-500 dark:text-blue-400'
+                  : 'text-gray-400 dark:text-gray-500'
+              }`}
+            >
+              {statusLabel}
             </p>
           </div>
         </motion.div>

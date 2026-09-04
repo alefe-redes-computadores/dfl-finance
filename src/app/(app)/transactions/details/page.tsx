@@ -151,6 +151,18 @@ function EditTransactionContent() {
       return
     }
 
+    if (!creditCardId && isPaid && !accountId) {
+      hapticError()
+      showToast(
+        txType === 'income'
+          ? 'Selecione a conta onde o valor foi recebido.'
+          : 'Selecione a conta usada para o pagamento.',
+        'warning'
+      )
+      setSaving(false)
+      return
+    }
+
     const selectedCat = categories.find((c) => c.id === categoryId) || Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
     const finalDescription = description.trim() || selectedCat?.name || 'Transação sem nome'
 
@@ -750,6 +762,24 @@ function EditTransactionContent() {
   const colorClass = isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-500' : 'bg-teal-600') : 'bg-gray-200 dark:bg-slate-700'
   const toggleTracks = isPaid ? 'translate-x-7' : 'translate-x-1'
+  const settlementTitle = creditCardId
+    ? 'Lançado no cartão'
+    : isPaid
+      ? isIncome
+        ? 'Recebido'
+        : 'Pago'
+      : isIncome
+        ? 'A receber'
+        : 'A pagar'
+  const settlementDescription = creditCardId
+    ? 'A compra já faz parte da fatura do cartão.'
+    : isPaid
+      ? isIncome
+        ? 'O valor entra no saldo da conta selecionada.'
+        : 'O valor reduz o saldo da conta selecionada.'
+      : isIncome
+        ? 'Pendente até o recebimento. Ainda não entra no saldo.'
+        : 'Pendente até o pagamento. Ainda não reduz o saldo.'
 
   const selectedCat = categories.find((c) => c.id === categoryId) || Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
   const selectedAcc = (accounts || []).find((a) => a.id === accountId)
@@ -844,30 +874,86 @@ function EditTransactionContent() {
             <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Essenciais</h2>
           </div>
 
-          <div className="px-5 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isPaid ? (isIncome ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400') : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500'}`}>
-                <Check size={18} />
+          <div
+            className={`px-5 py-4 ${
+              !creditCardId && !isPaid
+                ? isIncome
+                  ? 'bg-emerald-50/35 dark:bg-emerald-500/[0.03]'
+                  : 'bg-amber-50/40 dark:bg-amber-500/[0.03]'
+                : ''
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                    !creditCardId && !isPaid
+                      ? isIncome
+                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                        : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                      : isIncome
+                        ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400'
+                        : 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400'
+                  }`}
+                >
+                  {!creditCardId && !isPaid ? (
+                    <Clock size={18} />
+                  ) : (
+                    <Check size={18} />
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <p
+                    className={`text-[15px] font-semibold ${
+                      !creditCardId && !isPaid
+                        ? isIncome
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-amber-700 dark:text-amber-400'
+                        : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    {settlementTitle}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-4 text-gray-400 dark:text-gray-500">
+                    {settlementDescription}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[15px] font-semibold text-gray-900 dark:text-white">
-                  {isIncome ? 'Recebido' : creditCardId ? 'Lançado no cartão' : 'Pago'}
-                </p>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500">
-                  {creditCardId ? 'Cobrança no cartão selecionado' : isPaid ? 'Transação quitada' : 'Marcar como pendente'}
-                </p>
-              </div>
+
+              {!creditCardId && (
+                <button
+                  type="button"
+                  aria-label={
+                    isPaid
+                      ? 'Marcar como pendente'
+                      : isIncome
+                        ? 'Marcar como recebido'
+                        : 'Marcar como pago'
+                  }
+                  onClick={() => {
+                    vibrate([5])
+                    setIsPaid(!isPaid)
+                  }}
+                  className={`relative h-8 w-14 shrink-0 rounded-full shadow-inner transition-all duration-300 active:scale-95 ${toggleBgClass}`}
+                >
+                  <div
+                    className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-300 ${toggleTracks}`}
+                  />
+                </button>
+              )}
             </div>
 
-            {!creditCardId && (
+            {!creditCardId && !isPaid && isIncome && (
               <button
+                type="button"
                 onClick={() => {
                   vibrate([5])
-                  setIsPaid(!isPaid)
+                  router.push('/debts/new')
                 }}
-                className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${toggleBgClass} active:scale-95`}
+                className="mt-3 w-full rounded-[13px] border border-emerald-200/80 bg-white/80 px-3 py-2 text-left text-[11px] font-semibold text-emerald-700 transition-colors active:bg-emerald-50 dark:border-emerald-500/15 dark:bg-slate-900/60 dark:text-emerald-400"
               >
-                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${toggleTracks}`} />
+                É fiado ou aceita pagamento parcial? Use “Quem me deve”.
               </button>
             )}
           </div>
@@ -965,9 +1051,11 @@ function EditTransactionContent() {
                   <Wallet size={17} />
                 </div>
                 <div className="text-left min-w-0">
-                  <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Conta</p>
+                  <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
+                    {isPaid ? 'Conta' : 'Conta prevista (opcional)'}
+                  </p>
                   <p className={`text-[15px] font-semibold truncate ${selectedAcc ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
-                    {selectedAcc ? selectedAcc.name : 'Selecionar'}
+                    {selectedAcc ? selectedAcc.name : isPaid ? 'Selecionar' : 'Opcional'}
                   </p>
                 </div>
               </div>

@@ -38,7 +38,7 @@ const parseIsoDayNumber = (value?: string | null) => {
   )
 }
 
-export function getDebtDueState(
+export function getDueDateState(
   dueDate?: string | null,
   now = new Date()
 ) {
@@ -64,6 +64,29 @@ export function getDebtDueState(
       daysUntilDue > 0 &&
       daysUntilDue <= 7,
   }
+}
+
+export function getDebtDueState(
+  dueDate?: string | null,
+  now = new Date()
+) {
+  return getDueDateState(dueDate, now)
+}
+
+export function getDebtRemainingAmount(
+  totalAmount: number,
+  paidAmount: number
+) {
+  const totalCents = Math.max(
+    0,
+    Math.round(Number(totalAmount || 0) * 100)
+  )
+  const paidCents = Math.max(
+    0,
+    Math.round(Number(paidAmount || 0) * 100)
+  )
+
+  return Math.max(0, totalCents - paidCents) / 100
 }
 
 export function isDebtPayment(

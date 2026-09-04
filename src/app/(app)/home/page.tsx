@@ -45,9 +45,16 @@ import {
 } from '@/lib/cardOperations'
 import {
   getDebtDueState,
+  getDebtRemainingAmount,
   getDebtStatusFromAmounts,
+  getDueDateState,
   isDebtPayment,
 } from '@/lib/debtOperations'
+import {
+  getPendingDirection,
+  getPendingLabel,
+  isStandalonePendingReceivable,
+} from '@/lib/pendingOperations'
 
 const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
 
@@ -404,22 +411,6 @@ function HomeContent() {
     })
   }, [localCards, localTransactions, currentDate])
 
-  const pendings = useMemo(() => {
-    const allPending = localTransactions.filter((t: any) => t.status === 'pending')
-
-    const toPay = allPending
-      .filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && !t.credit_card_id)
-      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-
-    const toReceive = allPending
-      .filter((t: any) => t.type === 'income')
-      .reduce((a: number, t: any) => a + safeNumber(t.amount), 0)
-
-    const faturas = cards.reduce((acc: number, c: any) => acc + (c.faturaAtual || 0), 0)
-
-    return { toPay, toReceive, faturas }
-  }, [localTransactions, cards])
-
   const debtPaymentsById = useMemo(() => {
     const result = new Map<string, number>()
 
@@ -459,10 +450,66 @@ function HomeContent() {
       .filter((debt: any) => debt.status !== 'paid' && debt.status !== 'cancelled')
   }, [localDebts, debtPaymentsById])
 
+  const pendings = useMemo(() => {
+    const allPending = localTransactions.filter(
+      (tx: any) => tx.status === 'pending'
+    )
+
+    const toPay = allPending
+      .filter(
+        (tx: any) =>
+          getPendingDirection(tx) === 'payable' &&
+          !tx.credit_card_id
+      )
+      .reduce(
+        (sum: number, tx: any) =>
+          sum + safeNumber(tx.amount),
+        0
+      )
+
+    const transactionReceivables = allPending
+      .filter((tx: any) =>
+        isStandalonePendingReceivable(tx)
+      )
+      .reduce(
+        (sum: number, tx: any) =>
+          sum + safeNumber(tx.amount),
+        0
+      )
+
+    const debtReceivables = debtsList.reduce(
+      (sum: number, debt: any) =>
+        sum +
+        getDebtRemainingAmount(
+          safeNumber(debt.total_amount),
+          safeNumber(debt.paid_amount)
+        ),
+      0
+    )
+
+    const toReceive =
+      transactionReceivables + debtReceivables
+
+    const faturas = cards.reduce(
+      (sum: number, card: any) =>
+        sum + safeNumber(card.faturaAtual),
+      0
+    )
+
+    return {
+      toPay,
+      toReceive,
+      faturas,
+      transactionReceivables,
+      debtReceivables,
+    }
+  }, [localTransactions, cards, debtsList])
+
   const homePriorityAlerts = useMemo(() => {
     type HomePriorityAlert = {
       id: string
-      kind: 'debt' | 'card'
+      kind: 'debt' | 'card' | 'transaction'
+      direction: 'receivable' | 'payable' | 'invoice'
       title: string
       subtitle: string
       amount: number
@@ -475,25 +522,104 @@ function HomeContent() {
     for (const debt of debtsList) {
       const dueState = getDebtDueState(debt.due_date)
 
-      if (!dueState.isOverdue && !dueState.isToday) continue
+      if (
+        !dueState.isOverdue &&
+        !dueState.isToday &&
+        !dueState.isNearDue
+      ) {
+        continue
+      }
 
-      const remaining = Math.max(
-        0,
-        safeNumber(debt.total_amount) - safeNumber(debt.paid_amount)
+      const remaining = getDebtRemainingAmount(
+        safeNumber(debt.total_amount),
+        safeNumber(debt.paid_amount)
       )
 
-      const daysOverdue = Math.abs(dueState.daysUntilDue || 0)
+      if (remaining <= 0) continue
+
+      const daysOverdue = Math.abs(
+        dueState.daysUntilDue || 0
+      )
+
+      const dueLabel = dueState.isToday
+        ? 'Vence hoje'
+        : dueState.isOverdue
+          ? `Atrasado há ${daysOverdue} dia${daysOverdue === 1 ? '' : 's'}`
+          : dueState.daysUntilDue === 1
+            ? 'Vence amanhã'
+            : `Vence em ${dueState.daysUntilDue} dias`
 
       alerts.push({
         id: `debt-${debt.id}`,
         kind: 'debt',
+        direction: 'receivable',
         title: debt.person_name || 'Valor a receber',
-        subtitle: dueState.isToday
-          ? 'Vence hoje'
-          : `Atrasado há ${daysOverdue} dia${daysOverdue === 1 ? '' : 's'}`,
+        subtitle: `A receber · ${dueLabel}`,
         amount: remaining,
-        severity: dueState.isOverdue ? 0 : 1,
+        severity: dueState.isOverdue
+          ? 0
+          : dueState.isToday
+            ? 1
+            : 2,
         targetId: debt.id,
+      })
+    }
+
+    for (const tx of localTransactions) {
+      const direction = getPendingDirection(tx)
+
+      if (!direction) continue
+
+      if (
+        direction === 'receivable' &&
+        tx.debt_id
+      ) {
+        continue
+      }
+
+      const dueState = getDueDateState(tx.date)
+
+      if (
+        !dueState.isOverdue &&
+        !dueState.isToday &&
+        !(
+          dueState.daysUntilDue !== null &&
+          dueState.daysUntilDue > 0 &&
+          dueState.daysUntilDue <= 3
+        )
+      ) {
+        continue
+      }
+
+      const daysOverdue = Math.abs(
+        dueState.daysUntilDue || 0
+      )
+
+      const dueLabel = dueState.isToday
+        ? 'Vence hoje'
+        : dueState.isOverdue
+          ? `Atrasado há ${daysOverdue} dia${daysOverdue === 1 ? '' : 's'}`
+          : dueState.daysUntilDue === 1
+            ? 'Vence amanhã'
+            : `Vence em ${dueState.daysUntilDue} dias`
+
+      alerts.push({
+        id: `transaction-${tx.id}`,
+        kind: 'transaction',
+        direction,
+        title:
+          tx.description ||
+          (direction === 'receivable'
+            ? 'Receita pendente'
+            : 'Despesa pendente'),
+        subtitle: `${getPendingLabel(tx)} · ${dueLabel}`,
+        amount: safeNumber(tx.amount),
+        severity: dueState.isOverdue
+          ? 0
+          : dueState.isToday
+            ? 1
+            : 2,
+        targetId: tx.id,
       })
     }
 
@@ -502,22 +628,31 @@ function HomeContent() {
 
       if (amount <= 0) continue
 
-      const days = getDaysUntilCardDue(card.due_day, today)
+      const days = getDaysUntilCardDue(
+        card.due_day,
+        today
+      )
 
       if (days < 0 || days > 5) continue
 
       alerts.push({
         id: `card-${card.id}`,
         kind: 'card',
+        direction: 'invoice',
         title: card.name || 'Cartão',
         subtitle:
           days === 0
-            ? 'Vence hoje'
+            ? 'Fatura · Vence hoje'
             : days === 1
-              ? 'Vence amanhã'
-              : `Vence em ${days} dias`,
+              ? 'Fatura · Vence amanhã'
+              : `Fatura · Vence em ${days} dias`,
         amount,
-        severity: days === 0 ? 1 : days <= 2 ? 2 : 3,
+        severity:
+          days === 0
+            ? 1
+            : days <= 2
+              ? 2
+              : 3,
         targetId: card.id,
       })
     }
@@ -527,7 +662,7 @@ function HomeContent() {
         a.severity - b.severity ||
         b.amount - a.amount
     )
-  }, [debtsList, cards, today])
+  }, [debtsList, localTransactions, cards, today])
 
   const visiblePriorityAlerts = homePriorityAlerts.slice(0, 3)
   const hiddenPriorityAlertsCount = Math.max(
@@ -676,7 +811,7 @@ function HomeContent() {
               : `Vence em ${days} dias`,
           card_id: card.id,
           severity: 'warning',
-          is_read: false,
+          read: false,
           created_at: new Date().toISOString()
         }
 
@@ -685,10 +820,12 @@ function HomeContent() {
           .get(notifData.id)
 
         if (!existing) {
+          // Esta notificação é derivada dos próprios dados locais do cartão.
+          // Não precisa entrar na fila remota: qualquer dispositivo pode
+          // reconstruí-la a partir dos dados financeiros sincronizados.
           await db.table('notifications').put({
             ...notifData,
-            sync_status: 'pending',
-            sync_attempts: 0
+            sync_status: 'synced'
           })
 
           addedNew = true
@@ -1186,18 +1323,34 @@ function HomeContent() {
                 <div className="border-t border-gray-100 dark:border-slate-700/60">
                   {visiblePriorityAlerts.map((alert, index) => {
                     const isDebt = alert.kind === 'debt'
+                    const isCard = alert.kind === 'card'
+                    const isTransaction =
+                      alert.kind === 'transaction'
+                    const isReceivable =
+                      alert.direction === 'receivable'
+                    const isPayable =
+                      alert.direction === 'payable'
                     const isCritical = alert.severity === 0
-                    const isToday = alert.subtitle === 'Vence hoje'
+                    const isToday =
+                      alert.subtitle.includes('Vence hoje')
 
                     return (
                       <button
                         key={alert.id}
                         type="button"
-                        onClick={() =>
-                          isDebt
-                            ? goToDebt(alert.targetId)
-                            : goToCard(alert.targetId)
-                        }
+                        onClick={() => {
+                          if (isDebt) {
+                            goToDebt(alert.targetId)
+                            return
+                          }
+
+                          if (isTransaction) {
+                            goToTransaction(alert.targetId)
+                            return
+                          }
+
+                          goToCard(alert.targetId)
+                        }}
                         className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/50 ${
                           index !== visiblePriorityAlerts.length - 1
                             ? 'border-b border-gray-100 dark:border-slate-700/50'
@@ -1207,17 +1360,21 @@ function HomeContent() {
                         <div className="flex min-w-0 items-center gap-3">
                           <div
                             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${
-                              isCritical
-                                ? 'bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400'
-                                : isToday
-                                  ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400'
-                                  : 'bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400'
+                              isReceivable
+                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                                : isPayable
+                                  ? 'bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400'
+                                  : 'bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400'
                             }`}
                           >
                             {isDebt ? (
                               <User size={16} />
-                            ) : (
+                            ) : isCard ? (
                               <CreditCard size={16} />
+                            ) : isReceivable ? (
+                              <ArrowUp size={16} />
+                            ) : (
+                              <ArrowDown size={16} />
                             )}
                           </div>
 
@@ -1241,11 +1398,11 @@ function HomeContent() {
 
                         <p
                           className={`shrink-0 text-[14px] font-bold ${
-                            isCritical
-                              ? 'text-red-500 dark:text-red-400'
-                              : isToday
-                                ? 'text-orange-500 dark:text-orange-400'
-                                : 'text-amber-500 dark:text-amber-400'
+                            isReceivable
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : isPayable
+                                ? 'text-red-500 dark:text-red-400'
+                                : 'text-orange-500 dark:text-orange-400'
                           }`}
                         >
                           {hideBalance ? '••••' : formatCurrency(alert.amount)}
@@ -1275,7 +1432,7 @@ function HomeContent() {
                 >
                   <button
                     type="button"
-                    onClick={() => router.push('/transactions?filter=expense')}
+                    onClick={() => router.push('/transactions?filter=pending&kind=payable')}
                     className="min-w-0 rounded-[16px] px-2 py-2.5 text-left transition-colors hover:bg-red-50/60 active:scale-[0.97] dark:hover:bg-red-500/5"
                   >
                     <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">
@@ -1294,7 +1451,7 @@ function HomeContent() {
 
                   <button
                     type="button"
-                    onClick={() => router.push('/transactions?filter=income')}
+                    onClick={() => router.push('/transactions?filter=pending&kind=receivable')}
                     className="min-w-0 rounded-[16px] px-2 py-2.5 text-left transition-colors hover:bg-emerald-50/60 active:scale-[0.97] dark:hover:bg-emerald-500/5"
                   >
                     <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">

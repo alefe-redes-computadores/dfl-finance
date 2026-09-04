@@ -1,3 +1,4 @@
+// src/hooks/useDebtsList.ts
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -20,9 +21,9 @@ export function useDebtsList(context?: 'dfl' | 'personal') {
     }
 
     return results.sort((a: LocalDebt, b: LocalDebt) => {
-      const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0
-      const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0
-      return bTime - aTime
+      const updatedA = a.updated_at || ''
+      const updatedB = b.updated_at || ''
+      return updatedB.localeCompare(updatedA)
     })
   }, [user?.id, context])
 

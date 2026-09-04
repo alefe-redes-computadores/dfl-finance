@@ -3,26 +3,38 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
   Search, ChevronLeft, ChevronRight, ReceiptText, Loader2,
   ArrowLeftRight, Download, ArrowDown, ArrowUp, Clock, ChevronDown,
   Check, Image as ImageIcon, Paperclip, CheckCircle, X, SortDesc, SortAsc,
-  Filter
+  Filter, User
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useTransactionsList } from '@/hooks/useTransactionsList'
+import { useDebtsList } from '@/hooks/useDebtsList'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { useLocalData } from '@/hooks/useLocalData'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useToast } from '@/contexts/ToastContext'
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 import { createPortal } from 'react-dom'
+import {
+  getDebtRemainingAmount,
+  getDebtStatusFromAmounts,
+  isDebtPayment,
+} from '@/lib/debtOperations'
+import {
+  getPendingDirection,
+  getPendingLabel,
+  isStandalonePendingReceivable,
+} from '@/lib/pendingOperations'
 
 type QuickFilter = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
+type PendingKind = 'all' | 'payable' | 'receivable'
 
 interface AdvFilters {
   accountId: string;
@@ -131,52 +143,161 @@ function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exportin
   )
 }
 
-function PendingCard({ txs, loading }: { txs: any[]; loading: boolean }) {
+function PendingCard({
+  txs,
+  debts,
+  loading,
+}: {
+  txs: any[]
+  debts: any[]
+  loading: boolean
+}) {
   const [collapsed, setCollapsed] = useState(false)
+  const router = useRouter()
 
-  if (loading) return null;
-  if (txs.length === 0) return null
+  if (loading) return null
 
-  const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + safeNum(t.amount), 0)
-  const totalIncome = txs.filter(t => t.type === 'income').reduce((s, t) => s + safeNum(t.amount), 0)
-  const fmt = (v: number) => `R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const totalItems = txs.length + debts.length
+  if (totalItems === 0) return null
+
+  const totalExpense = txs
+    .filter(
+      (tx) =>
+        getPendingDirection(tx) === 'payable'
+    )
+    .reduce(
+      (sum, tx) => sum + safeNum(tx.amount),
+      0
+    )
+
+  const transactionReceivables = txs
+    .filter((tx) =>
+      isStandalonePendingReceivable(tx)
+    )
+    .reduce(
+      (sum, tx) => sum + safeNum(tx.amount),
+      0
+    )
+
+  const debtReceivables = debts.reduce(
+    (sum, debt) =>
+      sum + safeNum(debt.remaining),
+    0
+  )
+
+  const totalIncome =
+    transactionReceivables + debtReceivables
+
+  const fmt = (value: number) =>
+    `R$ ${Math.abs(value).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
 
   return (
     <div className="mb-5">
       <button
         type="button"
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3.5 shadow-sm transition-all active:scale-[0.99]"
+        onClick={() => setCollapsed((current) => !current)}
+        className="w-full rounded-[24px] border border-gray-200/70 bg-white px-4 py-3.5 shadow-sm transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-[16px] bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
-            <Clock size={18} className="text-amber-600 dark:text-amber-400" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-amber-50 dark:bg-amber-900/20">
+              <Clock
+                size={18}
+                className="text-amber-600 dark:text-amber-400"
+              />
+            </div>
+
+            <div className="min-w-0 text-left">
+              <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                {totalItems}{' '}
+                {totalItems === 1
+                  ? 'pendência'
+                  : 'pendências'}
+              </p>
+              <p className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+                Contas a pagar e valores a receber
+              </p>
+            </div>
           </div>
 
-          <div className="text-left min-w-0">
-            <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {txs.length} {txs.length === 1 ? 'pendente' : 'pendentes'}
-            </p>
-            <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
-              {totalExpense > 0 && <span className="text-red-500 dark:text-red-400">−{fmt(totalExpense)}</span>}
-              {totalExpense > 0 && totalIncome > 0 && <span className="mx-1.5 text-gray-300 dark:text-slate-600">•</span>}
-              {totalIncome > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{fmt(totalIncome)}</span>}
-            </p>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-700">
+            <ChevronDown
+              size={17}
+              className={`text-gray-500 transition-transform duration-300 dark:text-gray-300 ${
+                collapsed ? '-rotate-90' : ''
+              }`}
+            />
           </div>
         </div>
 
-        <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-          <ChevronDown
-            size={17}
-            className={`text-gray-500 dark:text-gray-300 transition-transform duration-300 ${collapsed ? '-rotate-90' : ''}`}
-          />
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-[15px] bg-red-50/70 px-3 py-2.5 text-left dark:bg-red-500/5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-red-400">
+              A pagar
+            </p>
+            <p className="mt-0.5 truncate text-[13px] font-bold text-red-600 dark:text-red-400">
+              {fmt(totalExpense)}
+            </p>
+          </div>
+
+          <div className="rounded-[15px] bg-emerald-50/70 px-3 py-2.5 text-left dark:bg-emerald-500/5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-500">
+              A receber
+            </p>
+            <p className="mt-0.5 truncate text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
+              {fmt(totalIncome)}
+            </p>
+          </div>
         </div>
       </button>
 
       {!collapsed && (
-        <div className="mt-2 rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-          {txs.map((t, index) => (
-            <TransactionItem key={t.id} transaction={t} index={index} totalItems={txs.length} />
+        <div className="mt-2 overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm animate-in fade-in slide-in-from-top-2 duration-300 dark:border-slate-700 dark:bg-slate-800">
+          {debts.map((debt, index) => (
+            <button
+              key={`debt-${debt.id}`}
+              type="button"
+              onClick={() =>
+                router.push(
+                  `/debts/details?id=${encodeURIComponent(debt.id)}`
+                )
+              }
+              className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/50 ${
+                index !== debts.length - 1 ||
+                txs.length > 0
+                  ? 'border-b border-gray-100 dark:border-slate-700/55'
+                  : ''
+              }`}
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                <User size={19} />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                  {debt.person_name || 'Valor a receber'}
+                </p>
+                <p className="mt-0.5 truncate text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400">
+                  Quem me deve · A receber
+                </p>
+              </div>
+
+              <p className="shrink-0 text-[14px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                +{fmt(debt.remaining)}
+              </p>
+            </button>
+          ))}
+
+          {txs.map((tx, index) => (
+            <TransactionItem
+              key={tx.id}
+              transaction={tx}
+              index={index}
+              totalItems={txs.length}
+            />
           ))}
         </div>
       )}
@@ -197,8 +318,13 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
   const attachmentIcon = getAttachmentIcon(transaction.receipt_url)
 
   const isIncome = transaction.type === 'income'
-  const isExpense = transaction.type === 'expense' || transaction.type === 'sangria'
+  const isExpense =
+    transaction.type === 'expense' ||
+    transaction.type === 'sangria'
   const isTransfer = transaction.type === 'transfer'
+  const pendingLabel = isPending
+    ? getPendingLabel(transaction)
+    : ''
 
   let amountColorClass = 'text-gray-900 dark:text-gray-100'
   let amountPrefix = ''
@@ -303,7 +429,7 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
               </>
             ) : (
               <span className={isPending ? 'text-amber-600 dark:text-amber-400' : ''}>
-                {isPending ? 'Pendente' : typeLabel}
+                {isPending ? pendingLabel : typeLabel}
               </span>
             )}
           </div>
@@ -326,7 +452,7 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
                   : 'text-blue-500 dark:text-blue-400'
               }`}
             >
-              {isPending ? 'Aguardando' : 'Transferência'}
+              {isPending ? pendingLabel : 'Transferência'}
             </p>
           )}
         </div>
@@ -338,11 +464,15 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
 export default function TransactionsPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { effectiveContext } = useContext_()
   const { showToast } = useToast()
   const { pendingCount } = useLocalSync()
 
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
+  const [quickFilter, setQuickFilter] =
+    useState<QuickFilter>('all')
+  const [pendingKind, setPendingKind] =
+    useState<PendingKind>('all')
   const [advFilters, setAdvFilters] = useState<AdvFilters>(defaultAdvFilters)
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [tempFilters, setTempFilters] = useState<AdvFilters>(defaultAdvFilters)
@@ -356,11 +486,47 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
 
-  const startMonth = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-  const endMonth = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+  useEffect(() => {
+    const filter = searchParams.get('filter')
+    const kind = searchParams.get('kind')
+
+    if (
+      filter === 'all' ||
+      filter === 'income' ||
+      filter === 'expense' ||
+      filter === 'transfer' ||
+      filter === 'pending'
+    ) {
+      setQuickFilter(filter)
+    }
+
+    if (
+      kind === 'payable' ||
+      kind === 'receivable'
+    ) {
+      setPendingKind(kind)
+    } else {
+      setPendingKind('all')
+    }
+  }, [searchParams])
+
+  const startMonth = format(
+    startOfMonth(currentDate),
+    'yyyy-MM-dd'
+  )
+  const endMonth = format(
+    endOfMonth(currentDate),
+    'yyyy-MM-dd'
+  )
 
   // ✅ HOOK ESPECÍFICO DE LISTAGEM
-  const { data: transactions, loading } = useTransactionsList(effectiveContext)
+  const { data: transactions, loading } =
+    useTransactionsList(effectiveContext)
+  const {
+    data: localDebts,
+    loading: debtsLoading,
+  } = useDebtsList(effectiveContext)
+  const pageLoading = loading || debtsLoading
 
   // ✅ CATEGORIAS E CONTAS (useLocalData mantido para joins)
   const { data: localCategories } = useLocalData({
@@ -386,6 +552,94 @@ export default function TransactionsPage() {
     })
   }, [transactions, localCategories, localAccounts])
 
+  const debtPaymentsById = useMemo(() => {
+    const result = new Map<string, number>()
+
+    for (const tx of transactions || []) {
+      if (!isDebtPayment(tx) || !tx.debt_id) {
+        continue
+      }
+
+      result.set(
+        tx.debt_id,
+        (result.get(tx.debt_id) || 0) +
+          Math.round(safeNum(tx.amount) * 100)
+      )
+    }
+
+    return result
+  }, [transactions])
+
+  const openDebtReceivables = useMemo(() => {
+    return (localDebts || [])
+      .map((debt: any) => {
+        const totalCents = Math.round(
+          safeNum(debt.total_amount) * 100
+        )
+        const paidCents =
+          debtPaymentsById.get(debt.id) || 0
+        const status =
+          debt.status === 'cancelled'
+            ? 'cancelled'
+            : getDebtStatusFromAmounts(
+                totalCents,
+                paidCents
+              )
+        const remaining = getDebtRemainingAmount(
+          safeNum(debt.total_amount),
+          paidCents / 100
+        )
+
+        return {
+          ...debt,
+          paid_amount: paidCents / 100,
+          remaining,
+          status,
+        }
+      })
+      .filter(
+        (debt: any) =>
+          debt.status !== 'paid' &&
+          debt.status !== 'cancelled' &&
+          debt.remaining > 0
+      )
+  }, [localDebts, debtPaymentsById])
+
+  const isCurrentMonth =
+    format(currentDate, 'yyyy-MM') ===
+    format(new Date(), 'yyyy-MM')
+
+  const debtReceivablesForPeriod = useMemo(() => {
+    return openDebtReceivables.filter(
+      (debt: any) => {
+        const dueDate = String(
+          debt.due_date || ''
+        )
+
+        if (!dueDate) {
+          return isCurrentMonth
+        }
+
+        if (
+          dueDate >= startMonth &&
+          dueDate <= endMonth
+        ) {
+          return true
+        }
+
+        return (
+          isCurrentMonth &&
+          dueDate < startMonth
+        )
+      }
+    )
+  }, [
+    openDebtReceivables,
+    startMonth,
+    endMonth,
+    isCurrentMonth,
+  ])
+
   // ✅ FILTROS
   const filtered = transactionsWithJoin.filter((t: any) => {
     if (t.date < startMonth || t.date > endMonth) return false
@@ -393,7 +647,30 @@ export default function TransactionsPage() {
     if (quickFilter === 'income' && t.type !== 'income') return false
     if (quickFilter === 'expense' && t.type !== 'expense' && t.type !== 'sangria') return false
     if (quickFilter === 'transfer' && t.type !== 'transfer') return false
-    if (quickFilter === 'pending' && t.status !== 'pending') return false
+    if (
+      quickFilter === 'pending' &&
+      t.status !== 'pending'
+    ) {
+      return false
+    }
+
+    if (quickFilter === 'pending') {
+      const direction = getPendingDirection(t)
+
+      if (
+        pendingKind === 'payable' &&
+        direction !== 'payable'
+      ) {
+        return false
+      }
+
+      if (
+        pendingKind === 'receivable' &&
+        direction !== 'receivable'
+      ) {
+        return false
+      }
+    }
 
     if (advFilters.status !== 'all' && t.status !== advFilters.status) return false
     if (advFilters.accountId && t.account_id !== advFilters.accountId) return false
@@ -418,10 +695,14 @@ export default function TransactionsPage() {
     const orderMult = advFilters.sortOrder === 'asc' ? 1 : -1;
 
     if (advFilters.sortBy === 'date') {
-      const timeA = new Date(a.created_at || a.date || 0).getTime();
-      const timeB = new Date(b.created_at || b.date || 0).getTime();
-      if (timeA === timeB) return 0;
-      return (timeA > timeB ? 1 : -1) * orderMult;
+      const dateA = String(
+        a.date || a.created_at || ''
+      )
+      const dateB = String(
+        b.date || b.created_at || ''
+      )
+
+      return dateA.localeCompare(dateB) * orderMult
     }
     if (advFilters.sortBy === 'amount') {
       return (safeNum(a.amount) - safeNum(b.amount)) * orderMult;
@@ -434,19 +715,229 @@ export default function TransactionsPage() {
     return 0;
   });
 
-  const pendingTxs = filtered.filter((t: any) => t.status === 'pending')
-  const displayTxs = filtered;
+  const pendingSummaryTxs = transactionsWithJoin.filter(
+    (tx: any) => {
+      if (
+        tx.date < startMonth ||
+        tx.date > endMonth ||
+        tx.status !== 'pending'
+      ) {
+        return false
+      }
+
+      if (
+        advFilters.status !== 'all' &&
+        advFilters.status !== 'pending'
+      ) {
+        return false
+      }
+
+      if (
+        advFilters.accountId &&
+        tx.account_id !== advFilters.accountId
+      ) {
+        return false
+      }
+
+      if (
+        advFilters.categoryId &&
+        tx.category_id !== advFilters.categoryId
+      ) {
+        return false
+      }
+
+      if (
+        advFilters.minAmount &&
+        safeNum(tx.amount) <
+          safeNum(advFilters.minAmount)
+      ) {
+        return false
+      }
+
+      if (
+        advFilters.maxAmount &&
+        safeNum(tx.amount) >
+          safeNum(advFilters.maxAmount)
+      ) {
+        return false
+      }
+
+      if (search) {
+        const term = search.toLowerCase()
+        const description = String(
+          tx.description || ''
+        ).toLowerCase()
+        const category = String(
+          tx.categories?.name || ''
+        ).toLowerCase()
+        const notes = String(
+          tx.notes || ''
+        ).toLowerCase()
+
+        if (advFilters.searchNotes) {
+          return (
+            description.includes(term) ||
+            category.includes(term) ||
+            notes.includes(term)
+          )
+        }
+
+        return (
+          description.includes(term) ||
+          category.includes(term)
+        )
+      }
+
+      return true
+    }
+  )
+
+  const pendingTxs = filtered.filter(
+    (tx: any) => tx.status === 'pending'
+  )
+  const displayTxs = filtered
   const grouped = groupByDate(displayTxs)
 
-  const sortedDates = Object.keys(grouped).sort((a, b) => {
-    return advFilters.sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b);
-  })
+  const debtSearchTerm = search
+    .trim()
+    .toLowerCase()
+
+  const visibleDebtReceivables = useMemo(() => {
+    if (quickFilter !== 'pending') return []
+
+    if (pendingKind === 'payable') return []
+
+    if (
+      advFilters.accountId ||
+      advFilters.categoryId ||
+      advFilters.status === 'done'
+    ) {
+      return []
+    }
+
+    return debtReceivablesForPeriod
+      .filter((debt: any) => {
+        if (advFilters.minAmount) {
+          if (
+            safeNum(debt.remaining) <
+            safeNum(advFilters.minAmount)
+          ) {
+            return false
+          }
+        }
+
+        if (advFilters.maxAmount) {
+          if (
+            safeNum(debt.remaining) >
+            safeNum(advFilters.maxAmount)
+          ) {
+            return false
+          }
+        }
+
+        if (!debtSearchTerm) return true
+
+        const person = String(
+          debt.person_name || ''
+        ).toLowerCase()
+        const description = String(
+          debt.description || ''
+        ).toLowerCase()
+
+        return (
+          person.includes(debtSearchTerm) ||
+          description.includes(debtSearchTerm)
+        )
+      })
+      .sort((a: any, b: any) => {
+        const dueA = String(
+          a.due_date || '9999-12-31'
+        )
+        const dueB = String(
+          b.due_date || '9999-12-31'
+        )
+
+        return dueA.localeCompare(dueB)
+      })
+  }, [
+    quickFilter,
+    pendingKind,
+    advFilters.accountId,
+    advFilters.categoryId,
+    advFilters.status,
+    advFilters.minAmount,
+    advFilters.maxAmount,
+    debtReceivablesForPeriod,
+    debtSearchTerm,
+  ])
+
+  const pendingCardDebts =
+    quickFilter === 'all' ||
+    quickFilter === 'income'
+      ? debtReceivablesForPeriod.filter(
+          (debt: any) => {
+            if (!debtSearchTerm) return true
+
+            return (
+              String(debt.person_name || '')
+                .toLowerCase()
+                .includes(debtSearchTerm) ||
+              String(debt.description || '')
+                .toLowerCase()
+                .includes(debtSearchTerm)
+            )
+          }
+        )
+      : []
+
+  const pendingPayableTotal = pendingSummaryTxs
+    .filter(
+      (tx: any) =>
+        getPendingDirection(tx) === 'payable'
+    )
+    .reduce(
+      (sum: number, tx: any) =>
+        sum + safeNum(tx.amount),
+      0
+    )
+
+  const pendingReceivableTxTotal = pendingSummaryTxs
+    .filter((tx: any) =>
+      isStandalonePendingReceivable(tx)
+    )
+    .reduce(
+      (sum: number, tx: any) =>
+        sum + safeNum(tx.amount),
+      0
+    )
+
+  const pendingDebtTotal =
+    debtReceivablesForPeriod.reduce(
+      (sum: number, debt: any) =>
+        sum + safeNum(debt.remaining),
+      0
+    )
+
+  const pendingReceivableTotal =
+    pendingReceivableTxTotal +
+    pendingDebtTotal
+
+  const hasVisibleRows =
+    displayTxs.length > 0 ||
+    visibleDebtReceivables.length > 0
+
+  const sortedDates = Object.keys(grouped).sort(
+    (a, b) =>
+      advFilters.sortOrder === 'desc'
+        ? b.localeCompare(a)
+        : a.localeCompare(b)
+  )
 
   // ✅ REMOVIDO useEffect com reload
 
   useEffect(() => {
-    setLoadingPulse(loading)
-  }, [loading])
+    setLoadingPulse(pageLoading)
+  }, [pageLoading])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -489,7 +980,7 @@ export default function TransactionsPage() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
 
-      {(loading || pendingCount > 0) && (
+      {(pageLoading || pendingCount > 0) && (
         <div className="fixed top-6 right-6 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
         </div>
@@ -681,27 +1172,156 @@ export default function TransactionsPage() {
               )
             })}
           </div>
+
+          {quickFilter === 'pending' && (
+            <div className="mt-2 grid grid-cols-3 gap-1 rounded-[14px] border border-gray-200/70 bg-white p-1 dark:border-slate-700 dark:bg-slate-800">
+              {[
+                {
+                  key: 'all',
+                  label: 'Tudo',
+                  display: `${
+                    pendingSummaryTxs.length +
+                    debtReceivablesForPeriod.length
+                  } itens`,
+                },
+                {
+                  key: 'payable',
+                  label: 'A pagar',
+                  display: formatCurrency(
+                    pendingPayableTotal
+                  ),
+                },
+                {
+                  key: 'receivable',
+                  label: 'A receber',
+                  display: formatCurrency(
+                    pendingReceivableTotal
+                  ),
+                },
+              ].map((option) => (
+                <button
+                  type="button"
+                  key={option.key}
+                  onClick={() =>
+                    setPendingKind(
+                      option.key as PendingKind
+                    )
+                  }
+                  className={`rounded-[11px] px-2 py-2 text-center transition-all active:scale-[0.97] ${
+                    pendingKind === option.key
+                      ? option.key === 'payable'
+                        ? 'bg-red-50 text-red-600 shadow-sm dark:bg-red-500/10 dark:text-red-400'
+                        : option.key === 'receivable'
+                          ? 'bg-emerald-50 text-emerald-700 shadow-sm dark:bg-emerald-500/10 dark:text-emerald-400'
+                          : 'bg-gray-100 text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                      : 'text-gray-400 hover:bg-gray-50 dark:text-gray-500 dark:hover:bg-slate-700/50'
+                  }`}
+                >
+                  <span className="block text-[10px] font-bold">
+                    {option.label}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums opacity-80">
+                    {option.display}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="px-4 pt-3">
-        {loading ? (
+        {pageLoading ? (
           <TransactionsSkeleton />
-        ) : displayTxs.length === 0 ? (
+        ) : !hasVisibleRows ? (
           <div className="flex flex-col items-center py-20 text-gray-400 dark:text-gray-500 animate-in fade-in duration-300">
-            <div className="w-16 h-16 rounded-full bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 shadow-sm flex items-center justify-center mb-4">
-              <ReceiptText size={28} className="opacity-30" />
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <ReceiptText
+                size={28}
+                className="opacity-30"
+              />
             </div>
-            <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">Nenhuma transação</p>
-            <p className="text-[12px] mt-1 text-center max-w-[220px] text-gray-400 dark:text-gray-500">
-              Tente alterar os filtros ou adicione um novo registro.
+            <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">
+              Nenhum registro
+            </p>
+            <p className="mt-1 max-w-[240px] text-center text-[12px] text-gray-400 dark:text-gray-500">
+              {quickFilter === 'pending'
+                ? 'Nenhuma conta a pagar ou valor a receber neste período.'
+                : 'Tente alterar os filtros ou adicione um novo registro.'}
             </p>
           </div>
         ) : (
           <>
-            {quickFilter !== 'pending' && pendingTxs.length > 0 && !hasAdvancedFilters && (
-              <PendingCard txs={pendingTxs} loading={false} />
-            )}
+            {quickFilter !== 'pending' &&
+              !hasAdvancedFilters &&
+              (pendingTxs.length > 0 ||
+                pendingCardDebts.length > 0) && (
+                <PendingCard
+                  txs={pendingTxs}
+                  debts={pendingCardDebts}
+                  loading={false}
+                />
+              )}
+
+            {quickFilter === 'pending' &&
+              visibleDebtReceivables.length > 0 && (
+                <div className="mb-4">
+                  <div className="mb-2 flex items-center gap-2 px-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.11em] text-emerald-600 dark:text-emerald-400">
+                      Quem me deve
+                    </p>
+                    <div className="h-px flex-1 bg-emerald-100 dark:bg-emerald-500/10" />
+                  </div>
+
+                  <div className="overflow-hidden rounded-[18px] border border-emerald-100 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.025)] dark:border-emerald-500/10 dark:bg-slate-800/80">
+                    {visibleDebtReceivables.map(
+                      (debt: any, index: number) => (
+                        <button
+                          key={debt.id}
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/debts/details?id=${encodeURIComponent(debt.id)}`
+                            )
+                          }
+                          className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-emerald-50/40 active:bg-emerald-50 dark:hover:bg-emerald-500/5 ${
+                            index !==
+                            visibleDebtReceivables.length -
+                              1
+                              ? 'border-b border-gray-100 dark:border-slate-700/55'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            <User size={19} />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
+                              {debt.person_name ||
+                                'Valor a receber'}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400">
+                              A receber
+                              {debt.due_date
+                                ? ` · ${dateLabel(
+                                    debt.due_date
+                                  )}`
+                                : ' · Sem vencimento'}
+                            </p>
+                          </div>
+
+                          <p className="shrink-0 text-[14px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                            +{formatCurrency(
+                              debt.remaining
+                            )}
+                          </p>
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
 
             <div className="space-y-4 animate-in fade-in duration-500">
               {sortedDates.map(date => (

@@ -251,6 +251,24 @@ function NewTransactionContent() {
   const themeColor = isIncome ? 'text-emerald-500' : 'text-red-500'
   const toggleBgClass = isPaid ? (isIncome ? 'bg-emerald-500' : 'bg-teal-600') : 'bg-gray-200 dark:bg-slate-700'
   const toggleTracks = isPaid ? 'translate-x-7' : 'translate-x-1'
+  const settlementTitle = creditCardId
+    ? 'Lançado na fatura'
+    : isPaid
+      ? isIncome
+        ? 'Recebido'
+        : 'Pago'
+      : isIncome
+        ? 'A receber'
+        : 'A pagar'
+  const settlementDescription = creditCardId
+    ? 'A compra já faz parte da fatura do cartão.'
+    : isPaid
+      ? isIncome
+        ? 'O valor entra no saldo da conta selecionada.'
+        : 'O valor reduz o saldo da conta selecionada.'
+      : isIncome
+        ? 'Fica pendente e não entra no saldo até você receber.'
+        : 'Fica pendente e não reduz o saldo até você pagar.'
 
   const selectedCat = allCategoriesFlat.find((c: any) => c.id === categoryId)
   const selectedAcc = (accounts || []).find((a: any) => a.id === accountId)
@@ -553,10 +571,17 @@ function NewTransactionContent() {
     if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
     if (amountNum <= 0) { hapticError(); showToast('Informe um valor maior que zero.', 'warning'); return }
 
-    // ✅ VALIDAÇÃO: obriga conta se não houver cartão
-    if (!creditCardId && !accountId) {
+    // Conta só é obrigatória quando a movimentação já foi efetivada.
+    // Pendências podem existir antes de sabermos em qual conta serão
+    // recebidas ou pagas.
+    if (!creditCardId && isPaid && !accountId) {
       hapticError()
-      showToast('Selecione uma conta ou cartão de crédito.', 'warning')
+      showToast(
+        isIncome
+          ? 'Selecione a conta onde o valor foi recebido.'
+          : 'Selecione a conta usada para o pagamento.',
+        'warning'
+      )
       return
     }
 
@@ -893,17 +918,67 @@ function NewTransactionContent() {
               </div>
             </div>
 
-            {/* Status */}
-            <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
-              <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200">
-                {isIncome ? 'Recebido' : creditCardId ? 'Lançado na fatura' : 'Pago'}
-              </span>
-              {!creditCardId && (
+            {/* Status financeiro */}
+            <div
+              className={`rounded-[18px] border px-4 py-3.5 ${
+                !creditCardId && !isPaid
+                  ? isIncome
+                    ? 'border-emerald-200/80 bg-emerald-50/55 dark:border-emerald-500/15 dark:bg-emerald-500/5'
+                    : 'border-amber-200/80 bg-amber-50/60 dark:border-amber-500/15 dark:bg-amber-500/5'
+                  : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p
+                    className={`text-[14px] font-semibold ${
+                      !creditCardId && !isPaid
+                        ? isIncome
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-amber-700 dark:text-amber-400'
+                        : 'text-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {settlementTitle}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                    {settlementDescription}
+                  </p>
+                </div>
+
+                {!creditCardId && (
+                  <button
+                    type="button"
+                    aria-label={
+                      isPaid
+                        ? 'Marcar como pendente'
+                        : isIncome
+                          ? 'Marcar como recebido'
+                          : 'Marcar como pago'
+                    }
+                    onClick={() => {
+                      vibrate([5])
+                      setIsPaid(!isPaid)
+                    }}
+                    className={`relative h-8 w-14 shrink-0 rounded-full shadow-inner transition-all duration-300 active:scale-[0.98] ${toggleBgClass}`}
+                  >
+                    <div
+                      className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-300 ${toggleTracks}`}
+                    />
+                  </button>
+                )}
+              </div>
+
+              {!creditCardId && !isPaid && isIncome && (
                 <button
-                  onClick={() => { vibrate([5]); setIsPaid(!isPaid); }}
-                  className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${toggleBgClass} active:scale-[0.98]`}
+                  type="button"
+                  onClick={() => {
+                    vibrate([5])
+                    router.push('/debts/new')
+                  }}
+                  className="mt-3 w-full rounded-[13px] border border-emerald-200/80 bg-white/80 px-3 py-2 text-left text-[11px] font-semibold text-emerald-700 transition-colors active:bg-emerald-50 dark:border-emerald-500/15 dark:bg-slate-900/60 dark:text-emerald-400"
                 >
-                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-sm ${toggleTracks}`} />
+                  É fiado ou aceita pagamento parcial? Use “Quem me deve”.
                 </button>
               )}
             </div>
@@ -993,7 +1068,7 @@ function NewTransactionContent() {
             {!creditCardId && (
               <div>
                 <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                  Conta
+                  {isPaid ? 'Conta' : 'Conta prevista (opcional)'}
                 </label>
                 <button
                   onClick={() => { vibrate([5]); setShowAccModal(true); }}
@@ -1006,10 +1081,10 @@ function NewTransactionContent() {
 
                     <div className="text-left min-w-0">
                       <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 block">
-                        Conta
+                        {isPaid ? 'Conta' : 'Conta prevista'}
                       </span>
                       <span className={`text-[14px] font-semibold ${selectedAcc ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
-                        {selectedAcc ? selectedAcc.name : 'Selecionar'}
+                        {selectedAcc ? selectedAcc.name : isPaid ? 'Selecionar' : 'Opcional'}
                       </span>
                     </div>
                   </div>

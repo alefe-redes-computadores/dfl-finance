@@ -1,3 +1,4 @@
+// src/app/(app)/debts/page.tsx
 'use client'
 
 
@@ -5,7 +6,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
-import { getDebtDueState, isDebtPayment } from '@/lib/debtOperations'
+import {
+  getDebtDueState,
+  getDebtRemainingAmount,
+  getDebtStatusFromAmounts,
+  isDebtPayment,
+} from '@/lib/debtOperations'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useDebtsList } from '@/hooks/useDebtsList' // ✅ HOOK ESPECÍFICO
@@ -17,7 +23,7 @@ function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
   const { context, effectiveContext } = useContext_()
-  const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
+  const { vibrate } = useHapticFeedback()
 
   const [filter, setFilter] = useState<'active' | 'paid'>('active')
   const [refreshing, setRefreshing] = useState(false)
@@ -33,61 +39,108 @@ function DebtsContent() {
 
   const loading = debtsLoading || transactionsLoading || !user?.id || !context
 
-  const debts = useMemo(() => {
-    if (!localDebts || !localTransactions) return []
+  const debtPaymentsById = useMemo(() => {
+    const result = new Map<string, number>()
 
-    const paymentsByDebt: Record<string, number> = {}
-
-    localTransactions.forEach((tx: any) => {
-      if (isDebtPayment(tx) && tx.debt_id) {
-        const amountCents = Math.round(Number(tx.amount || 0) * 100)
-        paymentsByDebt[tx.debt_id] =
-          (paymentsByDebt[tx.debt_id] || 0) + amountCents
+    for (const tx of localTransactions || []) {
+      if (!isDebtPayment(tx) || !tx.debt_id) {
+        continue
       }
-    })
 
-    let filtered = localDebts
-
-    if (filter === 'active') {
-      filtered = localDebts.filter((d: any) => {
-        const total = Number(d.total_amount) || 0
-        const paid = (paymentsByDebt[d.id] || 0) / 100
-        const isEffectivelyPaid = total > 0 && paid >= total
-        return !isEffectivelyPaid && d.status !== 'cancelled'
-      })
-    } else {
-      filtered = localDebts.filter((d: any) => {
-        const total = Number(d.total_amount) || 0
-        const paid = (paymentsByDebt[d.id] || 0) / 100
-        const isEffectivelyPaid = total > 0 && paid >= total
-        return isEffectivelyPaid || d.status === 'paid'
-      })
+      result.set(
+        tx.debt_id,
+        (result.get(tx.debt_id) || 0) +
+          Math.round(Number(tx.amount || 0) * 100)
+      )
     }
 
-    return filtered.map((debt: any) => {
-      const paid = (paymentsByDebt[debt.id] || 0) / 100
-      const total = Number(debt.total_amount) || 0
+    return result
+  }, [localTransactions])
+
+  const enrichedDebts = useMemo(() => {
+    return (localDebts || []).map((debt: any) => {
+      const totalCents = Math.round(
+        Number(debt.total_amount || 0) * 100
+      )
+      const paidCents =
+        debtPaymentsById.get(debt.id) || 0
+      const computedStatus =
+        debt.status === 'cancelled'
+          ? 'cancelled'
+          : getDebtStatusFromAmounts(
+              totalCents,
+              paidCents
+            )
+      const paidAmount = paidCents / 100
+      const remaining = getDebtRemainingAmount(
+        Number(debt.total_amount || 0),
+        paidAmount
+      )
+      const percent =
+        totalCents > 0
+          ? Math.min(
+              (paidCents / totalCents) * 100,
+              100
+            )
+          : 0
 
       return {
         ...debt,
-        paid_amount: paid,
-        percent: Math.min(total > 0 ? (paid / total) * 100 : 0, 100),
-        status: total > 0 && paid >= total ? 'paid' : debt.status,
+        paid_amount: paidAmount,
+        remaining,
+        percent,
+        status: computedStatus,
       }
     })
-  }, [localDebts, localTransactions, filter])
+  }, [localDebts, debtPaymentsById])
 
-  const totalToReceiveState = useMemo(() => {
-    return debts
-      .filter((d: any) => {
-        const totalVal = Number(d.total_amount) || 0
-        const paid = d.paid_amount || 0
-        return totalVal > 0 && paid < totalVal
-      })
-      .reduce((sum: number, d: any) => {
-        return sum + (Number(d.total_amount) - (d.paid_amount || 0))
-      }, 0)
-  }, [debts])
+  const activeDebts = useMemo(
+    () =>
+      enrichedDebts.filter(
+        (debt: any) =>
+          debt.status !== 'paid' &&
+          debt.status !== 'cancelled' &&
+          debt.remaining > 0
+      ),
+    [enrichedDebts]
+  )
+
+  const paidDebts = useMemo(
+    () =>
+      enrichedDebts.filter(
+        (debt: any) => debt.status === 'paid'
+      ),
+    [enrichedDebts]
+  )
+
+  const debts =
+    filter === 'active'
+      ? activeDebts
+      : paidDebts
+
+  const totalToReceiveState = useMemo(
+    () =>
+      activeDebts.reduce(
+        (sum: number, debt: any) =>
+          sum + Number(debt.remaining || 0),
+        0
+      ),
+    [activeDebts]
+  )
+
+  const activePeopleCount = useMemo(() => {
+    const names = new Set(
+      activeDebts
+        .map((debt: any) =>
+          String(debt.person_name || '')
+            .trim()
+            .toLocaleLowerCase('pt-BR')
+        )
+        .filter(Boolean)
+    )
+
+    return names.size
+  }, [activeDebts])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -219,7 +272,7 @@ function DebtsContent() {
               Pessoas
             </p>
             <p className="text-[20px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
-              {debts.length}
+              {activePeopleCount}
             </p>
           </div>
         </div>
@@ -238,7 +291,7 @@ function DebtsContent() {
                   : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
               }`}
             >
-              Pendentes
+              Em aberto
             </button>
 
             <button
@@ -253,7 +306,7 @@ function DebtsContent() {
                   : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
               }`}
             >
-              Pagos
+              Recebidos
             </button>
           </div>
         </div>
@@ -272,8 +325,8 @@ function DebtsContent() {
             </h3>
             <p className="text-gray-400 dark:text-gray-500 text-[12px] mb-5 max-w-[250px]">
               {filter === 'paid'
-                ? 'Nenhuma dívida foi paga ainda.'
-                : 'Registre empréstimos para acompanhar quem te deve.'}
+                ? 'Nenhum valor foi recebido ainda.'
+                : 'Registre fiados, empréstimos ou outros valores que alguém ainda precisa te pagar.'}
             </p>
             <button
               type="button"
@@ -283,7 +336,7 @@ function DebtsContent() {
               }}
               className="bg-teal-600 text-white px-8 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
             >
-              Novo empréstimo
+              Novo valor a receber
             </button>
           </div>
         ) : (
@@ -291,7 +344,10 @@ function DebtsContent() {
             {debts.map((debt: any) => {
               const IconComp = getDynamicIcon(debt.icon || 'user')
               const isPaid = debt.status === 'paid'
-              const remaining = Number(debt.total_amount) - (debt.paid_amount || 0)
+              const remaining = getDebtRemainingAmount(
+                Number(debt.total_amount),
+                Number(debt.paid_amount || 0)
+              )
               const dueState = getDebtDueState(debt.due_date)
               const daysUntilDue = dueState.daysUntilDue
               const isOverdue = dueState.isOverdue && !isPaid
@@ -332,7 +388,7 @@ function DebtsContent() {
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         {isPaid && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                            <Check size={10} /> Pago
+                            <Check size={10} /> Recebido
                           </span>
                         )}
                         {isOverdue && (
@@ -376,7 +432,9 @@ function DebtsContent() {
                             : 'text-gray-500 dark:text-gray-400'
                         }`}
                       >
-                        {isPaid ? 'Total pago' : `Falta ${formatCurrency(Math.max(remaining, 0))}`}
+                        {isPaid
+                          ? 'Valor recebido'
+                          : `A receber ${formatCurrency(remaining)}`}
                       </span>
 
                       <span className="shrink-0 text-gray-400 dark:text-gray-500">
