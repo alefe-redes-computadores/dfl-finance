@@ -1,6 +1,7 @@
+// src/app/(app)/tags/page.tsx
 'use client'
 
-import { useState, useRef, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   Search, Plus, X, RefreshCw, Trash2, Tag, Pencil, Save, Hash, ChevronLeft
@@ -33,15 +34,13 @@ export default function TagsPage() {
 
   const [search, setSearch] = useState("")
   const [showSearch, setShowSearch] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [tagName, setTagName] = useState("")
   const [tagColor, setTagColor] = useState(COLORS[0])
   const [saving, setSaving] = useState(false)
-  
-  const scrollRef = useRef<HTMLDivElement>(null)
+
 
   // ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: tags, loading } = useTagsList(effectiveContext)
@@ -80,16 +79,29 @@ export default function TagsPage() {
   }
 
   const handleSave = async () => {
-    if (!tagName.trim() || !user) {
+    const trimmedName = tagName.trim()
+
+    if (!trimmedName || !user) {
       errorHaptic()
-      showToast("⚠️ Informe o nome da tag", "warning")
+      showToast('Informe o nome da tag.', 'warning')
+      return
+    }
+
+    const duplicated = (tags || []).some((tag: any) =>
+      tag.id !== editId &&
+      String(tag.name || '').trim().toLowerCase() === trimmedName.toLowerCase()
+    )
+
+    if (duplicated) {
+      errorHaptic()
+      showToast('Já existe uma tag com este nome.', 'warning')
       return
     }
 
     setSaving(true)
     try {
       const payload = {
-        name: tagName.trim(),
+        name: trimmedName,
         color: tagColor,
         context: effectiveContext,
         updated_at: new Date().toISOString(),
@@ -99,7 +111,7 @@ export default function TagsPage() {
         const result = await safeUpdate('tags', editId, payload)
         if (!result.success) throw new Error(result.error)
         success()
-        showToast("✅ Tag atualizada!", "success")
+        showToast("Tag atualizada.", "success")
       } else {
         const id = crypto.randomUUID()
         const fullPayload = {
@@ -113,7 +125,7 @@ export default function TagsPage() {
         const result = await safeAdd('tags', fullPayload)
         if (!result.success) throw new Error(result.error)
         success()
-        showToast("✅ Tag criada!", "success")
+        showToast("Tag criada.", "success")
       }
 
       setShowForm(false)
@@ -122,7 +134,7 @@ export default function TagsPage() {
       // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Erro ao salvar tag: ${err.message}`, "error")
     } finally {
       setSaving(false)
     }
@@ -136,19 +148,25 @@ export default function TagsPage() {
       if (!result.success) throw new Error(result.error)
       
       success()
-      showToast("🗑️ Tag excluída!", "success")
+      showToast("Tag excluída.", "success")
       setDeleteModal(null)
       // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Erro ao excluir tag: ${err.message}`, "error")
     }
   }
 
   const filteredTags = useMemo(() => {
-    if (!search) return tags || []
-    return (tags || []).filter((tag: any) => 
-      tag.name && tag.name.toLowerCase().includes(search.toLowerCase())
+    const query = search.trim().toLowerCase()
+    const source = !query
+      ? [...(tags || [])]
+      : (tags || []).filter((tag: any) =>
+          tag.name && tag.name.toLowerCase().includes(query)
+        )
+
+    return source.sort((a: any, b: any) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')
     )
   }, [tags, search])
 
@@ -157,15 +175,6 @@ export default function TagsPage() {
       {(loading || pendingCount > 0) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-        </div>
-      )}
-
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
-          <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">
-            <RefreshCw size={16} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-semibold text-teal-600">Atualizando...</span>
-          </div>
         </div>
       )}
 
@@ -186,7 +195,7 @@ export default function TagsPage() {
                   Tags
                 </h1>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  Organize transações
+                  {tags.length} tag{tags.length === 1 ? '' : 's'} para organizar transações
                 </p>
               </div>
             </div>
@@ -234,10 +243,7 @@ export default function TagsPage() {
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar"
-      >
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar">
         {loading ? (
           <div className="space-y-2.5">
             <Skeleton count={5} height="76px" borderRadius="24px" />
@@ -397,7 +403,9 @@ export default function TagsPage() {
               Excluir Tag
             </h3>
             <p className="text-[14px] text-gray-500 dark:text-gray-400 mb-8 text-center px-4 font-medium">
-              As transações vinculadas continuarão existindo, apenas perderão a marcação desta tag.
+              {deleteModal && (transactionCountByTag[deleteModal] || 0) > 0
+                ? `Esta tag aparece em ${transactionCountByTag[deleteModal]} transação(ões). As transações serão preservadas e apenas perderão esta marcação.`
+                : 'A tag será removida. As transações permanecem intactas.'}
             </p>
             <div className="flex gap-3">
               <button

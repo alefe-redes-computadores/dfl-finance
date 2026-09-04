@@ -1,17 +1,16 @@
+// src/app/(app)/transactions/details/page.tsx
 'use client'
 
-import { useEffect, useState, useCallback, useRef, Suspense, useMemo } from 'react'
+import { useEffect, useState, useCallback, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/hooks/useAuth'
-import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
   ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
-  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, Layers, FileText,
+  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, FileText,
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import ReceiptModal from '@/components/ReceiptModal'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
@@ -27,6 +26,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
+import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
@@ -62,14 +62,10 @@ function EditTransactionContent() {
 
   const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
 
-  const galeriaInputRef = useRef<HTMLInputElement>(null)
-  const pdfInputRef = useRef<HTMLInputElement>(null)
-
   // HOOK ESPECÍFICO POR ID
   const { data: tx, loading, notFound } = useTransactionById(id)
 
   // TODOS OS HOOKS E USECALLBACK PRIMEIRO, ANTES DE QUALQUER RETURN CONDICIONAL
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isNew, setIsNew] = useState(false)
@@ -115,6 +111,7 @@ function EditTransactionContent() {
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
 
@@ -143,13 +140,13 @@ function EditTransactionContent() {
   }, [vibrate])
 
   const handleSave = useCallback(async () => {
-    if (!user?.id) { showToast('❌ Sessão expirada.', 'error'); return }
+    if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
     setSaving(true)
 
     const rawAmount = parseFloat(amountInput.replace(/\./g, '').replace(',', '.'))
     if (isNaN(rawAmount) || rawAmount <= 0) {
       hapticError()
-      showToast('⚠️ Informe um valor válido.', 'warning')
+      showToast('Informe um valor válido.', 'warning')
       setSaving(false)
       return
     }
@@ -359,11 +356,11 @@ function EditTransactionContent() {
 
       vibrate([10, 50])
       setSaved(true)
-      showToast('✅ Transação salva!', 'success')
+      showToast(`${txType === 'income' ? 'Receita' : 'Despesa'} ${isNew ? 'adicionada' : 'atualizada'}.`, 'success')
       setTimeout(() => { router.refresh(); router.back() }, 800)
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
+      showToast(`Erro ao salvar transação: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -388,7 +385,7 @@ function EditTransactionContent() {
         setContacts(contactsData.filter((c: any) => c.context === effectiveContext))
         setTags(tagData.filter((t: any) => t.context === effectiveContext))
 
-        const allCats = catData.filter((c: any) => c.context === effectiveContext)
+        const allCats = catData.filter((c: any) => c.context === effectiveContext && c.type === txType)
         const mainCats = allCats.filter((c: any) => !c.parent_id)
         const subCats = allCats.filter((c: any) => c.parent_id)
         const subsMap: Record<string, any[]> = {}
@@ -404,7 +401,7 @@ function EditTransactionContent() {
     }
 
     loadAuxData()
-  }, [user, effectiveContext])
+  }, [user, effectiveContext, txType])
 
   // HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR (useEffect)
   useEffect(() => {
@@ -518,6 +515,20 @@ function EditTransactionContent() {
 
   const uploadFile = async (file: File) => {
     if (!user) return
+
+    const isSupported = file.type.startsWith('image/') || file.type === 'application/pdf'
+    if (!isSupported) {
+      hapticError()
+      showToast('Use uma imagem ou um arquivo PDF.', 'warning')
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      hapticError()
+      showToast('O comprovante deve ter no máximo 10 MB.', 'warning')
+      return
+    }
+
     setUploading(true)
     setReceiptName(file.name)
 
@@ -548,7 +559,7 @@ function EditTransactionContent() {
       }
 
       setReceiptUrl(urlData.publicUrl)
-      showToast('✅ Comprovante anexado!', 'success')
+      showToast('Comprovante anexado.', 'success')
       success()
 
       if (isImage) {
@@ -578,7 +589,7 @@ function EditTransactionContent() {
                 const confirmed = confirm(`Deseja anexar este comprovante a despesa "${tx.description}" existente?`)
                 if (confirmed) {
                   await safeUpdate('transactions', tx.id, { receipt_url: urlData.publicUrl })
-                  showToast('✅ Comprovante vinculado!', 'success')
+                  showToast('Comprovante vinculado.', 'success')
                   vibrate([50])
                   return
                 }
@@ -593,14 +604,14 @@ function EditTransactionContent() {
               if (matchedCat) setCategoryId(matchedCat.id)
             }
             vibrate([50, 100, 50])
-            showToast('✅ Dados extraídos com sucesso!', 'success')
+            showToast('Dados extraídos do comprovante.', 'success')
           }
         } catch (ocrError) {
           console.error('Erro OCR:', ocrError)
         }
       }
     } catch (err: any) {
-      showToast(`❌ Erro ao anexar: ${err.message}`, 'error')
+      showToast(`Erro ao anexar comprovante: ${err.message}`, 'error')
       hapticError()
       setReceiptPreview(null)
       setReceiptName('')
@@ -609,8 +620,6 @@ function EditTransactionContent() {
       setUploading(false)
     }
   }
-
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const handleRemoveReceipt = async () => {
     vibrate([10])
@@ -622,26 +631,7 @@ function EditTransactionContent() {
     setReceiptPreview(null)
     setReceiptName('')
     setReceiptType(null)
-    showToast('🗑️ Comprovante removido.', 'success')
-  }
-
-  const handleReceiptOption = (option: string) => {
-    vibrate([5])
-    if (option === 'camera') {
-      setShowReceiptModal(false)
-      setTimeout(() => setShowCamera(true), 150)
-      return
-    }
-    if (option === 'galeria') {
-      galeriaInputRef.current?.click()
-      setTimeout(() => setShowReceiptModal(false), 200)
-      return
-    }
-    if (option === 'pdf') {
-      pdfInputRef.current?.click()
-      setTimeout(() => setShowReceiptModal(false), 200)
-      return
-    }
+    showToast('Comprovante removido.', 'success')
   }
 
   const handleCameraCapture = (file: File) => {
@@ -745,12 +735,12 @@ function EditTransactionContent() {
       })
 
       success()
-      showToast('🗑️ Transação excluída com sucesso.', 'success')
+      showToast('Transação excluída.', 'success')
       router.refresh()
       router.back()
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
+      showToast(`Erro ao excluir transação: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -771,29 +761,6 @@ function EditTransactionContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 font-sans pb-36 relative transition-colors duration-300">
-      <input
-        ref={galeriaInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) uploadFile(f)
-          e.target.value = ''
-        }}
-      />
-      <input
-        ref={pdfInputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) uploadFile(f)
-          e.target.value = ''
-        }}
-      />
-
       {/* HEADER */}
       <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
@@ -931,15 +898,14 @@ function EditTransactionContent() {
             </div>
             <div className="flex-1">
               <label className="block text-[12px] font-medium text-gray-400 dark:text-gray-500 mb-1">Data</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => {
-                  vibrate([5])
-                  handleDateChange(e.target.value)
-                }}
-                className="w-full bg-transparent outline-none text-[15px] font-semibold text-gray-900 dark:text-white"
-              />
+              <button
+                type="button"
+                onClick={() => { vibrate([5]); setShowDatePicker(true) }}
+                className="flex w-full items-center justify-between gap-3 text-left active:scale-[0.99]"
+              >
+                <span className="text-[15px] font-semibold text-gray-900 dark:text-white">{formatDateLabel(date)}</span>
+                <ChevronRight size={17} className="text-gray-300 dark:text-slate-600" />
+              </button>
             </div>
           </div>
         </section>
@@ -1397,8 +1363,22 @@ function EditTransactionContent() {
       )}
 
       {/* MODAIS (mantidos com lógica intacta) */}
-      {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
+      {showReceiptModal && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          onCamera={() => setShowCamera(true)}
+          onFileSelect={uploadFile}
+        />
+      )}
       {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
+      <DatePickerSheet
+        isOpen={showDatePicker}
+        value={date}
+        onChange={handleDateChange}
+        onClose={() => setShowDatePicker(false)}
+        title="Data da transação"
+      />
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
       {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
 

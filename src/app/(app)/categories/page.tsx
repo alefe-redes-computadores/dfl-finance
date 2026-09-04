@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { ChevronLeft, Plus, Trash2, X, ChevronDown, Tag, Edit3, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react'
@@ -31,6 +32,7 @@ export default function CategoriesPage() {
   const [isReordering, setIsReordering] = useState(false)
   const [showIconModal, setShowIconModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<any | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('Tag')
@@ -53,7 +55,20 @@ export default function CategoriesPage() {
     })
   }, [allLocalCategories])
 
+  const { data: transactions } = useLocalData({
+    table: 'transactions' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const transactionCountByCategory = useMemo(() => {
+    return (transactions || []).reduce((counts: Record<string, number>, tx: any) => {
+      if (tx.category_id) counts[tx.category_id] = (counts[tx.category_id] || 0) + 1
+      return counts
+    }, {})
+  }, [transactions])
+
   function openEdit(cat: any) {
+    vibrate([5])
     setIsReordering(false)
     setEditingCategory(cat)
     setName(cat.name)
@@ -69,6 +84,7 @@ export default function CategoriesPage() {
   }
 
   function openNew() {
+    vibrate([5])
     setIsReordering(false)
     setEditingCategory(null)
     setName('')
@@ -159,20 +175,25 @@ export default function CategoriesPage() {
     }
   }
 
-  async function handleDelete(id: string, e: React.MouseEvent) {
+  function requestDelete(cat: any, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm('Deseja realmente excluir esta categoria?')) return
-    if (!user) return
-    
+    vibrate([10])
+    setDeleteTarget(cat)
+  }
+
+  async function confirmDeleteCategory() {
+    if (!deleteTarget || !user) return
+
     try {
-      const result = await safeDelete('categories', id)
+      const result = await safeDelete('categories', deleteTarget.id)
       if (!result.success) throw new Error(result.error)
-      
+
+      setDeleteTarget(null)
       showToast('Categoria excluída.', 'success')
       hapticSuccess()
       await reloadCategories()
     } catch (err: any) {
-      showToast(`Erro ao excluir: ${err.message}`, 'error')
+      showToast(err?.message || 'Não foi possível excluir a categoria.', 'error')
       hapticError()
     }
   }
@@ -313,6 +334,9 @@ export default function CategoriesPage() {
                 onClick={() => {
                   setTab(k as any)
                   setIsReordering(false)
+                  setShowForm(false)
+                  setEditingCategory(null)
+                  setShowIconModal(false)
                 }}
                 className={`flex-1 h-10 rounded-[16px] text-[13px] font-semibold transition-all active:scale-[0.98] ${
                   tab === k
@@ -326,80 +350,6 @@ export default function CategoriesPage() {
           </div>
         </div>
       </div>
-
-      {/* FORMULÁRIO */}
-      {showForm && (
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4 animate-in fade-in slide-in-from-top-4 duration-200">
-          <div className="flex justify-between items-center mb-4">
-            <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-              {editingCategory ? 'Editar categoria' : 'Nova categoria'}
-            </p>
-            <button
-              onClick={() => { setShowForm(false); setEditingCategory(null); }}
-              className="h-9 w-9 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-            Nome
-          </label>
-          <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Nome da categoria"
-            className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[14px] text-gray-800 dark:text-white outline-none mb-4 focus:ring-2 focus:ring-teal-500/20"
-          />
-
-          <div className="mb-4">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Ícone
-            </label>
-            <button
-              onClick={() => setShowIconModal(true)}
-              className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 w-full text-left transition-colors active:scale-[0.98] focus:ring-2 focus:ring-teal-500/20"
-            >
-              <div
-                className="w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${color}20`, color: color }}
-              >
-                <FormIconComp size={18} />
-              </div>
-              <span className="text-[14px] font-semibold text-gray-800 dark:text-white flex-1">{icon}</span>
-              <ChevronDown size={18} className="text-gray-400" />
-            </button>
-          </div>
-
-          <div className="mb-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
-              Cor
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full border-2 transition-transform active:scale-[0.90] ${
-                    color === c
-                      ? 'border-gray-800 dark:border-white scale-110 shadow-sm'
-                      : 'border-transparent hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-            className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-[20px] py-3.5 text-[14px] font-bold disabled:opacity-50 transition-all active:scale-[0.98] shadow-lg shadow-teal-600/20"
-          >
-            {saving ? 'Salvando...' : 'Salvar categoria'}
-          </button>
-        </div>
-      )}
 
       {/* LISTA DE CATEGORIAS */}
       {catLoading && categories.length === 0 ? (
@@ -422,6 +372,7 @@ export default function CategoriesPage() {
         <div className="space-y-2.5 animate-in fade-in duration-300">
           {categories.map((cat: any, index: number) => {
             const ListIconComp = getDynamicIcon(cat.icon || 'Tag')
+            const txCount = transactionCountByCategory[cat.id] || 0
 
             return (
               <div
@@ -440,6 +391,14 @@ export default function CategoriesPage() {
                     <p className="text-[14px] font-semibold text-gray-900 dark:text-white truncate">
                       {cat.name}
                     </p>
+                    <div className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
+                      <span>{txCount} transaç{txCount === 1 ? 'ão' : 'ões'}</span>
+                      {cat.is_default && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500 dark:bg-slate-800 dark:text-gray-400">
+                          Padrão
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -474,7 +433,7 @@ export default function CategoriesPage() {
 
                         {!cat.is_default && (
                           <button
-                            onClick={(e) => handleDelete(cat.id, e)}
+                            onClick={(e) => requestDelete(cat, e)}
                             aria-label={`Excluir ${cat.name}`}
                             className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors active:scale-[0.98]"
                           >
@@ -489,6 +448,128 @@ export default function CategoriesPage() {
             )
           })}
         </div>
+      )}
+
+      {showForm && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[120000] flex items-end justify-center" onClick={() => { setShowForm(false); setEditingCategory(null) }}>
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" />
+          <div
+            className="relative max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-t-[32px] border border-b-0 border-gray-200/70 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-[0_-16px_60px_rgba(15,23,42,0.18)] animate-in slide-in-from-bottom-6 duration-200 dark:border-slate-700 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[20px] font-bold text-gray-900 dark:text-gray-100">
+                  {editingCategory ? 'Editar categoria' : `Nova categoria de ${tab === 'income' ? 'receita' : 'despesa'}`}
+                </h3>
+                <p className="mt-0.5 text-[12px] text-gray-400">Nome, ícone e cor ajudam a reconhecer rápido.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowForm(false); setEditingCategory(null) }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400 active:scale-[0.97] dark:bg-slate-800"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Nome</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Mercado, Salário, Transporte..."
+                  className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[14px] font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Ícone</label>
+                <button
+                  type="button"
+                  onClick={() => { vibrate([5]); setShowIconModal(true) }}
+                  className="flex w-full items-center gap-3 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 text-left active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px]" style={{ backgroundColor: `${color}20`, color }}>
+                    <FormIconComp size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-bold text-gray-900 dark:text-gray-100">{icon}</p>
+                    <p className="mt-0.5 text-[11px] text-gray-400">Toque para trocar</p>
+                  </div>
+                  <ChevronDown size={18} className="text-gray-400" />
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Cor</label>
+                <div className="flex flex-wrap gap-3 rounded-[20px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                  {COLORS.map((itemColor) => (
+                    <button
+                      type="button"
+                      key={itemColor}
+                      onClick={() => { vibrate([5]); setColor(itemColor) }}
+                      aria-label={`Selecionar cor ${itemColor}`}
+                      className={`h-10 w-10 rounded-full transition-transform active:scale-[0.9] ${color === itemColor ? 'scale-110 ring-2 ring-gray-300 ring-offset-2 ring-offset-gray-50 dark:ring-slate-500 dark:ring-offset-slate-800' : ''}`}
+                      style={{ backgroundColor: itemColor }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center py-1">
+                <div className="inline-flex items-center gap-2 rounded-full border border-gray-200/70 bg-white px-4 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-[10px]" style={{ backgroundColor: `${color}20`, color }}>
+                    <FormIconComp size={15} />
+                  </div>
+                  <span className="text-[13px] font-bold text-gray-800 dark:text-gray-200">{name.trim() || 'Prévia da categoria'}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || !name.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/20 active:scale-[0.98] disabled:opacity-50"
+              >
+                {saving ? 'Salvando...' : editingCategory ? 'Salvar alterações' : 'Criar categoria'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {deleteTarget && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[120000] flex items-end justify-center" onClick={() => setDeleteTarget(null)}>
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-lg rounded-t-[32px] border border-b-0 border-gray-200/70 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-[0_-16px_60px_rgba(15,23,42,0.18)] animate-in slide-in-from-bottom-6 duration-200 dark:border-slate-700 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+            <h3 className="text-center text-[20px] font-bold text-gray-900 dark:text-gray-100">Excluir categoria?</h3>
+            <p className="mx-auto mt-2 max-w-sm text-center text-[13px] leading-5 text-gray-500 dark:text-gray-400">
+              {transactionCountByCategory[deleteTarget.id]
+                ? `“${deleteTarget.name}” está em ${transactionCountByCategory[deleteTarget.id]} transação(ões). O histórico financeiro é protegido e a exclusão será bloqueada.`
+                : `“${deleteTarget.name}” será removida. Esta ação não pode ser desfeita.`}
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-[18px] bg-gray-100 py-3.5 text-[14px] font-bold text-gray-600 active:scale-[0.98] dark:bg-slate-800 dark:text-gray-300">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmDeleteCategory} className="rounded-[18px] bg-red-500 py-3.5 text-[14px] font-bold text-white shadow-lg shadow-red-500/20 active:scale-[0.98]">
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       <IconPicker

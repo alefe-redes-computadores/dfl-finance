@@ -1,17 +1,16 @@
 // src/app/(app)/transactions/new/page.tsx
 'use client'
 
-import { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react'
+import { useState, useCallback, useEffect, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import * as Icons from 'lucide-react'
 import {
   ChevronLeft, Tag, Wallet, ChevronDown, ChevronUp, Check,
   Camera, Plus, ArrowRightLeft, Building, HandCoins, X,
   QrCode, ChevronRight, Trash2, Loader2, Paperclip,
   Image as ImageIcon, CreditCard, Calendar, RefreshCw, Users,
-  Edit3, FileText, Layers, ArrowUp, ArrowDown
+  Edit3, FileText, ArrowUp, ArrowDown, Minus
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -25,7 +24,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ModalFinancing from '@/components/ModalFinancing'
 import ModalEmprestimo from '@/components/ModalEmprestimo'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
-import { getDynamicIcon } from '@/lib/iconUtils'
+import { getDynamicIcon, normalizeIconName } from '@/lib/iconUtils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useTransactionsList } from '@/hooks/useTransactionsList'
@@ -33,9 +32,9 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import { useSmartSearch, SmartSearchSuggestion } from '@/hooks/useSmartSearch'
 import { db } from '@/lib/db'
 import { createPortal } from 'react-dom'
+import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 
 type TxType = 'income' | 'expense' | 'transfer'
-type Context = 'dfl' | 'personal'
 type Repetition = 'once' | 'installments' | 'recurring'
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'custom'
 
@@ -61,20 +60,12 @@ function NewTransactionContent() {
   const searchParams = useSearchParams()
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
-  const { safeAdd, safeUpdate, safeDelete } = useSafeDb()
+  const { safeAdd, safeUpdate } = useSafeDb()
 
   const { context: globalContext, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : globalContext
-  const [context, setContext] = useState<Context>(effectiveContext as Context)
-
-  const [loadingPulse, setLoadingPulse] = useState(false)
-
-  const galeriaInputRef = useRef<HTMLInputElement>(null)
-  const pdfInputRef = useRef<HTMLInputElement>(null)
-
   const [type, setType] = useState<TxType>((searchParams.get('type') as TxType) || 'expense')
   const [amountNum, setAmountNum] = useState(0)
-  const [amountFormatted, setAmountFormatted] = useState('0,00')
   const [isPaid, setIsPaid] = useState(true)
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [desc, setDesc] = useState('')
@@ -123,7 +114,6 @@ function NewTransactionContent() {
   const [uploading, setUploading] = useState(false)
 
   const [installments, setInstallments] = useState(2)
-  const [budgetAlert, setBudgetAlert] = useState<{ message: string; type: 'warning' | 'danger' } | null>(null)
 
   const [repetition, setRepetition] = useState<Repetition>('once')
   const [frequency, setFrequency] = useState<Frequency>('monthly')
@@ -149,6 +139,7 @@ function NewTransactionContent() {
   const [showTagModal, setShowTagModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   const [showCreateCatModal, setShowCreateCatModal] = useState(false)
   const [showIconPicker, setShowIconPicker] = useState(false)
@@ -212,7 +203,6 @@ function NewTransactionContent() {
   )
 
   useEffect(() => {
-    setContext(effectiveContext as Context)
     setAccountId('')
     setCategoryId('')
     setCreditCardId('')
@@ -247,7 +237,6 @@ function NewTransactionContent() {
     setShowCatModal(false)
     setSelectedParentCat(null)
     setShowSuggestions(false)
-    setBudgetAlert(null)
 
     // Campos exclusivamente de despesa não podem sobreviver
     // quando o usuário transforma o lançamento em Receita.
@@ -277,54 +266,73 @@ function NewTransactionContent() {
     })
   }, [vibrate])
 
-  const budgetAlertMemo = useMemo(() => {
-    if (!categoryId || amountNum <= 0 || type !== 'expense') return null
-    const budget = (budgets || []).find((b: any) => b.category_id === categoryId)
-    if (!budget) return null
-    return budget
-  }, [categoryId, amountNum, type, budgets])
+  const budgetMonthStart = useMemo(
+    () => format(startOfMonth(createLocalDate(date)), 'yyyy-MM-dd'),
+    [date]
+  )
+  const budgetMonthEnd = useMemo(
+    () => format(endOfMonth(createLocalDate(date)), 'yyyy-MM-dd'),
+    [date]
+  )
 
-  useEffect(() => {
-    if (!budgetAlertMemo || !user?.id) {
-      setBudgetAlert(null)
-      return
+  const { data: budgetTransactions } = useTransactionsList(
+    effectiveContext as 'dfl' | 'personal',
+    categoryId
+      ? { category_id: categoryId, status: 'done', type: 'expense' }
+      : undefined,
+    budgetMonthStart,
+    budgetMonthEnd
+  )
+
+  const budgetAlert = useMemo(() => {
+    if (!categoryId || amountNum <= 0 || type !== 'expense') return null
+
+    const budget = (budgets || []).find((item: any) => item.category_id === categoryId)
+    if (!budget) return null
+
+    const spent = (budgetTransactions || []).reduce(
+      (total: number, tx: any) => total + safeNum(tx.amount),
+      0
+    )
+    const limit = safeNum(budget.amount)
+    if (limit <= 0) return null
+
+    const projected = spent + amountNum
+    const percent = (projected / limit) * 100
+
+    if (projected > limit) {
+      return {
+        message: `Este lançamento ultrapassa o orçamento “${budget.name}”. Já realizado: ${formatCurrency(spent)}.`,
+        type: 'danger' as const,
+      }
     }
 
-    const budget = budgetAlertMemo
-    const start = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-    const end = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    if (percent >= 80) {
+      return {
+        message: `Este lançamento leva o orçamento a ${percent.toFixed(0)}% de ${formatCurrency(limit)}.`,
+        type: 'warning' as const,
+      }
+    }
 
-    supabase
-      .from('transactions')
-      .select('amount')
-      .match({ user_id: user.id, context: effectiveContext, category_id: categoryId })
-      .eq('status', 'done')
-      .gte('date', start)
-      .lte('date', end)
-      .then(({ data }) => {
-        const spent = (data || []).reduce((a: number, t: any) => a + (Number(t.amount) || 0), 0)
-        const total = spent + amountNum
-        const limit = Number(budget.amount)
-        const percent = (total / limit) * 100
-
-        if (total > limit) {
-          setBudgetAlert({
-            message: `⚠️ Ultrapassa o orçamento de "${budget.name}". Gasto: ${formatCurrency(spent)}.`,
-            type: 'danger',
-          })
-        } else if (percent >= 80) {
-          setBudgetAlert({
-            message: `⚠️ Atenção! Atingirá ${percent.toFixed(0)}% do orçamento (${formatCurrency(limit)}).`,
-            type: 'warning',
-          })
-        } else {
-          setBudgetAlert(null)
-        }
-      })
-  }, [budgetAlertMemo, categoryId, amountNum, user, effectiveContext])
+    return null
+  }, [categoryId, amountNum, type, budgets, budgetTransactions])
 
   const uploadFile = async (file: File) => {
     if (!user) return
+
+    const isSupported = file.type.startsWith('image/') || file.type === 'application/pdf'
+    if (!isSupported) {
+      hapticError()
+      showToast('Use uma imagem ou um arquivo PDF.', 'warning')
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      hapticError()
+      showToast('O comprovante deve ter no máximo 10 MB.', 'warning')
+      return
+    }
+
     setUploading(true)
     setReceiptName(file.name)
 
@@ -355,7 +363,7 @@ function NewTransactionContent() {
 
       setReceiptUrl(urlData.publicUrl)
       success()
-      showToast('✅ Comprovante anexado!', 'success')
+      showToast('Comprovante anexado.', 'success')
 
       if (isImage) {
         try {
@@ -368,12 +376,11 @@ function NewTransactionContent() {
           if (ocrData.success && ocrData.data) {
             if (ocrData.data.amount > 0) {
               setAmountNum(ocrData.data.amount)
-              setAmountFormatted(ocrData.data.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
             }
             if (ocrData.data.date) setDate(ocrData.data.date)
             if (ocrData.data.description) setDesc(ocrData.data.description)
             vibrate([50, 100, 50])
-            showToast('✅ Dados extraídos da imagem!', 'success')
+            showToast('Dados extraídos da imagem.', 'success')
           }
         } catch (ocrError) {
           console.error('Erro OCR:', ocrError)
@@ -381,7 +388,7 @@ function NewTransactionContent() {
       }
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao anexar: ${err.message}`, 'error')
+      showToast(`Erro ao anexar comprovante: ${err.message}`, 'error')
       setReceiptPreview(null)
       setReceiptName('')
       setReceiptType(null)
@@ -400,26 +407,7 @@ function NewTransactionContent() {
     setReceiptPreview(null)
     setReceiptName('')
     setReceiptType(null)
-    showToast('🗑️ Comprovante removido.', 'success')
-  }
-
-  const handleReceiptOption = (option: string) => {
-    vibrate([5])
-    if (option === 'camera') {
-      setShowReceiptModal(false)
-      setTimeout(() => setShowCamera(true), 150)
-      return
-    }
-    if (option === 'galeria') {
-      galeriaInputRef.current?.click()
-      setTimeout(() => setShowReceiptModal(false), 200)
-      return
-    }
-    if (option === 'pdf') {
-      pdfInputRef.current?.click()
-      setTimeout(() => setShowReceiptModal(false), 200)
-      return
-    }
+    showToast('Comprovante removido.', 'success')
   }
 
   const handleCameraCapture = (file: File) => {
@@ -446,7 +434,6 @@ function NewTransactionContent() {
     }
 
     if (extractedAmount) {
-      setAmountFormatted(extractedAmount.replace('.', ','))
       setAmountNum(parseFloat(extractedAmount.replace(',', '.')))
     }
     if (extractedDesc) setDesc(extractedDesc)
@@ -455,12 +442,24 @@ function NewTransactionContent() {
 
   const handleSaveCategory = async () => {
     if (!user?.id || !newCatName.trim()) return
+
+    const cleanName = newCatName.trim()
+    const duplicate = validCategories.some((category: any) =>
+      String(category.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+    )
+
+    if (duplicate) {
+      hapticError()
+      showToast('Já existe uma categoria com este nome.', 'warning')
+      return
+    }
+
     setSavingCategory(true)
     try {
       const id = crypto.randomUUID()
       const newOrderIndex = mainCategories.length > 0 ? Math.max(...mainCategories.map((c: any) => c.order_index || 0)) + 1 : 0
       const payload = {
-        id, user_id: user.id, name: newCatName.trim(), icon: newCatIcon, color: newCatColor,
+        id, user_id: user.id, name: cleanName, icon: normalizeIconName(newCatIcon) || 'Tag', color: newCatColor,
         context: effectiveContext, type: type === 'income' ? 'income' : 'expense', order_index: newOrderIndex,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0,
       }
@@ -472,10 +471,10 @@ function NewTransactionContent() {
       setShowCreateCatModal(false)
       setNewCatName('')
       success()
-      showToast('✅ Categoria criada!', 'success')
+      showToast('Categoria criada e selecionada.', 'success')
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao criar categoria: ${err.message}`, 'error')
+      showToast(`Erro ao criar categoria: ${err.message}`, 'error')
     } finally {
       setSavingCategory(false)
     }
@@ -483,11 +482,13 @@ function NewTransactionContent() {
 
   const handleSaveAccount = async () => {
     if (!user?.id || !newAccName.trim()) return
+
+    const cleanName = newAccName.trim()
     setSavingAccount(true)
     try {
       const id = crypto.randomUUID()
       const payload = {
-        id, user_id: user.id, name: newAccName.trim(), color: newAccColor, context: effectiveContext,
+        id, user_id: user.id, name: cleanName, color: newAccColor, context: effectiveContext,
         balance: 0, is_archived: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         sync_status: 'pending', sync_attempts: 0,
       }
@@ -499,10 +500,10 @@ function NewTransactionContent() {
       setShowCreateAccModal(false)
       setNewAccName('')
       success()
-      showToast('✅ Conta criada!', 'success')
+      showToast('Conta criada e selecionada.', 'success')
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao criar conta: ${err.message}`, 'error')
+      showToast(`Erro ao criar conta: ${err.message}`, 'error')
     } finally {
       setSavingAccount(false)
     }
@@ -510,11 +511,23 @@ function NewTransactionContent() {
 
   const handleSaveTag = async () => {
     if (!user?.id || !newTagName.trim()) return
+
+    const cleanName = newTagName.trim()
+    const duplicate = (tags || []).some((tag: any) =>
+      String(tag.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+    )
+
+    if (duplicate) {
+      hapticError()
+      showToast('Já existe uma tag com este nome.', 'warning')
+      return
+    }
+
     setSavingTag(true)
     try {
       const id = crypto.randomUUID()
       const payload = {
-        id, user_id: user.id, name: newTagName.trim(), color: newTagColor, context: effectiveContext,
+        id, user_id: user.id, name: cleanName, color: newTagColor, context: effectiveContext,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0,
       }
 
@@ -525,10 +538,10 @@ function NewTransactionContent() {
       setShowCreateTagModal(false)
       setNewTagName('')
       success()
-      showToast('✅ Tag criada!', 'success')
+      showToast('Tag criada.', 'success')
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao criar tag: ${err.message}`, 'error')
+      showToast(`Erro ao criar tag: ${err.message}`, 'error')
     } finally {
       setSavingTag(false)
     }
@@ -537,13 +550,13 @@ function NewTransactionContent() {
   // ✅ FUNÇÃO HANDLE SAVE CORRIGIDA (COM VALIDAÇÃO DE CONTA OBRIGATÓRIA)
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
-    if (!user?.id) { showToast('❌ Sessão expirada.', 'error'); return }
-    if (amountNum <= 0) { hapticError(); showToast('⚠️ Valor deve ser maior que zero.', 'warning'); return }
+    if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
+    if (amountNum <= 0) { hapticError(); showToast('Informe um valor maior que zero.', 'warning'); return }
 
     // ✅ VALIDAÇÃO: obriga conta se não houver cartão
     if (!creditCardId && !accountId) {
       hapticError()
-      showToast('⚠️ Selecione uma conta (ou cartão de crédito).', 'warning')
+      showToast('Selecione uma conta ou cartão de crédito.', 'warning')
       return
     }
 
@@ -612,7 +625,7 @@ function NewTransactionContent() {
             status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
             context: effectiveContext,
             receipt_url: i === 0 ? receiptUrl : null,
-            notes: notes || null,
+            notes: finalNotes || null,
             recurring_group_id: recurringGroupId,
             installment_index: totalParcels > 1 ? i + 1 : 1,
             total_installments: totalParcels > 1 ? totalParcels : 1,
@@ -664,16 +677,22 @@ function NewTransactionContent() {
         }
       })
 
-      vibrate([10, 50])
-      showToast(isOnline ? '✅ Transação salva com sucesso!' : '☁️ Salvo localmente para sincronizar depois.', 'success')
+      success()
+      const transactionLabel = type === 'income' ? 'Receita' : 'Despesa'
+      showToast(
+        isOnline
+          ? `${transactionLabel} adicionada.`
+          : `${transactionLabel} salva no dispositivo e aguardando sincronização.`,
+        'success'
+      )
       router.push('/transactions')
     } catch (e: any) {
       hapticError()
-      showToast(`❌ Erro ao salvar: ${e.message}`, 'error')
+      showToast(`Erro ao salvar transação: ${e.message}`, 'error')
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, hapticError, accounts, safeAdd, safeUpdate, date, selectedCat])
+  }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, hapticError, accounts, safeAdd, safeUpdate, date, selectedCat])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -683,24 +702,6 @@ function NewTransactionContent() {
     }
     return <Camera size={20} className="text-gray-700 dark:text-gray-300" />
   }, [uploading, receiptUrl, receiptType])
-
-  // ✅ MODAL WRAPPER COM PORTAL
-  const ModalWrapper = ({ isOpen, onClose, title, children }: { isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }) => {
-    if (!isOpen) return null
-    return createPortal(
-      <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-        <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
-          <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-            <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">{title}</h3>
-            <button onClick={onClose} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
-          </div>
-          {children}
-        </div>
-      </div>,
-      document.body
-    )
-  }
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-[#f8f9fa] dark:bg-slate-900">
@@ -791,7 +792,7 @@ function NewTransactionContent() {
               <span className={`text-2xl font-bold opacity-50 ${themeColor}`}>R$</span>
               <MoneyInput
                 value={amountNum}
-                onChange={(num, formatted) => { setAmountNum(num); setAmountFormatted(formatted) }}
+                onChange={(num) => setAmountNum(num)}
                 className={`text-[42px] font-black tracking-tight outline-none bg-transparent ${themeColor} w-64 text-center placeholder:text-gray-300 dark:placeholder:text-gray-700`}
                 placeholder="0,00"
                 autoFocus
@@ -1079,15 +1080,15 @@ function NewTransactionContent() {
                     <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
                       Data
                     </label>
-                    <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-                      <Calendar size={18} className="text-gray-400 shrink-0" />
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => { vibrate([5]); handleDateChange(e.target.value) }}
-                        className="flex-1 bg-transparent text-[14px] font-semibold outline-none text-gray-800 dark:text-gray-200"
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { vibrate([5]); setShowDatePicker(true) }}
+                      className="flex w-full items-center gap-3 rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-left active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900"
+                    >
+                      <Calendar size={18} className="shrink-0 text-gray-400" />
+                      <span className="flex-1 text-[14px] font-semibold text-gray-800 dark:text-gray-200">{formatDateLabel(date)}</span>
+                      <ChevronRight size={17} className="text-gray-300 dark:text-slate-600" />
+                    </button>
                   </div>
 
                   {/* Observações */}
@@ -1130,19 +1131,18 @@ function NewTransactionContent() {
                       </div>
 
                       {repetition === 'installments' && (
-                        <div className="rounded-[16px] bg-white dark:bg-slate-800 border border-gray-200/70 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
-                          <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">
-                            Quantidade de parcelas
-                          </span>
-                          <select
-                            value={installments}
-                            onChange={(e) => { vibrate([5]); setInstallments(Number(e.target.value)) }}
-                            className="bg-transparent text-[14px] font-bold outline-none text-gray-800 dark:text-gray-200 cursor-pointer"
-                          >
-                            {[2,3,4,5,6,7,8,9,10,11,12,24,36,48,60].map((n) => (
-                              <option key={n} value={n}>{n}x</option>
-                            ))}
-                          </select>
+                        <div className="rounded-[16px] border border-gray-200/70 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">Quantidade de parcelas</span>
+                              <p className="mt-0.5 text-[11px] text-gray-400">{formatCurrency(amountNum / Math.max(installments, 1))} por parcela</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => { vibrate([5]); setInstallments((value) => Math.max(2, value - 1)) }} className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-gray-100 text-gray-600 active:scale-[0.95] dark:bg-slate-700 dark:text-gray-300"><Minus size={16} /></button>
+                              <span className="min-w-[44px] text-center text-[15px] font-black text-gray-900 dark:text-gray-100">{installments}x</span>
+                              <button type="button" onClick={() => { vibrate([5]); setInstallments((value) => Math.min(60, value + 1)) }} className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-teal-50 text-teal-700 active:scale-[0.95] dark:bg-teal-900/25 dark:text-teal-400"><Plus size={16} /></button>
+                            </div>
+                          </div>
                         </div>
                       )}
 
@@ -1290,7 +1290,7 @@ function NewTransactionContent() {
           ) : (
             <>
               <Check size={20} />
-              Salvar transação
+              {isIncome ? 'Adicionar receita' : 'Adicionar despesa'}
             </>
           )}
         </button>
@@ -1482,8 +1482,22 @@ function NewTransactionContent() {
       )}
 
       {/* MODAIS EXTERNOS */}
-      {showReceiptModal && <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} onOptionSelect={handleReceiptOption} />}
+      {showReceiptModal && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          onCamera={() => setShowCamera(true)}
+          onFileSelect={uploadFile}
+        />
+      )}
       {showCamera && <CameraCapture isOpen={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
+      <DatePickerSheet
+        isOpen={showDatePicker}
+        value={date}
+        onChange={handleDateChange}
+        onClose={() => setShowDatePicker(false)}
+        title="Data da transação"
+      />
       {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
       {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
@@ -1573,13 +1587,31 @@ function NewTransactionContent() {
               <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
             </div>
             <div className="space-y-4">
-              <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4">
-                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1 block">Número de parcelas</label>
-                <input type="number" value={customParcels} onChange={(e) => setCustomParcels(Number(e.target.value))} className="w-full bg-transparent outline-none font-bold text-[18px] text-gray-800 dark:text-gray-200" min={1} max={120} />
+              <div className="rounded-[18px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400">Lançamentos</p>
+                    <p className="mt-0.5 text-[11px] text-gray-400">Quantas vezes criar</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setCustomParcels((value) => Math.max(1, value - 1))} className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-white text-gray-600 shadow-sm active:scale-[0.95] dark:bg-slate-800 dark:text-gray-300"><Minus size={16} /></button>
+                    <span className="min-w-[42px] text-center text-[15px] font-black text-gray-900 dark:text-gray-100">{customParcels}</span>
+                    <button type="button" onClick={() => setCustomParcels((value) => Math.min(120, value + 1))} className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-teal-50 text-teal-700 active:scale-[0.95] dark:bg-teal-900/25 dark:text-teal-400"><Plus size={16} /></button>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4">
-                <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1 block">Intervalo (meses)</label>
-                <input type="number" value={customInterval} onChange={(e) => setCustomInterval(Number(e.target.value))} className="w-full bg-transparent outline-none font-bold text-[18px] text-gray-800 dark:text-gray-200" min={1} max={24} />
+              <div className="rounded-[18px] border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400">Intervalo</p>
+                    <p className="mt-0.5 text-[11px] text-gray-400">Meses entre lançamentos</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setCustomInterval((value) => Math.max(1, value - 1))} className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-white text-gray-600 shadow-sm active:scale-[0.95] dark:bg-slate-800 dark:text-gray-300"><Minus size={16} /></button>
+                    <span className="min-w-[42px] text-center text-[15px] font-black text-gray-900 dark:text-gray-100">{customInterval}</span>
+                    <button type="button" onClick={() => setCustomInterval((value) => Math.min(24, value + 1))} className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-teal-50 text-teal-700 active:scale-[0.95] dark:bg-teal-900/25 dark:text-teal-400"><Plus size={16} /></button>
+                  </div>
+                </div>
               </div>
               <button onClick={() => { setShowCustomRecurrenceModal(false); vibrate([10]) }} className="w-full bg-teal-600 text-white py-4 rounded-[20px] font-bold text-[16px] shadow-lg shadow-teal-600/30 mt-4 active:scale-[0.98] transition-transform">
                 Confirmar
