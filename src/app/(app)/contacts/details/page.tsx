@@ -44,6 +44,7 @@ import type {
   LocalTransaction,
 } from '@/lib/db'
 import { getDebtDueState, isDebtPayment } from '@/lib/debtOperations'
+import { applyContactCreditToDebt } from '@/lib/debtCreditOperations'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { useAuth } from '@/lib/hooks/useAuth'
 
@@ -126,6 +127,7 @@ function ContactDetailContent() {
   const [receivableAmount, setReceivableAmount] = useState('')
   const [receivableDueDate, setReceivableDueDate] = useState('')
   const [receivableDescription, setReceivableDescription] = useState('')
+  const [applyAvailableCredit, setApplyAvailableCredit] = useState(false)
 
   const contactDebts = useMemo(() => {
     if (!id) return []
@@ -164,6 +166,7 @@ function ContactDetailContent() {
         receivable: 0,
         received: 0,
         paid: 0,
+        creditBalance: 0,
       }
     }
 
@@ -306,11 +309,27 @@ function ContactDetailContent() {
 
       if (!result.success) throw new Error(result.error)
 
+      let appliedCredit = 0
+      if (applyAvailableCredit && financial.creditBalance > 0 && result.id) {
+        const creditResult = await applyContactCreditToDebt({
+          userId: user.id,
+          debtId: result.id,
+          requestedAmount: Math.min(amount, financial.creditBalance),
+        })
+        appliedCredit = creditResult.applied
+      }
+
       success()
-      showToast(`Valor a receber de ${contact.name} criado.`, 'success')
+      showToast(
+        appliedCredit > 0
+          ? `Cobrança criada com ${formatCurrency(appliedCredit)} de crédito aplicado.`
+          : `Valor a receber de ${contact.name} criado.`,
+        'success'
+      )
       setReceivableAmount('')
       setReceivableDueDate('')
       setReceivableDescription('')
+      setApplyAvailableCredit(false)
       setShowReceivableSheet(false)
     } catch (error: any) {
       hapticError()
@@ -490,6 +509,18 @@ function ContactDetailContent() {
               </p>
             </div>
           </section>
+
+          {financial.creditBalance > 0 && (
+            <section className="rounded-[24px] border border-sky-100 bg-sky-50/80 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-sky-700/70 dark:text-sky-400/70">Crédito disponível</p>
+                  <p className="mt-0.5 text-[19px] font-black text-sky-700 dark:text-sky-400">{formatCurrency(financial.creditBalance)}</p>
+                </div>
+                <p className="max-w-[210px] text-right text-[10px] leading-relaxed text-sky-700/60 dark:text-sky-400/60">Valor já recebido que pode abater uma nova cobrança deste contato.</p>
+              </div>
+            </section>
+          )}
 
           <section className="grid grid-cols-3 gap-2">
             <button
@@ -834,6 +865,27 @@ function ContactDetailContent() {
                     </div>
                   </div>
                 </button>
+
+                {financial.creditBalance > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      vibrate([5])
+                      setApplyAvailableCredit((current) => !current)
+                    }}
+                    className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3.5 text-left transition active:scale-[0.99] ${
+                      applyAvailableCredit
+                        ? 'border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/25'
+                        : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800'
+                    }`}
+                  >
+                    <div>
+                      <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">Usar crédito disponível</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">Até {formatCurrency(Math.min(financial.creditBalance, parseMoney(receivableAmount) || financial.creditBalance))} será abatido.</p>
+                    </div>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full border ${applyAvailableCredit ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 text-transparent dark:border-slate-600'}`}><Check size={13} /></span>
+                  </button>
+                )}
 
                 <textarea
                   value={receivableDescription}

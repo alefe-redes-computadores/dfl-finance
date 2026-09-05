@@ -33,6 +33,10 @@ export interface LocalTransaction {
   is_reimbursable?: boolean
   linked_transaction_id?: string | null
   debt_id?: string | null
+  /** Parte desta movimentação efetivamente aplicada a uma cobrança. */
+  debt_applied_amount?: number | null
+  /** Variação de crédito do contato: positivo gera, negativo consome. */
+  contact_credit_delta?: number | null
   receipt_url?: string | null
   created_at: string
   updated_at: string

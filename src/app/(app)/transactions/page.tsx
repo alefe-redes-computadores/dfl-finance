@@ -33,6 +33,7 @@ import {
   isStandalonePendingReceivable,
 } from '@/lib/pendingOperations'
 
+import { getDebtDueState } from '@/lib/debtOperations'
 type QuickFilter = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
 type PendingKind = 'all' | 'payable' | 'receivable'
 
@@ -620,10 +621,8 @@ export default function TransactionsPage() {
           return isCurrentMonth
         }
 
-        if (
-          dueDate >= startMonth &&
-          dueDate <= endMonth
-        ) {
+        const dueState = getDebtDueState(debt.due_date)
+        if (dueState.isOverdue || dueState.isToday) {
           return true
         }
 

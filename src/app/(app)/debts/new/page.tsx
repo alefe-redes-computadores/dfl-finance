@@ -12,6 +12,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
 import { db } from '@/lib/db'
+import { normalizeContactSearch } from '@/lib/contactOperations'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
@@ -172,10 +173,39 @@ function NewDebtContent() {
       } else {
         const id = crypto.randomUUID()
 
+        const contactCandidates = await db.contacts
+
+
+          .where('user_id')
+
+
+          .equals(user.id)
+
+
+          .toArray()
+
+
+        const normalizedDebtPerson = normalizeContactSearch(String(payload.person_name || ''))
+
+
+        const exactContacts = contactCandidates.filter(
+
+
+          (contact) => normalizeContactSearch(contact.name) === normalizedDebtPerson
+
+
+        )
+
+
+        const matchedContactForDebt = exactContacts.length === 1 ? exactContacts[0] : null
+
+
+
         const fullPayload = {
           id,
           user_id: user.id,
           ...payload,
+          contact_id: matchedContactForDebt?.id || null,
           status: 'pending',
           paid_amount: 0,
           created_at: now,

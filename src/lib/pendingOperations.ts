@@ -1,5 +1,6 @@
 // src/lib/pendingOperations.ts
 import type { LocalTransaction } from '@/lib/db'
+import { getDebtDueState } from '@/lib/debtOperations'
 
 export type PendingDirection = 'payable' | 'receivable'
 
@@ -59,4 +60,11 @@ export function isStandalonePendingReceivable(
     getPendingDirection(tx) === 'receivable' &&
     !tx.debt_id
   )
+}
+
+
+/** Card/fila de urgência: somente vencido ou vencendo hoje. */
+export function isUrgentDebtDue(dueDate?: string | null, now = new Date()) {
+  const due = getDebtDueState(dueDate, now)
+  return due.isOverdue || due.isToday
 }

@@ -101,13 +101,15 @@ export default function ContactsPage() {
   const totals = useMemo(() => {
     let receivable = 0
     let payable = 0
+    let credit = 0
 
     for (const summary of summaryByContact.values()) {
       receivable += summary.receivable
       payable += summary.payable
+      credit += summary.creditBalance
     }
 
-    return { receivable, payable }
+    return { receivable, payable, credit }
   }, [summaryByContact])
 
   const filteredContacts = useMemo(() => {
@@ -312,6 +314,13 @@ export default function ContactsPage() {
           </div>
         </section>
 
+        {totals.credit > 0 && (
+          <div className="mb-4 flex items-center justify-between rounded-[20px] border border-sky-100 bg-sky-50/80 px-4 py-3 dark:border-sky-900/40 dark:bg-sky-950/20">
+            <span className="text-[11px] font-semibold text-sky-700/70 dark:text-sky-400/70">Créditos disponíveis em clientes</span>
+            <span className="text-[13px] font-black text-sky-700 dark:text-sky-400">{formatCurrency(totals.credit)}</span>
+          </div>
+        )}
+
         <div className="mb-4 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {filterOptions.map((option) => {
             const active = relationshipFilter === option.key
@@ -466,6 +475,7 @@ export default function ContactsPage() {
                         {summary &&
                           (summary.receivable > 0 ||
                             summary.payable > 0 ||
+                            summary.creditBalance > 0 ||
                             summary.transactionCount > 0) && (
                             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
                               {summary.receivable > 0 && (
@@ -476,6 +486,11 @@ export default function ContactsPage() {
                               {summary.payable > 0 && (
                                 <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600 dark:bg-red-950/30 dark:text-red-400">
                                   A pagar {formatCurrency(summary.payable)}
+                                </span>
+                              )}
+                              {summary.creditBalance > 0 && (
+                                <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-700 dark:bg-sky-950/30 dark:text-sky-400">
+                                  Crédito {formatCurrency(summary.creditBalance)}
                                 </span>
                               )}
                               {summary.openDebtCount > 0 && (

@@ -119,3 +119,14 @@ export function getDebtStatusFromAmounts(
 
   return 'pending'
 }
+
+
+export function isDebtCreditApplication(
+  tx: Pick<LocalTransaction, 'debt_id' | 'type' | 'status' | 'affects_balance' | 'contact_credit_delta'>
+) {
+  return (
+    isDebtPayment(tx) &&
+    tx.affects_balance === false &&
+    Number(tx.contact_credit_delta || 0) < 0
+  )
+}

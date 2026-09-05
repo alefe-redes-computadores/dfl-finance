@@ -19,6 +19,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
 
+import { getDebtPaymentAppliedAmount } from '@/lib/contactOperations'
 function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -49,8 +50,7 @@ function DebtsContent() {
 
       result.set(
         tx.debt_id,
-        (result.get(tx.debt_id) || 0) +
-          Math.round(Number(tx.amount || 0) * 100)
+        (result.get(tx.debt_id) || 0) + Math.round(getDebtPaymentAppliedAmount(tx) * 100)
       )
     }
 

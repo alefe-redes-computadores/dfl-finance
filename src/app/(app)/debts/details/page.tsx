@@ -34,6 +34,8 @@ import {
   getDebtDueState,
   getDebtStatusFromAmounts,
 } from '@/lib/debtOperations'
+import { getDebtPaymentAppliedAmount } from '@/lib/contactOperations'
+import { assertCreditSourceCanBeRemoved } from '@/lib/debtCreditOperations'
 
 type DebtStatus = 'pending' | 'partial' | 'paid'
 
@@ -194,7 +196,7 @@ function PaymentHistoryItem({
     <div className="flex items-center justify-between gap-3 rounded-[20px] border border-gray-100 bg-gray-50 p-3.5 dark:border-slate-700/50 dark:bg-slate-700/40">
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-black text-emerald-600 dark:text-emerald-400">
-          + {formatCurrency(Number(payment.amount) || 0)}
+          + {formatCurrency(payment.affects_balance === false ? getDebtPaymentAppliedAmount(payment) : Number(payment.amount) || 0)}
         </p>
         <p className="mt-0.5 truncate text-[11px] font-medium text-gray-400 dark:text-gray-500">
           {format(new Date(`${payment.date}T12:00:00`), "dd 'de' MMM yyyy", {
@@ -440,6 +442,10 @@ function DebtDetailContent() {
     try {
       await db.transaction('rw', db.debts, db.transactions, db.accounts, db.syncQueue, async () => {
         for (const payment of payments) {
+          await assertCreditSourceCanBeRemoved(debt.user_id, payment)
+        }
+
+        for (const payment of payments) {
           if (payment.affects_balance && payment.account_id) {
             const account = await db.accounts.get(payment.account_id)
 
@@ -495,7 +501,7 @@ function DebtDetailContent() {
             const reversedBalance =
               (
                 Math.round(Number(account.balance || 0) * 100) -
-                Math.round(Number(paymentToDelete.amount || 0) * 100)
+                Math.round(getDebtPaymentAppliedAmount(paymentToDelete) * 100)
               ) / 100
 
             const result = await safeUpdate(
@@ -510,6 +516,7 @@ function DebtDetailContent() {
           }
         }
 
+        await assertCreditSourceCanBeRemoved(debt.user_id, paymentToDelete)
         const result = await safeDelete('transactions', paymentToDelete.id)
         if (!result.success) throw new Error(`Erro deletar pagamento: ${result.error}`)
 
@@ -553,9 +560,8 @@ function DebtDetailContent() {
     }
 
     const payAmountCents = Math.round(payAmountNum * 100)
-
-    if (payAmountCents > remainingCents) {
-      showToast(`O valor máximo que pode ser pago é ${formatCurrency(remaining)}.`, 'warning')
+    if (payAmountCents > remainingCents && !debt.contact_id) {
+      showToast('Para transformar o excedente em crédito, vincule esta cobrança a um contato.', 'warning')
       errorHaptic()
       return
     }
@@ -580,6 +586,12 @@ function DebtDetailContent() {
         description: payNote || `Pagamento de ${debt.person_name}`,
         account_id: targetAccountId,
         debt_id: debtId,
+        contact_id: debt.contact_id || null,
+        debt_applied_amount: Math.min(payAmountCents, remainingCents) / 100,
+        contact_credit_delta:
+          payAmountCents > remainingCents
+            ? (payAmountCents - remainingCents) / 100
+            : null,
         date: payDate,
         status: 'done',
         affects_balance: Boolean(targetAccountId),
@@ -632,7 +644,7 @@ function DebtDetailContent() {
 
         const debtResult = await safeUpdate('debts', debtId, {
           status: newStatus,
-          paid_amount: newTotalPaidCents / 100,
+          paid_amount: Math.min(totalAmountCents, newTotalPaidCents) / 100,
           updated_at: new Date().toISOString(),
         })
 
@@ -891,7 +903,9 @@ function DebtDetailContent() {
             </div>
 
             <p className="mt-2 text-[10px] font-bold text-emerald-600/70">
-              Máximo permitido: {formatCurrency(remaining)}
+              {payAmountCents > remainingCents
+                ? `Excedente de ${formatCurrency((payAmountCents - remainingCents) / 100)} será salvo como crédito do contato.`
+                : `Saldo desta cobrança: ${formatCurrency(remaining)}`}
             </p>
           </div>
 
