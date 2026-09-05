@@ -2,11 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-background: #f8f9fa;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+  background: var(--app-background);
+}
+
+html.dark {
+  --app-background: #0f172a;
+  color-scheme: dark;
+  background: var(--app-background);
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
-  -webkit-tap-highlight-color: transparent; /* Remove a caixa azul feia ao tocar em links no celular */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -14,28 +28,42 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
   min-height: 100%;
+  background: var(--app-background);
 }
 
-/* Transição de tela super elegante do iOS */
+body {
+  min-height: 100dvh;
+}
+
 .page-transition {
   animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes fadeIn {
-  0% { opacity: 0; transform: translateY(8px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Scrollbar oculta mas mantendo a rolagem */
 ::-webkit-scrollbar {
   display: none;
 }
+
 html {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-/* Safe area para telas com entalhe/Notch (iPhones novos) */
+.pt-safe {
+  padding-top: var(--safe-area-top);
+}
+
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 16px);
+  padding-bottom: max(var(--safe-area-bottom), 16px);
 }

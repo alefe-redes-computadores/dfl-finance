@@ -23,14 +23,31 @@ const ThemeContext = createContext<ThemeContextType>({
   toggleTheme: () => {},
 })
 
+const THEME_COLORS: Record<Theme, string> = {
+  light: '#f8f9fa',
+  dark: '#0f172a',
+}
+
 function applyTheme(theme: Theme) {
   if (typeof document === 'undefined') return
 
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
+  const isDark = theme === 'dark'
+  const themeColor = THEME_COLORS[theme]
+  const root = document.documentElement
+
+  root.classList.toggle('dark', isDark)
+  root.style.colorScheme = theme
+  root.style.backgroundColor = themeColor
+
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    document.head.appendChild(meta)
   }
+
+  meta.content = themeColor
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -45,6 +62,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         : 'light'
 
     setTheme(initialTheme)
+    applyTheme(initialTheme)
   }, [])
 
   useEffect(() => {

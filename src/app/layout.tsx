@@ -7,7 +7,6 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { BottomNavOverlayProvider } from '@/contexts/BottomNavOverlayContext'
 import CapacitorStatusBar from '@/components/CapacitorStatusBar'
 
-// Configuração oficial da Fonte Poppins
 const poppins = Poppins({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
@@ -32,10 +31,6 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   maximumScale: 1,
   userScalable: false,
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8f9fa' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
-  ],
 }
 
 export default function RootLayout({
@@ -44,29 +39,42 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" className={`${poppins.variable} font-sans antialiased`} suppressHydrationWarning>
+    <html
+      lang="pt-BR"
+      className={`${poppins.variable} font-sans antialiased`}
+      suppressHydrationWarning
+    >
       <head>
-        {/* ✅ SCRIPT MÁGICO: Trava o tema antes da tela piscar no celular */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.documentElement.classList.add('dark')
-                } else {
-                  document.documentElement.classList.remove('dark')
+                var storedTheme = localStorage.getItem('theme');
+                var isDark = storedTheme === 'dark' ||
+                  (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                var root = document.documentElement;
+                var themeColor = isDark ? '#0f172a' : '#f8f9fa';
+
+                root.classList.toggle('dark', isDark);
+                root.style.colorScheme = isDark ? 'dark' : 'light';
+                root.style.backgroundColor = themeColor;
+
+                var meta = document.querySelector('meta[name="theme-color"]');
+                if (!meta) {
+                  meta = document.createElement('meta');
+                  meta.setAttribute('name', 'theme-color');
+                  document.head.appendChild(meta);
                 }
+                meta.setAttribute('content', themeColor);
               } catch (_) {}
             `,
           }}
         />
       </head>
       <body className="min-h-[100dvh] bg-gray-50 text-gray-900 selection:bg-teal-500/30 transition-colors duration-300 dark:bg-slate-900 dark:text-gray-100">
-        {/* ✅ ENVELOPADO NO THEME PROVIDER */}
         <ThemeProvider>
           <CapacitorStatusBar />
           <ToastProvider>
-            {/* ✅ NOVO: overlay compartilhado entre FAB e BottomNav */}
             <BottomNavOverlayProvider>
               {children}
             </BottomNavOverlayProvider>
