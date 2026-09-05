@@ -13,15 +13,14 @@ import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
-import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const { success, error: errorHaptic, vibrate } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { user } = useAuth()
+  const { safeDelete } = useSafeDb()
 
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
@@ -35,18 +34,19 @@ export default function SubscriptionsPage() {
   const { data: subscriptions, loading } = useSubscriptionsList(effectiveContext)
 
   const handleDelete = async () => {
-    if (!deleteModal || !user) return
-    try {
-      await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
-        await db.table('subscriptions').delete(deleteModal)
-        await addToSyncQueue(user.id, 'subscriptions', 'delete', deleteModal, null)
-      })
+    if (!deleteModal) return
 
-      showToast("Assinatura excluída com sucesso!", "success")
+    try {
+      const result = await safeDelete('subscriptions', deleteModal)
+      if (!result.success) {
+        throw new Error(result.error || 'Não foi possível excluir a assinatura.')
+      }
+
+      showToast("Assinatura excluída", "success")
       success()
       setDeleteModal(null)
     } catch (err: any) {
-      showToast(`Erro ao excluir assinatura: ${err.message}`, "error")
+      showToast(err?.message || "Não foi possível excluir a assinatura.", "error")
       errorHaptic()
     }
   }
@@ -267,8 +267,17 @@ export default function SubscriptionsPage() {
               {search ? "Nenhuma assinatura encontrada" : "Nenhuma assinatura ativa"}
             </p>
             <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1 text-center max-w-[260px]">
-              {search ? "Tente buscar com outro termo." : "Gerencie seus serviços, planos e contratos mensais aqui."}
+              {search ? "Tente buscar com outro termo." : "Cadastre serviços, planos e contratos recorrentes para acompanhar o impacto mensal."}
             </p>
+            {!search && (
+              <button
+                type="button"
+                onClick={() => router.push('/subscriptions/new')}
+                className="mt-5 h-11 px-5 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-bold shadow-lg shadow-teal-600/20 active:scale-[0.98] transition-all"
+              >
+                Criar primeira assinatura
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2.5 animate-in fade-in duration-500">
@@ -387,7 +396,7 @@ export default function SubscriptionsPage() {
                 onClick={handleDelete}
                 className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
               >
-                Sim, Excluir
+                Excluir assinatura
               </button>
             </div>
           </div>

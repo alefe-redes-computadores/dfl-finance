@@ -33,10 +33,10 @@ export function ConciProgress({
         </div>
         <div className="flex items-center gap-2">
           <span className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-500/20">
-            {approved} ✓
+            {approved} conciliadas
           </span>
           <span className="bg-red-50 dark:bg-red-500/10 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-100 dark:border-red-500/20">
-            {rejected} ✕
+            {rejected} adiadas
           </span>
         </div>
       </div>

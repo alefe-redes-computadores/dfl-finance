@@ -2,8 +2,6 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import { Check, X, Calendar, DollarSign, Wallet, ArrowUp, ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -64,8 +62,15 @@ export function ConciCard({
   const isIncome = transaction?.type === 'income'
   const safeAmount = safeNum(transaction?.amount)
   
-  const formattedDate = transaction?.date 
-    ? format(new Date(transaction.date), "dd 'de' MMMM", { locale: ptBR })
+  const formattedDate = transaction?.date
+    ? (() => {
+        const iso = String(transaction.date).split('T')[0]
+        const [year, month, day] = iso.split('-')
+        if (!year || !month || !day) return 'Data desconhecida'
+        const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+        const monthLabel = months[Math.max(0, Number(month) - 1)] || month
+        return `${day} de ${monthLabel}`
+      })()
     : 'Data desconhecida'
 
   const formattedAmount = new Intl.NumberFormat('pt-BR', {
@@ -334,7 +339,7 @@ export function ConciCard({
           disabled={isAnimating || isLoading}
         >
           <X size={20} />
-          <span>Ignorar</span>
+          <span>Adiar</span>
         </button>
         <button
           onClick={() => {

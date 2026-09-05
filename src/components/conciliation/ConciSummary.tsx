@@ -45,10 +45,10 @@ export function ConciSummary({
 
       <div>
         <h2 className="text-[22px] font-black text-gray-900 dark:text-white tracking-tight mb-1">
-          Conciliação concluída! 🎉
+          Revisão concluída
         </h2>
         <p className="text-gray-500 dark:text-gray-400 text-[14px] font-medium">
-          Você analisou todas as transações da fila.
+          Você revisou todas as pendências desta sessão.
         </p>
       </div>
 
@@ -59,11 +59,11 @@ export function ConciSummary({
         </div>
         <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-[20px] p-4 flex flex-col items-center justify-center transition-transform hover:scale-105">
           <p className="text-[24px] font-black text-emerald-600 dark:text-emerald-400">{approved}</p>
-          <p className="text-[11px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-1">Aprovados</p>
+          <p className="text-[11px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-1">Conciliadas</p>
         </div>
         <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-[20px] p-4 flex flex-col items-center justify-center transition-transform hover:scale-105">
           <p className="text-[24px] font-black text-red-500">{rejected}</p>
-          <p className="text-[11px] font-bold text-red-500/70 dark:text-red-400/70 uppercase tracking-widest mt-1">Descartados</p>
+          <p className="text-[11px] font-bold text-red-500/70 dark:text-red-400/70 uppercase tracking-widest mt-1">Adiadas</p>
         </div>
       </div>
 
@@ -79,7 +79,7 @@ export function ConciSummary({
           )}
         >
           <RotateCcw size={18} />
-          Recomeçar
+          Revisar novamente
         </button>
         <button
           onClick={handleFinish}

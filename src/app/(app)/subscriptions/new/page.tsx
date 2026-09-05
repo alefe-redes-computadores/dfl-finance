@@ -9,7 +9,7 @@ import { useHapticFeedback } from "@/hooks/useHapticFeedback"
 import { useSubscriptionById } from "@/hooks/useSubscriptionById"
 import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db, addToSyncQueue } from '@/lib/db'
+import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
 import Skeleton from '@/components/Skeleton'
 
@@ -34,6 +34,7 @@ function NewSubscriptionContent() {
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { context, appMode } = useContext_()
   const { user } = useAuth()
+  const { safeAdd, safeUpdate } = useSafeDb()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
@@ -141,59 +142,29 @@ function NewSubscriptionContent() {
         updated_at: new Date().toISOString(),
       }
 
-      await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
-        if (editId) {
-          const existing = await db.table('subscriptions').get(editId)
-
-          if (!existing) {
-            throw new Error('Assinatura não encontrada para atualização.')
-          }
-
-          if (existing.user_id !== user.id) {
-            throw new Error('Assinatura pertence a outro usuário.')
-          }
-
-          const fullPayload = {
-            ...existing,
-            ...payload,
-            id: editId,
-            user_id: user.id,
-            sync_status: 'pending',
-            sync_attempts: 0,
-            last_sync_error: null,
-          }
-
-          await db.table('subscriptions').put(fullPayload)
-          await addToSyncQueue(
-            user.id,
-            'subscriptions',
-            'update',
-            editId,
-            fullPayload
-          )
-        } else {
-          const id = crypto.randomUUID()
-          const fullPayload = {
-            id,
-            user_id: user.id,
-            ...payload,
-            created_at: new Date().toISOString(),
-            sync_status: 'pending',
-            sync_attempts: 0,
-            last_sync_error: null,
-          }
-
-          await db.table('subscriptions').add(fullPayload)
-          await addToSyncQueue(user.id, 'subscriptions', 'create', id, fullPayload)
+      if (editId) {
+        const result = await safeUpdate('subscriptions', editId, payload)
+        if (!result.success) {
+          throw new Error(result.error || 'Não foi possível atualizar a assinatura.')
         }
-      })
+      } else {
+        const result = await safeAdd('subscriptions', {
+          id: crypto.randomUUID(),
+          user_id: user.id,
+          ...payload,
+          created_at: new Date().toISOString(),
+        })
+        if (!result.success) {
+          throw new Error(result.error || 'Não foi possível criar a assinatura.')
+        }
+      }
 
       success()
-      showToast(editId ? "Assinatura atualizada!" : "Assinatura criada!", "success")
+      showToast(editId ? "Assinatura atualizada" : "Assinatura criada", "success")
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`Erro: ${err.message}`, "error")
+      showToast(err?.message || "Não foi possível salvar a assinatura.", "error")
     } finally {
       setSaving(false)
     }
@@ -363,6 +334,13 @@ function NewSubscriptionContent() {
         </section>
 
         <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
+          <div className="mb-4 rounded-[18px] bg-teal-50/80 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/20 px-4 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-700 dark:text-teal-300">Resumo da recorrência</p>
+            <p className="mt-1 text-[13px] text-teal-800/80 dark:text-teal-200/80">
+              {billingCycle === 'weekly' ? 'Cobrança semanal' : billingCycle === 'yearly' ? 'Cobrança anual' : billingCycle === 'quarterly' ? 'Cobrança trimestral' : billingCycle === 'semiannually' ? 'Cobrança semestral' : 'Cobrança mensal'}
+              {nextDueDate ? ` com próxima cobrança em ${nextDueDate.split('-').reverse().join('/')}` : ''}.
+            </p>
+          </div>
           <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
             Observações
           </label>

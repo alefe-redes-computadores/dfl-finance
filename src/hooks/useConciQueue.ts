@@ -1,7 +1,7 @@
 // src/hooks/useConciQueue.ts
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 export interface ConciTransaction {
@@ -26,6 +26,9 @@ interface UseConciQueueReturn {
   total: number
   approved: number
   rejected: number
+  pending: number
+  processed: number
+  hydrated: boolean
   isComplete: boolean
   approve: () => void
   reject: () => void
@@ -37,78 +40,97 @@ interface UseConciQueueReturn {
 
 const STORAGE_KEY = 'conciliation_queue'
 
+function findNextPending(queue: ConciTransaction[], afterIndex: number) {
+  const next = queue.findIndex((item, index) => index > afterIndex && item.status === 'pending')
+  if (next >= 0) return next
+  return queue.findIndex((item) => item.status === 'pending')
+}
+
 export function useConciQueue(): UseConciQueueReturn {
   const [queue, setQueue] = useState<ConciTransaction[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
+
     if (saved) {
       try {
-        const parsed = JSON.parse(saved)
-        setQueue(parsed)
-        const firstPending = parsed.findIndex((t: ConciTransaction) => t.status === 'pending')
-        setCurrentIndex(firstPending >= 0 ? firstPending : parsed.length)
+        const parsed = JSON.parse(saved) as ConciTransaction[]
+        const safeQueue = Array.isArray(parsed) ? parsed : []
+        setQueue(safeQueue)
+        const firstPending = safeQueue.findIndex((item) => item.status === 'pending')
+        setCurrentIndex(firstPending >= 0 ? firstPending : safeQueue.length)
       } catch {
+        localStorage.removeItem(STORAGE_KEY)
         setQueue([])
+        setCurrentIndex(0)
       }
     }
+
+    setHydrated(true)
   }, [])
 
   useEffect(() => {
+    if (!hydrated) return
+
     if (queue.length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(queue))
     } else {
       localStorage.removeItem(STORAGE_KEY)
     }
-  }, [queue])
+  }, [queue, hydrated])
 
-  const current = queue[currentIndex] || null
-  const total = queue.filter(t => t.status === 'pending').length
-  const approved = queue.filter(t => t.status === 'approved').length
-  const rejected = queue.filter(t => t.status === 'rejected').length
-  const isComplete = total === 0 && queue.length > 0
+  const approved = useMemo(() => queue.filter((item) => item.status === 'approved').length, [queue])
+  const rejected = useMemo(() => queue.filter((item) => item.status === 'rejected').length, [queue])
+  const pending = useMemo(() => queue.filter((item) => item.status === 'pending').length, [queue])
+  const total = queue.length
+  const processed = approved + rejected
+  const isComplete = hydrated && total > 0 && pending === 0
+  const current = queue[currentIndex]?.status === 'pending' ? queue[currentIndex] : null
+
+  const advance = useCallback((baseQueue: ConciTransaction[], fromIndex: number) => {
+    const next = findNextPending(baseQueue, fromIndex)
+    setCurrentIndex(next >= 0 ? next : baseQueue.length)
+  }, [])
 
   const approve = useCallback(() => {
-    if (!current || current.status !== 'pending') return
-    setQueue(prev => {
-      const updated = [...prev]
-      updated[currentIndex] = { ...updated[currentIndex], status: 'approved' }
+    if (!current) return
+
+    setQueue((previous) => {
+      const updated = previous.map((item, index) =>
+        index === currentIndex ? { ...item, status: 'approved' as const } : item
+      )
+      advance(updated, currentIndex)
       return updated
     })
-    setCurrentIndex(prev => {
-      const next = queue.findIndex((t, i) => i > prev && t.status === 'pending')
-      return next >= 0 ? next : queue.length
-    })
-  }, [current, currentIndex, queue])
+  }, [current, currentIndex, advance])
 
   const reject = useCallback(() => {
-    if (!current || current.status !== 'pending') return
-    setQueue(prev => {
-      const updated = [...prev]
-      updated[currentIndex] = { ...updated[currentIndex], status: 'rejected' }
+    if (!current) return
+
+    setQueue((previous) => {
+      const updated = previous.map((item, index) =>
+        index === currentIndex ? { ...item, status: 'rejected' as const } : item
+      )
+      advance(updated, currentIndex)
       return updated
     })
-    setCurrentIndex(prev => {
-      const next = queue.findIndex((t, i) => i > prev && t.status === 'pending')
-      return next >= 0 ? next : queue.length
-    })
-  }, [current, currentIndex, queue])
+  }, [current, currentIndex, advance])
 
   const skip = useCallback(() => {
     if (!current) return
-    setCurrentIndex(prev => {
-      const next = queue.findIndex((t, i) => i > prev && t.status === 'pending')
-      return next >= 0 ? next : queue.length
-    })
-  }, [current, queue])
+    const next = findNextPending(queue, currentIndex)
+    setCurrentIndex(next >= 0 ? next : currentIndex)
+  }, [current, queue, currentIndex])
 
   const reset = useCallback((transactions: Omit<ConciTransaction, 'id' | 'status'>[]) => {
-    const newQueue: ConciTransaction[] = transactions.map(t => ({
-      ...t,
+    const newQueue: ConciTransaction[] = transactions.map((item) => ({
+      ...item,
       id: uuidv4(),
       status: 'pending',
     }))
+
     setQueue(newQueue)
     setCurrentIndex(0)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newQueue))
@@ -121,10 +143,10 @@ export function useConciQueue(): UseConciQueueReturn {
   }, [])
 
   const getStats = useCallback(() => ({
-    approved: queue.filter(t => t.status === 'approved').length,
-    rejected: queue.filter(t => t.status === 'rejected').length,
-    pending: queue.filter(t => t.status === 'pending').length,
-  }), [queue])
+    approved,
+    rejected,
+    pending,
+  }), [approved, rejected, pending])
 
   return {
     queue,
@@ -133,6 +155,9 @@ export function useConciQueue(): UseConciQueueReturn {
     total,
     approved,
     rejected,
+    pending,
+    processed,
+    hydrated,
     isComplete,
     approve,
     reject,
