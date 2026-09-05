@@ -56,8 +56,6 @@ import {
   isStandalonePendingReceivable,
 } from '@/lib/pendingOperations'
 
-const ProjectionSparklineCard = lazy(() => import('@/components/ProjectionSparklineCard'))
-
 // ALL_SECTIONS COM DESCRIÇÕES PARA O PERSONALIZE MODAL
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },

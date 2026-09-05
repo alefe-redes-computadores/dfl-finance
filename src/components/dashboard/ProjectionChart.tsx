@@ -91,7 +91,12 @@ function ProjectionChartComponent({
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-[28px] p-6 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-colors duration-300">
-      <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100 mb-6">{title}</h3>
+      <div className="mb-6">
+        <h3 className="font-bold text-[16px] text-gray-800 dark:text-gray-100">{title}</h3>
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+          Estimativa baseada na média dos últimos meses. Não representa garantia de saldo futuro.
+        </p>
+      </div>
 
       <div className="h-[240px]">
         <ResponsiveContainer width="100%" height="100%">

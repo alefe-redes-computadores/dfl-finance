@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import {
   ChevronLeft, Search, Trash2, Download, FileText,
   Image as ImageIcon, X, AlertCircle, Upload, RefreshCw,
@@ -18,6 +20,7 @@ import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface ReceiptFile {
   name: string
+  path: string
   url: string
   created_at: string
   size: number
@@ -27,11 +30,37 @@ interface ReceiptFile {
   transaction_date?: string
 }
 
+const normalizeReceiptStoragePath = (
+  value?: string | null
+) => {
+  if (!value) return ''
+
+  try {
+    const decoded = decodeURIComponent(value)
+    const marker = '/receipts/'
+    const markerIndex = decoded.indexOf(marker)
+
+    if (markerIndex >= 0) {
+      return decoded.slice(markerIndex + marker.length).split('?')[0]
+    }
+
+    return decoded
+      .replace(/^receipts\//, '')
+      .replace(/^\/+/, '')
+      .split('?')[0]
+  } catch {
+    return String(value)
+      .replace(/^receipts\//, '')
+      .replace(/^\/+/, '')
+      .split('?')[0]
+  }
+}
+
 export default function ReceiptsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
+  const { safeUpdate } = useSafeDb()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
   
   const [receipts, setReceipts] = useState<ReceiptFile[]>([])
@@ -44,6 +73,7 @@ export default function ReceiptsPage() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({})
+  const [receiptToDelete, setReceiptToDelete] = useState<ReceiptFile | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -104,6 +134,7 @@ export default function ReceiptsPage() {
 
         return {
           name: file.name,
+          path: filePath,
           url,
           created_at: file.created_at || new Date().toISOString(),
           size: file.metadata?.size || 0,
@@ -111,26 +142,24 @@ export default function ReceiptsPage() {
         }
       }))
 
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('id, receipt_url, description, date')
-        .eq('user_id', user.id)
-        .not('receipt_url', 'is', null)
-        .order('date', { ascending: false })
+      const txs = await db.transactions
+        .where('user_id')
+        .equals(user.id)
+        .filter((tx) => Boolean(tx.receipt_url))
+        .toArray()
 
       const txMap = new Map<string, any>()
-      if (txs) {
-        txs.forEach(tx => {
-          if (tx.receipt_url) {
-            txMap.set(tx.receipt_url, tx)
-          }
-        })
+
+      for (const tx of txs) {
+        const receiptPath = normalizeReceiptStoragePath(tx.receipt_url)
+        if (receiptPath) txMap.set(receiptPath, tx)
       }
 
-      const enrichedReceipts = receiptsData.map(r => {
-        const tx = txMap.get(r.url)
+      const enrichedReceipts = receiptsData.map((receipt) => {
+        const tx = txMap.get(receipt.path)
+
         return {
-          ...r,
+          ...receipt,
           transaction_id: tx?.id,
           transaction_desc: tx?.description,
           transaction_date: tx?.date,
@@ -177,11 +206,11 @@ export default function ReceiptsPage() {
       if (uploadError) throw uploadError
 
       success()
-      showToast('✅ Comprovante enviado com sucesso!', 'success')
+      showToast('Arquivo enviado. Você pode vinculá-lo a uma transação depois.', 'success')
       loadReceipts(false)
     } catch (error: any) {
       hapticError()
-      showToast(`❌ Erro ao enviar: ${error.message}`, 'error')
+      showToast(`Erro ao enviar: ${error.message}`, 'error')
     } finally {
       setUploading(false)
       setLoadingPulse(false)
@@ -189,25 +218,44 @@ export default function ReceiptsPage() {
     }
   }
 
-  const handleDelete = async (receipt: ReceiptFile) => {
+  const handleDelete = (receipt: ReceiptFile) => {
     vibrate([10])
-    if (!confirm(`Deseja excluir o comprovante "${receipt.name}"?`)) return
+    setReceiptToDelete(receipt)
+  }
+
+  const confirmDeleteReceipt = async () => {
+    if (!user?.id || !receiptToDelete) return
+
+    const receipt = receiptToDelete
 
     try {
-      const path = `${user.id}/${receipt.name}`
-      const { error: deleteError } = await supabase.storage.from('receipts').remove([path])
+      const { error: deleteError } = await supabase.storage
+        .from('receipts')
+        .remove([receipt.path])
+
       if (deleteError) throw deleteError
 
       if (receipt.transaction_id) {
-        const result = await safeUpdate('transactions', receipt.transaction_id, { 
-          receipt_url: null,
-          updated_at: new Date().toISOString()
-        })
-        if (!result.success) throw new Error(result.error)
+        const result = await safeUpdate(
+          'transactions',
+          receipt.transaction_id,
+          {
+            receipt_url: null,
+            updated_at: new Date().toISOString(),
+          }
+        )
+
+        if (!result.success) {
+          throw new Error(
+            result.error ||
+              'O arquivo foi removido, mas o vínculo da transação não pôde ser atualizado.'
+          )
+        }
       }
 
       success()
-      showToast('🗑️ Comprovante excluído.', 'success')
+      showToast('Comprovante excluído.', 'success')
+      setReceiptToDelete(null)
       loadReceipts(false)
     } catch (err: any) {
       hapticError()
@@ -231,14 +279,28 @@ export default function ReceiptsPage() {
     setExpandedId(prev => prev === id ? null : id)
   }
 
-  const filteredReceipts = receipts.filter(r => {
-    const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
-    const matchesFilter = filter === 'all' || (filter === 'image' ? r.isImage : !r.isImage)
-    return matchesSearch && matchesFilter
-  })
+  const filteredReceipts = useMemo(
+    () =>
+      receipts.filter((receipt) => {
+        const matchesSearch =
+          !search ||
+          receipt.name.toLowerCase().includes(search.toLowerCase())
 
-  const totalImages = receipts.filter(r => r.isImage).length
-  const totalPdfs = receipts.filter(r => !r.isImage).length
+        const matchesFilter =
+          filter === 'all' ||
+          (filter === 'image' ? receipt.isImage : !receipt.isImage)
+
+        return matchesSearch && matchesFilter
+      }),
+    [filter, receipts, search]
+  )
+
+  const totalImages = useMemo(
+    () => receipts.filter((receipt) => receipt.isImage).length,
+    [receipts]
+  )
+
+  const totalPdfs = receipts.length - totalImages
 
   useEffect(() => {
     const container = containerRef.current
@@ -294,7 +356,7 @@ export default function ReceiptsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -314,7 +376,7 @@ export default function ReceiptsPage() {
                   )}
                 </h1>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  Arquivos enviados e vinculados
+                  Arquivos anexados e arquivos avulsos
                 </p>
               </div>
             </div>
@@ -540,6 +602,50 @@ export default function ReceiptsPage() {
           </div>
         )}
       </div>
+
+      {receiptToDelete &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setReceiptToDelete(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl dark:bg-slate-900"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mx-auto mb-6 h-1.5 w-11 rounded-full bg-slate-200 dark:bg-slate-700" />
+              <div className="mb-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-950/30">
+                  <Trash2 size={24} />
+                </div>
+                <h2 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">
+                  Excluir comprovante?
+                </h2>
+                <p className="mx-auto mt-2 max-w-[320px] text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  O arquivo será removido. Se estiver vinculado a uma transação, o vínculo também será limpo.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReceiptToDelete(null)}
+                  className="flex-1 rounded-[20px] bg-slate-100 px-4 py-3.5 text-[14px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteReceipt}
+                  className="flex-1 rounded-[20px] bg-red-500 px-4 py-3.5 text-[14px] font-bold text-white"
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       <input
         ref={fileInputRef}

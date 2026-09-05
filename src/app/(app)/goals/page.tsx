@@ -22,11 +22,7 @@ function GoalsContent() {
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   const { showToast } = useToast()
   const { vibrate } = useHapticFeedback()
-  
-  const [loadingPulse, setLoadingPulse] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-
-  // ✅ HOOK ESPECÍFICO DE LISTAGEM
+// ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: localGoals, loading: goalsLoading } = useGoalsList(effectiveContext)
 
   // ✅ TRANSAÇÕES ainda vêm via useLocalData para calcular progresso
@@ -44,6 +40,21 @@ function GoalsContent() {
   // ✅ REMOVIDO pull-to-refresh manual (useGoalsList já é reativo)
   // Mantido apenas para compatibilidade com a UI, mas sem reload
 
+  const transactionsByGoalId = useMemo(() => {
+    const map = new Map<string, typeof localTransactions>()
+
+    for (const tx of localTransactions) {
+      const goalId = (tx as any).goal_id
+      if (!goalId || tx.status !== 'done') continue
+
+      const bucket = map.get(goalId)
+      if (bucket) bucket.push(tx)
+      else map.set(goalId, [tx])
+    }
+
+    return map
+  }, [localTransactions])
+
   const goalsWithProgress = useMemo(() => {
     return (localGoals || []).map((goal: any) => {
       const saved = (localTransactions || [])
@@ -52,7 +63,7 @@ function GoalsContent() {
 
       const remaining = Number(goal.target_amount) - saved
       const percent = Number(goal.target_amount) > 0 ? (saved / Number(goal.target_amount)) * 100 : 0
-      const daysLeft = differenceInDays(new Date(goal.deadline), new Date())
+      const daysLeft = differenceInDays((parseGoalCivilDate(goal.deadline) || new Date()), new Date())
 
       return {
         ...goal,
@@ -65,7 +76,14 @@ function GoalsContent() {
     })
   }, [localGoals, localTransactions])
 
-  const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const parseGoalCivilDate = (value?: string | null) => {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!match) return null
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0)
+}
+
+const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
     <div

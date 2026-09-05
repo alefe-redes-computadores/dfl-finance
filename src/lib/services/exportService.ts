@@ -87,39 +87,135 @@ export async function exportTransactionsToCSV(
 export async function exportAnalysisToCSV(
   userId: string,
   context: 'dfl' | 'personal',
-  month: Date
+  referenceDate: Date,
+  range: '7' | '14' | '30' | 'total' | 'month' = 'month'
 ): Promise<{ csv: string; filename: string }> {
-  const { transactions, categories } = await loadLocalData(userId, context)
-  const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
-  const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+  const { transactions, categories } =
+    await loadLocalData(userId, context)
+
+  const endDate = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate()
+  )
+
+  let startDate: Date
+
+  if (range === 'month') {
+    startDate = new Date(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth(),
+      1
+    )
+
+    endDate.setFullYear(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth() + 1,
+      0
+    )
+  } else if (range === 'total') {
+    startDate = new Date(2000, 0, 1)
+  } else {
+    const days =
+      Number.parseInt(range, 10) || 30
+
+    startDate = new Date(endDate)
+    startDate.setDate(
+      startDate.getDate() - days + 1
+    )
+  }
+
   const start = localISO(startDate)
   const end = localISO(endDate)
 
-  const txs = transactions.filter(t => t.date >= start && t.date <= end && t.status === 'done')
-  const income = txs.filter(t => t.type === 'income').reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
-  const expenseTxs = txs.filter(t => t.type === 'expense' || t.type === 'sangria')
-  const expense = expenseTxs.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+  const txs = transactions.filter(
+    (transaction: any) =>
+      transaction.date >= start &&
+      transaction.date <= end &&
+      transaction.status === 'done' &&
+      transaction.affects_balance !== false &&
+      !transaction.goal_id
+  )
+
+  const income = txs
+    .filter(
+      (transaction) =>
+        transaction.type === 'income'
+    )
+    .reduce(
+      (sum, transaction) =>
+        sum + (Number(transaction.amount) || 0),
+      0
+    )
+
+  const expenseTxs = txs.filter(
+    (transaction) =>
+      transaction.type === 'expense' ||
+      transaction.type === 'sangria'
+  )
+
+  const expense = expenseTxs.reduce(
+    (sum, transaction) =>
+      sum + (Number(transaction.amount) || 0),
+    0
+  )
+
   const balance = income - expense
 
-  const catMap = new Map<string, number>()
-  expenseTxs.forEach(t => {
-    const category: any = categories.get(t.category_id)
-    const name = category?.name || 'Sem categoria'
-    catMap.set(name, (catMap.get(name) || 0) + (Number(t.amount) || 0))
+  const categoryMap = new Map<string, number>()
+
+  expenseTxs.forEach((transaction) => {
+    const category: any =
+      categories.get(transaction.category_id)
+
+    const name =
+      category?.name || 'Sem categoria'
+
+    categoryMap.set(
+      name,
+      (categoryMap.get(name) || 0) +
+        (Number(transaction.amount) || 0)
+    )
   })
 
-  const monthName = startDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()
-  const header = `ANÁLISE - ${monthName}\n\n`
-  const summary = `RECEITAS,${csvText(money(income))}\nDESPESAS,${csvText(money(expense))}\nBALANÇO,${csvText(money(balance))}\n\n`
-  const categoryHeader = 'DESPESAS POR CATEGORIA\n'
-  const categoryRows = Array.from(catMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([category, amount]) => `${csvText(category)},${money(amount)}\n`)
-    .join('')
+  const rangeLabel =
+    range === 'month'
+      ? startDate
+          .toLocaleDateString('pt-BR', {
+            month: 'long',
+            year: 'numeric',
+          })
+          .toUpperCase()
+      : `${start} A ${end}`
+
+  const header =
+    `ANÁLISE - ${rangeLabel}\n\n`
+
+  const summary =
+    `RECEITAS,${csvText(money(income))}\n` +
+    `DESPESAS,${csvText(money(expense))}\n` +
+    `BALANÇO,${csvText(money(balance))}\n\n`
+
+  const categoryHeader =
+    'DESPESAS POR CATEGORIA\n'
+
+  const categoryRows =
+    Array.from(categoryMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(
+        ([category, amount]) =>
+          `${csvText(category)},${money(amount)}\n`
+      )
+      .join('')
 
   return {
-    csv: header + summary + categoryHeader + categoryRows,
-    filename: `analise-${context}-${start}.csv`,
+    csv:
+      header +
+      summary +
+      categoryHeader +
+      categoryRows,
+    filename:
+      `analise-${context}-${range}-${end}.csv`,
   }
 }
 

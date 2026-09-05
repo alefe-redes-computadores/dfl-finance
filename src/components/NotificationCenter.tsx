@@ -21,7 +21,10 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/contexts/ToastContext'
 import { safeUpdate } from '@/lib/safeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { clearAllNotifications } from '@/lib/notificationUtils'
+import {
+  clearAllNotifications,
+  isNotificationRead,
+} from '@/lib/notificationUtils'
 import { useIsAdmin } from '@/hooks/useAdmin'
 
 interface Notification {
@@ -57,8 +60,6 @@ interface NotificationCenterProps {
   notifications: Notification[]
   onReadChange?: ((unreadCount: number) => void) | (() => void)
 }
-
-const isNotifRead = (n: Notification) => Boolean(n.is_read || n.read)
 
 function groupNotifications(notifs: Notification[]): NotificationGroup[] {
   const groups: Record<string, NotificationGroup> = {}
@@ -168,11 +169,11 @@ export default function NotificationCenter({
 
       setLocalNotifs(updated)
 
-      const unread = updated.filter((n) => !isNotifRead(n)).length
+      const unread = updated.filter((n) => !isNotificationRead(n)).length
       emitReadChange(unread)
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
-      showToast(`❌ Erro ao processar: ${err?.message || 'Erro desconhecido'}`, 'error')
+      showToast(`Erro ao processar: ${err?.message || 'Erro desconhecido'}`, 'error')
     } finally {
       setProcessing(false)
     }
@@ -181,18 +182,18 @@ export default function NotificationCenter({
   const markAllAsRead = useCallback(async () => {
     if (!user?.id) return
 
-    const unreadIds = localNotifs.filter((n) => !isNotifRead(n)).map((n) => n.id)
+    const unreadIds = localNotifs.filter((n) => !isNotificationRead(n)).map((n) => n.id)
 
     if (unreadIds.length > 0) {
       success()
       await markAsRead(unreadIds)
-      showToast('✅ Notificações marcadas como lidas!', 'success')
+      showToast('Notificações marcadas como lidas!', 'success')
       vibrate([10])
     }
   }, [user?.id, localNotifs, markAsRead, showToast, success, vibrate])
 
   const activeNotifs = useMemo(
-    () => localNotifs.filter((n) => !isNotifRead(n)),
+    () => localNotifs.filter((n) => !isNotificationRead(n)),
     [localNotifs]
   )
 

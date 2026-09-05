@@ -1,18 +1,33 @@
 // src/lib/notificationUtils.ts
-import { db } from './db'
+import { db, addToSyncQueue, type LocalNotification } from './db'
 import { supabase } from './supabase'
 
-/**
- * 🔥 Gera uma chave única para verificação de duplicatas
- * Ex: user-123-invoice_soon-2026-07-13
- */
-export function generateNotificationKey(userId: string, type: string, date: string): string {
+export function generateNotificationKey(
+  userId: string,
+  type: string,
+  date: string
+): string {
   return `${userId}-${type}-${date}`
 }
 
-/**
- * 🔥 Verifica se já existe uma notificação com a mesma chave no banco local
- */
+export function isNotificationRead(
+  notification?: Pick<LocalNotification, 'read' | 'is_read'> | null
+) {
+  return Boolean(notification?.read || notification?.is_read)
+}
+
+export function normalizeNotificationReadState<T extends Record<string, any>>(
+  notification: T
+): T & { read: boolean; is_read: boolean } {
+  const read = Boolean(notification?.read || notification?.is_read)
+
+  return {
+    ...notification,
+    read,
+    is_read: read,
+  }
+}
+
 export async function hasDuplicateNotification(
   userId: string,
   type: string,
@@ -20,44 +35,88 @@ export async function hasDuplicateNotification(
 ): Promise<boolean> {
   try {
     const key = generateNotificationKey(userId, type, date)
-    const existing = await db.table('notifications')
+
+    const existing = await db.notifications
       .where('user_id')
       .equals(userId)
-      .and((n: any) => n.unique_key === key || (n.type === type && n.created_at?.startsWith(date)))
+      .and(
+        (notification: any) =>
+          notification.unique_key === key ||
+          (
+            notification.type === type &&
+            notification.created_at?.startsWith(date)
+          )
+      )
       .first()
-    
-    return !!existing
-  } catch (err) {
-    console.error('❌ [NotificationUtils] Erro ao verificar duplicata:', err)
+
+    return Boolean(existing)
+  } catch (error) {
+    console.error(
+      '[NotificationUtils] Erro ao verificar duplicata:',
+      error
+    )
     return false
   }
 }
 
-/**
- * 🔥 Limpa todas as notificações (local + servidor)
- * Retorna { success: boolean, error?: string }
- */
-export async function clearAllNotifications(userId: string): Promise<{ success: boolean; error?: string }> {
+export async function clearAllNotifications(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Limpa o banco local (Dexie)
-    await db.table('notifications').clear()
-    console.log('✅ [NotificationUtils] Notificações locais limpas com sucesso.')
+    const localNotifications = await db.notifications
+      .where('user_id')
+      .equals(userId)
+      .toArray()
 
-    // 2. Limpa o banco remoto (Supabase)
+    if (localNotifications.length > 0) {
+      const now = new Date().toISOString()
+
+      await db.transaction(
+        'rw',
+        db.notifications,
+        db.syncQueue,
+        async () => {
+          for (const notification of localNotifications) {
+            await db.notifications.delete(notification.id)
+
+            await addToSyncQueue(
+              userId,
+              'notifications',
+              'delete',
+              notification.id,
+              {
+                id: notification.id,
+                user_id: userId,
+                deleted_at: now,
+              }
+            )
+          }
+        }
+      )
+    }
+
     const { error } = await supabase
       .from('notifications')
       .delete()
       .eq('user_id', userId)
 
     if (error) {
-      console.error('❌ [NotificationUtils] Erro ao limpar notificações no Supabase:', error)
+      console.error(
+        '[NotificationUtils] Erro ao limpar notificações remotas:',
+        error
+      )
       return { success: false, error: error.message }
     }
 
-    console.log('✅ [NotificationUtils] Notificações do Supabase limpas com sucesso.')
     return { success: true }
-  } catch (err: any) {
-    console.error('❌ [NotificationUtils] Erro inesperado:', err)
-    return { success: false, error: err.message }
+  } catch (error: any) {
+    console.error(
+      '[NotificationUtils] Erro inesperado ao limpar notificações:',
+      error
+    )
+    return {
+      success: false,
+      error: error?.message || 'Erro inesperado ao limpar notificações.',
+    }
   }
 }

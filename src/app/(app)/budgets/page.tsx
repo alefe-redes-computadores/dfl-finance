@@ -14,6 +14,8 @@ import { ptBR } from 'date-fns/locale'
 import {
   calculateBudgetMetrics,
   getBudgetPeriodName,
+  buildBudgetTransactionIndex,
+  getBudgetCandidateTransactions,
 } from '@/lib/budgetOperations'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -70,11 +72,16 @@ function BudgetsContent() {
     }
   }, [user?.id])
 
+  const budgetTransactionIndex = useMemo(
+    () => buildBudgetTransactionIndex(localTransactions),
+    [localTransactions]
+  )
+
   const budgetsWithSpent = (localBudgets || []).map(
     (budget: any) => {
       const metrics = calculateBudgetMetrics({
         budget,
-        transactions: localTransactions || [],
+        transactions: getBudgetCandidateTransactions(budget, localTransactions, budgetTransactionIndex) || [],
         referenceDate: currentMonth,
       })
 

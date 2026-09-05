@@ -28,10 +28,10 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
     }).format(val)
   }
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const createTooltip = (scopeData: CategoryData[]) => ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
-      const total = (pfData || []).reduce((s, d) => s + d.value, 0) + (pjData || []).reduce((s, d) => s + d.value, 0)
+      const total = (scopeData || []).reduce((sum, item) => sum + item.value, 0)
       const percent = total > 0 ? ((data.value / total) * 100).toFixed(1) : '0.0'
 
       return (
@@ -47,6 +47,9 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
     }
     return null
   }
+
+  const PfTooltip = createTooltip(pfData)
+  const PjTooltip = createTooltip(pjData)
 
   const hasData = (pfData?.length > 0) || (pjData?.length > 0)
 
@@ -87,7 +90,7 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
                     <Cell key={`pf-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
+                <Tooltip content={<PfTooltip />} cursor={{ fill: 'transparent' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -114,7 +117,7 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
                     <Cell key={`pj-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
+                <Tooltip content={<PjTooltip />} cursor={{ fill: 'transparent' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -124,7 +127,7 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
       {/* Legenda compacta e moderna */}
       <div className="flex flex-wrap justify-center gap-3 mt-2 px-2">
         {[...(pfData || []), ...(pjData || [])].slice(0, 6).map((item) => (
-          <div key={item.name} className="flex items-center gap-1.5 bg-gray-50 dark:bg-slate-700/50 px-2.5 py-1 rounded-full border border-gray-100 dark:border-slate-600/50">
+          <div key={`${item.name}-${item.color}-${item.value}`} className="flex items-center gap-1.5 bg-gray-50 dark:bg-slate-700/50 px-2.5 py-1 rounded-full border border-gray-100 dark:border-slate-600/50">
             <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: item.color || '#64748b' }} />
             <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300 truncate max-w-[80px]">
               {item.name}
@@ -141,5 +144,5 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
   )
 }
 
-// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
+// MEMOIZADO: só re-renderiza se as props mudarem
 export default React.memo(CategoryPieComponent)

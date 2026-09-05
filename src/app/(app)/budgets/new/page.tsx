@@ -141,6 +141,11 @@ function NewBudgetContent() {
 
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(editId)
 
+  const recordContext =
+    isEditing && budgetData?.context
+      ? budgetData.context
+      : context
+
   const [saving, setSaving] = useState(false)
   const [initialized, setInitialized] = useState(!editId)
 
@@ -157,7 +162,7 @@ function NewBudgetContent() {
 
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context, type: 'expense', parent_id: null },
+    filters: { context: recordContext, type: 'expense', parent_id: null },
   })
 
   const categories = localCategories || []
@@ -266,7 +271,7 @@ function NewBudgetContent() {
       icon: normalizeIconName(icon) || 'Tag',
       period,
       accumulate,
-      context,
+      context: recordContext,
       updated_at: new Date().toISOString(),
     }
 

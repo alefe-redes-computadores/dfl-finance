@@ -368,6 +368,7 @@ function GoalDetailContent() {
 
   const [refreshing] = useState(false)
   const [showContributionModal, setShowContributionModal] = useState(false)
+  const [showDeleteSheet, setShowDeleteSheet] = useState(false)
   const [contribAmount, setContribAmount] = useState('')
   const [contribAmountNum, setContribAmountNum] = useState(0)
   const [contribDate, setContribDate] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -378,29 +379,25 @@ function GoalDetailContent() {
 
   const loading = goalsLoading || txLoading
 
-  const handleDelete = async () => {
-    if (!user) return
-
+  const handleDelete = () => {
     vibrate([10, 50])
+    setShowDeleteSheet(true)
+  }
 
-    if (
-      !confirm(
-        'Excluir esta meta? As contribuições vinculadas não serão apagadas, apenas perderão a categoria da meta.'
-      )
-    ) {
-      return
-    }
+  const confirmDeleteGoal = async () => {
+    if (!user) return
 
     try {
       const res = await safeDelete('goals', id as string)
       if (!res.success) throw new Error(res.error)
 
       success()
-      showToast('🗑️ Meta excluída.', 'success')
+      showToast('Meta excluída.', 'success')
+      setShowDeleteSheet(false)
       router.push('/goals')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro ao excluir: ${err.message}`, 'error')
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
     }
   }
 
@@ -435,7 +432,7 @@ function GoalDetailContent() {
       if (!res.success) throw new Error(res.error)
 
       success()
-      showToast('✅ Contribuição registrada!', 'success')
+      showToast('Contribuição registrada!', 'success')
       setShowContributionModal(false)
       setContribAmount('')
       setContribAmountNum(0)
@@ -462,7 +459,7 @@ function GoalDetailContent() {
     )
   }
 
-  // ✅ CORRIGIDO: regex com escape do ponto e grupo válido
+  // CORRIGIDO: regex com escape do ponto e grupo válido
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
@@ -470,7 +467,14 @@ function GoalDetailContent() {
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 
-  const formatCurrency = (val: number) =>
+  const parseGoalCivilDate = (value?: string | null) => {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!match) return null
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0)
+}
+
+const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -527,7 +531,7 @@ function GoalDetailContent() {
       ? (saved / Number(goal.target_amount)) * 100
       : 0
   const isCompleted = saved >= Number(goal.target_amount)
-  const daysLeft = differenceInDays(new Date(goal.deadline), new Date())
+  const daysLeft = differenceInDays((parseGoalCivilDate(goal.deadline) || new Date()), new Date())
   const isOverdue = daysLeft < 0 && !isCompleted
 
   return (
@@ -608,7 +612,7 @@ function GoalDetailContent() {
               value={
                 remaining > 0
                   ? formatCurrency(Math.abs(remaining))
-                  : '✅ Completo'
+                  : 'Completo'
               }
               tone={remaining > 0 ? 'warning' : 'success'}
             />
@@ -631,7 +635,7 @@ function GoalDetailContent() {
             <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
               Prazo:{' '}
               {goal.deadline
-                ? format(new Date(goal.deadline), "dd 'de' MMM yyyy", {
+                ? format((parseGoalCivilDate(goal.deadline) || new Date()), "dd 'de' MMM yyyy", {
                     locale: ptBR,
                   })
                 : '—'}
@@ -733,6 +737,51 @@ function GoalDetailContent() {
           )}
         </SurfaceCard>
       </div>
+
+      {showDeleteSheet &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowDeleteSheet(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl dark:bg-slate-900"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mx-auto mb-6 h-1.5 w-11 rounded-full bg-slate-200 dark:bg-slate-700" />
+              <div className="mb-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-950/30">
+                  <Trash2 size={24} />
+                </div>
+                <h2 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">
+                  Excluir meta?
+                </h2>
+                <p className="mx-auto mt-2 max-w-[320px] text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  A meta será removida. As movimentações financeiras continuam no histórico.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteSheet(false)}
+                  className="flex-1 rounded-[20px] bg-slate-100 px-4 py-3.5 text-[14px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteGoal}
+                  className="flex-1 rounded-[20px] bg-red-500 px-4 py-3.5 text-[14px] font-bold text-white"
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
 
       <ContributionModal
         open={showContributionModal}

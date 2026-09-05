@@ -33,6 +33,7 @@ export interface LocalTransaction {
   is_reimbursable?: boolean
   linked_transaction_id?: string | null
   debt_id?: string | null
+  goal_id?: string | null
   /** Parte desta movimentação efetivamente aplicada a uma cobrança. */
   debt_applied_amount?: number | null
   /** Variação de crédito do contato: positivo gera, negativo consome. */
@@ -269,6 +270,7 @@ export interface LocalNotification {
   subtitle?: string
   severity: 'info' | 'warning' | 'critical' | 'success'
   read: boolean
+  is_read?: boolean
   data?: any
   created_at: string
   sync_status: 'synced' | 'pending' | 'failed'

@@ -333,7 +333,7 @@ function NewGoalContent() {
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   
-  // ✅ useMemo para normalizar o ID
+  // useMemo para normalizar o ID
   const rawEditId = searchParams.get('edit')
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
   
@@ -392,7 +392,7 @@ function NewGoalContent() {
     }
   }, [editId, goalData, initialized])
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
   if (editId && notFound && !loading) {
     return <NotFoundState onBack={() => router.push('/goals')} />
   }
@@ -446,7 +446,7 @@ function NewGoalContent() {
         if (!res.success) throw new Error(res.error)
 
         success()
-        showToast('✅ Meta atualizada com sucesso!', 'success')
+        showToast('Meta atualizada com sucesso!', 'success')
       } else {
         const newId = crypto.randomUUID()
 
@@ -465,7 +465,7 @@ function NewGoalContent() {
 
         goalId = newId
         success()
-        showToast('🎯 Meta criada com sucesso!', 'success')
+        showToast('Meta criada com sucesso!', 'success')
       }
 
       if (!editId && initialContributionNum > 0 && goalId) {

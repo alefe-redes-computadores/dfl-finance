@@ -39,20 +39,48 @@ function ComparisonChartComponent({ data, title = 'Comparativo PF vs PJ' }: Comp
   }
 
   const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-4 rounded-[20px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-50 dark:border-slate-700/50 z-50">
-          <p className="font-bold text-gray-800 dark:text-gray-100 text-[13px] uppercase tracking-wider mb-3 pb-2 border-b border-gray-100 dark:border-slate-700">{label}</p>
-          <div className="space-y-2 text-[13px] font-medium">
-            <p className="flex justify-between gap-4"><span className="text-gray-500 dark:text-gray-400">Receitas PF</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrency(payload[0]?.value || 0)}</span></p>
-            <p className="flex justify-between gap-4"><span className="text-gray-500 dark:text-gray-400">Despesas PF</span> <span className="text-red-500 dark:text-red-400 font-bold">{formatCurrency(payload[1]?.value || 0)}</span></p>
-            <p className="flex justify-between gap-4"><span className="text-gray-500 dark:text-gray-400">Receitas PJ</span> <span className="text-blue-600 dark:text-blue-400 font-bold">{formatCurrency(payload[2]?.value || 0)}</span></p>
-            <p className="flex justify-between gap-4"><span className="text-gray-500 dark:text-gray-400">Despesas PJ</span> <span className="text-orange-500 dark:text-orange-400 font-bold">{formatCurrency(payload[3]?.value || 0)}</span></p>
-          </div>
+    if (!active || !payload?.length) return null
+
+    const values = Object.fromEntries(
+      payload.map((item: any) => [
+        item.dataKey,
+        Number(item.value) || 0,
+      ])
+    )
+
+    return (
+      <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-4 rounded-[20px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-50 dark:border-slate-700/50 z-50">
+        <p className="font-bold text-gray-800 dark:text-gray-100 text-[13px] uppercase tracking-wider mb-3 pb-2 border-b border-gray-100 dark:border-slate-700">
+          {label}
+        </p>
+        <div className="space-y-2 text-[13px] font-medium">
+          <p className="flex justify-between gap-4">
+            <span className="text-gray-500 dark:text-gray-400">Receitas PF</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+              {formatCurrency(values.receitasPF || 0)}
+            </span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span className="text-gray-500 dark:text-gray-400">Despesas PF</span>
+            <span className="text-red-500 dark:text-red-400 font-bold">
+              {formatCurrency(values.despesasPF || 0)}
+            </span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span className="text-gray-500 dark:text-gray-400">Receitas PJ</span>
+            <span className="text-blue-600 dark:text-blue-400 font-bold">
+              {formatCurrency(values.receitasPJ || 0)}
+            </span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span className="text-gray-500 dark:text-gray-400">Despesas PJ</span>
+            <span className="text-orange-500 dark:text-orange-400 font-bold">
+              {formatCurrency(values.despesasPJ || 0)}
+            </span>
+          </p>
         </div>
-      )
-    }
-    return null
+      </div>
+    )
   }
 
   return (
@@ -81,5 +109,5 @@ function ComparisonChartComponent({ data, title = 'Comparativo PF vs PJ' }: Comp
   )
 }
 
-// 🔥 MEMOIZADO: só re-renderiza se as props mudarem
+// MEMOIZADO: só re-renderiza se as props mudarem
 export default React.memo(ComparisonChartComponent)

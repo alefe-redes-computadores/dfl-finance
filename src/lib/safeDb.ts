@@ -379,6 +379,65 @@ export async function safeDelete(
       })
     }
 
+    if (table === 'goals') {
+      const linkedTransactions = await db.transactions
+        .where('user_id')
+        .equals(userId)
+        .filter((tx: any) => tx.goal_id === id)
+        .toArray()
+
+      const now = new Date().toISOString()
+
+      await db.transaction(
+        'rw',
+        db.goals,
+        db.transactions,
+        db.syncQueue,
+        async () => {
+          for (const tx of linkedTransactions) {
+            const updatedTransaction = {
+              ...tx,
+              goal_id: null,
+              updated_at: now,
+              sync_status: 'pending',
+            }
+
+            await db.transactions.put(updatedTransaction)
+
+            await addToSyncQueue(
+              userId,
+              'transactions',
+              'update',
+              tx.id,
+              updatedTransaction
+            )
+          }
+
+          await db.goals.delete(id)
+
+          await addToSyncQueue(
+            userId,
+            'goals',
+            'delete',
+            id,
+            {
+              id,
+              user_id: existing.user_id ?? userId,
+              deleted_at: now,
+            }
+          )
+        }
+      )
+
+      return logOperation('delete', table, id, {
+        success: true,
+        operation: 'delete' as const,
+        table,
+        id,
+        affected: linkedTransactions.length + 1,
+      })
+    }
+
     if (table === 'contacts') {
       const linkedTransactions = await db.transactions
         .where('user_id')

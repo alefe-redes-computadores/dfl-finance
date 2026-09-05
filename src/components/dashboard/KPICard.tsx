@@ -11,7 +11,6 @@ import {
   Percent,
   DollarSign,
 } from 'lucide-react'
-import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
 interface KPICardProps {
   title: string
@@ -54,7 +53,6 @@ function KPICardComponent({
   color = 'teal',
   formatter,
 }: KPICardProps) {
-  const { vibrate } = useHapticFeedback()
   const Icon = iconMap[icon] || Wallet
   const colorClass = colorMap[color] || colorMap.teal
 
@@ -70,11 +68,7 @@ function KPICardComponent({
   }
 
   return (
-    <button
-      type="button"
-      className="w-full text-left bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-all hover:shadow-md active:scale-[0.98]"
-      onClick={() => vibrate([5])}
-    >
+    <div className="w-full text-left bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-50 dark:border-slate-700/50 transition-all">
       <div className="flex items-center justify-between mb-3">
         <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
           {title}
@@ -93,7 +87,7 @@ function KPICardComponent({
           {subtitle}
         </p>
       )}
-    </button>
+    </div>
   )
 }
 

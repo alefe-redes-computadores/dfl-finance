@@ -307,6 +307,35 @@ const totalTransactions = (
   )
 }
 
+export type BudgetTransactionIndex = Map<string, LocalTransaction[]>
+
+export const buildBudgetTransactionIndex = (
+  transactions: LocalTransaction[]
+): BudgetTransactionIndex => {
+  const index = new Map<string, LocalTransaction[]>()
+
+  for (const tx of transactions) {
+    if (tx.status !== 'done' || tx.type !== 'expense') continue
+
+    const key = tx.category_id || '__uncategorized__'
+    const current = index.get(key)
+
+    if (current) current.push(tx)
+    else index.set(key, [tx])
+  }
+
+  return index
+}
+
+export const getBudgetCandidateTransactions = (
+  budget: { category_id?: string | null },
+  transactions: LocalTransaction[],
+  index?: BudgetTransactionIndex
+) => {
+  if (!index) return transactions
+  return index.get(budget.category_id || '__uncategorized__') || []
+}
+
 export const calculateBudgetMetrics = ({
   budget,
   transactions,

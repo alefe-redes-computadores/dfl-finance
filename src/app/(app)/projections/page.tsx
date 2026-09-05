@@ -12,6 +12,7 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useTransactionsList } from '@/hooks/useTransactionsList' // ✅ HOOK ESPECÍFICO
+import { useAccountsList } from '@/hooks/useAccountsList'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
@@ -81,6 +82,7 @@ export default function ProjectionsPage() {
 
   // ✅ HOOK ESPECÍFICO
   const { data: localTransactions, loading: txLoading } = useTransactionsList(effectiveContext)
+  const { data: localAccounts } = useAccountsList(effectiveContext)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
@@ -119,65 +121,72 @@ export default function ProjectionsPage() {
     }
   }, [loading, refreshing])
 
-  // 🔥 CÁLCULO DE PROJEÇÃO COM BLINDAGEM
+  // CÁLCULO DE PROJEÇÃO COM BLINDAGEM
+  // Projeção determinística baseada em saldo real + média de meses completos.
   const processedProjections = useMemo(() => {
-    const txs = localTransactions || []
-    
-    if (txs.length === 0) {
-      return []
-    }
+    const txs = (localTransactions || []).filter((tx: any) => {
+      if (tx.status !== 'done') return false
+      if (tx.affects_balance === false) return false
+      if (tx.goal_id) return false
 
-    const endDate = new Date()
-    const startDate = subMonths(endDate, 6)
-
-    const filtered = txs.filter((tx: any) => {
-      const txDate = new Date(tx.date)
-      return txDate >= startDate && txDate <= endDate && tx.type !== 'transfer'
+      return (
+        tx.type === 'income' ||
+        tx.type === 'expense' ||
+        tx.type === 'sangria'
+      )
     })
 
-    if (filtered.length === 0) {
-      return []
+    const currentBalance = (localAccounts || [])
+      .filter((account: any) => !account.is_archived)
+      .reduce(
+        (sum: number, account: any) =>
+          sum + (Number(account.balance) || 0),
+        0
+      )
+
+    const now = new Date()
+    const months = new Map<string, { income: number; expense: number }>()
+
+    for (let offset = 1; offset <= 6; offset++) {
+      const date = subMonths(now, offset)
+      months.set(format(date, 'yyyy-MM'), { income: 0, expense: 0 })
     }
 
-    const months = new Map()
-    filtered.forEach((tx: any) => {
-      const month = format(new Date(tx.date), 'yyyy-MM')
-      if (!months.has(month)) {
-        months.set(month, { income: 0, expense: 0 })
-      }
+    txs.forEach((tx: any) => {
+      const month = String(tx.date || '').slice(0, 7)
       const data = months.get(month)
+      if (!data) return
+
       if (tx.type === 'income') {
         data.income += Number(tx.amount) || 0
-      } else if (tx.type === 'expense') {
+      } else if (tx.type === 'expense' || tx.type === 'sangria') {
         data.expense += Number(tx.amount) || 0
       }
     })
 
-    let totalIncome = 0
-    let totalExpense = 0
-    months.forEach((data) => {
-      totalIncome += data.income
-      totalExpense += data.expense
-    })
+    const history = Array.from(months.values())
+    const avgIncome =
+      history.reduce((sum, item) => sum + item.income, 0) /
+      Math.max(history.length, 1)
+    const avgExpense =
+      history.reduce((sum, item) => sum + item.expense, 0) /
+      Math.max(history.length, 1)
 
-    const avgIncome = months.size > 0 ? totalIncome / months.size : 0
-    const avgExpense = months.size > 0 ? totalExpense / months.size : 0
-
-    let currentBalance = 0
-    filtered.forEach((tx: any) => {
-      if (tx.type === 'income') {
-        currentBalance += Number(tx.amount) || 0
-      } else if (tx.type === 'expense') {
-        currentBalance -= Number(tx.amount) || 0
-      }
-    })
-
-    const monthsToProject = parseInt(period)
+    const monthsToProject = Number.parseInt(period, 10) || 6
     const projectionData = []
     let balance = currentBalance
 
-    for (let i = 0; i <= monthsToProject; i++) {
-      const date = addMonths(new Date(), i)
+    projectionData.push({
+      month: format(now, 'yyyy-MM-dd'),
+      label: 'Hoje',
+      income: 0,
+      expense: 0,
+      balance: currentBalance,
+      currentBalance,
+    })
+
+    for (let i = 1; i <= monthsToProject; i++) {
+      const date = addMonths(now, i)
       const monthLabel = format(date, "MMM 'yy", { locale: ptBR })
 
       let income = avgIncome
@@ -196,15 +205,15 @@ export default function ProjectionsPage() {
       projectionData.push({
         month: format(date, 'yyyy-MM'),
         label: monthLabel,
-        income: income,
-        expense: expense,
-        balance: balance,
-        currentBalance: i === 0 ? currentBalance : undefined,
+        income,
+        expense,
+        balance,
+        currentBalance: undefined,
       })
     }
 
     return projectionData
-  }, [localTransactions, period, scenario])
+  }, [localAccounts, localTransactions, period, scenario])
 
   // Atualiza projeções quando os dados mudam
   useEffect(() => {

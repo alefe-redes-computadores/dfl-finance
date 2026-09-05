@@ -195,8 +195,7 @@ function BudgetDetailContent() {
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(budgetId)
 
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [refreshing, setRefreshing] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const hasScheduledRedirect = useRef(false)
 

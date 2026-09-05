@@ -1,4 +1,5 @@
 'use client'
+import { createPortal } from 'react-dom'
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -13,10 +14,14 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { clearAllNotifications } from '@/lib/notificationUtils'
+import {
+  clearAllNotifications,
+  isNotificationRead,
+  normalizeNotificationReadState,
+} from '@/lib/notificationUtils'
 import { useIsAdmin } from '@/hooks/useAdmin'
 
-// 🔥 SKELETON ATUALIZADO
+// SKELETON ATUALIZADO
 const NotificationsSkeleton = () => (
   <div className="space-y-2.5 animate-pulse">
     {[1, 2, 3, 4].map((i) => (
@@ -46,6 +51,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true)
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [showClearAllSheet, setShowClearAllSheet] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all')
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -118,13 +124,9 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (localNotifications) {
-      const mapped = localNotifications.map((n: any) => ({
-        ...n,
-        is_read: n.is_read || n.read || false,
-        read: n.is_read || n.read || false,
-      }))
+      const mapped = localNotifications.map((n: any) => (normalizeNotificationReadState(n)))
       setNotifications(mapped)
-      const unread = mapped.filter((n: any) => !n.is_read).length
+      const unread = mapped.filter((n: any) => !isNotificationRead(n)).length
       setUnreadCount(unread)
     }
   }, [localNotifications])
@@ -136,7 +138,7 @@ export default function NotificationsPage() {
         n.id === id ? { ...n, is_read: true, read: true } : n
       )
       setNotifications(updatedList)
-      setUnreadCount(updatedList.filter((n: any) => !n.is_read).length)
+      setUnreadCount(updatedList.filter((n: any) => !isNotificationRead(n)).length)
 
       const updateData = { is_read: true, read: true, updated_at: new Date().toISOString() }
       const result = await safeUpdate('notifications', id, updateData)
@@ -158,7 +160,7 @@ export default function NotificationsPage() {
     if (!user?.id || notifications.length === 0) return
 
     try {
-      const unread = notifications.filter((n: any) => !n.is_read)
+      const unread = notifications.filter((n: any) => !isNotificationRead(n))
       
       const updatedList = notifications.map((n: any) => ({ ...n, is_read: true, read: true }))
       setNotifications(updatedList)
@@ -174,7 +176,7 @@ export default function NotificationsPage() {
       
       hapticSuccess()
       vibrate([20, 10])
-      showToast('✅ Todas as notificações marcadas como lidas!', 'success')
+      showToast('Todas as notificações marcadas como lidas!', 'success')
     } catch (err: any) {
       console.error('Erro:', err)
       hapticError()
@@ -190,9 +192,9 @@ export default function NotificationsPage() {
       return
     }
 
-    if (!confirm('⚠️ Tem certeza que deseja limpar TODAS as notificações? Esta ação não pode ser desfeita.')) return
-
-    setProcessing(true)
+    setShowClearAllSheet(true)
+      return
+setProcessing(true)
     try {
       const result = await clearAllNotifications(user.id)
       if (!result.success) {
@@ -204,10 +206,10 @@ export default function NotificationsPage() {
       
       hapticSuccess()
       vibrate([20, 10])
-      showToast('🗑️ Todas as notificações foram removidas!', 'success')
+      showToast('Todas as notificações foram removidas!', 'success')
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao limpar notificações: ${err.message}`, 'error')
+      showToast(`Erro ao limpar notificações: ${err.message}`, 'error')
     } finally {
       setProcessing(false)
     }
@@ -220,14 +222,14 @@ export default function NotificationsPage() {
       // 1. Atualização Otimista
       const filteredList = notifications.filter(n => n.id !== id)
       setNotifications(filteredList)
-      setUnreadCount(filteredList.filter((n: any) => !n.is_read).length)
+      setUnreadCount(filteredList.filter((n: any) => !isNotificationRead(n)).length)
 
       // 2. Remoção Real do DB
       const result = await safeDelete('notifications', id)
       
       if (!result.success) throw new Error(result.error)
       
-      // 🔥 MATADOR DE ZUMBI: Se houver Service Worker, avisamos ele aqui
+      // MATADOR DE ZUMBI: Se houver Service Worker, avisamos ele aqui
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready
         // Isso limpa tags de notificações pendentes ligadas a esse ID
@@ -266,7 +268,7 @@ export default function NotificationsPage() {
 
   const filteredNotifications = useMemo(() => {
     const filtered = notifications.filter((n: any) => {
-      if (filter === 'unread') return !n.is_read
+      if (filter === 'unread') return !isNotificationRead(n)
       if (filter === 'critical') return n.severity === 'critical'
       return true
     })
@@ -293,7 +295,7 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* 🔥 HEADER UNIFICADO */}
+      {/* HEADER UNIFICADO */}
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -384,7 +386,7 @@ export default function NotificationsPage() {
         ) : (
           <div className="space-y-2.5 animate-in fade-in duration-300">
             {filteredNotifications.map((notif: any) => {
-              const isUnread = !notif.is_read
+              const isUnread = !isNotificationRead(notif)
               return (
                 <div
                   key={notif.id}
@@ -447,6 +449,53 @@ export default function NotificationsPage() {
           </div>
         )}
       </div>
+      {showClearAllSheet &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowClearAllSheet(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl dark:bg-slate-900"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mx-auto mb-6 h-1.5 w-11 rounded-full bg-slate-200 dark:bg-slate-700" />
+              <div className="mb-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-950/30">
+                  <Trash2 size={24} />
+                </div>
+                <h2 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">
+                  Limpar todas as notificações?
+                </h2>
+                <p className="mx-auto mt-2 max-w-[320px] text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  As notificações deste usuário serão removidas do aparelho e da conta.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowClearAllSheet(false)}
+                  className="flex-1 rounded-[20px] bg-slate-100 px-4 py-3.5 text-[14px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowClearAllSheet(false)
+                    await confirmClearAll()
+                  }}
+                  className="flex-1 rounded-[20px] bg-red-500 px-4 py-3.5 text-[14px] font-bold text-white"
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
     </div>
   )
 }

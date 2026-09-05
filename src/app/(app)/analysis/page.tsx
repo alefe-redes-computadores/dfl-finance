@@ -55,9 +55,9 @@ import CategoryPie from '@/components/dashboard/CategoryPie'
 import { useToast } from '@/contexts/ToastContext'
 
 import { exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService'
-import { createPortal } from 'react-dom' // 🔥 IMPORT ADICIONADO
+import { createPortal } from 'react-dom' // IMPORT ADICIONADO
 
-// 🔥 SKELETON ATUALIZADO
+// SKELETON ATUALIZADO
 const AnalysisSkeleton = () => (
   <div className="space-y-5 animate-pulse">
     <div className="grid grid-cols-2 gap-3">
@@ -97,7 +97,7 @@ const AnalysisSkeleton = () => (
   </div>
 )
 
-// 🔥 EXPORT FEEDBACK OVERLAY
+// EXPORT FEEDBACK OVERLAY
 function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exporting' | 'success', onClose: () => void }) {
   if (status === 'idle') return null;
 
@@ -178,7 +178,7 @@ function AnalysisContent() {
     filters: { context: effectiveContext }
   })
 
-  const { metrics, loading: metricsLoading, reload: reloadMetrics } = useDashboardMetrics(currentDate)
+  const { metrics, loading: metricsLoading, reload: reloadMetrics } = useDashboardMetrics(currentDate, effectiveContext)
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -382,7 +382,7 @@ function AnalysisContent() {
     setExportStatus('exporting')
     
     try {
-      const { csv, filename } = await exportAnalysisToCSV(user.id, effectiveContext, currentDate)
+      const { csv, filename } = await exportAnalysisToCSV(user.id, effectiveContext, currentDate, range as '7' | '14' | '30' | 'total')
       downloadCSV(csv, filename)
       setExportStatus('success')
       setTimeout(() => {
@@ -487,7 +487,7 @@ function AnalysisContent() {
         onClose={() => setExportStatus('idle')}
       />
 
-      {/* 🔥 HEADER UNIFICADO COM STICKY */}
+      {/* HEADER UNIFICADO COM STICKY */}
       <div className="sticky top-0 z-40 pb-3 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl">
         <div className="bg-white/95 dark:bg-slate-800/95 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -599,7 +599,7 @@ function AnalysisContent() {
             </div>
           </div>
 
-          {/* 🔥 TABS DENTRO DO HEADER */}
+          {/* TABS DENTRO DO HEADER */}
           <div className="flex bg-gray-50 dark:bg-slate-900/40 border border-gray-200/70 dark:border-slate-700 p-1 rounded-[20px]">
             <button
               type="button"
@@ -638,7 +638,7 @@ function AnalysisContent() {
         </div>
       </div>
 
-      {/* 🔥 FAIXA DE FILTROS ATIVOS */}
+      {/* FAIXA DE FILTROS ATIVOS */}
       {hasActiveFilters && (
         <div className="flex items-center gap-2 mb-4 mt-1 px-1">
           <Filter size={14} className="text-teal-600 dark:text-teal-400" />
@@ -655,10 +655,10 @@ function AnalysisContent() {
         </div>
       )}
 
-      {/* 🔥 CONTEÚDO DAS TABS */}
+      {/* CONTEÚDO DAS TABS */}
       {activeTab === 'dashboard' && dashboardContent}
 
-      {/* 🔥 ABA "MÊS" ATUALIZADA */}
+      {/* ABA "MÊS" ATUALIZADA */}
       {activeTab === 'month' && (
         <div className="space-y-4 animate-in fade-in duration-300">
           {/* KPIs */}
@@ -907,11 +907,11 @@ function AnalysisContent() {
             )}
           </div>
 
-          <DetailedProjectionChart />
+          <DetailedProjectionChart data={metrics?.dailyProjection || []} />
         </div>
       )}
 
-      {/* 🔥 ABA "NOVOS GASTOS" ATUALIZADA */}
+      {/* ABA "NOVOS GASTOS" ATUALIZADA */}
       {activeTab === 'new' && (
         <div className="space-y-4 animate-in fade-in duration-300">
           <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
@@ -1034,7 +1034,7 @@ function AnalysisContent() {
         </div>
       )}
 
-      {/* 🔥 DRAWER DE FILTROS AVANÇADOS - USANDO PORTAL */}
+      {/* DRAWER DE FILTROS AVANÇADOS - USANDO PORTAL */}
       {showFilterDrawer && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-300">
           {/* Fundo que fecha ao clicar */}
