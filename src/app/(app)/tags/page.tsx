@@ -8,8 +8,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useTagsList } from "@/hooks/useTagsList" // ✅ NOVO HOOK
-import { useLocalSync } from "@/hooks/useLocalSync"
+import { useTagsList } from "@/hooks/useTagsList"
 import { useContext_ } from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useAuth } from "@/lib/hooks/useAuth"
@@ -25,7 +24,6 @@ export default function TagsPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
-  const { pendingCount } = useLocalSync()
   const { context, appMode } = useContext_()
   const { user } = useAuth()
   const { safeDelete, safeUpdate, safeAdd } = useSafeDb()
@@ -42,10 +40,18 @@ export default function TagsPage() {
   const [saving, setSaving] = useState(false)
 
 
-  // ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: tags, loading } = useTagsList(effectiveContext)
 
-  // ✅ TRANSAÇÕES para contagem
+  const editingTag = useMemo(
+    () => (editId ? (tags || []).find((tag: any) => tag.id === editId) : null),
+    [editId, tags]
+  )
+
+  const recordContext =
+    editId && editingTag?.context
+      ? editingTag.context
+      : effectiveContext
+
   const { data: transactions } = useLocalData({
     table: 'transactions' as any,
     filters: { context: effectiveContext },
@@ -103,7 +109,7 @@ export default function TagsPage() {
       const payload = {
         name: trimmedName,
         color: tagColor,
-        context: effectiveContext,
+        context: recordContext,
         updated_at: new Date().toISOString(),
       }
 
@@ -131,7 +137,6 @@ export default function TagsPage() {
       setShowForm(false)
       setEditId(null)
       setTagName("")
-      // ✅ NÃO PRECISA reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
       showToast(`Erro ao salvar tag: ${err.message}`, "error")
@@ -172,7 +177,7 @@ export default function TagsPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 transition-colors duration-300">
-      {(loading || pendingCount > 0) && (
+      {loading && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
         </div>
@@ -379,7 +384,7 @@ export default function TagsPage() {
             </div>
 
             <button
-              onClick={() => { vibrate([10, 50]); handleSave(); }}
+              onClick={handleSave}
               disabled={saving}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-[20px] font-bold text-[15px] shadow-lg shadow-teal-600/20 transition-transform active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2"
             >
@@ -409,12 +414,14 @@ export default function TagsPage() {
             </p>
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setDeleteModal(null)}
                 className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 transition-colors active:scale-[0.98]"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
               >
