@@ -1,3 +1,4 @@
+// src/app/(app)/loans/details/page.tsx
 'use client'
 
 import { useEffect, useState, useRef, useMemo, Suspense } from 'react'
@@ -206,7 +207,7 @@ function LoanDetailContent() {
   const { context, appMode } = useContext_()
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
-  // ✅ HOOKS (mantidos exatamente iguais)
+  // HOOKS (mantidos exatamente iguais)
   const { data: loan, loading, notFound } = useLoanById(id)
   const { data: payments, loading: paymentsLoading } = useLoanPayments(id)
 
@@ -214,19 +215,19 @@ function LoanDetailContent() {
   const [showPayConfirm, setShowPayConfirm] = useState(false)
   const [processing, setProcessing] = useState(false)
 
-  // ✅ FUNÇÕES AUXILIARES (mantidas exatamente iguais)
+  // FUNÇÕES AUXILIARES (mantidas exatamente iguais)
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
   const formatDate = (date: string | null) => 
-    date ? format(new Date(date), "dd/MM/yyyy") : "—"
+    date ? new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR") : "—"
 
-  // ✅ TRATAMENTO DE LOADING
+  // TRATAMENTO DE LOADING
   if (loading) {
     return <LoanDetailSkeleton />
   }
 
-  // ✅ TRATAMENTO DE NÃO ENCONTRADO
+  // TRATAMENTO DE NÃO ENCONTRADO
   if (notFound) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-[#f6f7f8] dark:bg-slate-950">
@@ -249,7 +250,7 @@ function LoanDetailContent() {
 
   if (!loan) return null
 
-  // ✅ CÁLCULOS (mantidos exatamente iguais)
+  // CÁLCULOS (mantidos exatamente iguais)
   const isLent = loan.direction === "lent"
   const amount = Number(loan.amount) || 0
   const totalPaid = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
@@ -273,7 +274,7 @@ function LoanDetailContent() {
     shadow: "shadow-orange-500/20",
   }
 
-  // ✅ HANDLERS (mantidos exatamente iguais)
+  // HANDLERS (mantidos exatamente iguais)
   const handlePay = async () => {
     setProcessing(true)
     try {
@@ -284,11 +285,11 @@ function LoanDetailContent() {
       })
       if (!res.success) throw new Error(res.error)
       success()
-      showToast("✅ Empréstimo marcado como pago!", "success")
+      showToast("Empréstimo marcado como quitado.", "success")
       setShowPayConfirm(false)
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Não foi possível atualizar o empréstimo: ${err.message}`, "error")
     } finally {
       setProcessing(false)
     }
@@ -303,18 +304,18 @@ function LoanDetailContent() {
       const res = await safeDelete('loans', loan.id)
       if (!res.success) throw new Error(res.error)
       success()
-      showToast("🗑️ Empréstimo excluído", "success")
+      showToast("Empréstimo excluído com sucesso.", "success")
       setShowDeleteConfirm(false)
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Não foi possível excluir o empréstimo: ${err.message}`, "error")
     } finally {
       setProcessing(false)
     }
   }
 
-  // ✅ RENDERIZAÇÃO REFATORADA
+  // RENDERIZAÇÃO REFATORADA
   return (
     <div className="min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950">
       {/* ============================================================
@@ -380,6 +381,18 @@ function LoanDetailContent() {
               </p>
             </div>
           </div>
+
+          {amount > 0 && (
+            <div className="mt-4 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">Progresso</p>
+                <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{Math.min(100, Math.max(0, Math.round((totalPaid / amount) * 100)))}%</p>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                <div className={`h-full rounded-full bg-gradient-to-r ${isLent ? 'from-emerald-500 to-teal-500' : 'from-orange-500 to-amber-400'} transition-all`} style={{ width: `${Math.min(100, Math.max(0, (totalPaid / amount) * 100))}%` }} />
+              </div>
+            </div>
+          )}
 
           {payments && payments.length > 0 && (
             <div className="mt-3 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-black/5 dark:border-white/10 p-4">
@@ -458,7 +471,7 @@ function LoanDetailContent() {
             disabled={status === 'paid' || remaining <= 0}
             className={`w-full rounded-2xl py-4 font-semibold text-white ${accent.bg} ${accent.hover} disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-lg ${accent.shadow}`}
           >
-            {status === 'paid' ? 'Já pago' : remaining <= 0 ? 'Quitado' : 'Marcar como pago'}
+            {status === 'paid' ? 'Empréstimo quitado' : remaining <= 0 ? 'Quitado' : 'Marcar como quitado'}
           </button>
 
           <button

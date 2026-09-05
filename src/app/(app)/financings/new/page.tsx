@@ -1,3 +1,4 @@
+// src/app/(app)/financings/new/page.tsx
 "use client"
 
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react"
@@ -47,7 +48,7 @@ function NewFinancingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // ✅ useMemo para normalizar o ID
+  // useMemo para normalizar o ID
   const rawEditId = searchParams.get("edit")
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
 
@@ -89,7 +90,7 @@ function NewFinancingContent() {
     return totalAmountNum / installmentsCountNum
   }, [totalAmountNum, installmentsCountNum])
 
-  // ✅ HIDRATAÇÃO DO FORMULÁRIO
+  // HIDRATAÇÃO DO FORMULÁRIO
   useEffect(() => {
     if (editId && financing && !initialized) {
       setDescription(financing.description || "")
@@ -117,7 +118,7 @@ function NewFinancingContent() {
     }
   }, [editId, financing, initialized])
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
   if (editId && notFound && !loading) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-950">
@@ -202,31 +203,31 @@ function NewFinancingContent() {
 
     if (!user && !editId) {
       errorHaptic()
-      showToast("❌ Usuário não autenticado", "error")
+      showToast("Sua sessão expirou. Entre novamente para continuar.", "error")
       return
     }
 
     if (!trimmedDescription) {
       errorHaptic()
-      showToast("⚠️ Preencha a descrição", "warning")
+      showToast("Informe uma descrição para identificar o financiamento.", "warning")
       return
     }
 
     if (totalAmountNum <= 0) {
       errorHaptic()
-      showToast("⚠️ Informe um valor válido", "warning")
+      showToast("Informe um valor total maior que zero.", "warning")
       return
     }
 
     if (installmentsCountNum <= 0) {
       errorHaptic()
-      showToast("⚠️ Informe o número de parcelas", "warning")
+      showToast("Informe uma quantidade válida de parcelas.", "warning")
       return
     }
 
     if (parsedInterestRate !== null && Number.isNaN(parsedInterestRate)) {
       errorHaptic()
-      showToast("⚠️ Informe uma taxa de juros válida", "warning")
+      showToast("Informe uma taxa de juros válida.", "warning")
       return
     }
 
@@ -255,7 +256,7 @@ function NewFinancingContent() {
         if (!res.success) throw new Error(res.error)
 
         success()
-        showToast("✅ Financiamento atualizado!", "success")
+        showToast("Financiamento atualizado com sucesso.", "success")
       } else {
         const fullPayload = {
           id: crypto.randomUUID(),
@@ -271,13 +272,13 @@ function NewFinancingContent() {
         if (!res.success) throw new Error(res.error)
 
         success()
-        showToast("✅ Financiamento criado!", "success")
+        showToast("Financiamento criado com sucesso.", "success")
       }
 
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Não foi possível salvar o financiamento: ${err.message}`, "error")
     } finally {
       setSaving(false)
     }

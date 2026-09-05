@@ -1,3 +1,4 @@
+// src/app/(app)/financings/details/page.tsx
 'use client'
 
 import { useState, Suspense, useMemo } from "react"
@@ -330,6 +331,7 @@ function FinancingDetailContent() {
   const { safeUpdate, safeDelete } = useSafeDb()
 
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
+  const [showDeleteFinancingConfirm, setShowDeleteFinancingConfirm] = useState(false)
   const [expandedInstallments, setExpandedInstallments] = useState(false)
 
   const {
@@ -350,7 +352,7 @@ function FinancingDetailContent() {
     }).format(val)
 
   const formatDate = (date: string | null) =>
-    date ? new Date(date).toLocaleDateString("pt-BR") : ""
+    date ? new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR") : ""
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -420,10 +422,10 @@ function FinancingDetailContent() {
       }
 
       success()
-      showToast("✅ Parcela paga com sucesso!", "success")
+      showToast("Parcela marcada como paga.", "success")
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ ${err?.message || "Erro ao pagar parcela"}`, "error")
+      showToast(`${err?.message || "Erro ao pagar parcela"}`, "error")
     }
   }
 
@@ -452,10 +454,10 @@ function FinancingDetailContent() {
       }
 
       success()
-      showToast("🔄 Pagamento desfeito com sucesso!", "success")
+      showToast("Pagamento desfeito. A parcela voltou para pendente.", "success")
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ ${err?.message || "Erro ao desfazer pagamento"}`, "error")
+      showToast(`${err?.message || "Erro ao desfazer pagamento"}`, "error")
     }
   }
 
@@ -467,11 +469,11 @@ function FinancingDetailContent() {
       if (!res.success) throw new Error(res.error)
 
       success()
-      showToast("🗑️ Parcela excluída com sucesso!", "success")
+      showToast("Parcela excluída com sucesso.", "success")
       setDeleteModal(null)
     } catch (err: any) {
       errorHaptic()
-      showToast("❌ Erro ao excluir parcela", "error")
+      showToast("Não foi possível excluir a parcela.", "error")
     }
   }
 
@@ -479,8 +481,6 @@ function FinancingDetailContent() {
     if (!user) return
 
     vibrate([10, 50])
-
-    if (!confirm("Tem certeza que deseja excluir este financiamento e todas as suas parcelas?")) return
 
     try {
       for (const inst of installments) {
@@ -492,11 +492,12 @@ function FinancingDetailContent() {
       if (!res2.success) throw new Error(res2.error)
 
       success()
-      showToast("🗑️ Financiamento excluído!", "success")
+      showToast("Financiamento excluído com sucesso.", "success")
+      setShowDeleteFinancingConfirm(false)
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast("❌ Erro ao excluir financiamento", "error")
+      showToast("Não foi possível excluir o financiamento.", "error")
     }
   }
 
@@ -578,7 +579,7 @@ function FinancingDetailContent() {
           vibrate([5])
           router.push(`/financings/new?edit=${financingId}`)
         }}
-        onDelete={handleDeleteFinancing}
+        onDelete={() => { vibrate([10]); setShowDeleteFinancingConfirm(true) }}
       />
 
       <div className="flex-1 overflow-y-auto px-4 pt-5 pb-24 space-y-4">
@@ -743,6 +744,32 @@ function FinancingDetailContent() {
           )}
         </SectionCard>
       </div>
+
+
+      <AppBottomSheet
+        open={showDeleteFinancingConfirm}
+        onClose={() => setShowDeleteFinancingConfirm(false)}
+        title="Excluir financiamento"
+        zIndex={99999}
+      >
+        <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400 mb-6">
+          O financiamento e todas as parcelas vinculadas serão excluídos. Essa ação não pode ser desfeita.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => { vibrate([5]); setShowDeleteFinancingConfirm(false) }}
+            className="flex-1 py-4 rounded-[24px] bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold text-[15px] active:scale-[0.98] transition-transform"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleDeleteFinancing}
+            className="flex-1 py-4 rounded-[24px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/30 active:scale-[0.98] transition-transform"
+          >
+            Excluir financiamento
+          </button>
+        </div>
+      </AppBottomSheet>
 
       <AppBottomSheet
         open={!!deleteModal}

@@ -1,119 +1,113 @@
+// src/components/ModalEmprestimo.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { X, Check, Loader2, Wallet, Calendar, Tag, ChevronLeft, Building } from 'lucide-react'
-import { useContext_ } from '@/components/ContextToggle'
-import IconPicker from '@/components/IconPicker'
-import { getDynamicIcon } from '@/lib/iconUtils'
+import { useEffect, useState } from 'react'
+import { CalendarDays, HandCoins, Loader2, Percent, User, X } from 'lucide-react'
 import MoneyInput from '@/components/MoneyInput'
-import BankLogo from '@/components/BankLogo'
+import { useContext_ } from '@/components/ContextToggle'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { useSafeDb } from '@/hooks/useSafeDb'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { useLocalData } from '@/hooks/useLocalData'
-import { useSafeDb } from '@/hooks/useSafeDb'
-import { db } from '@/lib/db'
 
-const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
-
-interface ModalFinancingProps {
+interface ModalEmprestimoProps {
   isOpen: boolean
   onClose: () => void
   onSave: (id: string) => void
 }
 
-export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinancingProps) {
+export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmprestimoProps) {
   const { user } = useAuth()
-  const { context } = useContext_()
+  const { context, appMode } = useContext_()
+  const { safeAdd } = useSafeDb()
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
-  const { safeAdd } = useSafeDb()
 
+  const effectiveContext = appMode === 'personal_only' ? 'personal' : context
   const [saving, setSaving] = useState(false)
+  const [description, setDescription] = useState('')
+  const [amount, setAmount] = useState(0)
+  const [direction, setDirection] = useState<'lent' | 'borrowed'>('lent')
+  const [lender, setLender] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState('')
+  const [interestRate, setInterestRate] = useState('')
+  const [loanContext, setLoanContext] = useState<'dfl' | 'personal'>('dfl')
 
-  // ✅ DADOS LOCAIS (Dexie)
-  const { data: categories } = useLocalData({
-    table: 'categories' as any,
-    filters: { context, type: 'expense' },
-  })
-
-  const { data: accounts } = useLocalData({
-    table: 'accounts' as any,
-    filters: { context },
-  })
-
-  const [name, setName] = useState('')
-  const [institution, setInstitution] = useState('')
-  const [installmentValueNum, setInstallmentValueNum] = useState(0)
-  const [installmentValueFormatted, setInstallmentValueFormatted] = useState('0,00')
-  const [totalInstallments, setTotalInstallments] = useState('1')
-  const [nextDueDate, setNextDueDate] = useState('')
-  const [outstandingBalanceNum, setOutstandingBalanceNum] = useState(0)
-  const [outstandingBalanceFormatted, setOutstandingBalanceFormatted] = useState('0,00')
-  const [accountId, setAccountId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [color, setColor] = useState('#14b8a6')
-  const [icon, setIcon] = useState('Home')
-  const [finContext, setFinContext] = useState<'dfl' | 'personal'>('dfl')
-
-  const [showCatModal, setShowCatModal] = useState(false)
-  const [showAccModal, setShowAccModal] = useState(false)
-  const [showIconModal, setShowIconModal] = useState(false)
-
-  // Reset form quando o modal abre
   useEffect(() => {
-    if (isOpen) {
-      setFinContext(context === 'dfl' ? 'dfl' : 'personal')
-    }
-  }, [isOpen, context])
+    if (!isOpen) return
+    setDescription('')
+    setAmount(0)
+    setDirection('lent')
+    setLender('')
+    setDate(new Date().toISOString().split('T')[0])
+    setDueDate('')
+    setInterestRate('')
+    setLoanContext(effectiveContext)
+  }, [isOpen, effectiveContext])
+
+  const close = () => {
+    if (saving) return
+    vibrate([5])
+    onClose()
+  }
 
   const handleSave = async () => {
-    if (!user?.id || !name.trim() || installmentValueNum <= 0) {
-      showToast('⚠️ Preencha nome e valor da parcela.', 'warning')
+    if (!user?.id) {
       hapticError()
+      showToast('Sessão expirada. Entre novamente.', 'error')
+      return
+    }
+    if (!description.trim()) {
+      hapticError()
+      showToast('Informe uma descrição para o empréstimo.', 'warning')
+      return
+    }
+    if (amount <= 0) {
+      hapticError()
+      showToast('Informe um valor maior que zero.', 'warning')
+      return
+    }
+
+    const parsedInterest = interestRate.trim() ? Number(interestRate.replace(',', '.')) : null
+    if (parsedInterest !== null && (!Number.isFinite(parsedInterest) || parsedInterest < 0)) {
+      hapticError()
+      showToast('Informe uma taxa de juros válida.', 'warning')
       return
     }
 
     setSaving(true)
-
-    const id = crypto.randomUUID()
-    const now = new Date().toISOString()
-
-    const payload = {
-      id,
-      user_id: user.id,
-      context: finContext,
-      name: name.trim(),
-      institution: institution || null,
-      installment_value: installmentValueNum,
-      total_installments: parseInt(totalInstallments),
-      current_installment: 1,
-      next_due_date: nextDueDate || null,
-      outstanding_balance: outstandingBalanceNum,
-      account_id: accountId || null,
-      category_id: categoryId || null,
-      color,
-      icon: icon.toLowerCase(),
-      status: 'active',
-      created_at: now,
-      updated_at: now,
-      sync_status: 'pending',
-      sync_attempts: 0,
-    }
-
     try {
-      await db.transaction('rw', db.financings, db.syncQueue, async () => {
-        const result = await safeAdd('financings', payload)
-        if (!result.success) throw new Error(result.error)
+      const id = crypto.randomUUID()
+      const now = new Date().toISOString()
+      const result = await safeAdd('loans', {
+        id,
+        user_id: user.id,
+        context: loanContext,
+        description: description.trim(),
+        amount,
+        remaining_amount: amount,
+        direction,
+        lender: lender.trim() || null,
+        date,
+        due_date: dueDate || null,
+        interest_rate: parsedInterest,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_attempts: 0,
       })
 
+      if (!result.success) throw new Error(result.error || 'Falha ao criar empréstimo')
+
       success()
-      showToast('✅ Financiamento criado!', 'success')
+      showToast('Empréstimo criado e vinculado à transação.', 'success')
       onSave(id)
       onClose()
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
+      showToast(`Não foi possível criar o empréstimo: ${err?.message || 'erro desconhecido'}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -121,390 +115,102 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
 
   if (!isOpen) return null
 
-  const selectedCat = categories?.find((c: any) => c.id === categoryId)
-  const selectedAcc = accounts?.find((a: any) => a.id === accountId)
-  const IconComp = getDynamicIcon(icon)
-
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+    <div className="fixed inset-0 z-[9999] flex items-end justify-center" onClick={close}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[85vh] overflow-y-auto animate-in slide-in-from-bottom-8 shadow-[0_-8px_30px_rgba(0,0,0,0.12)]"
-        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Novo empréstimo"
+        className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-[32px] bg-[#f6f7f8] dark:bg-slate-900 p-5 pb-8 shadow-[0_-16px_50px_rgba(0,0,0,0.18)] animate-in slide-in-from-bottom-8 duration-300"
+        onClick={(event) => event.stopPropagation()}
       >
-        <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
+        <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
 
-        <div className="flex items-center justify-between mb-5">
+        <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-[22px] text-gray-900 dark:text-gray-100 tracking-tight">
-              Novo Financiamento
-            </h3>
-            <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
-              Preencha os dados principais do contrato
-            </p>
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+              <HandCoins size={21} />
+            </div>
+            <h2 className="text-[22px] font-black tracking-tight text-gray-900 dark:text-white">Novo empréstimo</h2>
+            <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">Crie o registro e vincule esta transação ao empréstimo.</p>
           </div>
-
-          <button
-            onClick={() => { vibrate([10]); onClose(); }}
-            className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-500 dark:text-gray-300 flex items-center justify-center active:scale-[0.98] transition-colors"
-          >
+          <button onClick={close} disabled={saving} aria-label="Fechar" className="h-10 w-10 rounded-full bg-white dark:bg-slate-800 border border-black/5 dark:border-white/10 text-gray-500 flex items-center justify-center active:scale-95 disabled:opacity-50">
             <X size={18} />
           </button>
         </div>
 
         <div className="space-y-4">
-          {/* Contexto */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
-              Contexto
-            </label>
-            <div className="flex rounded-[20px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 p-1">
-              {(['dfl', 'personal'] as const).map(c => (
-                <button
-                  key={c}
-                  onClick={() => { vibrate([5]); setFinContext(c); }}
-                  className={`flex-1 h-10 rounded-[16px] text-[13px] font-bold transition-all active:scale-[0.98] ${
-                    finContext === c
-                      ? 'bg-teal-700 text-white shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {c === 'dfl' ? 'Empresa' : 'Pessoal'}
-                </button>
-              ))}
+          <section className="rounded-[24px] border border-black/5 dark:border-white/10 bg-white dark:bg-slate-800 p-4 shadow-sm">
+            <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.14em] text-gray-400">Tipo</p>
+            <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-gray-100 dark:bg-slate-900 p-1">
+              <button onClick={() => { vibrate([5]); setDirection('lent') }} className={`h-11 rounded-[15px] text-[13px] font-bold transition-all ${direction === 'lent' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Eu emprestei</button>
+              <button onClick={() => { vibrate([5]); setDirection('borrowed') }} className={`h-11 rounded-[15px] text-[13px] font-bold transition-all ${direction === 'borrowed' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Eu peguei</button>
             </div>
-          </div>
+          </section>
 
-          {/* Nome */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Nome do financiamento
+          <section className="rounded-[24px] border border-black/5 dark:border-white/10 bg-white dark:bg-slate-800 p-4 shadow-sm space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Descrição</span>
+              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: Empréstimo para capital de giro" className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 text-[14px] font-semibold text-gray-900 dark:text-white outline-none focus:border-teal-500" />
             </label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Ex: Financiamento Imóvel"
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500/20 outline-none"
-              autoFocus
-            />
-          </div>
 
-          {/* Instituição */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Instituição financeira
+            <label className="block">
+              <span className="mb-2 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Valor</span>
+              <div className="h-12 rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 flex items-center">
+                <MoneyInput value={amount} onChange={setAmount} placeholder="0,00" className="w-full bg-transparent outline-none text-[16px] font-black text-gray-900 dark:text-white" />
+              </div>
             </label>
-            <div className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <Building size={17} className="text-gray-400 dark:text-gray-500 shrink-0" />
-              <input
-                type="text"
-                value={institution}
-                onChange={e => setInstitution(e.target.value)}
-                placeholder="Ex: Itaú, Caixa"
-                className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-            </div>
-          </div>
 
-          {/* Valor da parcela */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Valor da parcela
+            <label className="block">
+              <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><User size={13} />{direction === 'lent' ? 'Quem pegou?' : 'Quem emprestou?'}</span>
+              <input value={lender} onChange={(e) => setLender(e.target.value)} placeholder="Pessoa ou empresa" className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 text-[14px] font-semibold text-gray-900 dark:text-white outline-none focus:border-teal-500" />
             </label>
-            <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <span className="text-[18px] text-gray-400 dark:text-gray-500 font-semibold">R$</span>
-              <MoneyInput
-                value={installmentValueNum}
-                onChange={(num, formatted) => {
-                  setInstallmentValueNum(num)
-                  setInstallmentValueFormatted(formatted)
-                }}
-                className="text-[24px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                placeholder="0,00"
-              />
-            </div>
-          </div>
+          </section>
 
-          {/* Parcelas e vencimento */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                Qtd. parcelas
+          <section className="rounded-[24px] border border-black/5 dark:border-white/10 bg-white dark:bg-slate-800 p-4 shadow-sm space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label>
+                <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><CalendarDays size={13} />Data</span>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-3 text-[13px] font-semibold text-gray-900 dark:text-white outline-none" />
               </label>
-              <input
-                type="number"
-                value={totalInstallments}
-                onChange={e => setTotalInstallments(e.target.value)}
-                min={1}
-                max={360}
-                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/20"
-              />
-            </div>
-
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-              <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-                1º vencimento
+              <label>
+                <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><CalendarDays size={13} />Vencimento</span>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-3 text-[13px] font-semibold text-gray-900 dark:text-white outline-none" />
               </label>
-              <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-                <Calendar size={16} className="text-gray-400 dark:text-gray-500 shrink-0" />
-                <input
-                  type="date"
-                  value={nextDueDate}
-                  onChange={e => setNextDueDate(e.target.value)}
-                  className="bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-200 outline-none w-full"
-                />
-              </div>
             </div>
-          </div>
-
-          {/* Saldo devedor */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
-              Saldo devedor total
+            <label className="block">
+              <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><Percent size={13} />Juros (%)</span>
+              <input inputMode="decimal" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="0" className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 text-[14px] font-semibold text-gray-900 dark:text-white outline-none focus:border-teal-500" />
             </label>
-            <div className="flex items-center gap-2 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 focus-within:ring-2 focus-within:ring-teal-500/20">
-              <span className="text-[18px] text-gray-400 dark:text-gray-500 font-semibold">R$</span>
-              <MoneyInput
-                value={outstandingBalanceNum}
-                onChange={(num, formatted) => {
-                  setOutstandingBalanceNum(num)
-                  setOutstandingBalanceFormatted(formatted)
-                }}
-                className="text-[24px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                placeholder="0,00"
-              />
+          </section>
+
+          {appMode !== 'personal_only' && (
+            <section className="rounded-[24px] border border-black/5 dark:border-white/10 bg-white dark:bg-slate-800 p-4 shadow-sm">
+              <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.14em] text-gray-400">Contexto</p>
+              <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-gray-100 dark:bg-slate-900 p-1">
+                {(['dfl', 'personal'] as const).map((item) => (
+                  <button key={item} onClick={() => { vibrate([5]); setLoanContext(item) }} className={`h-10 rounded-[15px] text-[13px] font-bold transition-all ${loanContext === item ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>{item === 'dfl' ? 'Empresa' : 'Pessoal'}</button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="mt-5 rounded-[24px] border border-teal-100 bg-teal-50/80 p-4 dark:border-teal-800/40 dark:bg-teal-900/20">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">Resumo</p>
+              <p className="mt-1 text-[13px] font-semibold text-gray-700 dark:text-gray-200">{direction === 'lent' ? 'Valor a receber' : 'Valor a pagar'}</p>
             </div>
-          </div>
-
-          {/* Conta */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
-              Conta para débito
-            </label>
-            <button
-              onClick={() => { vibrate([10]); setShowAccModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <Wallet size={17} className="text-gray-400 dark:text-gray-500" />
-                </div>
-                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
-                  {selectedAcc ? selectedAcc.name : 'Nenhuma conta'}
-                </span>
-              </div>
-              <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180 shrink-0" />
-            </button>
-          </div>
-
-          {/* Categoria */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
-              Categoria
-            </label>
-            <button
-              onClick={() => { vibrate([10]); setShowCatModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-[14px] bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm shrink-0">
-                  <Tag size={17} className="text-gray-400 dark:text-gray-500" />
-                </div>
-                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
-                  {selectedCat ? selectedCat.name : 'Geral'}
-                </span>
-              </div>
-              <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180 shrink-0" />
-            </button>
-          </div>
-
-          {/* Cor */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
-              Cor
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => { vibrate([5]); setColor(c); }}
-                  className={`w-9 h-9 rounded-full transition-all active:scale-[0.95] ${
-                    color === c
-                      ? 'scale-110 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 ring-gray-400 shadow-sm'
-                      : 'hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Ícone */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
-            <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">
-              Ícone
-            </label>
-            <button
-              onClick={() => { vibrate([10]); setShowIconModal(true); }}
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-[14px] flex items-center justify-center shadow-sm bg-white dark:bg-slate-800 shrink-0"
-                  style={{ color }}
-                >
-                  <IconComp size={18} />
-                </div>
-                <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
-                  {icon}
-                </span>
-              </div>
-              <ChevronLeft size={18} className="text-gray-300 dark:text-gray-600 rotate-180 shrink-0" />
-            </button>
+            <p className="text-[20px] font-black text-teal-700 dark:text-teal-300">{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
           </div>
         </div>
 
-        <button
-          onClick={() => { vibrate([10, 50]); handleSave(); }}
-          disabled={saving}
-          className="w-full mt-7 bg-teal-700 text-white py-4 rounded-[20px] font-bold hover:bg-teal-800 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-teal-600/20"
-        >
-          {saving ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Financiamento'}
+        <button onClick={() => { vibrate([10]); handleSave() }} disabled={saving} className="mt-4 h-14 w-full rounded-[20px] bg-teal-600 hover:bg-teal-700 text-white font-black text-[15px] shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60">
+          {saving ? <Loader2 size={20} className="animate-spin" /> : <HandCoins size={19} />}
+          {saving ? 'Salvando...' : 'Criar e vincular'}
         </button>
-
-        {/* Modal Categorias */}
-        {showCatModal && (
-          <div className="fixed inset-0 z-[300] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-            <div
-              className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[70vh] overflow-y-auto animate-in slide-in-from-bottom-8"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-                <h3 className="font-semibold text-[22px] text-gray-900 dark:text-gray-100">Categorias</h3>
-                <button
-                  onClick={() => setShowCatModal(false)}
-                  className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-300 flex items-center justify-center active:scale-[0.98]"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={() => { vibrate([5]); setCategoryId(''); setShowCatModal(false); }}
-                  className={`w-full rounded-[18px] p-3 flex items-center gap-3 transition-all active:scale-[0.98] ${
-                    !categoryId
-                      ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50'
-                      : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 border border-transparent'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center bg-white dark:bg-slate-800 text-gray-400 shadow-sm">
-                    <Tag size={18} />
-                  </div>
-                  <span className={`flex-1 text-left text-[14px] font-semibold ${!categoryId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                    Geral
-                  </span>
-                  {!categoryId && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
-                </button>
-
-                {(categories || []).map((cat: any) => {
-                  const CatIconComp = getDynamicIcon(cat.icon)
-                  const isActive = cat.id === categoryId
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => { vibrate([5]); setCategoryId(cat.id); setShowCatModal(false); }}
-                      className={`w-full rounded-[18px] p-3 flex items-center gap-3 transition-all active:scale-[0.98] ${
-                        isActive
-                          ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50'
-                          : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 border border-transparent'
-                      }`}
-                    >
-                      <div className="w-10 h-10 rounded-[14px] flex items-center justify-center bg-white dark:bg-slate-800 shadow-sm" style={{ color: cat.color }}>
-                        <CatIconComp size={18} />
-                      </div>
-                      <span className={`flex-1 text-left text-[14px] font-semibold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                        {cat.name}
-                      </span>
-                      {isActive && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Contas */}
-        {showAccModal && (
-          <div className="fixed inset-0 z-[300] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-            <div
-              className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[70vh] overflow-y-auto animate-in slide-in-from-bottom-8"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
-              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2">
-                <h3 className="font-semibold text-[22px] text-gray-900 dark:text-gray-100">Contas</h3>
-                <button
-                  onClick={() => setShowAccModal(false)}
-                  className="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-300 flex items-center justify-center active:scale-[0.98]"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={() => { vibrate([5]); setAccountId(''); setShowAccModal(false); }}
-                  className={`w-full rounded-[18px] p-3 flex items-center gap-3 transition-all active:scale-[0.98] ${
-                    !accountId
-                      ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50'
-                      : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 border border-transparent'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center bg-white dark:bg-slate-800 text-gray-400 shadow-sm">
-                    <Wallet size={18} />
-                  </div>
-                  <span className={`flex-1 text-left text-[14px] font-semibold ${!accountId ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                    Nenhuma conta
-                  </span>
-                  {!accountId && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
-                </button>
-
-                {(accounts || []).map((acc: any) => {
-                  const isActive = acc.id === accountId
-                  return (
-                    <button
-                      key={acc.id}
-                      onClick={() => { vibrate([5]); setAccountId(acc.id); setShowAccModal(false); }}
-                      className={`w-full rounded-[18px] p-3 flex items-center gap-3 transition-all active:scale-[0.98] ${
-                        isActive
-                          ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50'
-                          : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 border border-transparent'
-                      }`}
-                    >
-                      <BankLogo color={acc.color || '#14b8a6'} name={acc.name} size="md" />
-                      <span className={`flex-1 text-left text-[14px] font-semibold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                        {acc.name}
-                      </span>
-                      {isActive && <Check size={18} className="text-teal-700 dark:text-teal-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <IconPicker
-          isOpen={showIconModal}
-          onClose={() => setShowIconModal(false)}
-          selectedIcon={icon}
-          onSelect={(i) => { setIcon(i); vibrate([5]) }}
-        />
       </div>
     </div>
   )

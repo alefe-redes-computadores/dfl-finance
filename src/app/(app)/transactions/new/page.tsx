@@ -78,7 +78,7 @@ function NewTransactionContent() {
   const [showDetails, setShowDetails] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // ✅ NOVO: busca inteligente
+  // NOVO: busca inteligente
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestions = useSmartSearch(desc, effectiveContext as 'dfl' | 'personal', type === 'income' ? 'income' : 'expense')
 
@@ -121,7 +121,7 @@ function NewTransactionContent() {
   const [isReimbursable, setIsReimbursable] = useState(false)
 
   const [financingId, setFinancingId] = useState<string | null>(null)
-  const [debtId, setDebtId] = useState<string | null>(null)
+  const [loanId, setLoanId] = useState<string | null>(null)
   
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [showLoanModal, setShowLoanModal] = useState(false)
@@ -160,7 +160,7 @@ function NewTransactionContent() {
 
   const { isOnline } = useLocalSync()
 
-  // ✅ DADOS AUXILIARES (useLocalData mantido para joins)
+  // DADOS AUXILIARES (useLocalData mantido para joins)
   const { data: accounts } = useLocalData({ table: 'accounts' as any, filters: { context: effectiveContext } })
   const { data: localCategories } = useLocalData({ table: 'categories' as any, filters: { context: effectiveContext, type: type === 'income' ? 'income' : 'expense' } })
   const { data: tags } = useLocalData({ table: 'tags' as any, filters: { context: effectiveContext } })
@@ -256,7 +256,7 @@ function NewTransactionContent() {
     if (nextType === 'income') {
       setCreditCardId('')
       setFinancingId(null)
-      setDebtId(null)
+      setLoanId(null)
       setIsRefund(false)
     }
   }, [type, vibrate])
@@ -578,7 +578,7 @@ function NewTransactionContent() {
     }
   }
 
-  // ✅ FUNÇÃO HANDLE SAVE CORRIGIDA (COM VALIDAÇÃO DE CONTA OBRIGATÓRIA)
+  // FUNÇÃO HANDLE SAVE CORRIGIDA (COM VALIDAÇÃO DE CONTA OBRIGATÓRIA)
   const handleSave = useCallback(async () => {
     if (isSubmitting) return
     if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
@@ -606,7 +606,7 @@ function NewTransactionContent() {
       const flags = []
       if (isRefund) flags.push('[Devolução/Estorno]')
       if (financingId) flags.push('[Financiamento]')
-      if (debtId) flags.push('[Empréstimo]')
+      if (loanId) flags.push('[Empréstimo]')
       if (flags.length > 0) finalNotes = `${flags.join(' ')} ${finalNotes}`.trim()
     }
 
@@ -668,7 +668,7 @@ function NewTransactionContent() {
             installment_index: totalParcels > 1 ? i + 1 : 1,
             total_installments: totalParcels > 1 ? totalParcels : 1,
             financing_id: financingId,
-            debt_id: debtId,
+            loan_id: loanId,
             is_reimbursable: isReimbursable,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -730,7 +730,7 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, debtId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, hapticError, accounts, safeAdd, safeUpdate, date, selectedCat])
+  }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, loanId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, hapticError, accounts, safeAdd, safeUpdate, date, selectedCat])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />
@@ -1347,8 +1347,8 @@ function NewTransactionContent() {
                         </div>
                         <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Vincular empréstimo</span>
                       </div>
-                      <button className={`w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${debtId ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
-                        <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-1 shadow-sm ${debtId ? 'translate-x-7' : 'translate-x-1'}`} />
+                      <button className={`w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${loanId ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-700'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-1 shadow-sm ${loanId ? 'translate-x-7' : 'translate-x-1'}`} />
                       </button>
                     </div>
                   </div>
@@ -1588,7 +1588,7 @@ function NewTransactionContent() {
       />
       {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
-      {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
+      {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setLoanId(id)} />}
       <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={newCatIcon} onSelect={setNewCatIcon} />
 
       {/* MODAIS DE CRIAÇÃO */}

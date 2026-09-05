@@ -11,11 +11,14 @@ export function useLoanPayments(loanId?: string | null) {
   const data = useLiveQuery(async () => {
     if (!user?.id || !loanId) return []
 
-    // Usa índice composto [user_id+loan_id] se disponível
-    return await db.transactions
-      .where('[user_id+loan_id]')
-      .equals([user.id, loanId])
+    const transactions = await db.transactions
+      .where('user_id')
+      .equals(user.id)
       .toArray()
+
+    return transactions
+      .filter((item: any) => item.loan_id === loanId && item.type === 'loan_payment')
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
   }, [user?.id, loanId])
 
   return {

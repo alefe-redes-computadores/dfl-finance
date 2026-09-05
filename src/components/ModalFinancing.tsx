@@ -1,3 +1,4 @@
+// src/components/ModalFinancing.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -31,7 +32,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
 
   const [saving, setSaving] = useState(false)
 
-  // ✅ DADOS LOCAIS (Dexie)
+  // DADOS LOCAIS (Dexie)
   const { data: categories } = useLocalData({
     table: 'categories' as any,
     filters: { context, type: 'expense' },
@@ -69,7 +70,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
 
   const handleSave = async () => {
     if (!user?.id || !name.trim() || installmentValueNum <= 0) {
-      showToast('⚠️ Preencha nome e valor da parcela.', 'warning')
+      showToast('Preencha o nome e informe um valor de parcela válido.', 'warning')
       hapticError()
       return
     }
@@ -108,12 +109,12 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
       })
 
       success()
-      showToast('✅ Financiamento criado!', 'success')
+      showToast('Financiamento criado com sucesso.', 'success')
       onSave(id)
       onClose()
     } catch (err: any) {
       hapticError()
-      showToast(`❌ Erro ao salvar: ${err.message}`, 'error')
+      showToast(`Não foi possível criar o financiamento: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -364,10 +365,23 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
           </div>
         </div>
 
+        <div className="mt-6 rounded-[24px] border border-teal-100 bg-teal-50/80 p-4 dark:border-teal-800/40 dark:bg-teal-900/20">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">Resumo</p>
+              <p className="mt-1 text-[13px] font-semibold text-gray-700 dark:text-gray-200">{Math.max(1, parseInt(totalInstallments || '1'))} parcela(s)</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[20px] font-black text-teal-700 dark:text-teal-300">{installmentValueNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+              <p className="text-[11px] font-medium text-teal-700/70 dark:text-teal-300/70">por parcela</p>
+            </div>
+          </div>
+        </div>
+
         <button
           onClick={() => { vibrate([10, 50]); handleSave(); }}
           disabled={saving}
-          className="w-full mt-7 bg-teal-700 text-white py-4 rounded-[20px] font-bold hover:bg-teal-800 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-teal-600/20"
+          className="w-full mt-4 bg-teal-700 text-white py-4 rounded-[20px] font-bold hover:bg-teal-800 transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-teal-600/20"
         >
           {saving ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Financiamento'}
         </button>

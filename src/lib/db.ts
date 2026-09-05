@@ -8,7 +8,7 @@ export interface LocalTransaction {
   id: string
   user_id: string
   context: 'dfl' | 'personal'
-  type: 'income' | 'expense' | 'transfer' | 'sangria'
+  type: 'income' | 'expense' | 'transfer' | 'sangria' | 'loan_payment' | 'financing_installment'
   amount: number
   description: string
   date: string
@@ -24,6 +24,12 @@ export interface LocalTransaction {
   installment_index?: number
   total_installments?: number
   financing_id?: string | null
+  loan_id?: string | null
+  due_date?: string | null
+  paid?: boolean
+  paid_date?: string | null
+  number?: number
+  installment_number?: number
   is_reimbursable?: boolean
   linked_transaction_id?: string | null
   debt_id?: string | null

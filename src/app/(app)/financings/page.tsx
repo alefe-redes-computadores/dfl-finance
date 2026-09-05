@@ -1,3 +1,4 @@
+// src/app/(app)/financings/page.tsx
 'use client'
 
 import { useState } from "react"
@@ -16,6 +17,7 @@ import {
   Home,
   Percent,
   ChevronLeft,
+  CircleDollarSign,
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
@@ -100,11 +102,11 @@ export default function FinancingsPage() {
       if (!res2.success) throw new Error(res2.error)
 
       success()
-      showToast("✅ Financiamento excluído com sucesso!", "success")
+      showToast("Financiamento excluído com sucesso.", "success")
       setDeleteModal(null)
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro ao excluir financiamento: ${err.message}`, "error")
+      showToast(`Não foi possível excluir o financiamento: ${err.message}`, "error")
     }
   }
 
@@ -176,6 +178,21 @@ export default function FinancingsPage() {
         )
     }
   }
+
+
+  const summary = (financings || []).reduce(
+    (acc: { active: number; principal: number; paid: number; open: number }, fin: any) => {
+      const installments = installmentsByFinancing[fin.id] || []
+      const paid = installments.filter((item: Installment) => item.paid).reduce((sum: number, item: Installment) => sum + Number(item.amount || 0), 0)
+      const principal = Number(fin.total_amount || 0)
+      acc.principal += principal
+      acc.paid += paid
+      acc.open += Math.max(0, principal - paid)
+      if (fin.status === 'active') acc.active += 1
+      return acc
+    },
+    { active: 0, principal: 0, paid: 0, open: 0 }
+  )
 
   const getAssetIcon = (type: string) => {
     switch (type) {
@@ -318,6 +335,35 @@ export default function FinancingsPage() {
       </div>
 
       <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-24 pt-3">
+        {!loading && (financings || []).length > 0 && (
+          <section className="mb-4 overflow-hidden rounded-[28px] border border-teal-100/80 bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-[0_16px_40px_rgba(13,148,136,0.20)] dark:border-teal-800/50">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-100">Compromissos financiados</p>
+                <p className="mt-1 text-[26px] font-black tracking-tight">{formatCurrency(summary.open)}</p>
+                <p className="mt-0.5 text-[12px] font-medium text-teal-100/90">Saldo restante dos contratos</p>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white/15 ring-1 ring-white/15">
+                <CircleDollarSign size={21} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-[18px] bg-white/10 px-3 py-3 ring-1 ring-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Ativos</p>
+                <p className="mt-1 text-[17px] font-black">{summary.active}</p>
+              </div>
+              <div className="rounded-[18px] bg-white/10 px-3 py-3 ring-1 ring-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Contratado</p>
+                <p className="mt-1 truncate text-[13px] font-black">{formatCurrency(summary.principal)}</p>
+              </div>
+              <div className="rounded-[18px] bg-white/10 px-3 py-3 ring-1 ring-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Pago</p>
+                <p className="mt-1 truncate text-[13px] font-black">{formatCurrency(summary.paid)}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {loading ? (
           <div className="space-y-3">
             <Skeleton count={3} height="132px" borderRadius="24px" />
@@ -327,9 +373,11 @@ export default function FinancingsPage() {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <Percent size={28} className="text-gray-500 opacity-30" />
             </div>
-            <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">
-              Nenhum financiamento
-            </p>
+            <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">Nenhum financiamento por aqui</p>
+            <p className="mt-2 max-w-[260px] text-center text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">Cadastre contratos, acompanhe parcelas pagas e veja quanto ainda falta quitar.</p>
+            <button onClick={() => { vibrate([10]); router.push('/financings/new') }} className="mt-5 flex items-center gap-2 rounded-[18px] bg-teal-600 px-5 py-3 text-[13px] font-bold text-white shadow-lg shadow-teal-600/20 active:scale-[0.98]" type="button">
+              <Plus size={16} /> Novo financiamento
+            </button>
           </div>
         ) : (
           <div className="animate-in fade-in space-y-2.5 duration-500">
@@ -393,6 +441,18 @@ export default function FinancingsPage() {
                         )}
                       </div>
                     </div>
+
+                    {fin.total_amount > 0 && (
+                      <div className="mt-4">
+                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-gray-400 dark:text-gray-500">
+                          <span>Progresso do contrato</span>
+                          <span>{Math.min(100, Math.max(0, Math.round((totalPaid / Number(fin.total_amount || 1)) * 100)))}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700/70">
+                          <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.max(0, (totalPaid / Number(fin.total_amount || 1)) * 100))}%` }} />
+                        </div>
+                      </div>
+                    )}
 
                     {installments.length > 0 && (
                       <div className="mt-3 border-t border-gray-100 pt-3 dark:border-slate-700/60">

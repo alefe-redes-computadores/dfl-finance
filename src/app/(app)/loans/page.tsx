@@ -1,14 +1,15 @@
+// src/app/(app)/loans/page.tsx
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
-  ArrowUpDown, Search, Plus, X, ChevronDown, Landmark, RefreshCw, Trash2, CheckCircle2, AlertTriangle, Clock, HandCoins, ChevronLeft, ArrowLeftRight
+  ArrowUpDown, Search, Plus, X, Landmark, Trash2, CheckCircle2, AlertTriangle, Clock, HandCoins, ChevronLeft, ArrowLeftRight, TrendingDown, CircleDollarSign
 } from "lucide-react"
 import { useToast } from "@/contexts/ToastContext"
 import { useHapticFeedback } from "@/hooks/useHapticFeedback"
-import { useLoansList } from "@/hooks/useLoansList" // ✅ NOVO HOOK
+import { useLoansList } from "@/hooks/useLoansList"
 import { useLocalSync } from "@/hooks/useLocalSync"
 import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
@@ -42,10 +43,8 @@ export default function LoansPage() {
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: loans, loading } = useLoansList(effectiveContext)
   
-  // ✅ PAGAMENTOS ainda vêm via useLocalData para agrupamento
   const { data: allPayments } = useLocalData({ 
     table: 'transactions' as any, 
     filters: { context: effectiveContext, type: 'loan_payment' } 
@@ -74,16 +73,13 @@ export default function LoansPage() {
       if (!res2.success) throw new Error(res2.error)
 
       success()
-      showToast("✅ Empréstimo excluído com sucesso!", "success")
+      showToast("Empréstimo excluído com sucesso.", "success")
       setDeleteModal(null)
-      // ✅ NÃO PRECISA MAIS reload() – a UI atualiza automaticamente via IndexedDB
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro ao excluir empréstimo: ${err.message}`, "error")
+      showToast(`Não foi possível excluir o empréstimo: ${err.message}`, "error")
     }
   }
-
-  // ✅ REMOVIDO pull-to-refresh manual (useLoansList já é reativo)
 
   const filteredLoans = (loans || []).filter((loan: any) => {
     if (!search) return true
@@ -102,6 +98,21 @@ export default function LoansPage() {
     if (!date) return ""
     return new Date(date + 'T12:00:00').toLocaleDateString("pt-BR", { day: '2-digit', month: 'short', year: 'numeric' })
   }
+
+
+  const summary = (loans || []).reduce(
+    (acc: { active: number; principal: number; paid: number; open: number }, loan: any) => {
+      const payments = paymentsByLoan[loan.id] || []
+      const paid = payments.reduce((sum: number, payment: Payment) => sum + Number(payment.amount || 0), 0)
+      const principal = Number(loan.amount || 0)
+      acc.principal += principal
+      acc.paid += paid
+      acc.open += Math.max(0, principal - paid)
+      if (loan.status === 'active') acc.active += 1
+      return acc
+    },
+    { active: 0, principal: 0, paid: 0, open: 0 }
+  )
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -185,6 +196,35 @@ export default function LoansPage() {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pt-4 pb-24 custom-scrollbar">
+        {!loading && (loans || []).length > 0 && (
+          <section className="mb-4 overflow-hidden rounded-[28px] border border-teal-100/80 bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-[0_16px_40px_rgba(13,148,136,0.20)] dark:border-teal-800/50">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-100">Carteira de empréstimos</p>
+                <p className="mt-1 text-[26px] font-black tracking-tight">{formatCurrency(summary.open)}</p>
+                <p className="mt-0.5 text-[12px] font-medium text-teal-100/90">Saldo ainda em aberto</p>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white/15 ring-1 ring-white/15">
+                <CircleDollarSign size={21} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-[18px] bg-white/10 px-3 py-3 ring-1 ring-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Ativos</p>
+                <p className="mt-1 text-[17px] font-black">{summary.active}</p>
+              </div>
+              <div className="rounded-[18px] bg-white/10 px-3 py-3 ring-1 ring-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Principal</p>
+                <p className="mt-1 truncate text-[13px] font-black">{formatCurrency(summary.principal)}</p>
+              </div>
+              <div className="rounded-[18px] bg-white/10 px-3 py-3 ring-1 ring-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Pago</p>
+                <p className="mt-1 truncate text-[13px] font-black">{formatCurrency(summary.paid)}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {loading ? (
           <div className="space-y-4">
              <Skeleton count={3} height="130px" borderRadius="28px" />
@@ -194,7 +234,11 @@ export default function LoansPage() {
             <div className="w-20 h-20 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
                <HandCoins size={32} className="opacity-30 text-gray-500" />
             </div>
-            <p className="text-[16px] font-bold text-gray-800 dark:text-gray-200 tracking-tight">Nenhum empréstimo</p>
+            <p className="text-[16px] font-bold text-gray-800 dark:text-gray-200 tracking-tight">Nenhum empréstimo por aqui</p>
+            <p className="mt-2 max-w-[260px] text-center text-[13px] leading-relaxed text-gray-500 dark:text-gray-400">Registre valores que você emprestou ou pegou emprestado e acompanhe o saldo em aberto.</p>
+            <button onClick={() => { vibrate([10]); router.push('/loans/new') }} className="mt-5 flex items-center gap-2 rounded-[18px] bg-teal-600 px-5 py-3 text-[13px] font-bold text-white shadow-lg shadow-teal-600/20 active:scale-[0.98]">
+              <Plus size={16} /> Novo empréstimo
+            </button>
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in duration-500">
@@ -231,6 +275,18 @@ export default function LoansPage() {
                       </div>
                     </div>
                     {loan.lender && <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-3">{loan.direction === "lent" ? "Devedor" : "Credor"}: <span className="font-bold text-gray-700 dark:text-gray-300">{loan.lender}</span></p>}
+
+                    {loan.amount > 0 && (
+                      <div className="mt-4">
+                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold text-gray-400 dark:text-gray-500">
+                          <span>Progresso</span>
+                          <span>{Math.min(100, Math.max(0, Math.round((totalPaid / Number(loan.amount || 1)) * 100)))}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700/70">
+                          <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.max(0, (totalPaid / Number(loan.amount || 1)) * 100))}%` }} />
+                        </div>
+                      </div>
+                    )}
                     
                     {payments.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-gray-50 dark:border-slate-700/50">
@@ -286,7 +342,7 @@ export default function LoansPage() {
                 Cancelar
               </button>
               <button type="button" onClick={() => { vibrate([50]); handleDelete(); }} className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]">
-                Sim, Excluir
+                Excluir empréstimo
               </button>
             </div>
           </div>

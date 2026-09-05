@@ -1,3 +1,4 @@
+// src/app/(app)/loans/new/page.tsx
 'use client'
 
 import { useEffect, useState, Suspense, useMemo } from 'react'
@@ -55,7 +56,7 @@ function NewLoanContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // ✅ useMemo para normalizar o ID
+  // useMemo para normalizar o ID
   const rawEditId = searchParams.get("edit")
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
   
@@ -101,7 +102,7 @@ function NewLoanContent() {
     }
   }, [editId, loanData, initialized])
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
   if (editId && notFound && !loading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
@@ -152,12 +153,12 @@ function NewLoanContent() {
   const handleSave = async () => {
     if (!description.trim()) {
       errorHaptic()
-      showToast("⚠️ Preencha a descrição", "warning")
+      showToast("Informe uma descrição para identificar o empréstimo.", "warning")
       return
     }
     if (amountNum <= 0) {
       errorHaptic()
-      showToast("⚠️ Informe um valor válido", "warning")
+      showToast("Informe um valor maior que zero.", "warning")
       return
     }
 
@@ -196,11 +197,11 @@ function NewLoanContent() {
       }
 
       success()
-      showToast(editId ? "✅ Empréstimo atualizado!" : "✅ Empréstimo registrado!", "success")
+      showToast(editId ? "Empréstimo atualizado com sucesso." : "Empréstimo criado com sucesso.", "success")
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Não foi possível salvar o empréstimo: ${err.message}`, "error")
     } finally {
       setSaving(false)
     }

@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft, Copy, Trash2, Calendar, Edit3, Tag, Wallet, RefreshCw, Check, Loader2,
   ChevronRight, ArrowRightLeft, Building, HandCoins, Plus, X, Camera, QrCode, Paperclip,
-  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, FileText,
+  Image as ImageIcon, CreditCard, ChevronUp, ChevronDown, Users, FileText, Clock,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
@@ -100,7 +100,7 @@ function EditTransactionContent() {
   const [uploading, setUploading] = useState(false)
 
   const [financingId, setFinancingId] = useState<string | null>(null)
-  const [debtId, setDebtId] = useState<string | null>(null)
+  const [loanId, setLoanId] = useState<string | null>(null)
 
   const [showCatModal, setShowCatModal] = useState(false)
   const [showSubCatModal, setShowSubCatModal] = useState(false)
@@ -175,7 +175,7 @@ function EditTransactionContent() {
       const flags = []
       if (isRefund) flags.push('[Devolução/Estorno]')
       if (financingId) flags.push('[Financiamento]')
-      if (debtId) flags.push('[Empréstimo]')
+      if (loanId) flags.push('[Empréstimo]')
       if (flags.length > 0) finalNotes = `${flags.join(' ')} ${finalNotes}`.trim()
     }
 
@@ -194,7 +194,7 @@ function EditTransactionContent() {
       type: txType,
       receipt_url: receiptUrl,
       financing_id: financingId,
-      debt_id: debtId,
+      loan_id: loanId,
       is_reimbursable: isReimbursable,
       context: isNew ? effectiveContext : (tx?.context || effectiveContext),
       updated_at: new Date().toISOString(),
@@ -376,7 +376,7 @@ function EditTransactionContent() {
     } finally {
       setSaving(false)
     }
-  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, debtId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, date, vibrate, showToast, router, safeAdd, safeUpdate, safeDelete, id, hapticError, categories])
+  }, [user, amountInput, categoryId, subcategories, description, notes, isRefund, financingId, loanId, txType, creditCardId, isPaid, accountId, contactId, selectedTags, receiptUrl, isReimbursable, isNew, tx, effectiveContext, date, vibrate, showToast, router, safeAdd, safeUpdate, safeDelete, id, hapticError, categories])
 
   // CARREGA DADOS AUXILIARES (useEffect também deve estar antes dos returns)
   useEffect(() => {
@@ -431,7 +431,7 @@ function EditTransactionContent() {
       setIsReimbursable(tx.is_reimbursable || false)
       setIsRefund(tx.notes?.includes('[Devolução/Estorno]') || false)
       setFinancingId(tx.financing_id || null)
-      setDebtId(tx.debt_id || null)
+      setLoanId(tx.loan_id || null)
 
       const amountSafe = Number(tx.amount) || 0
       setAmountInput(amountSafe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -1369,18 +1369,18 @@ function EditTransactionContent() {
                       </div>
                       <div className="text-left">
                         <p className="text-[12px] font-medium text-gray-400 dark:text-gray-500">Empréstimo</p>
-                        <p className={`text-[15px] font-semibold ${debtId ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
-                          {debtId ? 'Vinculado' : 'Nenhum'}
+                        <p className={`text-[15px] font-semibold ${loanId ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
+                          {loanId ? 'Vinculado' : 'Nenhum'}
                         </p>
                       </div>
                     </div>
 
-                    {debtId ? (
+                    {loanId ? (
                       <div
                         onClick={(e) => {
                           e.stopPropagation()
                           vibrate([10])
-                          setDebtId(null)
+                          setLoanId(null)
                         }}
                         className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 hover:text-red-500"
                       >
@@ -1468,7 +1468,7 @@ function EditTransactionContent() {
         title="Data da transação"
       />
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
-      {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setDebtId(id)} />}
+      {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setLoanId(id)} />}
 
       {/* Modal Categorias */}
       {showCatModal && (
