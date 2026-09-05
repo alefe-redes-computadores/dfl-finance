@@ -1,47 +1,63 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+// src/lib/services/chatService.ts
+import { supabase } from '@/lib/supabase'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
 }
 
+export interface FinancialAssistantContext {
+  context: string
+  generatedAt: string
+  accountBalance: number
+  currentMonthIncome: number
+  currentMonthExpense: number
+  currentMonthNet: number
+  transactionCount: number
+  topExpenseCategories: Array<{
+    name: string
+    amount: number
+  }>
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
-  apiKey: string
+  financialContext: FinancialAssistantContext
 ): Promise<string> {
-  try {
-    if (!apiKey) {
-      throw new Error('Chave de API do Gemini não configurada. Adicione nas configurações.')
-    }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  if (!session?.access_token) {
+    throw new Error('Sessão expirada. Entre novamente.')
+  }
 
-    const formattedMessages = messages.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }))
+  const response = await fetch('/api/assistant/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      messages,
+      financialContext,
+    }),
+  })
 
-    const result = await model.generateContent({
-      contents: formattedMessages,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-      }
-    })
+  const data = await response.json()
 
-    const response = result.response
-    const text = response.text()
-
-    if (!text) {
-      throw new Error('Resposta vazia da IA. Tente reformular sua pergunta.')
-    }
-
-    return text
-  } catch (error: any) {
-    console.error('Erro no Chat:', error)
+  if (!response.ok) {
     throw new Error(
-      error.message || 'Erro ao conectar com a IA. Verifique sua chave de API.'
+      data?.error || 'Não foi possível consultar o assistente.'
     )
   }
+
+  if (
+    typeof data?.message !== 'string' ||
+    !data.message.trim()
+  ) {
+    throw new Error('O assistente retornou uma resposta vazia.')
+  }
+
+  return data.message.trim()
 }
