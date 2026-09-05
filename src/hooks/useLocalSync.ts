@@ -1,537 +1,81 @@
 // src/hooks/useLocalSync.ts
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { supabase } from '@/lib/supabase'
-import { db, addToSyncQueue, getPendingSyncItems, removeFromSyncQueueIfCurrent, markSyncFailedIfCurrent } from '@/lib/db'
 import { useToast } from '@/contexts/ToastContext'
-import { useIsAdmin } from '@/hooks/useAdmin'
+import {
+  configureSyncEngine,
+  getServerSyncSnapshot,
+  getSyncSnapshot,
+  processSyncQueue,
+  refreshPendingCount,
+  subscribeSyncSnapshot,
+  type SyncCycleResult,
+} from '@/lib/syncEngine'
 
-type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline'
-
-type PullResult = {
-  success: boolean
-  failedTables: AllTables[]
+const EMPTY_RESULT: SyncCycleResult = {
+  success: false,
+  pushFailures: 0,
+  pendingCount: 0,
+  pullSuccess: false,
+  pullFailedTables: [],
 }
-
-type SyncCycleResult = {
-  success: boolean
-  pushFailures: number
-  pendingCount: number
-  pullSuccess: boolean
-  pullFailedTables: AllTables[]
-}
-
-type AllTables = 
-  | 'transactions' | 'accounts' | 'categories' | 'debts' | 'loans' 
-  | 'financings' | 'subscriptions' | 'tags' | 'contacts' | 'budgets' 
-  | 'goals' | 'credit_cards' | 'credit_invoices' | 'notifications'
 
 export function useLocalSync() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { isAdmin } = useIsAdmin()
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
-  const [pendingCount, setPendingCount] = useState(0)
-  const [isSyncingState, setIsSyncingState] = useState(false)
-  const isSyncing = useRef(false)
 
-  const renderLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
-    if (!isAdmin) return
-    if (typeof window === 'undefined') return
-    
-    try {
-      window.dispatchEvent(new CustomEvent('admin-log', { 
-        detail: { msg, type, timestamp: new Date().toISOString() }
-      }))
-    } catch (_) {
-      // Fallback silencioso se o evento falhar
-    }
-  }
-
-  const updatePendingCount = useCallback(async () => {
-    if (!user?.id) {
-      setPendingCount(0)
-      return 0
-    }
-
-    const items = await getPendingSyncItems(user.id)
-    const count = items.length
-    setPendingCount(count)
-    return count
-  }, [user?.id])
-
-  // ✅ NOVA LÓGICA: Puxar dados remotos (do Bot/Supabase) para o celular
-  // ✅ CORRIGIDO (parte 1): aceita um parâmetro opcional "force". Para CADA
-  // tabela, se o Dexie local estiver vazio para aquele usuário, ignora o
-  // "lastPull" salvo e busca TUDO do zero (full resync daquela tabela).
-  //
-  // ✅ CORRIGIDO (parte 2 — ESTA É A CORREÇÃO PRINCIPAL DESTA RODADA):
-  // a lista tablesToPull estava com só 4 tabelas ('transactions', 'accounts',
-  // 'categories', 'credit_cards'). Isso fazia com que debts, budgets, goals,
-  // loans, financings, subscriptions, tags, contacts, credit_invoices e
-  // notifications NUNCA fossem puxadas da nuvem — mesmo existindo lá, com
-  // schema correto e sem erro de RLS. Agora a lista cobre todas as tabelas
-  // do app que fazem sentido sincronizar via pull.
-  const pullRemoteChanges = useCallback(async (force = false): Promise<PullResult> => {
-    if (!user?.id || !isOnline) {
-      return {
-        success: false,
-        failedTables: [],
-      }
-    }
-    renderLog(`Iniciando PULL da nuvem${force ? ' (FORÇADO / FULL RESYNC)' : ''}...`, 'info')
-
-    try {
-      const lastPullKey = `dfl_last_pull_${user.id}`
-      const storedLastPull = localStorage.getItem(lastPullKey) || '2000-01-01T00:00:00.000Z'
-      const syncTime = new Date().toISOString()
-      const failedTables: AllTables[] = []
-
-      // ✅ Lista ampliada — agora cobre todas as tabelas sincronizáveis do app.
-      // chat_history e chat_sessions ficam de fora de propósito: são
-      // conversas do bot/assistente e não fazem sentido no pull genérico.
-      const tablesToPull: AllTables[] = [
-        'transactions',
-        'accounts',
-        'categories',
-        'credit_cards',
-        'debts',
-        'loans',
-        'financings',
-        'subscriptions',
-        'tags',
-        'contacts',
-        'budgets',
-        'goals',
-        'credit_invoices',
-        'notifications',
-      ]
-
-      for (const tableName of tablesToPull) {
-        // Verifica se a tabela local está vazia para este usuário.
-        // Se estiver (ou se force=true), ignora o cutoff salvo e busca tudo.
-        let effectiveLastPull = storedLastPull
-        try {
-          const localCount = await db.table(tableName).where('user_id').equals(user.id).count()
-          if (force || localCount === 0) {
-            effectiveLastPull = '2000-01-01T00:00:00.000Z'
-            renderLog(
-              `Tabela [${tableName}] vazia localmente (ou força ativa) — buscando histórico completo.`,
-              'info'
-            )
-          }
-        } catch (countErr: any) {
-          // Se por algum motivo a contagem falhar, joga pro modo seguro (full fetch)
-          effectiveLastPull = '2000-01-01T00:00:00.000Z'
-        }
-
-        const { data, error } = await supabase
-          .from(tableName)
-          .select('*')
-          .eq('user_id', user.id)
-          .gt('updated_at', effectiveLastPull)
-
-        if (error) {
-          failedTables.push(tableName)
-          renderLog(`Erro ao puxar ${tableName}: ${error.message}`, 'error')
-          continue
-        }
-
-        const remoteData = data ?? []
-
-        // Le a fila novamente para esta tabela imediatamente antes de aplicar
-        // os dados remotos. Isso cobre inclusive alteracoes locais criadas
-        // enquanto este ciclo de PULL ja estava em andamento.
-        const currentPendingItems = await getPendingSyncItems(user.id)
-
-        const pendingIds = new Set(
-          currentPendingItems
-            .filter((pendingItem) => pendingItem.table === tableName)
-            .map((pendingItem) => pendingItem.record_id)
-        )
-
-        // Carrega o estado local atual da tabela uma unica vez.
-        // Alem da fila, registros pending/failed tambem sao protegidos para
-        // evitar perda silenciosa em caso de inconsistencia antiga da queue.
-        const localRows = await db
-          .table(tableName)
-          .where('user_id')
-          .equals(user.id)
-          .toArray()
-
-        const localRowsById = new Map(
-          localRows
-            .filter((item: any) => typeof item?.id === 'string')
-            .map((item: any) => [item.id, item])
-        )
-
-        const isLocallyProtected = (id: string) => {
-          if (pendingIds.has(id)) return true
-
-          const localItem: any = localRowsById.get(id)
-
-          return Boolean(
-            localItem &&
-              localItem.sync_status &&
-              localItem.sync_status !== 'synced'
-          )
-        }
-
-        // Um remoto antigo nunca deve sobrescrever uma mudanca local que
-        // ainda nao esta confirmada como sincronizada.
-        const remoteDataSafeToApply = remoteData.filter(
-          (item: any) =>
-            typeof item?.id !== 'string' ||
-            !isLocallyProtected(item.id)
-        )
-
-        const protectedCount =
-          remoteData.length - remoteDataSafeToApply.length
-
-        if (remoteDataSafeToApply.length > 0) {
-          renderLog(
-            `Baixando ${remoteDataSafeToApply.length} atualizacoes de ${tableName}` +
-              `${protectedCount > 0 ? ` (${protectedCount} protegida(s) localmente)` : ''}...`,
-            'success'
-          )
-
-          const localData = remoteDataSafeToApply.map((item: any) => ({
-            ...item,
-            sync_status: 'synced',
-            sync_attempts: 0,
-            last_sync_error: null,
-          }))
-
-          await db.table(tableName).bulkPut(localData)
-        } else if (remoteData.length > 0) {
-          renderLog(
-            `As ${remoteData.length} atualizacoes remotas de ${tableName} estao protegidas por alteracoes locais pendentes.`,
-            'info'
-          )
-        } else {
-          renderLog(`Nenhuma atualização em ${tableName}.`, 'info')
-        }
-
-        // DELETE fisico nao aparece em um PULL incremental.
-        // No Full Resync, entretanto, remoteData representa o conjunto remoto
-        // completo da tabela para este usuario. Isso permite remover fantasmas
-        // locais que ja estavam efetivamente sincronizados.
-        if (force) {
-          const remoteIds = new Set(
-            remoteData
-              .map((item: any) => item?.id)
-              .filter(
-                (id: any): id is string =>
-                  typeof id === 'string' && id.length > 0
-              )
-          )
-
-          const staleSyncedIds = localRows
-            .filter((item: any) => {
-              if (typeof item?.id !== 'string') return false
-              if (remoteIds.has(item.id)) return false
-              if (isLocallyProtected(item.id)) return false
-
-              return item.sync_status === 'synced'
-            })
-            .map((item: any) => item.id)
-
-          if (staleSyncedIds.length > 0) {
-            await db.table(tableName).bulkDelete(staleSyncedIds)
-
-            renderLog(
-              `Full Resync removeu ${staleSyncedIds.length} registro(s) local(is) obsoleto(s) de ${tableName}.`,
-              'success'
-            )
-          }
-        }
-      }
-
-      // So avanca o cutoff se todas as tabelas concluirem.
-      if (failedTables.length === 0) {
-        localStorage.setItem(lastPullKey, syncTime)
-        renderLog('PULL finalizado com sucesso.', 'success')
-
-        return {
-          success: true,
-          failedTables: [],
-        }
-      }
-
-      renderLog(
-        `PULL parcial: ${failedTables.length} tabela(s) falharam. lastPull preservado para nova tentativa.`,
-        'error'
-      )
-
-      return {
-        success: false,
-        failedTables,
-      }
-    } catch (err: any) {
-      renderLog(`Erro crítico no PULL: ${err?.message}`, 'error')
-      console.error('❌ [SYNC PULL] Erro:', err)
-
-      return {
-        success: false,
-        failedTables: [],
-      }
-    }
-  }, [user?.id, isOnline, isAdmin])
-
-  const processSyncQueue = useCallback(async (forcePull = false): Promise<SyncCycleResult> => {
-    renderLog('Iniciando processSyncQueue...', 'info')
-
-    if (!user?.id) {
-      renderLog('Cancelado: Usuário sem ID logado', 'error')
-
-      return {
-        success: false,
-        pushFailures: 0,
-        pendingCount: 0,
-        pullSuccess: false,
-        pullFailedTables: [],
-      }
-    }
-
-    if (isSyncing.current) {
-      renderLog('Cancelado: Já existe uma fila rodando', 'info')
-
-      return {
-        success: false,
-        pushFailures: 0,
-        pendingCount: await updatePendingCount(),
-        pullSuccess: false,
-        pullFailedTables: [],
-      }
-    }
-
-    if (!isOnline) {
-      renderLog('Cancelado: Dispositivo detectado como Offline', 'error')
-
-      return {
-        success: false,
-        pushFailures: 0,
-        pendingCount: await updatePendingCount(),
-        pullSuccess: false,
-        pullFailedTables: [],
-      }
-    }
-
-    isSyncing.current = true
-    setIsSyncingState(true)
-    setSyncStatus('syncing')
-
-    let pushFailures = 0
-
-    try {
-      renderLog('Buscando itens pendentes no Dexie...', 'info')
-      const items = await getPendingSyncItems(user.id)
-      renderLog(`Dexie retornou ${items.length} itens pendentes.`, 'info')
-
-      // PASSO 1: EMPURRAR (PUSH) OS DADOS LOCAIS PARA A NUVEM
-      if (items.length > 0) {
-        for (const item of items) {
-          renderLog(`Processando ${item.operation} na tabela [${item.table}]... (tentativa ${(item.attempts || 0) + 1})`, 'info')
-          
-          try {
-            const attempts = item.attempts || 0
-            if (attempts >= 3) {
-              renderLog(
-                `Item ${item.id} ja falhou ${attempts} vezes e continuara pendente para nova tentativa.`,
-                'error'
-              )
-            }
-
-            const { table, operation, record_id, data } = item
-            const itemRevision = item.revision ?? 0
-            
-            let supabaseTable: string = table
-            if (table === 'credit_cards') supabaseTable = 'credit_cards'
-            if (table === 'credit_invoices') supabaseTable = 'credit_invoices'
-
-            const supabaseClient = supabase.from(supabaseTable)
-            let error = null
-
-            if (operation === 'delete') {
-              renderLog(`Disparando DELETE para ID: ${record_id}`, 'info')
-              const res = await supabaseClient.delete().eq('id', record_id)
-              error = res.error
-            } else {
-              renderLog(`Disparando UPSERT para ID: ${record_id} (payload contém ID: ${!!data?.id})`, 'info')
-              const payload = data?.id ? data : { ...data, id: record_id }
-              const res = await supabaseClient.upsert(payload, { onConflict: 'id' })
-              error = res.error
-            }
-
-            if (error) {
-              renderLog(`Erro Supabase: ${error.message} (Código: ${error.code})`, 'error')
-              console.error(`❌ [SYNC] Erro no item ${item.id}: ${error.message}`, error)
-              throw new Error(error.message)
-            }
-
-            const removed = await removeFromSyncQueueIfCurrent(
-              item.id,
-              itemRevision
-            )
-
-            if (removed) {
-              renderLog(`Sucesso no ID ${record_id}. Item removido da fila local.`, 'success')
-              console.log(`✅ [SYNC] Item ${item.id} sincronizado com sucesso.`)
-            } else {
-              renderLog(
-                `Sucesso remoto no ID ${record_id}, mas existe uma revisao local mais nova. Mantendo item na fila.`,
-                'info'
-              )
-              console.log(
-                `[SYNC] Item ${item.id} mudou durante o envio e permanecera pendente.`
-              )
-            }
-
-            await updatePendingCount()
-
-          } catch (err: any) {
-            renderLog(`Falha no item: ${err.message}`, 'error')
-            console.error(`❌ [SYNC] Falha no item ${item.id}:`, err)
-            
-            const failureRecorded = await markSyncFailedIfCurrent(
-              item.id,
-              item.revision ?? 0,
-              err.message
-            )
-
-            if (failureRecorded) {
-              pushFailures += 1
-              const newAttempts = (item.attempts || 0) + 1
-              renderLog(
-                `Item mantido na fila apos ${newAttempts} tentativa(s) para evitar perda silenciosa de sincronizacao.`,
-                'error'
-              )
-            } else {
-              renderLog(
-                `Falha pertence a uma revisao antiga do item ${item.id}; uma revisao mais nova continua pendente.`,
-                'info'
-              )
-            }
-          }
-        }
-      }
-
-      // PASSO 2: PUXAR (PULL) OS DADOS DO WHATSAPP / NUVEM PARA O CELULAR
-      const pullResult = await pullRemoteChanges(forcePull)
-      const remainingPendingCount = await updatePendingCount()
-
-      const success =
-        pushFailures === 0 &&
-        remainingPendingCount === 0 &&
-        pullResult.success
-
-      setSyncStatus(isOnline ? 'online' : 'offline')
-
-      if (success) {
-        renderLog(
-          'Ciclo de sincronização concluído sem pendências.',
-          'success'
-        )
-      } else {
-        renderLog(
-          `Ciclo concluído com pendências: ${pushFailures} falha(s) de PUSH, ` +
-            `${remainingPendingCount} item(ns) na fila e ` +
-            `${pullResult.failedTables.length} tabela(s) com falha no PULL.`,
-          'error'
-        )
-      }
-
-      return {
-        success,
-        pushFailures,
-        pendingCount: remainingPendingCount,
-        pullSuccess: pullResult.success,
-        pullFailedTables: pullResult.failedTables,
-      }
-    } catch (err: any) {
-      renderLog(`Erro crítico na fila: ${err?.message}`, 'error')
-      console.error('❌ [SYNC] Erro crítico:', err)
-
-      const remainingPendingCount = await updatePendingCount()
-
-      setSyncStatus(isOnline ? 'online' : 'offline')
-
-      return {
-        success: false,
-        pushFailures: pushFailures + 1,
-        pendingCount: remainingPendingCount,
-        pullSuccess: false,
-        pullFailedTables: [],
-      }
-    } finally {
-      isSyncing.current = false
-      setIsSyncingState(false)
-      renderLog('Ciclo de sincronização finalizado.', 'info')
-    }
-  }, [user?.id, isOnline, updatePendingCount, pullRemoteChanges])
+  const syncSnapshot = useSyncExternalStore(
+    subscribeSyncSnapshot,
+    getSyncSnapshot,
+    getServerSyncSnapshot
+  )
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true)
-      setSyncStatus('online')
-      renderLog('🌐 Rede detectou conexão reestabelecida.', 'success')
-      processSyncQueue()
-    }
-    const handleOffline = () => {
-      setIsOnline(false)
-      setSyncStatus('offline')
-      renderLog('📡 Rede detectou queda de conexão.', 'error')
-    }
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    if (isOnline) processSyncQueue()
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [processSyncQueue])
+    configureSyncEngine(user?.id ?? null)
+  }, [user?.id])
 
-  const queueOperation = useCallback(async (table: AllTables, operation: 'create' | 'update' | 'delete', recordId: string, data: any) => {
-    if (!user?.id) return
-    await addToSyncQueue(user.id, table, operation, recordId, data)
-    await updatePendingCount()
-    if (isOnline) processSyncQueue()
-  }, [user?.id, isOnline, updatePendingCount, processSyncQueue])
+  const forceSync = useCallback(async (): Promise<SyncCycleResult> => {
+    configureSyncEngine(user?.id ?? null)
 
-  const forceSync = useCallback(async () => {
-    renderLog('Ação manual: Forçar Sincronismo acionado.', 'info')
-    if (!isOnline) {
-      showToast('📡 Sem conexão.', 'warning')
-      return
+    if (!user?.id) {
+      return EMPTY_RESULT
     }
-    await processSyncQueue(false)
-  }, [isOnline, processSyncQueue])
 
-  // Força uma ressincronização completa, ignorando qualquer "lastPull" salvo —
-  // útil como botão de emergência ("Ressincronizar tudo").
-  const forceFullResync = useCallback(async () => {
-    renderLog('Ação manual: Ressincronização COMPLETA acionada.', 'info')
-
-    if (!isOnline) {
+    if (!getSyncSnapshot().isOnline) {
       showToast('Sem conexão.', 'warning')
-      return
+
+      return {
+        ...EMPTY_RESULT,
+        pendingCount: getSyncSnapshot().pendingCount,
+      }
     }
 
-    if (user?.id) {
-      localStorage.removeItem(`dfl_last_pull_${user.id}`)
+    return processSyncQueue(false)
+  }, [showToast, user?.id])
+
+  const forceFullResync = useCallback(async (): Promise<SyncCycleResult> => {
+    configureSyncEngine(user?.id ?? null)
+
+    if (!user?.id) {
+      return EMPTY_RESULT
+    }
+
+    if (!getSyncSnapshot().isOnline) {
+      showToast('Sem conexão.', 'warning')
+
+      return {
+        ...EMPTY_RESULT,
+        pendingCount: getSyncSnapshot().pendingCount,
+      }
     }
 
     const result = await processSyncQueue(true)
 
     if (result.success) {
-      showToast(
-        'Ressincronização completa concluída.',
-        'success'
-      )
-      return
+      showToast('Ressincronização completa concluída.', 'success')
+      return result
     }
 
     if (result.pendingCount > 0) {
@@ -539,7 +83,7 @@ export function useLocalSync() {
         `Ressincronização incompleta: ${result.pendingCount} item(ns) ainda aguardando sincronização.`,
         'warning'
       )
-      return
+      return result
     }
 
     if (!result.pullSuccess) {
@@ -552,28 +96,25 @@ export function useLocalSync() {
         `Ressincronização incompleta: ${pullMessage}`,
         'warning'
       )
-      return
+      return result
     }
 
     showToast(
       'Ressincronização incompleta. Algumas operações precisam de nova tentativa.',
       'warning'
     )
-  }, [isOnline, processSyncQueue, user?.id, showToast])
 
+    return result
+  }, [showToast, user?.id])
 
-  const refreshPendingCount = useCallback(async () => {
-    await updatePendingCount()
-  }, [updatePendingCount])
+  const refreshPendingCountForUser = useCallback(async () => {
+    await refreshPendingCount(user?.id ?? null)
+  }, [user?.id])
 
   return {
-    syncStatus,
-    isOnline,
-    pendingCount,
-    isSyncing: isSyncingState,
-    queueOperation,
+    ...syncSnapshot,
     forceSync,
     forceFullResync,
-    refreshPendingCount,
+    refreshPendingCount: refreshPendingCountForUser,
   }
 }

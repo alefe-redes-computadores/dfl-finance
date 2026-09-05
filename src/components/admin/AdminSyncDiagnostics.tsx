@@ -1,3 +1,4 @@
+// src/components/admin/AdminSyncDiagnostics.tsx
 'use client'
 
 // ============================================================
@@ -17,7 +18,7 @@
 //   erros de RLS (permissão negada) automaticamente.
 // - Mostra o valor de lastPull salvo, útil pra saber se o pull
 //   está "preso" numa data antiga.
-// - Botão de ressync completo (limpa lastPull + repuxa tudo).
+// - Botão de ressincronização completa (limpa lastPull + repuxa tudo).
 // ============================================================
 
 import { useEffect, useState } from 'react'
@@ -25,30 +26,14 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { useLocalSync } from '@/hooks/useLocalSync'
+import { SYNC_TABLES, type SyncTableName } from '@/lib/syncEngine'
+import { RefreshCw, AlertTriangle, CheckCircle2, ShieldAlert, Zap } from 'lucide-react'
 
-// ✅ Lista completa de tabelas sincronizáveis do app.
-// IMPORTANTE: se você adicionar uma tabela nova ao Dexie/Supabase que
-// deveria sincronizar via pull, adicione o nome aqui TAMBÉM e no
-// array `tablesToPull` dentro de src/hooks/useLocalSync.ts.
-// Os dois arrays precisam ficar sempre iguais.
-const TABLES = [
-  'transactions',
-  'accounts',
-  'categories',
-  'debts',
-  'loans',
-  'financings',
-  'subscriptions',
-  'tags',
-  'contacts',
-  'budgets',
-  'goals',
-  'credit_cards',
-  'credit_invoices',
-  'notifications',
-] as const
+// A lista vem da mesma boundary usada pelo motor de pull para evitar
+// divergência entre o diagnóstico e as tabelas realmente sincronizadas.
+const TABLES = SYNC_TABLES
 
-type TableName = (typeof TABLES)[number]
+type TableName = SyncTableName
 
 interface TableDiag {
   table: TableName
@@ -143,10 +128,34 @@ export function AdminSyncDiagnostics() {
 
   const handleForceResync = async () => {
     setResyncMsg('Ressincronizando...')
-    await forceFullResync()
-    setResyncMsg('Concluído! Recarregando diagnóstico...')
+
+    const result = await forceFullResync()
+
+    if (result.success) {
+      setResyncMsg('Ressincronização concluída. Atualizando diagnóstico...')
+    } else if (result.pendingCount > 0) {
+      setResyncMsg(
+        `Ressincronização parcial: ${result.pendingCount} item(ns) permanecem pendentes. Atualizando diagnóstico...`
+      )
+    } else if (!result.pullSuccess) {
+      setResyncMsg(
+        result.pullFailedTables.length > 0
+          ? `Ressincronização parcial: ${result.pullFailedTables.length} tabela(s) falharam no recebimento. Atualizando diagnóstico...`
+          : 'Ressincronização parcial: recebimento remoto incompleto. Atualizando diagnóstico...'
+      )
+    } else {
+      setResyncMsg(
+        'Ressincronização parcial: algumas operações precisam de nova tentativa. Atualizando diagnóstico...'
+      )
+    }
+
     await loadDiagnostics()
-    setResyncMsg('✅ Diagnóstico atualizado.')
+
+    setResyncMsg(
+      result.success
+        ? 'Diagnóstico atualizado após sincronização completa.'
+        : 'Diagnóstico atualizado. Ainda existem pendências de sincronização.'
+    )
   }
 
   const schemaErrors = diags.filter((d) => d.remoteError?.includes('42703'))
@@ -163,7 +172,7 @@ export function AdminSyncDiagnostics() {
             Diagnóstico de Sincronização
           </h2>
           <p className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
-            Compara Dexie (local) x Supabase (remoto), tabela por tabela
+            Compara contagens do Dexie (local) e Supabase (remoto)
           </p>
         </div>
         <button
@@ -171,7 +180,7 @@ export function AdminSyncDiagnostics() {
           disabled={loading}
           className="shrink-0 rounded-[14px] bg-gray-100 dark:bg-slate-700 px-3 py-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200 active:scale-[0.98] disabled:opacity-50"
         >
-          {loading ? '...' : '🔄'}
+          {loading ? <RefreshCw size={16} className="animate-spin" /> : <RefreshCw size={16} />}
         </button>
       </div>
 
@@ -201,7 +210,7 @@ export function AdminSyncDiagnostics() {
                 <span>{d.table}</span>
                 {!d.remoteError && (
                   <span className={mismatch ? 'text-orange-600' : 'text-emerald-600 dark:text-emerald-400'}>
-                    {mismatch ? '⚠️' : '✅'}
+                    {mismatch ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
                   </span>
                 )}
               </div>
@@ -221,17 +230,17 @@ export function AdminSyncDiagnostics() {
         <div className="mb-4 space-y-2 rounded-[16px] border border-orange-200 bg-orange-50 p-3 text-[12px] dark:border-orange-900/40 dark:bg-orange-900/10">
           {schemaErrors.length > 0 && (
             <p className="text-red-600 dark:text-red-400">
-              🚫 Erro de schema (coluna faltando) em: {schemaErrors.map((d) => d.table).join(', ')}
+              <ShieldAlert size={14} className="inline mr-1" /> Erro de schema (coluna faltando) em: {schemaErrors.map((d) => d.table).join(', ')}
             </p>
           )}
           {rlsErrors.length > 0 && (
             <p className="text-red-600 dark:text-red-400">
-              🚫 Erro de RLS/permissão em: {rlsErrors.map((d) => d.table).join(', ')}
+              <ShieldAlert size={14} className="inline mr-1" /> Erro de RLS/permissão em: {rlsErrors.map((d) => d.table).join(', ')}
             </p>
           )}
           {outOfSync.length > 0 && (
             <p className="text-orange-600 dark:text-orange-400">
-              ⚠️ Divergência local x remoto: {outOfSync.map((d) => `${d.table} (${d.localCount}/${d.remoteCount})`).join(', ')}
+              <AlertTriangle size={14} className="inline mr-1" /> Divergência de contagem local x remoto: {outOfSync.map((d) => `${d.table} (${d.localCount}/${d.remoteCount})`).join(', ')}
             </p>
           )}
         </div>
@@ -239,15 +248,15 @@ export function AdminSyncDiagnostics() {
 
       {diags.length > 0 && schemaErrors.length === 0 && rlsErrors.length === 0 && outOfSync.length === 0 && (
         <p className="mb-4 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
-          ✅ Tudo sincronizado, sem erros de schema ou RLS.
+          As contagens local e remota coincidem nas tabelas consultadas. Isso não prova igualdade de conteúdo.
         </p>
       )}
 
       <button
         onClick={handleForceResync}
-        className="w-full rounded-[16px] bg-teal-600 py-3 text-[13px] font-bold text-white active:scale-[0.98]"
+        className="w-full rounded-[16px] bg-teal-600 py-3 text-[13px] font-bold text-white active:scale-[0.98] flex items-center justify-center gap-2"
       >
-        ⚡ Forçar ressync completo
+        <Zap size={16} /> Forçar ressincronização completa
       </button>
 
       {resyncMsg && (

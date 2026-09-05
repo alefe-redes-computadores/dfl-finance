@@ -312,6 +312,7 @@ export interface LocalSyncQueue {
   attempts: number
   revision?: number
   last_error?: string | null
+  last_attempt_at?: string | null
 }
 
 // ============================================================
@@ -499,6 +500,8 @@ export async function addToSyncQueue(
         created_at: new Date().toISOString(),
         attempts: 0,
         revision: 0,
+        last_error: null,
+        last_attempt_at: null,
       })
 
       return id
@@ -539,6 +542,7 @@ export async function addToSyncQueue(
       data: mergedData,
       attempts: 0,
       last_error: null,
+      last_attempt_at: null,
       revision: nextRevision,
     })
 
@@ -554,38 +558,47 @@ export async function addToSyncQueue(
   })
 }
 
-export async function removeFromSyncQueue(id: string) {
-  return db.syncQueue.delete(id)
-}
-
-export async function removeFromSyncQueueIfCurrent(
+export async function confirmSyncSuccessIfCurrent(
   id: string,
   expectedRevision: number
 ) {
-  return db.transaction('rw', db.syncQueue, async () => {
-    const current = await db.syncQueue.get(id)
+  const preview = await db.syncQueue.get(id)
 
-    if (!current) {
-      return false
-    }
-
-    if ((current.revision ?? 0) !== expectedRevision) {
-      return false
-    }
-
-    await db.syncQueue.delete(id)
-    return true
-  })
-}
-
-export async function markSyncFailed(id: string, error: string) {
-  const item = await db.syncQueue.get(id)
-  if (item) {
-    await db.syncQueue.update(id, {
-      attempts: item.attempts + 1,
-      last_error: error,
-    })
+  if (!preview) {
+    return false
   }
+
+  return db.transaction(
+    'rw',
+    db.syncQueue,
+    db.table(preview.table),
+    async () => {
+      const current = await db.syncQueue.get(id)
+
+      if (!current) {
+        return false
+      }
+
+      if ((current.revision ?? 0) !== expectedRevision) {
+        return false
+      }
+
+      if (current.operation !== 'delete') {
+        const localRecord = await db.table(current.table).get(current.record_id)
+
+        if (localRecord && localRecord.user_id === current.user_id) {
+          await db.table(current.table).update(current.record_id, {
+            sync_status: 'synced',
+            sync_attempts: 0,
+            last_sync_error: null,
+          })
+        }
+      }
+
+      await db.syncQueue.delete(id)
+      return true
+    }
+  )
 }
 
 export async function markSyncFailedIfCurrent(
@@ -593,22 +606,49 @@ export async function markSyncFailedIfCurrent(
   expectedRevision: number,
   error: string
 ) {
-  return db.transaction('rw', db.syncQueue, async () => {
-    const current = await db.syncQueue.get(id)
+  const preview = await db.syncQueue.get(id)
 
-    if (!current) {
-      return false
+  if (!preview) {
+    return false
+  }
+
+  return db.transaction(
+    'rw',
+    db.syncQueue,
+    db.table(preview.table),
+    async () => {
+      const current = await db.syncQueue.get(id)
+
+      if (!current) {
+        return false
+      }
+
+      if ((current.revision ?? 0) !== expectedRevision) {
+        return false
+      }
+
+      const nextAttempts = (current.attempts || 0) + 1
+      const attemptedAt = new Date().toISOString()
+
+      await db.syncQueue.update(id, {
+        attempts: nextAttempts,
+        last_error: error,
+        last_attempt_at: attemptedAt,
+      })
+
+      if (current.operation !== 'delete') {
+        const localRecord = await db.table(current.table).get(current.record_id)
+
+        if (localRecord && localRecord.user_id === current.user_id) {
+          await db.table(current.table).update(current.record_id, {
+            sync_status: 'failed',
+            sync_attempts: nextAttempts,
+            last_sync_error: error,
+          })
+        }
+      }
+
+      return true
     }
-
-    if ((current.revision ?? 0) !== expectedRevision) {
-      return false
-    }
-
-    await db.syncQueue.update(id, {
-      attempts: (current.attempts || 0) + 1,
-      last_error: error,
-    })
-
-    return true
-  })
+  )
 }

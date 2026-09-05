@@ -1,3 +1,4 @@
+// src/app/(app)/subscriptions/new/page.tsx
 'use client'
 
 import { useState, useEffect, Suspense, useMemo } from "react"
@@ -25,7 +26,7 @@ const BILLING_CYCLES = [
 function NewSubscriptionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // ✅ useMemo para normalizar o ID
+  // Normaliza o ID de edição.
   const rawEditId = searchParams.get("edit")
   const editId = useMemo(() => rawEditId?.trim() || null, [rawEditId])
   
@@ -68,7 +69,7 @@ function NewSubscriptionContent() {
     }
   }, [editId, subscription, initialized])
 
-  // ✅ SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  // Só redireciona quando a consulta terminou e confirmou ausência.
   if (editId && notFound && !loading) {
     return (
       <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 items-center justify-center px-4">
@@ -108,19 +109,19 @@ function NewSubscriptionContent() {
   const handleSave = async () => {
     if (!name.trim()) {
       errorHaptic()
-      showToast("⚠️ Preencha o nome da assinatura", "warning")
+      showToast("Preencha o nome da assinatura.", "warning")
       return
     }
 
     if (amountNum <= 0) {
       errorHaptic()
-      showToast("⚠️ Informe um valor válido", "warning")
+      showToast("Informe um valor válido.", "warning")
       return
     }
 
     if (!user?.id) {
       errorHaptic()
-      showToast("⚠️ Usuário não autenticado", "warning")
+      showToast("Usuário não autenticado.", "warning")
       return
     }
 
@@ -142,13 +143,34 @@ function NewSubscriptionContent() {
 
       await db.transaction('rw', ['subscriptions', 'syncQueue'], async () => {
         if (editId) {
-          const updated = await db.table('subscriptions').update(editId, payload)
+          const existing = await db.table('subscriptions').get(editId)
 
-          if (!updated) {
+          if (!existing) {
             throw new Error('Assinatura não encontrada para atualização.')
           }
 
-          await addToSyncQueue(user.id, 'subscriptions', 'update', editId, payload)
+          if (existing.user_id !== user.id) {
+            throw new Error('Assinatura pertence a outro usuário.')
+          }
+
+          const fullPayload = {
+            ...existing,
+            ...payload,
+            id: editId,
+            user_id: user.id,
+            sync_status: 'pending',
+            sync_attempts: 0,
+            last_sync_error: null,
+          }
+
+          await db.table('subscriptions').put(fullPayload)
+          await addToSyncQueue(
+            user.id,
+            'subscriptions',
+            'update',
+            editId,
+            fullPayload
+          )
         } else {
           const id = crypto.randomUUID()
           const fullPayload = {
@@ -158,6 +180,7 @@ function NewSubscriptionContent() {
             created_at: new Date().toISOString(),
             sync_status: 'pending',
             sync_attempts: 0,
+            last_sync_error: null,
           }
 
           await db.table('subscriptions').add(fullPayload)
@@ -166,11 +189,11 @@ function NewSubscriptionContent() {
       })
 
       success()
-      showToast(editId ? "✅ Assinatura atualizada!" : "✅ Assinatura criada!", "success")
+      showToast(editId ? "Assinatura atualizada!" : "Assinatura criada!", "success")
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, "error")
+      showToast(`Erro: ${err.message}`, "error")
     } finally {
       setSaving(false)
     }

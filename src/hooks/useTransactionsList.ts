@@ -43,11 +43,12 @@ export function useTransactionsList(
       items = items.filter((item) => item.date <= endDate)
     }
 
-    // Ordena por data (mais recente primeiro)
+    // Datas ISO/locais ordenam corretamente de forma lexical,
+    // sem interpretação de timezone pelo Date.
     return items.sort((a, b) => {
-      const aTime = a.date ? new Date(a.date).getTime() : 0
-      const bTime = b.date ? new Date(b.date).getTime() : 0
-      return bTime - aTime
+      const dateA = typeof a.date === 'string' ? a.date : ''
+      const dateB = typeof b.date === 'string' ? b.date : ''
+      return dateB.localeCompare(dateA)
     })
   }, [user?.id, context, JSON.stringify(filters), startDate, endDate])
 

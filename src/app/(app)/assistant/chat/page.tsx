@@ -1,3 +1,4 @@
+// src/app/(app)/assistant/chat/page.tsx
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
@@ -191,8 +192,23 @@ export default function AssistantChatPage() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        await db.table('chat_sessions').add(sessionPayload)
-        await addToSyncQueue(user.id, 'chat_sessions', 'create', sessionIdNew, sessionPayload)
+        await db.transaction(
+          'rw',
+          db.table('chat_sessions'),
+          db.syncQueue,
+          async () => {
+            await db.table('chat_sessions').add(sessionPayload)
+
+            await addToSyncQueue(
+              user.id,
+              'chat_sessions',
+              'create',
+              sessionIdNew,
+              sessionPayload
+            )
+          }
+        )
+
         currentSessionId = sessionIdNew
         setSessionId(currentSessionId)
       }
@@ -208,8 +224,22 @@ export default function AssistantChatPage() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.table('chat_history').add(userMsgPayload)
-      await addToSyncQueue(user.id, 'chat_history', 'create', userMsgId, userMsgPayload)
+      await db.transaction(
+        'rw',
+        db.table('chat_history'),
+        db.syncQueue,
+        async () => {
+          await db.table('chat_history').add(userMsgPayload)
+
+          await addToSyncQueue(
+            user.id,
+            'chat_history',
+            'create',
+            userMsgId,
+            userMsgPayload
+          )
+        }
+      )
       
       const newMessagesList = [...messages, userMsgPayload]
       setMessages(newMessagesList as Message[])
@@ -233,8 +263,24 @@ export default function AssistantChatPage() {
         sync_status: 'pending',
         sync_attempts: 0,
       }
-      await db.table('chat_history').add(assistantMsgPayload)
-      await addToSyncQueue(user.id, 'chat_history', 'create', assistantMsgId, assistantMsgPayload)
+      await db.transaction(
+        'rw',
+        db.table('chat_history'),
+        db.syncQueue,
+        async () => {
+          await db.table('chat_history').add(
+            assistantMsgPayload
+          )
+
+          await addToSyncQueue(
+            user.id,
+            'chat_history',
+            'create',
+            assistantMsgId,
+            assistantMsgPayload
+          )
+        }
+      )
       
       await reloadMessages()
 
@@ -261,10 +307,24 @@ export default function AssistantChatPage() {
     try {
       const idsToRemove = messages.map((m) => m.id)
 
-      for (const id of idsToRemove) {
-        await db.table('chat_history').delete(id)
-        await addToSyncQueue(user.id, 'chat_history', 'delete', id, { id })
-      }
+      await db.transaction(
+        'rw',
+        db.table('chat_history'),
+        db.syncQueue,
+        async () => {
+          for (const id of idsToRemove) {
+            await db.table('chat_history').delete(id)
+
+            await addToSyncQueue(
+              user.id,
+              'chat_history',
+              'delete',
+              id,
+              { id }
+            )
+          }
+        }
+      )
 
       setMessages([])
       await reloadMessages()
