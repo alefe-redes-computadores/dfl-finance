@@ -54,16 +54,7 @@ export default function Page({ params }) {
   }
 }
 
-console.log('🤖 Iniciando o Robô v5 (Esconde-Esconde de API)...');
+console.log('Iniciando o utilitário legado de rotas dinâmicas...');
 processDirectory('./src/app');
 
-// 🚨 O NOVO TRUQUE: Esconder a pasta API do Next.js
-const apiPath = path.join('./src/app', 'api');
-const hiddenApiPath = path.join('./src/app', '_api');
-
-if (fs.existsSync(apiPath)) {
-  console.log('🙈 Escondendo a pasta /api do servidor para o Build passar...');
-  fs.renameSync(apiPath, hiddenApiPath);
-}
-
-console.log('🚀 Tudo pronto! O Build estático vai voar agora.');
+console.log('Rotas dinâmicas processadas. A pasta /api não é mais alterada por este utilitário.');

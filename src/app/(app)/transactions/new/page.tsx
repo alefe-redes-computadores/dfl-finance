@@ -398,9 +398,20 @@ function NewTransactionContent() {
 
       if (isImage) {
         try {
+          const {
+            data: { session: ocrSession },
+          } = await supabase.auth.getSession()
+
+          if (!ocrSession?.access_token) {
+            throw new Error('Sessão expirada. Entre novamente.')
+          }
+
           const ocrResponse = await fetch('/api/ocr-receipt', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${ocrSession.access_token}`,
+            },
             body: JSON.stringify({ imageUrl: urlData.publicUrl }),
           })
           const ocrData = await ocrResponse.json()

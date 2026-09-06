@@ -33,7 +33,8 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export', // ESSA LINHA GERA A PASTA 'out' QUE O CAPACITOR PRECISA
+  // O build web/Vercel usa o runtime normal do Next.
+  // O export estático do Capacitor será tratado por um build mobile dedicado.
   
   typescript: {
     ignoreBuildErrors: true,
