@@ -550,6 +550,9 @@ function DebtDetailContent() {
     }
   }
 
+  const payAmountCents =
+    Math.round(payAmountNum * 100)
+
   const handlePayment = async () => {
     if (isSubmitting || !user?.id || !debt) return
 
@@ -559,7 +562,6 @@ function DebtDetailContent() {
       return
     }
 
-    const payAmountCents = Math.round(payAmountNum * 100)
     if (payAmountCents > remainingCents && !debt.contact_id) {
       showToast('Para transformar o excedente em crédito, vincule esta cobrança a um contato.', 'warning')
       errorHaptic()

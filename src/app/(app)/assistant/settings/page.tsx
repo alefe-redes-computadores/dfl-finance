@@ -363,13 +363,13 @@ export default function AssistantSettingsPage() {
           <div className="space-y-2.5">
             <SettingToggle
               label="Habilitar IA"
-              description="Mantém registrada sua preferência para usar recursos inteligentes."
+              description="Controla o acesso ao Chat inteligente. Desativado, o Chat não envia solicitações ao serviço de IA."
               checked={draft.ai_enabled}
               onChange={() => toggleSetting('ai_enabled')}
             />
             <SettingToggle
               label="Auto categorização"
-              description="Preferência para categorizar lançamentos automaticamente quando o recurso estiver disponível."
+              description="Guarda sua preferência para categorização automática. O lançamento só será alterado quando um fluxo compatível usar essa opção."
               checked={draft.auto_categorize}
               onChange={() => toggleSetting('auto_categorize')}
             />

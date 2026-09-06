@@ -27,6 +27,7 @@ import ContextToggle, {
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
+import { useUserSettings } from '@/hooks/useUserSettings'
 import { addToSyncQueue, db } from '@/lib/db'
 import {
   isRealizedFinancialTransaction,
@@ -83,6 +84,14 @@ export default function AssistantChatPage() {
     success,
     error: errorHaptic,
   } = useHapticFeedback()
+
+  const {
+    settings: assistantSettings,
+    loading: assistantSettingsLoading,
+  } = useUserSettings()
+
+  const aiEnabled =
+    assistantSettings?.preferences.ai_enabled ?? true
 
   const [messages, setMessages] =
     useState<Message[]>([])
@@ -428,8 +437,20 @@ export default function AssistantChatPage() {
     if (
       !input.trim() ||
       isSending ||
+      assistantSettingsLoading ||
       !user?.id
     ) {
+      return
+    }
+
+    if (!aiEnabled) {
+      errorHaptic()
+
+      showToast(
+        'O Assistente está desativado. Ative-o nas configurações para usar o Chat.',
+        'warning'
+      )
+
       return
     }
 
@@ -810,15 +831,19 @@ export default function AssistantChatPage() {
               setInput(event.target.value)
             }
             onKeyDown={handleKeyDown}
-            placeholder="Pergunte sobre suas finanças..."
+            placeholder={
+              aiEnabled
+                ? 'Pergunte sobre suas finanças...'
+                : 'Assistente desativado'
+            }
             className="flex-1 rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] text-gray-800 outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
-            disabled={isSending}
+            disabled={isSending || !aiEnabled || assistantSettingsLoading}
           />
 
           <button
             type="button"
             onClick={handleSend}
-            disabled={!input.trim() || isSending}
+            disabled={!input.trim() || isSending || !aiEnabled || assistantSettingsLoading}
             className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-teal-600 text-white shadow-lg shadow-teal-600/20 active:scale-[0.98] disabled:opacity-50"
           >
             {isSending ? (
