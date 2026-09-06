@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const base64Image = Buffer.from(imageBuffer).toString('base64')
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
     const prompt = `Analise esta imagem de comprovante fiscal ou cupom e extraia:
 - Valor total como número

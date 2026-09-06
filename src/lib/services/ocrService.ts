@@ -63,7 +63,7 @@ export async function extractInvoiceFromImage(
     const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg'
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
     const result = await model.generateContent([
       { inlineData: { data: base64Image, mimeType } },
@@ -88,7 +88,7 @@ export async function extractReceiptFromFile(
     const mimeType = file.type || 'image/jpeg'
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
     const result = await model.generateContent([
       { inlineData: { data: base64Image, mimeType } },
