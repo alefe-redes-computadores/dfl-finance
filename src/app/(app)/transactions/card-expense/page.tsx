@@ -136,6 +136,7 @@ export default function CardExpensePage() {
             description: finalDescription,
             category_id: categoryId || null,
             credit_card_id: creditCardId,
+            affects_balance: false,
             tag_ids: tagId ? [tagId] : null,
             notes: finalNotes || null,
             type: 'expense',

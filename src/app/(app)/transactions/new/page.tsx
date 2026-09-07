@@ -668,6 +668,14 @@ function NewTransactionContent() {
             category_id: categoryId || null,
             account_id: creditCardId ? null : (accountId || null),
             credit_card_id: creditCardId || null,
+
+            /*
+             * Compra no cartão é obrigação da fatura.
+             * O saldo da conta só será alterado quando a fatura
+             * for liquidada.
+             */
+            affects_balance: creditCardId ? false : isPaid,
+
             contact_id: contactId || null,
             tag_ids: selectedTags.length > 0 ? selectedTags : null,
             date: installmentDate,

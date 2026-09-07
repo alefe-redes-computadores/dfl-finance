@@ -563,7 +563,15 @@ export async function payCardInvoice({
           freshAccount.context ??
           freshCard.context,
 
-        affects_balance: true,
+        /*
+         * A compra original é a despesa econômica e passa a ser
+         * realizada quando a fatura é paga.
+         *
+         * Esta movimentação registra somente a liquidação da fatura.
+         * O saldo da conta já foi debitado acima, portanto ela não
+         * pode entrar novamente nas métricas de despesas.
+         */
+        affects_balance: false,
 
         created_at: now,
         updated_at: now,
@@ -593,6 +601,11 @@ export async function payCardInvoice({
             tx.invoice_id ??
             null,
 
+          /*
+           * A compra deixa de ser uma obrigação aberta da fatura
+           * e passa a integrar o fluxo financeiro realizado.
+           */
+          status: 'done',
           affects_balance: true,
 
           updated_at: now,

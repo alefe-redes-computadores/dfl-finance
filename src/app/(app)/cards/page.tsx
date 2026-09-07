@@ -23,6 +23,8 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createPortal } from 'react-dom'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import { useToast } from '@/contexts/ToastContext'
+import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
   getCardBillingCycleForMonth,
   isTransactionInCardCycle,
@@ -55,11 +57,12 @@ export default function CardsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { effectiveContext, appMode } = useContext_()
+  const { showToast } = useToast()
+  const { success } = useHapticFeedback()
 
   const [currentDate, setCurrentDate] = useState(new Date())
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [loadingPulse] = useState(false)
 
   // ========== PERSONALIZAÇÃO DA ORDEM (ITENS DA LISTA) ==========
   const [showPersonalizeModal, setShowPersonalizeModal] = useState(false)
@@ -126,9 +129,8 @@ export default function CardsPage() {
 
   const handleSavePersonalize = () => {
     setShowPersonalizeModal(false)
-    showToast('✅ Ordem personalizada!', 'success')
     success()
-    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([10])
+    showToast('Ordem dos cartões atualizada.', 'success')
   }
 
   const handleTouchStart = useCallback(
@@ -431,12 +433,6 @@ export default function CardsPage() {
       ref={containerRef}
       className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 font-sans pb-28 relative transition-colors duration-300"
     >
-      {loadingPulse && (
-        <div className="fixed top-6 right-6 z-50">
-          <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
-        </div>
-      )}
-
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
           <div className="bg-white dark:bg-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 border border-gray-200/70 dark:border-slate-700">

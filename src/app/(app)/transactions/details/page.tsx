@@ -179,15 +179,58 @@ function EditTransactionContent() {
       if (flags.length > 0) finalNotes = `${flags.join(' ')} ${finalNotes}`.trim()
     }
 
+    /*
+     * Uma movimentação done + account_id + affects_balance=false
+     * representa um lançamento de controle cujo efeito no saldo é
+     * administrado pelo fluxo de origem (ex.: liquidação de fatura).
+     * Não podemos reaplicar/reverter esse saldo pela tela genérica.
+     */
+    const isManagedSettlement =
+      !isNew &&
+      tx?.status === 'done' &&
+      tx?.affects_balance === false &&
+      Boolean(tx?.account_id)
+
+    if (isManagedSettlement) {
+      hapticError()
+      showToast(
+        'Esta movimentação é controlada pelo fluxo que a originou e não pode ser alterada por esta tela.',
+        'warning'
+      )
+      setSaving(false)
+      return
+    }
+
+    const existingPaidCardPurchase =
+      !isNew &&
+      Boolean(creditCardId) &&
+      tx?.credit_card_id === creditCardId &&
+      tx?.affects_balance === true
+
+    const payloadAffectsBalance =
+      creditCardId
+        ? existingPaidCardPurchase
+        : isPaid
+
+    const payloadStatus =
+      creditCardId
+        ? existingPaidCardPurchase
+          ? 'done'
+          : 'pending'
+        : isPaid
+          ? 'done'
+          : 'pending'
+
     const payload: any = {
       user_id: user.id,
       amount: rawAmount,
-      status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
+      status: payloadStatus,
       date,
       description: finalDescription,
       category_id: categoryId || null,
       account_id: creditCardId ? null : (accountId || null),
       credit_card_id: creditCardId || null,
+      affects_balance: payloadAffectsBalance,
       contact_id: contactId || null,
       tag_ids: selectedTags.length > 0 ? selectedTags : null,
       notes: finalNotes || null,
@@ -208,7 +251,12 @@ function EditTransactionContent() {
     try {
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
         // 1) Reverte exatamente o efeito financeiro antigo.
-        if (!isNew && tx?.status === 'done' && tx?.account_id) {
+        if (
+          !isNew &&
+          tx?.status === 'done' &&
+          tx?.affects_balance !== false &&
+          tx?.account_id
+        ) {
           const oldAcc = await db.accounts.get(tx.account_id)
           if (!oldAcc) throw new Error('Conta original da transação não encontrada')
 
@@ -224,7 +272,11 @@ function EditTransactionContent() {
         }
 
         // 2) Aplica exatamente o novo efeito financeiro.
-        if (payload.status === 'done' && payload.account_id) {
+        if (
+          payload.status === 'done' &&
+          payload.affects_balance !== false &&
+          payload.account_id
+        ) {
           const newAcc = await db.accounts.get(payload.account_id)
           if (!newAcc) throw new Error('Conta selecionada não encontrada')
 
@@ -713,6 +765,17 @@ function EditTransactionContent() {
           const txRecord: any = await db.transactions.get(txId)
           if (!txRecord) continue
 
+          const isManagedSettlement =
+            txRecord.status === 'done' &&
+            txRecord.affects_balance === false &&
+            Boolean(txRecord.account_id)
+
+          if (isManagedSettlement) {
+            throw new Error(
+              'Esta movimentação é controlada pelo fluxo que a originou e não pode ser excluída por esta tela.'
+            )
+          }
+
           // Trata o par de reembolso sem apagar histórico financeiro já efetivado.
           if (txRecord.linked_transaction_id && !deleteSet.has(txRecord.linked_transaction_id)) {
             const linked: any = await db.transactions.get(txRecord.linked_transaction_id)
@@ -735,7 +798,11 @@ function EditTransactionContent() {
             }
           }
 
-          if (txRecord.status === 'done' && txRecord.account_id) {
+          if (
+            txRecord.status === 'done' &&
+            txRecord.affects_balance !== false &&
+            txRecord.account_id
+          ) {
             const acc = await db.accounts.get(txRecord.account_id)
             if (!acc) throw new Error('Conta vinculada à transação não encontrada')
 

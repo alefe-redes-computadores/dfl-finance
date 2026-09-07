@@ -153,7 +153,6 @@ function CardDetailContent() {
   }
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showPayModal, setShowPayModal] = useState(false)
   const [paying, setPaying] = useState(false)
@@ -194,7 +193,17 @@ function CardDetailContent() {
         setRefreshing(true)
         isPulling.current = false
         vibrate([10])
-        setTimeout(() => setRefreshing(false), 600)
+
+        /*
+         * Os dados desta tela vêm de useLiveQuery e reagem
+         * automaticamente às alterações do Dexie.
+         * O gesto continua oferecendo feedback tátil/visual,
+         * sem fingir que dispara uma sincronização inexistente.
+         */
+        setTimeout(
+          () => setRefreshing(false),
+          350
+        )
       }
     },
     [refreshing, vibrate]
@@ -363,12 +372,6 @@ function CardDetailContent() {
             <RefreshCw size={16} className="animate-spin text-teal-600" />
             <span className="text-[12px] font-semibold text-teal-600">Atualizando...</span>
           </div>
-        </div>
-      )}
-
-      {loadingPulse && (
-        <div className="fixed right-4 top-20 z-50">
-          <div className="h-3 w-3 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.5)] animate-pulse" />
         </div>
       )}
 
@@ -562,7 +565,9 @@ function CardDetailContent() {
           ) : (
             <div className="space-y-2">
               {transactions.map((tx: any) => {
-                const isPending = tx.status === 'pending'
+                const isPending =
+                  tx.type === 'expense' &&
+                  tx.affects_balance !== true
 
                 return (
                   <button
@@ -674,8 +679,8 @@ function CardDetailContent() {
             </div>
 
             <p className="mb-6 px-2 text-center text-[13px] font-medium leading-relaxed text-gray-500 dark:text-gray-400">
-              O valor será debitado da sua conta de pagamento padrão e as transações do
-              cartão passarão a afetar seu saldo principal.
+              O valor será debitado da conta selecionada. As compras originais passam
+              a compor suas despesas realizadas sem duplicar o pagamento da fatura.
             </p>
 
             <button
