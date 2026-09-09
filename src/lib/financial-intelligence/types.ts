@@ -63,6 +63,75 @@ export interface IntelligenceSubscriptionLike {
   status?: string | null
 }
 
+export interface IntelligenceBudgetLike {
+  id?: string
+  context?: string | null
+  name?: string | null
+  amount?: number | null
+  category_id?: string | null
+  period?: 'monthly' | 'biweekly' | 'weekly' | null
+  accumulate?: boolean | null
+  created_at?: string | null
+}
+
+export interface IntelligenceGoalLike {
+  id?: string
+  context?: string | null
+  name?: string | null
+  target_amount?: number | null
+  saved_amount?: number | null
+  deadline?: string | null
+  status?: string | null
+  created_at?: string | null
+}
+
+export interface IntelligenceLoanLike {
+  id?: string
+  context?: string | null
+  description?: string | null
+  amount?: number | null
+  remaining_amount?: number | null
+  due_date?: string | null
+  status?: string | null
+}
+
+export interface IntelligenceFinancingLike {
+  id?: string
+  context?: string | null
+  name?: string | null
+  description?: string | null
+  total_amount?: number | null
+  remaining_amount?: number | null
+  current_installment?: number | null
+  total_installments?: number | null
+  installments_count?: number | null
+  installment_value?: number | null
+  installment_amount?: number | null
+  next_due_date?: string | null
+  status?: string | null
+}
+
+export interface IntelligenceCreditCardLike {
+  id?: string
+  context?: string | null
+  name?: string | null
+  limit_amount?: number | null
+  due_day?: number | null
+  closing_day?: number | null
+  is_archived?: boolean | null
+}
+
+export interface IntelligenceCreditInvoiceLike {
+  id?: string
+  context?: string | null
+  credit_card_id?: string | null
+  total_amount?: number | null
+  paid_amount?: number | null
+  due_date?: string | null
+  closing_date?: string | null
+  status?: string | null
+}
+
 export interface FinancialInsight {
   id: string
   type: string
@@ -109,6 +178,22 @@ export interface FinancialIntelligenceSnapshot {
   receivablesOverdue: number
   overdueReceivablesCount: number
   recurringMonthlyEquivalent: number
+  activeBudgetCount: number
+  warningBudgetCount: number
+  overBudgetCount: number
+  goalsActiveCount: number
+  goalsOverdueCount: number
+  goalsNearDeadlineCount: number
+  creditCardOpenExposure: number
+  creditCardLimitTotal: number
+  creditCardUtilizationRate: number | null
+  overdueCardInvoiceAmount: number
+  overdueCardInvoiceCount: number
+  activeLoanRemaining: number
+  overdueLoanCount: number
+  activeFinancingRemaining: number
+  overdueFinancingCount: number
+  committedOutstandingTotal: number
   topExpenseCategories: Array<{
     id: string
     name: string
@@ -134,4 +219,10 @@ export interface BuildFinancialIntelligenceInput {
   categories: IntelligenceCategoryLike[]
   debts?: IntelligenceDebtLike[]
   subscriptions?: IntelligenceSubscriptionLike[]
+  budgets?: IntelligenceBudgetLike[]
+  goals?: IntelligenceGoalLike[]
+  loans?: IntelligenceLoanLike[]
+  financings?: IntelligenceFinancingLike[]
+  creditCards?: IntelligenceCreditCardLike[]
+  creditInvoices?: IntelligenceCreditInvoiceLike[]
 }

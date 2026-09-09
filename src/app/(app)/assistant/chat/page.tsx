@@ -142,6 +142,48 @@ function AssistantChatContent() {
     },
   })
 
+  const budgets = useLocalData({
+    table: 'budgets',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const goals = useLocalData({
+    table: 'goals',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const loans = useLocalData({
+    table: 'loans',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const financings = useLocalData({
+    table: 'financings',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const creditCards = useLocalData({
+    table: 'credit_cards',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const creditInvoices = useLocalData({
+    table: 'credit_invoices',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
   const intelligence = useMemo(
     () =>
       buildFinancialIntelligence({
@@ -151,6 +193,12 @@ function AssistantChatContent() {
         categories: categories.data as any[],
         debts: debts.data as any[],
         subscriptions: subscriptions.data as any[],
+        budgets: budgets.data as any[],
+        goals: goals.data as any[],
+        loans: loans.data as any[],
+        financings: financings.data as any[],
+        creditCards: creditCards.data as any[],
+        creditInvoices: creditInvoices.data as any[],
       }),
     [
       effectiveContext,
@@ -159,6 +207,12 @@ function AssistantChatContent() {
       categories.data,
       debts.data,
       subscriptions.data,
+      budgets.data,
+      goals.data,
+      loans.data,
+      financings.data,
+      creditCards.data,
+      creditInvoices.data,
     ]
   )
 

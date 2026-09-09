@@ -143,6 +143,66 @@ export default function AssistantReportPage() {
     },
   })
 
+  const {
+    data: localBudgets = [],
+    loading: budgetsLoading,
+  } = useLocalData({
+    table: 'budgets' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localGoals = [],
+    loading: goalsLoading,
+  } = useLocalData({
+    table: 'goals' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localLoans = [],
+    loading: loansLoading,
+  } = useLocalData({
+    table: 'loans' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localFinancings = [],
+    loading: financingsLoading,
+  } = useLocalData({
+    table: 'financings' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localCreditCards = [],
+    loading: creditCardsLoading,
+  } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localCreditInvoices = [],
+    loading: creditInvoicesLoading,
+  } = useLocalData({
+    table: 'credit_invoices' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
   const intelligence = useMemo(
     () =>
       buildFinancialIntelligence({
@@ -152,6 +212,12 @@ export default function AssistantReportPage() {
         categories: localCategories as any[],
         debts: localDebts as any[],
         subscriptions: localSubscriptions as any[],
+        budgets: localBudgets as any[],
+        goals: localGoals as any[],
+        loans: localLoans as any[],
+        financings: localFinancings as any[],
+        creditCards: localCreditCards as any[],
+        creditInvoices: localCreditInvoices as any[],
       }),
     [
       effectiveContext,
@@ -160,6 +226,12 @@ export default function AssistantReportPage() {
       localCategories,
       localDebts,
       localSubscriptions,
+      localBudgets,
+      localGoals,
+      localLoans,
+      localFinancings,
+      localCreditCards,
+      localCreditInvoices,
     ]
   )
 
@@ -341,7 +413,7 @@ export default function AssistantReportPage() {
     }
 
     const categoryBreakdown =
-      [...categoryMap.values()]
+      Array.from(categoryMap.values())
         .map((category) => ({
           ...category,
           percent:
@@ -433,7 +505,7 @@ export default function AssistantReportPage() {
     }
 
     const monthlyTrend =
-      [...monthlyMap.entries()]
+      Array.from(monthlyMap.entries())
         .map(
           ([key, values]) => {
             const [
@@ -711,7 +783,13 @@ export default function AssistantReportPage() {
     catLoading ||
     accountsLoading ||
     debtsLoading ||
-    subscriptionsLoading
+    subscriptionsLoading ||
+    budgetsLoading ||
+    goalsLoading ||
+    loansLoading ||
+    financingsLoading ||
+    creditCardsLoading ||
+    creditInvoicesLoading
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-[#f8f9fa] px-4 pb-28 pt-4 font-sans dark:bg-slate-900">

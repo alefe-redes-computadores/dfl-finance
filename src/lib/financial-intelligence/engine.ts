@@ -6,6 +6,13 @@ import {
   isExpenseTransaction,
   isRealizedFinancialTransaction,
 } from '@/lib/financialMetrics'
+import {
+  calculateBudgetMetrics,
+  getBudgetElapsedDays,
+} from '@/lib/budgetOperations'
+import {
+  getCardOutstandingExposure,
+} from '@/lib/cardOperations'
 
 import type {
   BuildFinancialIntelligenceInput,
@@ -154,6 +161,12 @@ export function buildFinancialIntelligence({
   categories,
   debts = [],
   subscriptions = [],
+  budgets = [],
+  goals = [],
+  loans = [],
+  financings = [],
+  creditCards = [],
+  creditInvoices = [],
 }: BuildFinancialIntelligenceInput): FinancialIntelligenceOutput {
   const now = startOfDay(nowInput)
   const todayISO = iso(now)
@@ -278,7 +291,7 @@ export function buildFinancialIntelligence({
   }
 
   const topExpenseCategories =
-    [...currentCategoryMap.entries()]
+    Array.from(currentCategoryMap.entries())
       .map(([id, amount]) => {
         const previousAmount = previousCategoryMap.get(id) || 0
         return {
@@ -355,6 +368,418 @@ export function buildFinancialIntelligence({
           ),
         0
       )
+
+  const contextBudgets =
+    budgets.filter(
+      (budget) =>
+        budget.context === context
+    )
+
+  const budgetSnapshots =
+    contextBudgets.map((budget) => {
+      const metrics =
+        calculateBudgetMetrics({
+          budget: {
+            amount:
+              safeNumber(
+                budget.amount
+              ),
+            category_id:
+              budget.category_id,
+            period:
+              budget.period,
+            accumulate:
+              budget.accumulate,
+            created_at:
+              budget.created_at,
+          },
+          transactions:
+            realized.map(
+              (transaction) => ({
+                id:
+                  transaction.id,
+                context:
+                  transaction.context ||
+                  undefined,
+                category_id:
+                  transaction.category_id,
+                type:
+                  transaction.type ||
+                  undefined,
+                status:
+                  transaction.status ||
+                  undefined,
+                date:
+                  transaction.date ||
+                  undefined,
+                amount:
+                  safeNumber(
+                    transaction.amount
+                  ),
+              })
+            ),
+          referenceDate: now,
+        })
+
+      const elapsedDays =
+        getBudgetElapsedDays(
+          metrics.cycle,
+          now
+        )
+
+      const totalCycleDays =
+        Math.max(
+          1,
+          Math.round(
+            (
+              metrics.cycle.end.getTime() -
+              metrics.cycle.start.getTime()
+            ) /
+              (24 * 60 * 60 * 1000)
+          ) + 1
+        )
+
+      const elapsedRatio =
+        Math.min(
+          1,
+          elapsedDays /
+            totalCycleDays
+        )
+
+      return {
+        budget,
+        metrics,
+        elapsedRatio,
+      }
+    })
+
+  const activeBudgetCount =
+    budgetSnapshots.length
+
+  const warningBudgetCount =
+    budgetSnapshots.filter(
+      ({ metrics }) =>
+        metrics.isWarning
+    ).length
+
+  const overBudgetCount =
+    budgetSnapshots.filter(
+      ({ metrics }) =>
+        metrics.isOverBudget
+    ).length
+
+  const goalContributions =
+    new Map<string, number>()
+
+  for (const transaction of transactions) {
+    if (
+      transaction.context !== context ||
+      !transaction.goal_id ||
+      transaction.type !== 'income' ||
+      transaction.status !== 'done'
+    ) {
+      continue
+    }
+
+    goalContributions.set(
+      transaction.goal_id,
+      (
+        goalContributions.get(
+          transaction.goal_id
+        ) || 0
+      ) +
+        safeNumber(
+          transaction.amount
+        )
+    )
+  }
+
+  const contextGoals =
+    goals
+      .filter(
+        (goal) =>
+          goal.context === context &&
+          goal.status !== 'cancelled'
+      )
+      .map((goal) => {
+        const ledgerSaved =
+          goal.id
+            ? goalContributions.get(
+                goal.id
+              ) || 0
+            : 0
+
+        const saved =
+          ledgerSaved > 0
+            ? ledgerSaved
+            : safeNumber(
+                goal.saved_amount
+              )
+
+        const target =
+          Math.max(
+            0,
+            safeNumber(
+              goal.target_amount
+            )
+          )
+
+        const remaining =
+          Math.max(
+            0,
+            target - saved
+          )
+
+        const deadline =
+          String(
+            goal.deadline || ''
+          ).slice(0, 10)
+
+        const daysLeft =
+          deadline
+            ? Math.ceil(
+                (
+                  new Date(
+                    `${deadline}T12:00:00`
+                  ).getTime() -
+                  now.getTime()
+                ) /
+                  (24 * 60 * 60 * 1000)
+              )
+            : null
+
+        return {
+          goal,
+          saved,
+          target,
+          remaining,
+          progress:
+            target > 0
+              ? saved / target
+              : 0,
+          daysLeft,
+        }
+      })
+
+  const goalsActiveCount =
+    contextGoals.filter(
+      ({ remaining }) =>
+        remaining > 0
+    ).length
+
+  const goalsOverdueCount =
+    contextGoals.filter(
+      ({ remaining, daysLeft }) =>
+        remaining > 0 &&
+        daysLeft !== null &&
+        daysLeft < 0
+    ).length
+
+  const goalsNearDeadlineCount =
+    contextGoals.filter(
+      ({ remaining, daysLeft }) =>
+        remaining > 0 &&
+        daysLeft !== null &&
+        daysLeft >= 0 &&
+        daysLeft <= 30
+    ).length
+
+  const contextCards =
+    creditCards.filter(
+      (card) =>
+        card.context === context &&
+        !card.is_archived
+    )
+
+  const creditCardOpenExposure =
+    contextCards.reduce(
+      (sum, card) =>
+        sum +
+        getCardOutstandingExposure(
+          card,
+          transactions
+        ),
+      0
+    )
+
+  const creditCardLimitTotal =
+    contextCards.reduce(
+      (sum, card) =>
+        sum +
+        Math.max(
+          0,
+          safeNumber(
+            card.limit_amount
+          )
+        ),
+      0
+    )
+
+  const creditCardUtilizationRate =
+    creditCardLimitTotal > 0
+      ? (
+          creditCardOpenExposure /
+          creditCardLimitTotal
+        ) * 100
+      : null
+
+  const overdueInvoices =
+    creditInvoices.filter(
+      (invoice) =>
+        invoice.context === context &&
+        invoice.status !== 'paid' &&
+        Boolean(
+          invoice.due_date
+        ) &&
+        String(
+          invoice.due_date
+        ).slice(0, 10) <
+          todayISO
+    )
+
+  const overdueCardInvoiceAmount =
+    overdueInvoices.reduce(
+      (sum, invoice) =>
+        sum +
+        Math.max(
+          0,
+          safeNumber(
+            invoice.total_amount
+          ) -
+            safeNumber(
+              invoice.paid_amount
+            )
+        ),
+      0
+    )
+
+  const overdueCardInvoiceCount =
+    overdueInvoices.length
+
+  const activeLoans =
+    loans.filter(
+      (loan) =>
+        loan.context === context &&
+        loan.status !== 'paid'
+    )
+
+  const activeLoanRemaining =
+    activeLoans.reduce(
+      (sum, loan) =>
+        sum +
+        Math.max(
+          0,
+          safeNumber(
+            loan.remaining_amount
+          )
+        ),
+      0
+    )
+
+  const overdueLoanCount =
+    activeLoans.filter(
+      (loan) =>
+        loan.status === 'overdue' ||
+        (
+          loan.due_date &&
+          String(
+            loan.due_date
+          ).slice(0, 10) <
+            todayISO
+        )
+    ).length
+
+  const activeFinancings =
+    financings.filter(
+      (financing) =>
+        financing.context === context &&
+        financing.status !== 'paid'
+    )
+
+  const financingRemaining = (
+    financing: typeof activeFinancings[number]
+  ) => {
+    const explicit =
+      safeNumber(
+        financing.remaining_amount
+      )
+
+    if (explicit > 0) {
+      return explicit
+    }
+
+    const totalInstallments =
+      Math.max(
+        0,
+        safeNumber(
+          financing.total_installments ??
+            financing.installments_count
+        )
+      )
+
+    const currentInstallment =
+      Math.max(
+        0,
+        safeNumber(
+          financing.current_installment
+        )
+      )
+
+    const installmentAmount =
+      Math.max(
+        0,
+        safeNumber(
+          financing.installment_value ??
+            financing.installment_amount
+        )
+      )
+
+    if (
+      totalInstallments > 0 &&
+      installmentAmount > 0
+    ) {
+      return Math.max(
+        0,
+        totalInstallments -
+          currentInstallment
+      ) * installmentAmount
+    }
+
+    return Math.max(
+      0,
+      safeNumber(
+        financing.total_amount
+      )
+    )
+  }
+
+  const activeFinancingRemaining =
+    activeFinancings.reduce(
+      (sum, financing) =>
+        sum +
+        financingRemaining(
+          financing
+        ),
+      0
+    )
+
+  const overdueFinancingCount =
+    activeFinancings.filter(
+      (financing) =>
+        financing.status === 'overdue' ||
+        (
+          financing.next_due_date &&
+          String(
+            financing.next_due_date
+          ).slice(0, 10) <
+            todayISO
+        )
+    ).length
+
+  const committedOutstandingTotal =
+    activeLoanRemaining +
+    activeFinancingRemaining +
+    creditCardOpenExposure
 
   const insights: FinancialInsight[] = []
 
@@ -708,6 +1133,416 @@ export function buildFinancialIntelligence({
     }
   }
 
+  for (const {
+    budget,
+    metrics,
+    elapsedRatio,
+  } of budgetSnapshots) {
+    const name =
+      String(
+        (budget as any).name ||
+        'Orçamento'
+      )
+
+    if (
+      metrics.isOverBudget
+    ) {
+      addInsight({
+        id:
+          `budget-over-${budget.id || name}`,
+        type: 'budget_risk',
+        severity: 'warning',
+        confidence: 'high',
+        sampleSize:
+          metrics.transactions.length,
+        title:
+          `${name} estourou o orçamento`,
+        message:
+          'O gasto realizado neste ciclo já ultrapassou o valor disponível do orçamento.',
+        currentValue:
+          metrics.spent,
+        baselineValue:
+          metrics.availableAmount,
+        evidence: {
+          budget:
+            name,
+          remaining:
+            round(
+              metrics.remaining
+            ),
+          percentUsed:
+            round(
+              metrics.percent
+            ),
+        },
+        suggestedQuestion:
+          `O que fez o orçamento ${name} estourar?`,
+      })
+
+      continue
+    }
+
+    if (
+      metrics.percent >= 75
+    ) {
+      addInsight({
+        id:
+          `budget-warning-${budget.id || name}`,
+        type: 'budget_risk',
+        severity:
+          metrics.percent >= 90
+            ? 'warning'
+            : 'attention',
+        confidence: 'high',
+        sampleSize:
+          metrics.transactions.length,
+        title:
+          `${name} está perto do limite`,
+        message:
+          'Uma parcela elevada do orçamento deste ciclo já foi consumida.',
+        currentValue:
+          metrics.spent,
+        baselineValue:
+          metrics.availableAmount,
+        evidence: {
+          budget:
+            name,
+          percentUsed:
+            round(
+              metrics.percent
+            ),
+          remaining:
+            round(
+              metrics.remaining
+            ),
+        },
+        suggestedQuestion:
+          `Como está meu orçamento ${name}?`,
+      })
+
+      continue
+    }
+
+    if (
+      elapsedRatio > 0 &&
+      elapsedRatio < 0.9 &&
+      metrics.percent / 100 >
+        elapsedRatio + 0.2 &&
+      metrics.spent > 0
+    ) {
+      addInsight({
+        id:
+          `budget-pace-${budget.id || name}`,
+        type: 'budget_pace',
+        severity: 'attention',
+        confidence: 'medium',
+        sampleSize:
+          metrics.transactions.length,
+        title:
+          `${name} está consumindo rápido`,
+        message:
+          'O percentual já usado do orçamento está significativamente à frente do tempo decorrido no ciclo.',
+        currentValue:
+          metrics.percent,
+        baselineValue:
+          round(
+            elapsedRatio * 100
+          ),
+        evidence: {
+          budget:
+            name,
+          percentUsed:
+            round(
+              metrics.percent
+            ),
+          cycleElapsedPercent:
+            round(
+              elapsedRatio * 100
+            ),
+        },
+        suggestedQuestion:
+          `Meu ritmo de gasto no orçamento ${name} é sustentável?`,
+      })
+    }
+  }
+
+  const overdueGoals =
+    contextGoals
+      .filter(
+        ({ remaining, daysLeft }) =>
+          remaining > 0 &&
+          daysLeft !== null &&
+          daysLeft < 0
+      )
+      .sort(
+        (a, b) =>
+          (
+            a.daysLeft || 0
+          ) -
+          (
+            b.daysLeft || 0
+          )
+      )
+
+  if (
+    overdueGoals.length > 0
+  ) {
+    const first =
+      overdueGoals[0]
+
+    addInsight({
+      id:
+        `goal-overdue-${first.goal.id || 'goal'}`,
+      type: 'goal_progress',
+      severity:
+        overdueGoals.length >= 2
+          ? 'warning'
+          : 'attention',
+      confidence: 'high',
+      sampleSize:
+        contextGoals.length,
+      title:
+        overdueGoals.length === 1
+          ? 'Uma meta passou do prazo'
+          : `${overdueGoals.length} metas passaram do prazo`,
+      message:
+        `${String(first.goal.name || 'Meta')} ainda precisa de recursos para ser concluída.`,
+      currentValue:
+        first.remaining,
+      evidence: {
+        goal:
+          String(
+            first.goal.name ||
+            'Meta'
+          ),
+        remaining:
+          round(
+            first.remaining
+          ),
+        progressPercent:
+          round(
+            first.progress * 100
+          ),
+      },
+      suggestedQuestion:
+        'Quais metas estão mais atrasadas e como posso reorganizá-las?',
+    })
+  }
+
+  const nearGoals =
+    contextGoals
+      .filter(
+        ({ remaining, daysLeft }) =>
+          remaining > 0 &&
+          daysLeft !== null &&
+          daysLeft >= 0 &&
+          daysLeft <= 30
+      )
+      .sort(
+        (a, b) =>
+          (
+            a.daysLeft || 0
+          ) -
+          (
+            b.daysLeft || 0
+          )
+      )
+
+  if (
+    nearGoals.length > 0
+  ) {
+    const first =
+      nearGoals[0]
+
+    addInsight({
+      id:
+        `goal-near-${first.goal.id || 'goal'}`,
+      type: 'goal_progress',
+      severity:
+        first.daysLeft !== null &&
+        first.daysLeft <= 7
+          ? 'warning'
+          : 'attention',
+      confidence: 'high',
+      sampleSize:
+        contextGoals.length,
+      title:
+        'Meta com prazo próximo',
+      message:
+        `${String(first.goal.name || 'Meta')} está perto do prazo e ainda não foi concluída.`,
+      currentValue:
+        first.remaining,
+      evidence: {
+        goal:
+          String(
+            first.goal.name ||
+            'Meta'
+          ),
+        daysLeft:
+          first.daysLeft,
+        progressPercent:
+          round(
+            first.progress * 100
+          ),
+      },
+      suggestedQuestion:
+        `Quanto preciso reservar para concluir ${String(first.goal.name || 'esta meta')}?`,
+    })
+  }
+
+  if (
+    overdueCardInvoiceAmount > 0
+  ) {
+    addInsight({
+      id:
+        'overdue-card-invoices',
+      type: 'credit_card',
+      severity: 'critical',
+      confidence: 'high',
+      sampleSize:
+        overdueCardInvoiceCount,
+      title:
+        'Há fatura de cartão vencida',
+      message:
+        'Existe saldo de fatura com vencimento anterior a hoje.',
+      currentValue:
+        overdueCardInvoiceAmount,
+      evidence: {
+        overdueInvoices:
+          overdueCardInvoiceCount,
+      },
+      suggestedQuestion:
+        'Quais faturas estão vencidas e quanto preciso pagar?',
+    })
+  } else if (
+    creditCardUtilizationRate !== null &&
+    creditCardUtilizationRate >= 70
+  ) {
+    addInsight({
+      id:
+        'credit-card-utilization',
+      type: 'credit_card',
+      severity:
+        creditCardUtilizationRate >= 90
+          ? 'warning'
+          : 'attention',
+      confidence: 'high',
+      sampleSize:
+        contextCards.length,
+      title:
+        'Uso do limite está elevado',
+      message:
+        'As compras abertas ocupam uma parcela alta do limite total dos cartões.',
+      currentValue:
+        creditCardOpenExposure,
+      baselineValue:
+        creditCardLimitTotal,
+      evidence: {
+        utilizationPercent:
+          round(
+            creditCardUtilizationRate
+          ),
+      },
+      suggestedQuestion:
+        'Quanto do meu limite de cartão está comprometido?',
+    })
+  }
+
+  if (
+    overdueLoanCount > 0
+  ) {
+    addInsight({
+      id:
+        'overdue-loans',
+      type: 'loan_commitment',
+      severity: 'warning',
+      confidence: 'high',
+      sampleSize:
+        activeLoans.length,
+      title:
+        'Empréstimo com prazo vencido',
+      message:
+        'Há empréstimo ativo com vencimento anterior a hoje.',
+      currentValue:
+        activeLoanRemaining,
+      evidence: {
+        overdueLoans:
+          overdueLoanCount,
+      },
+      suggestedQuestion:
+        'Quais empréstimos estão vencidos e qual o saldo restante?',
+    })
+  }
+
+  if (
+    overdueFinancingCount > 0
+  ) {
+    addInsight({
+      id:
+        'overdue-financings',
+      type: 'financing_commitment',
+      severity: 'warning',
+      confidence: 'high',
+      sampleSize:
+        activeFinancings.length,
+      title:
+        'Financiamento com parcela vencida',
+      message:
+        'Há financiamento ativo com próximo vencimento anterior a hoje.',
+      currentValue:
+        activeFinancingRemaining,
+      evidence: {
+        overdueFinancings:
+          overdueFinancingCount,
+      },
+      suggestedQuestion:
+        'Quais financiamentos exigem atenção agora?',
+    })
+  }
+
+  if (
+    committedOutstandingTotal > 0 &&
+    accountBalance > 0 &&
+    committedOutstandingTotal >
+      accountBalance * 2
+  ) {
+    addInsight({
+      id:
+        'commitment-pressure',
+      type: 'future_commitments',
+      severity: 'attention',
+      confidence: 'medium',
+      sampleSize:
+        activeLoans.length +
+        activeFinancings.length +
+        contextCards.length,
+      title:
+        'Compromissos futuros estão pesados',
+      message:
+        'O saldo aberto de empréstimos, financiamentos e cartões é elevado em relação ao caixa atual.',
+      currentValue:
+        committedOutstandingTotal,
+      baselineValue:
+        accountBalance,
+      evidence: {
+        loans:
+          round(
+            activeLoanRemaining
+          ),
+        financings:
+          round(
+            activeFinancingRemaining
+          ),
+        cards:
+          round(
+            creditCardOpenExposure
+          ),
+      },
+      suggestedQuestion:
+        'Como meus compromissos futuros se comparam ao meu caixa?',
+    })
+  }
+
   insights.sort((a, b) => {
     const severityDiff =
       severityOrder[b.severity] -
@@ -757,6 +1592,25 @@ export function buildFinancialIntelligence({
       receivablesOverdue: round(receivablesOverdue),
       overdueReceivablesCount,
       recurringMonthlyEquivalent: round(recurringMonthlyEquivalent),
+      activeBudgetCount,
+      warningBudgetCount,
+      overBudgetCount,
+      goalsActiveCount,
+      goalsOverdueCount,
+      goalsNearDeadlineCount,
+      creditCardOpenExposure: round(creditCardOpenExposure),
+      creditCardLimitTotal: round(creditCardLimitTotal),
+      creditCardUtilizationRate:
+        creditCardUtilizationRate === null
+          ? null
+          : round(creditCardUtilizationRate),
+      overdueCardInvoiceAmount: round(overdueCardInvoiceAmount),
+      overdueCardInvoiceCount,
+      activeLoanRemaining: round(activeLoanRemaining),
+      overdueLoanCount,
+      activeFinancingRemaining: round(activeFinancingRemaining),
+      overdueFinancingCount,
+      committedOutstandingTotal: round(committedOutstandingTotal),
       topExpenseCategories,
     },
     insights,

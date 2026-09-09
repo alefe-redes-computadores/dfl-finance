@@ -170,23 +170,33 @@ function HomeContent() {
     table: 'subscriptions' as any,
     filters: { context: effectiveContext }
   })
+  const { data: rawGoals, loading: goalsLoading } = useLocalData({
+    table: 'goals' as any,
+    filters: { context: effectiveContext }
+  })
+  const { data: rawCreditInvoices, loading: creditInvoicesLoading } = useLocalData({
+    table: 'credit_invoices' as any,
+    filters: { context: effectiveContext }
+  })
   const { data: rawNotifications, reload: reloadNotifs } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id }
   })
 
-  const localTransactions = safeArray<any>(rawTransactions)
-  const localCategories = safeArray<any>(rawCategories)
-  const localAccountsData = safeArray<any>(rawAccounts)
-  const localDebts = safeArray<any>(rawDebts)
-  const localFinancings = safeArray<any>(rawFinancings)
-  const localCards = safeArray<any>(rawCards)
-  const localBudgets = safeArray<any>(rawBudgets)
-  const localLoans = safeArray<any>(rawLoans)
-  const localSubscriptions = safeArray<any>(rawSubscriptions)
-  const localNotifications = safeArray<any>(rawNotifications)
+  const localTransactions = safeArray(rawTransactions)
+  const localCategories = safeArray(rawCategories)
+  const localAccountsData = safeArray(rawAccounts)
+  const localDebts = safeArray(rawDebts)
+  const localFinancings = safeArray(rawFinancings)
+  const localCards = safeArray(rawCards)
+  const localBudgets = safeArray(rawBudgets)
+  const localLoans = safeArray(rawLoans)
+  const localSubscriptions = safeArray(rawSubscriptions)
+  const localGoals = safeArray(rawGoals)
+  const localCreditInvoices = safeArray(rawCreditInvoices)
+  const localNotifications = safeArray(rawNotifications)
 
-  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading || subscriptionsLoading
+  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading || subscriptionsLoading || goalsLoading || creditInvoicesLoading
 
   useEffect(() => {
     if (user?.id && isOnline && isClient && !syncAttempted) {
@@ -408,8 +418,27 @@ function HomeContent() {
       categories: localCategories,
       debts: localDebts,
       subscriptions: localSubscriptions,
+      budgets: localBudgets,
+      goals: localGoals,
+      loans: localLoans,
+      financings: localFinancings,
+      creditCards: localCards,
+      creditInvoices: localCreditInvoices,
     }),
-    [effectiveContext, localTransactions, accounts, localCategories, localDebts, localSubscriptions]
+    [
+      effectiveContext,
+      localTransactions,
+      accounts,
+      localCategories,
+      localDebts,
+      localSubscriptions,
+      localBudgets,
+      localGoals,
+      localLoans,
+      localFinancings,
+      localCards,
+      localCreditInvoices,
+    ]
   )
 
   const intelligenceHighlights = useMemo(
