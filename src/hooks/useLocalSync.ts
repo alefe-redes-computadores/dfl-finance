@@ -7,6 +7,7 @@ import { useToast } from '@/contexts/ToastContext'
 import {
   configureSyncEngine,
   getServerSyncSnapshot,
+  getSyncQueueDiagnostics,
   getSyncSnapshot,
   processSyncQueue,
   refreshPendingCount,
@@ -52,7 +53,52 @@ export function useLocalSync() {
       }
     }
 
-    return processSyncQueue(false)
+    const result =
+      await processSyncQueue(
+        false,
+        true
+      )
+
+    if (
+      result.pendingCount > 0
+    ) {
+      const diagnostics =
+        await getSyncQueueDiagnostics(
+          user.id
+        )
+
+      const failed =
+        diagnostics.filter(
+          (item) =>
+            Boolean(
+              item.lastError
+            )
+        )
+
+      if (failed.length > 0) {
+        const first =
+          failed[0]
+
+        showToast(
+          `${failed.length} item(ns) falharam. ${first.table}/${first.operation}: ${first.lastError}`,
+          'error'
+        )
+      } else {
+        showToast(
+          `${result.pendingCount} item(ns) continuam aguardando sincronização.`,
+          'warning'
+        )
+      }
+    } else if (
+      result.success
+    ) {
+      showToast(
+        'Sincronização concluída.',
+        'success'
+      )
+    }
+
+    return result
   }, [showToast, user?.id])
 
   const forceFullResync = useCallback(async (): Promise<SyncCycleResult> => {
@@ -71,7 +117,11 @@ export function useLocalSync() {
       }
     }
 
-    const result = await processSyncQueue(true)
+    const result =
+      await processSyncQueue(
+        true,
+        true
+      )
 
     if (result.success) {
       showToast('Ressincronização completa concluída.', 'success')

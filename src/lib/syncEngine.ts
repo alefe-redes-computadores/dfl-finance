@@ -39,6 +39,16 @@ export type SyncCycleResult = {
   pullFailedTables: SyncTableName[]
 }
 
+export type SyncQueueDiagnostic = {
+  id: string
+  table: LocalSyncQueue['table']
+  operation: LocalSyncQueue['operation']
+  recordId: string
+  attempts: number
+  lastError: string | null
+  lastAttemptAt: string | null
+}
+
 type PullResult = {
   success: boolean
   failedTables: SyncTableName[]
@@ -73,9 +83,11 @@ let queuedForcePromise: Promise<SyncCycleResult> | null = null
 let periodicSyncTimer: ReturnType<typeof setInterval> | null = null
 
 function emit() {
-  for (const listener of listeners) {
-    listener()
-  }
+  listeners.forEach(
+    (listener) => {
+      listener()
+    }
+  )
 }
 
 function setSnapshot(patch: Partial<SyncSnapshot>) {
@@ -224,6 +236,24 @@ export async function refreshPendingCount(userId = currentUserId) {
   }
 
   return count
+}
+
+export async function getSyncQueueDiagnostics(
+  userId = currentUserId
+): Promise<SyncQueueDiagnostic[]> {
+  if (!userId) return []
+
+  const items = await getPendingSyncItems(userId)
+
+  return items.map((item) => ({
+    id: item.id,
+    table: item.table,
+    operation: item.operation,
+    recordId: item.record_id,
+    attempts: item.attempts || 0,
+    lastError: item.last_error || null,
+    lastAttemptAt: item.last_attempt_at || null,
+  }))
 }
 
 function sanitizeRemotePayload(
@@ -437,7 +467,8 @@ async function pullRemoteChanges(
 
 async function runSyncCycle(
   userId: string,
-  forcePull: boolean
+  forcePull: boolean,
+  forcePushRetry = false
 ): Promise<SyncCycleResult> {
   if (!snapshot.isOnline) {
     const pendingCount = await refreshPendingCount(userId)
@@ -462,7 +493,10 @@ async function runSyncCycle(
     const items = await getPendingSyncItems(userId)
 
     for (const item of items) {
-      if (!isRetryDue(item)) {
+      if (
+        !forcePushRetry &&
+        !isRetryDue(item)
+      ) {
         continue
       }
 
@@ -590,7 +624,10 @@ async function runSyncCycle(
   }
 }
 
-function startSyncCycle(forcePull: boolean) {
+function startSyncCycle(
+  forcePull: boolean,
+  forcePushRetry = false
+) {
   if (!currentUserId) {
     return Promise.resolve<SyncCycleResult>({
       success: false,
@@ -602,7 +639,11 @@ function startSyncCycle(forcePull: boolean) {
   }
 
   const userId = currentUserId
-  const running = runSyncCycle(userId, forcePull)
+  const running = runSyncCycle(
+    userId,
+    forcePull,
+    forcePushRetry
+  )
   const wrapped = running.finally(() => {
     if (activeSyncPromise === wrapped) {
       activeSyncPromise = null
@@ -613,28 +654,48 @@ function startSyncCycle(forcePull: boolean) {
   return wrapped
 }
 
-export function processSyncQueue(forcePull = false): Promise<SyncCycleResult> {
+export function processSyncQueue(
+  forcePull = false,
+  forcePushRetry = false
+): Promise<SyncCycleResult> {
   ensureRuntime()
 
   if (activeSyncPromise) {
-    if (!forcePull) {
+    if (
+      !forcePull &&
+      !forcePushRetry
+    ) {
       return activeSyncPromise
     }
 
     if (!queuedForcePromise) {
-      const running = activeSyncPromise
-      queuedForcePromise = running
-        .then(
-          () => startSyncCycle(true),
-          () => startSyncCycle(true)
-        )
-        .finally(() => {
-          queuedForcePromise = null
-        })
+      const running =
+        activeSyncPromise
+
+      queuedForcePromise =
+        running
+          .then(
+            () =>
+              startSyncCycle(
+                forcePull,
+                forcePushRetry
+              ),
+            () =>
+              startSyncCycle(
+                forcePull,
+                forcePushRetry
+              )
+          )
+          .finally(() => {
+            queuedForcePromise = null
+          })
     }
 
     return queuedForcePromise
   }
 
-  return startSyncCycle(forcePull)
+  return startSyncCycle(
+    forcePull,
+    forcePushRetry
+  )
 }
