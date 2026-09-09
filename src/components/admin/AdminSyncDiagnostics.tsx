@@ -42,9 +42,37 @@ interface TableDiag {
   remoteError: string | null
 }
 
+interface TransactionInspection {
+  id: string
+  context: string
+  type: string
+  amount: number
+  description: string
+  date: string
+  status: string
+  affects_balance: boolean | null
+  account_id: string | null
+  account_name: string | null
+  category_id: string | null
+  category_name: string | null
+  credit_card_id: string | null
+  debt_id: string | null
+  goal_id: string | null
+  recurring_group_id: string | null
+  installment_index: number | null
+  total_installments: number | null
+  due_date: string | null
+  paid: boolean | null
+  paid_date: string | null
+  created_at: string
+  updated_at: string
+  sync_status: string
+}
+
 interface TransactionDiff {
   localOnly: string[]
   remoteOnly: string[]
+  localOnlyDetails: TransactionInspection[]
 }
 
 function Row({ label, value, ok }: { label: string; value: any; ok?: boolean }) {
@@ -190,22 +218,45 @@ export function AdminSyncDiagnostics() {
               )
           )
 
-        setTransactionDiff({
-          localOnly:
-            Array.from(
-              localIds
-            ).filter(
-              (id) =>
-                !remoteIds.has(id)
-            ),
-          remoteOnly:
-            Array.from(
-              remoteIds
-            ).filter(
-              (id) =>
-                !localIds.has(id)
-            ),
-        })
+        const localOnly = Array.from(localIds).filter((id) => !remoteIds.has(id))
+        const remoteOnly = Array.from(remoteIds).filter((id) => !localIds.has(id))
+        const localOnlyRows = localRows.filter((item: any) => localOnly.includes(item.id))
+
+        const accountIds = Array.from(new Set(localOnlyRows.map((item: any) => item.account_id).filter(Boolean)))
+        const categoryIds = Array.from(new Set(localOnlyRows.map((item: any) => item.category_id).filter(Boolean)))
+        const accounts = accountIds.length > 0 ? await db.accounts.bulkGet(accountIds) : []
+        const categories = categoryIds.length > 0 ? await db.categories.bulkGet(categoryIds) : []
+        const accountNames = new Map(accounts.filter(Boolean).map((item: any) => [item.id, item.name]))
+        const categoryNames = new Map(categories.filter(Boolean).map((item: any) => [item.id, item.name]))
+
+        const localOnlyDetails: TransactionInspection[] = localOnlyRows.map((item: any) => ({
+          id: item.id,
+          context: item.context,
+          type: item.type,
+          amount: Number(item.amount || 0),
+          description: item.description || '(sem descrição)',
+          date: item.date || '',
+          status: item.status || '',
+          affects_balance: typeof item.affects_balance === 'boolean' ? item.affects_balance : null,
+          account_id: item.account_id || null,
+          account_name: item.account_id ? accountNames.get(item.account_id) || null : null,
+          category_id: item.category_id || null,
+          category_name: item.category_id ? categoryNames.get(item.category_id) || null : null,
+          credit_card_id: item.credit_card_id || null,
+          debt_id: item.debt_id || null,
+          goal_id: item.goal_id || null,
+          recurring_group_id: item.recurring_group_id || null,
+          installment_index: typeof item.installment_index === 'number' ? item.installment_index : null,
+          total_installments: typeof item.total_installments === 'number' ? item.total_installments : null,
+          due_date: item.due_date || null,
+          paid: typeof item.paid === 'boolean' ? item.paid : null,
+          paid_date: item.paid_date || null,
+          created_at: item.created_at || '',
+          updated_at: item.updated_at || '',
+          sync_status: item.sync_status || '',
+        }))
+
+        setTransactionDiff({ localOnly, remoteOnly, localOnlyDetails })
       } catch (error: any) {
         setTransactionDiffError(
           error?.message ||
@@ -367,17 +418,31 @@ export function AdminSyncDiagnostics() {
                   Só no Dexie: {transactionDiff.localOnly.length}
                 </p>
                 {transactionDiff.localOnly.length > 0 ? (
-                  <div className="mt-1 max-h-28 overflow-y-auto rounded-[10px] bg-white/70 p-2 font-mono text-[10px] text-gray-600 dark:bg-slate-950/40 dark:text-gray-300">
-                    {transactionDiff.localOnly.map(
-                      (id) => (
-                        <div
-                          key={`local-${id}`}
-                          className="break-all"
-                        >
-                          {id}
+                  <div className="mt-2 space-y-2">
+                    {transactionDiff.localOnlyDetails.map((item) => (
+                      <div key={`local-${item.id}`} className="rounded-[12px] border border-sky-200/70 bg-white/80 p-3 dark:border-sky-900/40 dark:bg-slate-950/40">
+                        <p className="break-all font-mono text-[9px] text-gray-400 dark:text-gray-500">{item.id}</p>
+                        <p className="mt-2 text-[12px] font-semibold text-gray-800 dark:text-gray-100">{item.description}</p>
+                        <p className="mt-1 font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                          R$ {item.amount.toFixed(2).replace('.', ',')} • {item.date || '(sem data)'}
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-gray-500 dark:text-gray-400">
+                          <span>contexto: {item.context}</span><span>tipo: {item.type}</span>
+                          <span>status: {item.status}</span><span>saldo: {String(item.affects_balance)}</span>
+                          <span className="col-span-2 break-words">conta: {item.account_name || item.account_id || '—'}</span>
+                          <span className="col-span-2 break-words">categoria: {item.category_name || item.category_id || '—'}</span>
+                          <span className="col-span-2 break-all">recorrência: {item.recurring_group_id || '—'}{item.total_installments !== null ? ` • ${item.installment_index ?? '?'} / ${item.total_installments}` : ''}</span>
+                          <span className="col-span-2 break-all">cartão: {item.credit_card_id || '—'}</span>
+                          <span className="col-span-2 break-all">dívida: {item.debt_id || '—'}</span>
+                          <span className="col-span-2 break-all">meta: {item.goal_id || '—'}</span>
+                          <span>venc.: {item.due_date || '—'}</span><span>pago: {String(item.paid)}</span>
+                          <span className="col-span-2">data pgto: {item.paid_date || '—'}</span>
+                          <span className="col-span-2 break-all">criado: {item.created_at || '—'}</span>
+                          <span className="col-span-2 break-all">atualizado: {item.updated_at || '—'}</span>
+                          <span className="col-span-2">sync local: {item.sync_status || '—'}</span>
                         </div>
-                      )
-                    )}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="mt-1 text-[10px] text-gray-400">
