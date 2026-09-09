@@ -490,7 +490,58 @@ async function runSyncCycle(
   let pushFailures = 0
 
   try {
-    const items = await getPendingSyncItems(userId)
+    const items =
+      await getPendingSyncItems(userId)
+
+    const syncPriority:
+      Partial<Record<
+        LocalSyncQueue['table'],
+        number
+      >> = {
+        categories: 10,
+        accounts: 20,
+        contacts: 30,
+        credit_cards: 40,
+        debts: 50,
+        loans: 60,
+        financings: 70,
+        subscriptions: 80,
+        tags: 90,
+        budgets: 100,
+        goals: 110,
+        chat_sessions: 120,
+        transactions: 200,
+        credit_invoices: 210,
+        notifications: 220,
+        chat_history: 230,
+      }
+
+    items.sort((a, b) => {
+      const priorityA =
+        syncPriority[a.table] ??
+        150
+
+      const priorityB =
+        syncPriority[b.table] ??
+        150
+
+      if (
+        priorityA !== priorityB
+      ) {
+        return (
+          priorityA -
+          priorityB
+        )
+      }
+
+      return String(
+        a.created_at || ''
+      ).localeCompare(
+        String(
+          b.created_at || ''
+        )
+      )
+    })
 
     for (const item of items) {
       if (
