@@ -263,6 +263,12 @@ const LOCAL_ONLY_REMOTE_KEYS =
     'lastsyncerror',
   ])
 
+const TRANSACTION_PRESENTATION_REMOTE_KEYS =
+  new Set([
+    'categoryname',
+    'accountname',
+  ])
+
 function sanitizeRemotePayload(
   source: Record<string, any>,
   recordId: string,
@@ -284,8 +290,17 @@ function sanitizeRemotePayload(
             )
             .toLowerCase()
 
-        return !LOCAL_ONLY_REMOTE_KEYS.has(
-          normalizedKey
+        return (
+          !LOCAL_ONLY_REMOTE_KEYS.has(
+            normalizedKey
+          ) &&
+          !(
+            table ===
+              'transactions' &&
+            TRANSACTION_PRESENTATION_REMOTE_KEYS.has(
+              normalizedKey
+            )
+          )
         )
       })
       .map(([key, value]) => {

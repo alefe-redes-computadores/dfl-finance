@@ -155,11 +155,8 @@ export default function FAB({
         const accountUpdatePayload = {
           balance: nextBalance,
           updated_at: new Date().toISOString(),
-          updatedat: new Date().toISOString(),
           sync_status: 'pending',
-          syncstatus: 'pending',
           sync_attempts: 0,
-          syncattempts: 0,
         }
 
         const accRes = await safeUpdate('accounts', accountId, accountUpdatePayload as any)
@@ -175,7 +172,6 @@ export default function FAB({
       const payload: any = {
         id: txId,
         user_id: user.id,
-        userid: user.id,
 
         type: quickType,
         amount: Number(amount),
@@ -187,21 +183,13 @@ export default function FAB({
         status: 'done',
         context: quickContext,
 
-        category_name: category || null,
-        categoryname: category || null,
-
         account_id: accountId || null,
-        accountid: accountId || null,
 
         created_at: nowIso,
-        createdat: nowIso,
         updated_at: nowIso,
-        updatedat: nowIso,
 
         sync_status: 'pending',
-        syncstatus: 'pending',
         sync_attempts: 0,
-        syncattempts: 0,
       }
 
       const res = await safeAdd('transactions', payload)
