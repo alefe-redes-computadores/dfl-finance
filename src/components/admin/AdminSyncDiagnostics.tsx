@@ -24,7 +24,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import { db } from '@/lib/db'
+import { addToSyncQueue, db } from '@/lib/db'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { SYNC_TABLES, type SyncTableName } from '@/lib/syncEngine'
 import { RefreshCw, AlertTriangle, CheckCircle2, ShieldAlert, Zap } from 'lucide-react'
@@ -67,6 +67,9 @@ interface TransactionInspection {
   created_at: string
   updated_at: string
   sync_status: string
+  possible_local_duplicates: string[]
+  possible_remote_duplicates: string[]
+  safe_to_requeue: boolean
 }
 
 interface TransactionDiff {
@@ -107,6 +110,8 @@ export function AdminSyncDiagnostics() {
     useState<TransactionDiff | null>(null)
   const [transactionDiffError, setTransactionDiffError] =
     useState<string | null>(null)
+  const [orphanRepairMsg, setOrphanRepairMsg] = useState<string>('')
+  const [repairingOrphans, setRepairingOrphans] = useState(false)
 
   const loadDiagnostics = async () => {
     setLoading(true)
@@ -229,32 +234,84 @@ export function AdminSyncDiagnostics() {
         const accountNames = new Map(accounts.filter(Boolean).map((item: any) => [item.id, item.name]))
         const categoryNames = new Map(categories.filter(Boolean).map((item: any) => [item.id, item.name]))
 
-        const localOnlyDetails: TransactionInspection[] = localOnlyRows.map((item: any) => ({
-          id: item.id,
-          context: item.context,
-          type: item.type,
-          amount: Number(item.amount || 0),
-          description: item.description || '(sem descrição)',
-          date: item.date || '',
-          status: item.status || '',
-          affects_balance: typeof item.affects_balance === 'boolean' ? item.affects_balance : null,
-          account_id: item.account_id || null,
-          account_name: item.account_id ? accountNames.get(item.account_id) || null : null,
-          category_id: item.category_id || null,
-          category_name: item.category_id ? categoryNames.get(item.category_id) || null : null,
-          credit_card_id: item.credit_card_id || null,
-          debt_id: item.debt_id || null,
-          goal_id: item.goal_id || null,
-          recurring_group_id: item.recurring_group_id || null,
-          installment_index: typeof item.installment_index === 'number' ? item.installment_index : null,
-          total_installments: typeof item.total_installments === 'number' ? item.total_installments : null,
-          due_date: item.due_date || null,
-          paid: typeof item.paid === 'boolean' ? item.paid : null,
-          paid_date: item.paid_date || null,
-          created_at: item.created_at || '',
-          updated_at: item.updated_at || '',
-          sync_status: item.sync_status || '',
-        }))
+        const remoteDetailRowsByDate = new Map<string, any[]>()
+
+        for (const item of localOnlyRows) {
+          if (!item.date || remoteDetailRowsByDate.has(item.date)) continue
+
+          const { data, error } = await supabase
+            .from('transactions')
+            .select('id, description, amount, date, type, account_id')
+            .eq('user_id', uid)
+            .eq('date', item.date)
+
+          if (error) {
+            throw error
+          }
+
+          remoteDetailRowsByDate.set(item.date, data || [])
+        }
+
+        const normalizeDescription = (value: any) =>
+          String(value || '')
+            .trim()
+            .toLocaleLowerCase('pt-BR')
+            .replace(/\s+/g, ' ')
+
+        const sameSemanticTransaction = (a: any, b: any) =>
+          a.id !== b.id &&
+          a.date === b.date &&
+          a.type === b.type &&
+          Math.round(Number(a.amount || 0) * 100) ===
+            Math.round(Number(b.amount || 0) * 100) &&
+          normalizeDescription(a.description) ===
+            normalizeDescription(b.description) &&
+          (a.account_id || null) === (b.account_id || null)
+
+        const localOnlyDetails: TransactionInspection[] = localOnlyRows.map((item: any) => {
+          const possibleLocalDuplicates = localRows
+            .filter((candidate: any) => sameSemanticTransaction(item, candidate))
+            .map((candidate: any) => candidate.id)
+
+          const possibleRemoteDuplicates = (
+            remoteDetailRowsByDate.get(item.date) || []
+          )
+            .filter((candidate: any) => sameSemanticTransaction(item, candidate))
+            .map((candidate: any) => candidate.id)
+
+          return {
+            id: item.id,
+            context: item.context,
+            type: item.type,
+            amount: Number(item.amount || 0),
+            description: item.description || '(sem descrição)',
+            date: item.date || '',
+            status: item.status || '',
+            affects_balance: typeof item.affects_balance === 'boolean' ? item.affects_balance : null,
+            account_id: item.account_id || null,
+            account_name: item.account_id ? accountNames.get(item.account_id) || null : null,
+            category_id: item.category_id || null,
+            category_name: item.category_id ? categoryNames.get(item.category_id) || null : null,
+            credit_card_id: item.credit_card_id || null,
+            debt_id: item.debt_id || null,
+            goal_id: item.goal_id || null,
+            recurring_group_id: item.recurring_group_id || null,
+            installment_index: typeof item.installment_index === 'number' ? item.installment_index : null,
+            total_installments: typeof item.total_installments === 'number' ? item.total_installments : null,
+            due_date: item.due_date || null,
+            paid: typeof item.paid === 'boolean' ? item.paid : null,
+            paid_date: item.paid_date || null,
+            created_at: item.created_at || '',
+            updated_at: item.updated_at || '',
+            sync_status: item.sync_status || '',
+            possible_local_duplicates: possibleLocalDuplicates,
+            possible_remote_duplicates: possibleRemoteDuplicates,
+            safe_to_requeue:
+              item.sync_status === 'pending' &&
+              possibleLocalDuplicates.length === 0 &&
+              possibleRemoteDuplicates.length === 0,
+          }
+        })
 
         setTransactionDiff({ localOnly, remoteOnly, localOnlyDetails })
       } catch (error: any) {
@@ -273,6 +330,119 @@ export function AdminSyncDiagnostics() {
     loadDiagnostics()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
+
+  const handleRepairSafeOrphans = async () => {
+    if (!user?.id || !transactionDiff) return
+
+    setRepairingOrphans(true)
+    setOrphanRepairMsg('Validando órfãs antes de reenfileirar...')
+
+    try {
+      let queued = 0
+      const blocked: string[] = []
+
+      for (const detail of transactionDiff.localOnlyDetails) {
+        const row = await db.transactions.get(detail.id)
+
+        if (
+          !row ||
+          row.user_id !== user.id ||
+          row.sync_status !== 'pending'
+        ) {
+          blocked.push(`${detail.id}: registro mudou ou não está pending`)
+          continue
+        }
+
+        const { data: sameIdRemote, error: sameIdError } = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('id', row.id)
+          .maybeSingle()
+
+        if (sameIdError) throw sameIdError
+
+        if (sameIdRemote?.id) {
+          blocked.push(`${detail.id}: já existe no Supabase`)
+          continue
+        }
+
+        const { data: sameDateRemote, error: sameDateError } = await supabase
+          .from('transactions')
+          .select('id, description, amount, date, type, account_id')
+          .eq('user_id', user.id)
+          .eq('date', row.date)
+
+        if (sameDateError) throw sameDateError
+
+        const normalizeDescription = (value: any) =>
+          String(value || '')
+            .trim()
+            .toLocaleLowerCase('pt-BR')
+            .replace(/\s+/g, ' ')
+
+        const semanticallySame = (candidate: any) =>
+          candidate.id !== row.id &&
+          candidate.date === row.date &&
+          candidate.type === row.type &&
+          Math.round(Number(candidate.amount || 0) * 100) ===
+            Math.round(Number(row.amount || 0) * 100) &&
+          normalizeDescription(candidate.description) ===
+            normalizeDescription(row.description) &&
+          (candidate.account_id || null) === (row.account_id || null)
+
+        const localSameDate = await db.transactions
+          .where('[user_id+date]')
+          .equals([user.id, row.date])
+          .toArray()
+
+        const localDuplicate = localSameDate.some(semanticallySame)
+        const remoteDuplicate = (sameDateRemote || []).some(semanticallySame)
+
+        if (localDuplicate || remoteDuplicate) {
+          blocked.push(
+            `${detail.id}: possível duplicata ${localDuplicate ? 'local' : ''}${
+              localDuplicate && remoteDuplicate ? ' e ' : ''
+            }${remoteDuplicate ? 'remota' : ''}`
+          )
+          continue
+        }
+
+        await addToSyncQueue(
+          user.id,
+          'transactions',
+          'create',
+          row.id,
+          row
+        )
+        queued += 1
+      }
+
+      if (queued > 0) {
+        setOrphanRepairMsg(
+          `${queued} transação(ões) órfã(s) reenfileirada(s) com segurança.${
+            blocked.length > 0
+              ? ` ${blocked.length} bloqueada(s) por proteção.`
+              : ' Agora use “Forçar ressincronização completa”.'
+          }`
+        )
+      } else {
+        setOrphanRepairMsg(
+          blocked.length > 0
+            ? `Nenhuma foi reenfileirada. Proteções bloquearam ${blocked.length} registro(s).`
+            : 'Nenhuma órfã segura encontrada.'
+        )
+      }
+
+      await loadDiagnostics()
+    } catch (error: any) {
+      setOrphanRepairMsg(
+        `Falha ao reparar órfãs: ${error?.message || 'erro desconhecido'}`
+      )
+    } finally {
+      setRepairingOrphans(false)
+    }
+  }
 
   const handleForceResync = async () => {
     setResyncMsg('Ressincronizando...')
@@ -440,6 +610,19 @@ export function AdminSyncDiagnostics() {
                           <span className="col-span-2 break-all">criado: {item.created_at || '—'}</span>
                           <span className="col-span-2 break-all">atualizado: {item.updated_at || '—'}</span>
                           <span className="col-span-2">sync local: {item.sync_status || '—'}</span>
+                          <span className="col-span-2">
+                            duplicatas locais: {item.possible_local_duplicates.length}
+                          </span>
+                          <span className="col-span-2">
+                            duplicatas remotas: {item.possible_remote_duplicates.length}
+                          </span>
+                          <span className={`col-span-2 font-semibold ${
+                            item.safe_to_requeue
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-orange-600 dark:text-orange-400'
+                          }`}>
+                            reenfileiramento: {item.safe_to_requeue ? 'seguro' : 'bloqueado'}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -475,8 +658,26 @@ export function AdminSyncDiagnostics() {
                 )}
               </div>
 
+              {transactionDiff.localOnlyDetails.some((item) => item.safe_to_requeue) && (
+                <button
+                  onClick={handleRepairSafeOrphans}
+                  disabled={repairingOrphans}
+                  className="w-full rounded-[14px] border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-[11px] font-semibold text-emerald-700 active:scale-[0.98] disabled:opacity-50 dark:border-emerald-900/50 dark:bg-emerald-900/10 dark:text-emerald-300"
+                >
+                  {repairingOrphans
+                    ? 'Validando e reenfileirando...'
+                    : 'Reenfileirar órfãs seguras'}
+                </button>
+              )}
+
+              {orphanRepairMsg && (
+                <p className="rounded-[10px] bg-white/70 p-2 text-[10px] leading-4 text-gray-600 dark:bg-slate-950/40 dark:text-gray-300">
+                  {orphanRepairMsg}
+                </p>
+              )}
+
               <p className="text-[10px] leading-4 text-gray-400 dark:text-gray-500">
-                Diagnóstico somente leitura. Nenhum registro é criado, removido ou alterado.
+                O diagnóstico é somente leitura. O botão de reparo apenas recria itens ausentes na fila após validar ID e possíveis duplicatas; ele não altera saldo nem apaga transações.
               </p>
             </div>
           ) : null}
