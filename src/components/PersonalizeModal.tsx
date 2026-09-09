@@ -24,7 +24,7 @@ interface Props {
 }
 
 // ✅ Seções que NÃO podem ser desativadas (sempre visíveis)
-const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
+const FIXED_SECTIONS = ['balance', 'income-expense', 'intelligence', 'pendings', 'accounts', 'cards', 'recent']
 
 export default function PersonalizeModal({
   isOpen,

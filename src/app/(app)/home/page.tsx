@@ -14,7 +14,7 @@ import {
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
   AlertTriangle, Image, Paperclip,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
-  SearchX,
+  SearchX, Sparkles,
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -40,26 +40,32 @@ import {
 } from '@/lib/safe'
 import EmptyState from '@/components/EmptyState'
 import {
-  getCardBillingCycleForMonth,
-  isTransactionInCardCycle,
+  getOpenCardInvoiceSnapshot,
 } from '@/lib/cardOperations'
 import {
   getDebtDueState,
   getDebtRemainingAmount,
   getDebtStatusFromAmounts,
   getDueDateState,
-  isDebtPayment,
+  buildDebtPaymentTotals,
 } from '@/lib/debtOperations'
 import {
   getPendingDirection,
   getPendingLabel,
   isStandalonePendingReceivable,
 } from '@/lib/pendingOperations'
+import { getMonthlyFlow } from '@/lib/financialMetrics'
+import {
+  buildFinancialIntelligence,
+  selectFinancialInsights,
+  type FinancialInsight,
+} from '@/lib/financial-intelligence'
 
 // ALL_SECTIONS COM DESCRIÇÕES PARA O PERSONALIZE MODAL
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },
   { id: 'income-expense', label: 'Receitas e despesas', description: 'Entradas e saídas do mês' },
+  { id: 'intelligence', label: 'Inteligência financeira', description: 'Sinais e prioridades calculados pelos seus dados' },
   { id: 'pendings', label: 'Pendências', description: 'Prioridades, contas e vencimentos' },
   { id: 'accounts', label: 'Contas', description: 'Suas contas bancárias' },
   { id: 'projection', label: 'Projeção de Saldo', description: 'Previsão para os próximos 30 dias' },
@@ -72,7 +78,7 @@ const ALL_SECTIONS = [
   { id: 'loans', label: 'Empréstimos entre Contextos', description: 'Transferências entre PF e PJ' },
 ]
 const DEFAULT_SECTION_ORDER = ALL_SECTIONS.map(s => s.id)
-const FIXED_SECTIONS = ['balance', 'income-expense', 'pendings', 'accounts', 'cards', 'recent']
+const FIXED_SECTIONS = ['balance', 'income-expense', 'intelligence', 'pendings', 'accounts', 'cards', 'recent']
 
 const getContextLabel = (ctx: string) => ctx === 'dfl' ? 'PJ' : 'PF'
 const getContextIcon = (ctx: string) => ctx === 'dfl' ? <Building2 size={14} className="text-blue-500" /> : <User size={14} className="text-emerald-500" />
@@ -100,7 +106,6 @@ function HomeContent() {
   const firstName = (user?.user_metadata?.name || 'Visitante').split(' ')[0]
 
   const [refreshing, setRefreshing] = useState(false)
-  const [loadingPulse, setLoadingPulse] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [isClient, setIsClient] = useState(false)
   const [syncAttempted, setSyncAttempted] = useState(false)
@@ -161,6 +166,10 @@ function HomeContent() {
     table: 'loans' as any,
     filters: { context: effectiveContext }
   })
+  const { data: rawSubscriptions, loading: subscriptionsLoading } = useLocalData({
+    table: 'subscriptions' as any,
+    filters: { context: effectiveContext }
+  })
   const { data: rawNotifications, reload: reloadNotifs } = useLocalData({
     table: 'notifications' as any,
     filters: { user_id: user?.id }
@@ -174,9 +183,10 @@ function HomeContent() {
   const localCards = safeArray<any>(rawCards)
   const localBudgets = safeArray<any>(rawBudgets)
   const localLoans = safeArray<any>(rawLoans)
+  const localSubscriptions = safeArray<any>(rawSubscriptions)
   const localNotifications = safeArray<any>(rawNotifications)
 
-  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading
+  const isDataLoading = txLoading || catLoading || accLoading || debtsLoading || finLoading || cardsLoading || budgetsLoading || loansLoading || subscriptionsLoading
 
   useEffect(() => {
     if (user?.id && isOnline && isClient && !syncAttempted) {
@@ -195,23 +205,10 @@ function HomeContent() {
   }, [user?.id, isOnline, isClient, syncAttempted, forceSync])
 
   useEffect(() => {
-    if (!isDataLoading && !syncAttempted) {
-      const timer = setTimeout(() => {
-        setIsInitialLoad(false)
-      }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [isDataLoading, syncAttempted])
-
-  useEffect(() => {
-    setLoadingPulse(isDataLoading)
-  }, [isDataLoading])
-
-  useEffect(() => {
-    if (!isDataLoading && (localTransactions.length || localAccountsData.length)) {
+    if (!isDataLoading) {
       setIsInitialLoad(false)
     }
-  }, [isDataLoading, localTransactions, localAccountsData])
+  }, [isDataLoading])
 
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
@@ -331,22 +328,10 @@ function HomeContent() {
       }),
   [transactionsWithJoin, start, end])
 
-  const summary = useMemo(() => {
-    return monthTransactions.reduce(
-      (acc: { income: number; expense: number; balance: number }, tx: any) => {
-        if (tx.status !== 'done') return acc
-
-        const amount = safeNumber(tx.amount)
-
-        if (tx.type === 'income') acc.income += amount
-        if (tx.type === 'expense' || tx.type === 'sangria') acc.expense += amount
-
-        acc.balance = acc.income - acc.expense
-        return acc
-      },
-      { income: 0, expense: 0, balance: 0 }
-    )
-  }, [monthTransactions])
+  const summary = useMemo(
+    () => getMonthlyFlow(localTransactions, currentDate, effectiveContext),
+    [localTransactions, currentDate, effectiveContext]
+  )
 
   const recentTransactions = useMemo(() => monthTransactions.slice(0, 4), [monthTransactions])
 
@@ -369,60 +354,27 @@ function HomeContent() {
   }, [monthTransactions])
 
   const accounts = useMemo(() => {
-    return localAccountsData.map((acc: any) => {
-      const pending = pendingByAccount.get(acc.id) || { income: 0, expense: 0 }
-      const previsto = safeNumber(acc.balance) + pending.income - pending.expense
-      return { ...acc, previsto }
-    })
+    return localAccountsData
+      .filter((acc: any) => !acc.is_archived)
+      .map((acc: any) => {
+        const pending = pendingByAccount.get(acc.id) || { income: 0, expense: 0 }
+        const previsto = safeNumber(acc.balance) + pending.income - pending.expense
+        return { ...acc, previsto }
+      })
+      .sort((a: any, b: any) => safeNumber(b.balance) - safeNumber(a.balance))
   }, [localAccountsData, pendingByAccount])
 
   const cards = useMemo(() => {
     return localCards.map((card: any) => {
-      const cycle = getCardBillingCycleForMonth(
-        card,
-        currentDate
-      )
-
-      const cardTxs = localTransactions.filter(
-        (t: any) =>
-          t.credit_card_id === card.id &&
-          t.type === 'expense' &&
-          t.affects_balance !== true &&
-          isTransactionInCardCycle(
-            card,
-            t.date,
-            cycle.closingDate
-          )
-      )
-
-      const faturaAtual = cardTxs.reduce(
-        (acc: number, t: any) =>
-          acc + safeNumber(t.amount),
-        0
-      )
-
-      return {
-        ...card,
-        faturaAtual,
-        billingCycle: cycle,
-      }
+      const invoice = getOpenCardInvoiceSnapshot(card, localTransactions, currentDate)
+      return { ...card, faturaAtual: invoice.amount, billingCycle: invoice.billingCycle }
     })
   }, [localCards, localTransactions, currentDate])
 
-  const debtPaymentsById = useMemo(() => {
-    const result = new Map<string, number>()
-
-    for (const tx of localTransactions) {
-      if (!isDebtPayment(tx) || !tx.debt_id) continue
-
-      result.set(
-        tx.debt_id,
-        (result.get(tx.debt_id) || 0) + Math.round(safeNumber(tx.amount) * 100)
-      )
-    }
-
-    return result
-  }, [localTransactions])
+  const debtPaymentsById = useMemo(
+    () => buildDebtPaymentTotals(localTransactions),
+    [localTransactions]
+  )
 
   const debtsList = useMemo(() => {
     return localDebts
@@ -447,6 +399,23 @@ function HomeContent() {
       })
       .filter((debt: any) => debt.status !== 'paid' && debt.status !== 'cancelled')
   }, [localDebts, debtPaymentsById])
+
+  const financialIntelligence = useMemo(
+    () => buildFinancialIntelligence({
+      context: effectiveContext,
+      transactions: localTransactions,
+      accounts,
+      categories: localCategories,
+      debts: localDebts,
+      subscriptions: localSubscriptions,
+    }),
+    [effectiveContext, localTransactions, accounts, localCategories, localDebts, localSubscriptions]
+  )
+
+  const intelligenceHighlights = useMemo(
+    () => selectFinancialInsights(financialIntelligence, { limit: 2 }),
+    [financialIntelligence]
+  )
 
   const pendings = useMemo(() => {
     const allPending = localTransactions.filter(
@@ -735,34 +704,8 @@ function HomeContent() {
       const now = new Date()
 
       const realCards = localCards.map((card: any) => {
-        const cycle = getCardBillingCycleForMonth(
-          card,
-          now
-        )
-
-        const faturaAtual = localTransactions
-          .filter(
-            (t: any) =>
-              t.credit_card_id === card.id &&
-              t.type === 'expense' &&
-              t.affects_balance !== true &&
-              isTransactionInCardCycle(
-                card,
-                t.date,
-                cycle.closingDate
-              )
-          )
-          .reduce(
-            (acc: number, t: any) =>
-              acc + safeNumber(t.amount),
-            0
-          )
-
-        return {
-          ...card,
-          faturaAtual,
-          billingCycle: cycle,
-        }
+        const invoice = getOpenCardInvoiceSnapshot(card, localTransactions, now)
+        return { ...card, faturaAtual: invoice.amount, billingCycle: invoice.billingCycle }
       })
 
       let addedNew = false
@@ -847,9 +790,17 @@ function HomeContent() {
     if (user?.id && isOnline) {
       supabase.from('home_layout').select('section_order').match({ user_id: user.id, context }).single().then(({ data }) => {
         if (data?.section_order) {
-          setEnabledSections(data.section_order)
-          setPersonalizeOrder(ALL_SECTIONS.filter(s => data.section_order.includes(s.id)))
-          setPersonalizeEnabled(new Set(data.section_order))
+          const knownIds = new Set(ALL_SECTIONS.map((section) => section.id))
+          const normalized = data.section_order.filter((id: string) => knownIds.has(id))
+          for (const fixedId of FIXED_SECTIONS) {
+            if (!normalized.includes(fixedId)) {
+              const defaultIndex = DEFAULT_SECTION_ORDER.indexOf(fixedId)
+              normalized.splice(Math.min(Math.max(defaultIndex, 0), normalized.length), 0, fixedId)
+            }
+          }
+          setEnabledSections(normalized)
+          setPersonalizeOrder(ALL_SECTIONS.filter((section) => normalized.includes(section.id)))
+          setPersonalizeEnabled(new Set(normalized))
         }
       })
     }
@@ -1092,6 +1043,59 @@ function HomeContent() {
             </div>
           </div>
         )
+      case 'intelligence': {
+        const snapshot = financialIntelligence.snapshot
+        const confidenceLabel = snapshot.confidence === 'high' ? 'Confiança alta' : snapshot.confidence === 'medium' ? 'Confiança média' : 'Confiança baixa'
+
+        return (
+          <div key="intelligence" className="mb-5">
+            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <button type="button" onClick={() => router.push('/assistant')} className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/40">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400">
+                    <Sparkles size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">Inteligência financeira</p>
+                    <h3 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">O que seus dados estão dizendo</h3>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="shrink-0 text-gray-300 dark:text-gray-600" />
+              </button>
+
+              <div className="border-t border-gray-100 px-4 py-3 dark:border-slate-700/60">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:bg-slate-700 dark:text-gray-300">{confidenceLabel}</span>
+                  <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{snapshot.sampleSize} movimentações na amostra</span>
+                  {snapshot.historicalMonthsUsed > 0 && (
+                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">· {snapshot.historicalMonthsUsed} meses históricos válidos</span>
+                  )}
+                </div>
+
+                {intelligenceHighlights.length === 0 ? (
+                  <div className="rounded-[17px] bg-emerald-50/60 px-3 py-3 dark:bg-emerald-500/5">
+                    <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">Nenhum desvio financeiro relevante foi detectado agora.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {intelligenceHighlights.map((insight: FinancialInsight) => (
+                      <button key={insight.id} type="button" onClick={() => router.push(insight.suggestedQuestion ? `/assistant/chat?q=${encodeURIComponent(insight.suggestedQuestion)}` : '/assistant')} className="w-full rounded-[17px] border border-gray-200/70 bg-gray-50 px-3 py-3 text-left transition-transform active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-semibold text-gray-900 dark:text-gray-100">{insight.title}</p>
+                            <p className="mt-1 text-[11px] leading-5 text-gray-500 dark:text-gray-400">{insight.message}</p>
+                          </div>
+                          <ChevronRight size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
       case 'projection':
         return (
           <div key="projection" className="mb-5 relative">
@@ -2048,7 +2052,7 @@ function HomeContent() {
 
   return (
     <div ref={containerRef} className="relative mx-auto min-h-[100dvh] max-w-md bg-gray-50 px-4 pb-28 pt-[max(0.75rem,env(safe-area-inset-top))] font-sans transition-colors duration-300 dark:bg-slate-900">
-      {loadingPulse && (
+      {(isDataLoading || isSyncing) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-md shadow-teal-500/40" />
         </div>

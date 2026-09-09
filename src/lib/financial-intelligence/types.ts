@@ -27,6 +27,9 @@ export interface IntelligenceTransactionLike {
   category_id?: string | null
   account_id?: string | null
   goal_id?: string | null
+  debt_id?: string | null
+  debt_applied_amount?: number | null
+  contact_credit_delta?: number | null
 }
 
 export interface IntelligenceAccountLike {

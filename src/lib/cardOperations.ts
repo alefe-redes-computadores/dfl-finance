@@ -156,6 +156,33 @@ export const isTransactionInCardCycle = (
   )
 }
 
+export interface OpenCardInvoiceSnapshot {
+  amount: number
+  billingCycle: CardBillingCycle
+  transactionIds: string[]
+}
+
+export const getOpenCardInvoiceSnapshot = (
+  card: any,
+  transactions: any[],
+  referenceDate: Date
+): OpenCardInvoiceSnapshot => {
+  const billingCycle = getCardBillingCycleForMonth(card, referenceDate)
+  const openTransactions = transactions.filter(
+    (transaction: any) =>
+      transaction.credit_card_id === card.id &&
+      transaction.type === 'expense' &&
+      transaction.affects_balance !== true &&
+      isTransactionInCardCycle(card, transaction.date, billingCycle.closingDate)
+  )
+
+  return {
+    amount: openTransactions.reduce((sum: number, transaction: any) => sum + safeNum(transaction.amount), 0),
+    billingCycle,
+    transactionIds: openTransactions.map((transaction: any) => String(transaction.id || '')).filter(Boolean),
+  }
+}
+
 interface ReconcileCardInvoiceCycleInput {
   userId: string
   card: any

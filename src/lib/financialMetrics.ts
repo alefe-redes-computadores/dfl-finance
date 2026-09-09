@@ -160,15 +160,29 @@ export function getHistoricalMonthlyAverages(
   months = 6,
   context?: FinancialContext
 ) {
-  const flows = Array.from({ length: months }, (_, index) =>
-    getMonthlyFlow(
-      transactions,
-      subMonths(referenceDate, index + 1),
-      context
-    )
-  )
+  const samples = Array.from(
+    { length: Math.max(0, months) },
+    (_, index) => {
+      const monthTransactions = filterTransactionsByMonth(
+        transactions,
+        subMonths(referenceDate, index + 1),
+        context
+      )
 
-  if (flows.length === 0) {
+      if (monthTransactions.length === 0) return null
+
+      const income = sumIncome(monthTransactions)
+      const expense = sumExpense(monthTransactions)
+
+      return {
+        income,
+        expense,
+        net: income - expense,
+      }
+    }
+  ).filter((sample): sample is { income: number; expense: number; net: number } => sample !== null)
+
+  if (samples.length === 0) {
     return {
       averageIncome: 0,
       averageExpense: 0,
@@ -177,19 +191,15 @@ export function getHistoricalMonthlyAverages(
     }
   }
 
-  const averageIncome =
-    flows.reduce((sum, flow) => sum + flow.income, 0) /
-    flows.length
-
-  const averageExpense =
-    flows.reduce((sum, flow) => sum + flow.expense, 0) /
-    flows.length
+  const averageIncome = samples.reduce((sum, sample) => sum + sample.income, 0) / samples.length
+  const averageExpense = samples.reduce((sum, sample) => sum + sample.expense, 0) / samples.length
+  const averageNet = samples.reduce((sum, sample) => sum + sample.net, 0) / samples.length
 
   return {
     averageIncome,
     averageExpense,
-    averageNet: averageIncome - averageExpense,
-    monthsUsed: flows.length,
+    averageNet,
+    monthsUsed: samples.length,
   }
 }
 

@@ -16,7 +16,7 @@ import { format, parseISO, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useProjection, ProjectionData } from '@/hooks/useProjection'
 import { useContext_ } from '@/components/ContextToggle'
-import { Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 
 interface ProjectionChartProps {
   hideBalance?: boolean
@@ -164,8 +164,9 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
         </div>
 
         {projection.dayZero && projection.dayZero <= 30 && (
-          <div className="px-3 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold">
-            ⚠️ Dia {projection.dayZero}
+          <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[10px] font-bold text-red-600 dark:bg-red-900/30 dark:text-red-400">
+            <AlertTriangle size={11} />
+            Dia {projection.dayZero}
           </div>
         )}
       </div>

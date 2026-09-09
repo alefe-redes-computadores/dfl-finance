@@ -102,6 +102,35 @@ export function isDebtPayment(
   )
 }
 
+export interface DebtPaymentTransactionLike {
+  debt_id?: string | null
+  type?: string | null
+  status?: string | null
+  amount?: number | null
+  debt_applied_amount?: number | null
+}
+
+export function getDebtAppliedPaymentAmount(tx: DebtPaymentTransactionLike) {
+  if (!tx.debt_id || tx.type !== 'income' || tx.status !== 'done') return 0
+
+  const applied = Number(tx.debt_applied_amount)
+  if (Number.isFinite(applied) && applied > 0) return applied
+
+  const amount = Number(tx.amount)
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0
+}
+
+export function buildDebtPaymentTotals(transactions: DebtPaymentTransactionLike[]) {
+  const result = new Map<string, number>()
+  for (const tx of transactions) {
+    if (!tx.debt_id) continue
+    const applied = getDebtAppliedPaymentAmount(tx)
+    if (applied <= 0) continue
+    result.set(tx.debt_id, (result.get(tx.debt_id) || 0) + Math.round(applied * 100))
+  }
+  return result
+}
+
 export function getDebtStatusFromAmounts(
   totalAmountCents: number,
   paidAmountCents: number

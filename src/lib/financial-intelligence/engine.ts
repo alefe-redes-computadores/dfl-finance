@@ -298,29 +298,42 @@ export function buildFinancialIntelligence({
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 8)
 
+  const debtPaymentsById = new Map<string, number>()
+
+  for (const transaction of transactions) {
+    if (
+      transaction.context !== context ||
+      !transaction.debt_id ||
+      transaction.type !== 'income' ||
+      transaction.status !== 'done'
+    ) continue
+
+    const appliedCandidate = safeNumber(transaction.debt_applied_amount)
+    const applied = appliedCandidate > 0 ? appliedCandidate : safeNumber(transaction.amount)
+    if (applied <= 0) continue
+
+    debtPaymentsById.set(
+      transaction.debt_id,
+      (debtPaymentsById.get(transaction.debt_id) || 0) + applied
+    )
+  }
+
   let receivablesOpen = 0
   let receivablesOverdue = 0
   let overdueReceivablesCount = 0
 
   for (const debt of debts) {
-    if (
-      debt.context !== context ||
-      debt.status === 'paid' ||
-      debt.status === 'cancelled'
-    ) continue
+    if (debt.context !== context || debt.status === 'cancelled') continue
 
-    const remaining = Math.max(
-      0,
-      safeNumber(debt.total_amount) -
-        safeNumber(debt.paid_amount)
-    )
+    const paidFromLedger = debt.id ? debtPaymentsById.get(debt.id) || 0 : 0
+    const paid = paidFromLedger > 0 ? paidFromLedger : safeNumber(debt.paid_amount)
+    const remaining = Math.max(0, safeNumber(debt.total_amount) - paid)
+
+    if (remaining <= 0) continue
 
     receivablesOpen += remaining
 
-    if (
-      debt.due_date &&
-      String(debt.due_date).slice(0, 10) < todayISO
-    ) {
+    if (debt.due_date && String(debt.due_date).slice(0, 10) < todayISO) {
       receivablesOverdue += remaining
       overdueReceivablesCount += 1
     }
