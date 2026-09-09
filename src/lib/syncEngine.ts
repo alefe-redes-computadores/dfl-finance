@@ -297,12 +297,27 @@ function sanitizeRemotePayload(
             )
             .toLowerCase()
 
-        if (
-          normalizedKey ===
-          'updatedat'
-        ) {
+        const legacyRemoteKeyAliases: Record<string, string> = {
+          accountid: 'account_id',
+          categoryid: 'category_id',
+          creditcardid: 'credit_card_id',
+          invoiceid: 'invoice_id',
+          debtid: 'debt_id',
+          goalid: 'goal_id',
+          contactid: 'contact_id',
+          linkedtransactionid: 'linked_transaction_id',
+          recurringgroupid: 'recurring_group_id',
+          affectsbalance: 'affects_balance',
+          createdat: 'created_at',
+          updatedat: 'updated_at',
+        }
+
+        const canonicalKey =
+          legacyRemoteKeyAliases[normalizedKey]
+
+        if (canonicalKey) {
           return [
-            'updated_at',
+            canonicalKey,
             value,
           ]
         }
