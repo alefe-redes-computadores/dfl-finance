@@ -28,6 +28,8 @@ import { useCardById } from '@/hooks/useCardById'
 import { useCardTransactions } from '@/hooks/useCardTransactions'
 import {
   getCardBillingCycleForMonth,
+  getCardCycleFinancialSnapshot,
+  getCardOutstandingExposure,
   isTransactionInCardCycle,
   payCardInvoice,
 } from '@/lib/cardOperations'
@@ -165,6 +167,11 @@ function CardDetailContent() {
     filters: { context },
   })
 
+  const { data: localInvoices } = useLocalData({
+    table: 'credit_invoices' as any,
+    filters: { context },
+  })
+
   const containerRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
@@ -252,31 +259,88 @@ function CardDetailContent() {
       )
   }, [allTransactions, card, selectedCycle])
 
-  const openTransactions = useMemo(
+  const cycleSnapshot = useMemo(
     () =>
-      transactions.filter(
-        (t: any) => t.type === 'expense' && t.affects_balance !== true
-      ),
-    [transactions]
+      card
+        ? getCardCycleFinancialSnapshot(
+            card,
+            allTransactions || [],
+            localInvoices || [],
+            currentMonth
+          )
+        : null,
+    [
+      card,
+      allTransactions,
+      localInvoices,
+      currentMonth,
+    ]
   )
 
-  const totalFatura = useMemo(() => {
-    return openTransactions.reduce(
-      (sum: number, t: any) => sum + (Number(t.amount) || 0),
-      0
-    )
-  }, [openTransactions])
+  const openTransactions = useMemo(
+    () => {
+      if (!cycleSnapshot) return []
+
+      const ids =
+        new Set(
+          cycleSnapshot.transactionIds
+        )
+
+      return (allTransactions || []).filter(
+        (transaction: any) =>
+          ids.has(transaction.id)
+      )
+    },
+    [
+      allTransactions,
+      cycleSnapshot,
+    ]
+  )
+
+  const totalFatura =
+    cycleSnapshot?.displayAmount || 0
+
+  const openFatura =
+    cycleSnapshot?.openAmount || 0
+
+  const outstandingExposure = useMemo(
+    () =>
+      card
+        ? getCardOutstandingExposure(
+            card,
+            allTransactions || []
+          )
+        : 0,
+    [card, allTransactions]
+  )
 
   const limitPercent = useMemo(
-    () => getLimitPercent(totalFatura, Number(card?.limit_amount) || 0),
-    [totalFatura, card?.limit_amount]
+    () =>
+      getLimitPercent(
+        outstandingExposure,
+        Number(card?.limit_amount) || 0
+      ),
+    [
+      outstandingExposure,
+      card?.limit_amount,
+    ]
   )
 
-  const limitColor = useMemo(() => getLimitColor(limitPercent), [limitPercent])
+  const limitColor =
+    useMemo(
+      () =>
+        getLimitColor(limitPercent),
+      [limitPercent]
+    )
 
   const available = useMemo(
-    () => (Number(card?.limit_amount) || 0) - totalFatura,
-    [card?.limit_amount, totalFatura]
+    () =>
+      (Number(card?.limit_amount) || 0) -
+      outstandingExposure,
+    [
+      card?.limit_amount,
+      outstandingExposure,
+    ]
   )
 
   const isNearLimit = limitPercent >= 90
@@ -289,7 +353,7 @@ function CardDetailContent() {
   const handlePayFatura = async () => {
     if (!user?.id || !card) return
 
-    if (totalFatura <= 0 || openTransactions.length === 0) {
+    if (openFatura <= 0 || openTransactions.length === 0) {
       showToast('Esta fatura não possui compras abertas.', 'warning')
       hapticError()
       return
@@ -300,11 +364,17 @@ function CardDetailContent() {
     try {
       const accounts = (localAccounts || []) as any[]
       const targetAccount =
-        accounts.find((account) => account.id === card.payment_account_id) ||
-        accounts[0]
+        accounts.find(
+          (account) =>
+            account.id ===
+            card.payment_account_id
+        )
 
       if (!targetAccount) {
-        showToast('Crie uma conta primeiro.', 'warning')
+        showToast(
+          'Defina a conta de pagamento deste cartão antes de pagar a fatura.',
+          'warning'
+        )
         hapticError()
         return
       }
@@ -449,6 +519,16 @@ function CardDetailContent() {
                 <p className="leading-none text-[26px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
                   {formatCurrency(totalFatura)}
                 </p>
+                {cycleSnapshot?.status === 'paid' && (
+                  <p className="mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Fatura paga
+                  </p>
+                )}
+                {cycleSnapshot?.status === 'overdue' && (
+                  <p className="mt-1 text-[11px] font-semibold text-red-500 dark:text-red-400">
+                    Fatura vencida
+                  </p>
+                )}
               </div>
 
               <div className="text-right">
@@ -501,7 +581,8 @@ function CardDetailContent() {
             </div>
           </div>
 
-          {totalFatura > 0 && (
+          {openFatura > 0 &&
+            cycleSnapshot?.status !== 'paid' && (
             <button
               onClick={() => {
                 vibrate([10])
@@ -673,7 +754,7 @@ function CardDetailContent() {
                   Valor da fatura
                 </span>
                 <span className="text-[22px] font-black tracking-tight text-red-500">
-                  {formatCurrency(totalFatura)}
+                  {formatCurrency(openFatura)}
                 </span>
               </div>
             </div>

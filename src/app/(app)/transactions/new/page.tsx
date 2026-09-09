@@ -33,6 +33,10 @@ import { useSmartSearch, SmartSearchSuggestion } from '@/hooks/useSmartSearch'
 import { db } from '@/lib/db'
 import { createPortal } from 'react-dom'
 import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
+import {
+  reconcileCardInvoiceCycle,
+  splitMoneyIntoInstallments,
+} from '@/lib/cardOperations'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Repetition = 'once' | 'installments' | 'recurring'
@@ -639,13 +643,48 @@ function NewTransactionContent() {
       }
     }
 
-    const installmentAmount = totalParcels > 1 && repetition === 'installments' ? amountNum / totalParcels : amountNum
+    const installmentAmounts =
+      repetition === 'installments'
+        ? splitMoneyIntoInstallments(
+            amountNum,
+            totalParcels
+          )
+        : Array.from(
+            { length: totalParcels },
+            () => amountNum
+          )
 
     try {
       const baseDate = createLocalDate(date)
       
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        for (let i = 0; i < totalParcels; i++) {
+      await db.transaction(
+        'rw',
+        db.accounts,
+        db.credit_cards,
+        db.credit_invoices,
+        db.transactions,
+        db.syncQueue,
+        async () => {
+          let freshCard: any = null
+
+          if (creditCardId) {
+            freshCard =
+              await db.credit_cards.get(
+                creditCardId
+              )
+
+            if (
+              !freshCard ||
+              freshCard.user_id !== user.id
+            ) {
+              throw new Error(
+                'Cartão selecionado não está disponível.'
+              )
+            }
+          }
+          for (let i = 0; i < totalParcels; i++) {
+            const installmentAmount =
+              installmentAmounts[i] || 0
           let installmentDate: string
 
           if (repetition === 'recurring') {
@@ -679,7 +718,7 @@ function NewTransactionContent() {
             contact_id: contactId || null,
             tag_ids: selectedTags.length > 0 ? selectedTags : null,
             date: installmentDate,
-            status: creditCardId ? 'done' : (isPaid ? 'done' : 'pending'),
+            status: creditCardId ? 'pending' : (isPaid ? 'done' : 'pending'),
             context: effectiveContext,
             receipt_url: i === 0 ? receiptUrl : null,
             notes: finalNotes || null,
@@ -714,6 +753,15 @@ function NewTransactionContent() {
             if (!balanceResult.success) {
               throw new Error(balanceResult.error || 'Erro ao atualizar saldo da conta')
             }
+          }
+
+          if (freshCard) {
+            await reconcileCardInvoiceCycle({
+              userId: user.id,
+              card: freshCard,
+              transactionDate:
+                installmentDate,
+            })
           }
 
           if (isReimbursable && i === 0) {

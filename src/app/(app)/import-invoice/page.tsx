@@ -395,6 +395,7 @@ export default function ImportInvoicePage() {
       await db.transaction(
         'rw',
         [
+          'accounts',
           'credit_cards',
           'credit_invoices',
           'transactions',
@@ -514,6 +515,48 @@ export default function ImportInvoicePage() {
                 transactionDate,
               })
             }
+          }
+
+          if (freshAccount) {
+            const balanceDelta =
+              payload.reduce(
+                (
+                  sum: number,
+                  transaction: any
+                ) =>
+                  transaction.type === 'income'
+                    ? sum +
+                      Number(
+                        transaction.amount || 0
+                      )
+                    : sum -
+                      Number(
+                        transaction.amount || 0
+                      ),
+                0
+              )
+
+            const updatedAccount = {
+              ...freshAccount,
+              balance:
+                Number(
+                  freshAccount.balance || 0
+                ) + balanceDelta,
+              updated_at: now,
+              sync_status: 'pending',
+            }
+
+            await db.accounts.put(
+              updatedAccount
+            )
+
+            await addToSyncQueue(
+              user.id,
+              'accounts',
+              'update',
+              freshAccount.id,
+              updatedAccount
+            )
           }
 
           const notificationId = crypto.randomUUID()

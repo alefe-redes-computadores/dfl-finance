@@ -167,20 +167,205 @@ export const getOpenCardInvoiceSnapshot = (
   transactions: any[],
   referenceDate: Date
 ): OpenCardInvoiceSnapshot => {
-  const billingCycle = getCardBillingCycleForMonth(card, referenceDate)
-  const openTransactions = transactions.filter(
-    (transaction: any) =>
-      transaction.credit_card_id === card.id &&
-      transaction.type === 'expense' &&
-      transaction.affects_balance !== true &&
-      isTransactionInCardCycle(card, transaction.date, billingCycle.closingDate)
-  )
+  const billingCycle =
+    getCardBillingCycleForMonth(
+      card,
+      referenceDate
+    )
+
+  const openTransactions =
+    transactions.filter(
+      (transaction: any) =>
+        transaction.credit_card_id === card.id &&
+        transaction.type === 'expense' &&
+        transaction.affects_balance !== true &&
+        isTransactionInCardCycle(
+          card,
+          transaction.date,
+          billingCycle.closingDate
+        )
+    )
 
   return {
-    amount: openTransactions.reduce((sum: number, transaction: any) => sum + safeNum(transaction.amount), 0),
+    amount: openTransactions.reduce(
+      (sum: number, transaction: any) =>
+        sum + safeNum(transaction.amount),
+      0
+    ),
     billingCycle,
-    transactionIds: openTransactions.map((transaction: any) => String(transaction.id || '')).filter(Boolean),
+    transactionIds:
+      openTransactions
+        .map((transaction: any) =>
+          String(transaction.id || '')
+        )
+        .filter(Boolean),
   }
+}
+
+export interface CardCycleFinancialSnapshot {
+  billingCycle: CardBillingCycle
+  invoiceId: string | null
+  status:
+    | 'empty'
+    | 'open'
+    | 'overdue'
+    | 'paid'
+  openAmount: number
+  paidAmount: number
+  displayAmount: number
+  transactionIds: string[]
+}
+
+const toCivilDate = (value: string) => {
+  const [year, month, day] =
+    String(value)
+      .slice(0, 10)
+      .split('-')
+      .map(Number)
+
+  if (!year || !month || !day) {
+    return null
+  }
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12
+  )
+}
+
+export const getCardCycleFinancialSnapshot = (
+  card: any,
+  transactions: any[],
+  invoices: any[],
+  referenceDate: Date,
+  now = new Date()
+): CardCycleFinancialSnapshot => {
+  const open =
+    getOpenCardInvoiceSnapshot(
+      card,
+      transactions,
+      referenceDate
+    )
+
+  const invoice =
+    invoices.find(
+      (item: any) =>
+        item.credit_card_id === card.id &&
+        item.closing_date ===
+          open.billingCycle.closingDate
+    ) || null
+
+  const paidAmount =
+    safeNum(invoice?.paid_amount)
+
+  const persistedTotal =
+    safeNum(invoice?.total_amount)
+
+  let status:
+    CardCycleFinancialSnapshot['status'] =
+      'empty'
+
+  if (invoice?.status === 'paid') {
+    status = 'paid'
+  } else if (open.amount > 0) {
+    const due =
+      toCivilDate(
+        open.billingCycle.dueDate
+      )
+
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      12
+    )
+
+    status =
+      due && due.getTime() < today.getTime()
+        ? 'overdue'
+        : 'open'
+  }
+
+  const displayAmount =
+    status === 'paid'
+      ? Math.max(
+          persistedTotal,
+          paidAmount
+        )
+      : open.amount
+
+  return {
+    billingCycle:
+      open.billingCycle,
+    invoiceId:
+      invoice?.id || null,
+    status,
+    openAmount:
+      open.amount,
+    paidAmount,
+    displayAmount,
+    transactionIds:
+      open.transactionIds,
+  }
+}
+
+export const getCardOutstandingExposure = (
+  card: any,
+  transactions: any[]
+) => {
+  return transactions
+    .filter(
+      (transaction: any) =>
+        transaction.credit_card_id === card.id &&
+        transaction.type === 'expense' &&
+        transaction.affects_balance !== true
+    )
+    .reduce(
+      (sum: number, transaction: any) =>
+        sum + safeNum(transaction.amount),
+      0
+    )
+}
+
+export const splitMoneyIntoInstallments = (
+  totalAmount: number,
+  installments: number
+) => {
+  const count =
+    Math.max(
+      1,
+      Math.floor(
+        Number(installments) || 1
+      )
+    )
+
+  const totalCents =
+    Math.max(
+      0,
+      Math.round(
+        safeNum(totalAmount) * 100
+      )
+    )
+
+  const baseCents =
+    Math.floor(
+      totalCents / count
+    )
+
+  const remainder =
+    totalCents -
+    baseCents * count
+
+  return Array.from(
+    { length: count },
+    (_, index) =>
+      (
+        baseCents +
+        (index < remainder ? 1 : 0)
+      ) / 100
+  )
 }
 
 interface ReconcileCardInvoiceCycleInput {
@@ -249,6 +434,26 @@ export async function reconcileCardInvoiceCycle({
   }
 
   const now = new Date().toISOString()
+
+  if (
+    invoice &&
+    invoice.status !== 'paid' &&
+    total <= 0
+  ) {
+    await db.credit_invoices.delete(
+      invoice.id
+    )
+
+    await addToSyncQueue(
+      userId,
+      'credit_invoices',
+      'delete',
+      invoice.id,
+      invoice
+    )
+
+    return null
+  }
 
   if (!invoice) {
     invoice = {

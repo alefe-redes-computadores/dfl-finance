@@ -17,6 +17,7 @@ export interface LocalTransaction {
   category_id?: string | null
   account_id?: string | null
   credit_card_id?: string | null
+  invoice_id?: string | null
   tag_ids?: string[] | null
   contact_id?: string | null
   notes?: string | null

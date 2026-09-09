@@ -27,6 +27,7 @@ import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
 import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
+import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
 
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
@@ -203,20 +204,26 @@ function EditTransactionContent() {
 
     const existingPaidCardPurchase =
       !isNew &&
-      Boolean(creditCardId) &&
-      tx?.credit_card_id === creditCardId &&
+      Boolean(tx?.credit_card_id) &&
+      tx?.type === 'expense' &&
       tx?.affects_balance === true
 
+    if (existingPaidCardPurchase) {
+      hapticError()
+      showToast(
+        'Esta compra pertence a uma fatura já paga. Para preservar o saldo e o histórico da fatura, ela não pode ser editada por esta tela.',
+        'warning'
+      )
+      setSaving(false)
+      return
+    }
+
     const payloadAffectsBalance =
-      creditCardId
-        ? existingPaidCardPurchase
-        : isPaid
+      creditCardId ? false : isPaid
 
     const payloadStatus =
       creditCardId
-        ? existingPaidCardPurchase
-          ? 'done'
-          : 'pending'
+        ? 'pending'
         : isPaid
           ? 'done'
           : 'pending'
@@ -249,7 +256,14 @@ function EditTransactionContent() {
     }
 
     try {
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
+      await db.transaction(
+        'rw',
+        db.accounts,
+        db.credit_cards,
+        db.credit_invoices,
+        db.transactions,
+        db.syncQueue,
+        async () => {
         // 1) Reverte exatamente o efeito financeiro antigo.
         if (
           !isNew &&
@@ -312,6 +326,59 @@ function EditTransactionContent() {
             await safeUpdate('transactions', primaryId, payload),
             'Erro ao atualizar transação'
           )
+        }
+
+        const cardReferences = [
+          !isNew && tx?.credit_card_id && tx?.date
+            ? {
+                cardId: tx.credit_card_id,
+                date: tx.date,
+              }
+            : null,
+          payload.credit_card_id && payload.date
+            ? {
+                cardId: payload.credit_card_id,
+                date: payload.date,
+              }
+            : null,
+        ].filter(Boolean) as Array<{
+          cardId: string
+          date: string
+        }>
+
+        const uniqueCardReferences =
+          new Map<string, {
+            cardId: string
+            date: string
+          }>()
+
+        for (const reference of cardReferences) {
+          uniqueCardReferences.set(
+            `${reference.cardId}:${reference.date}`,
+            reference
+          )
+        }
+
+        for (const reference of uniqueCardReferences.values()) {
+          const freshCard =
+            await db.credit_cards.get(
+              reference.cardId
+            )
+
+          if (!freshCard) continue
+
+          if (freshCard.user_id !== user.id) {
+            throw new Error(
+              'Cartão da transação não pertence ao usuário atual.'
+            )
+          }
+
+          await reconcileCardInvoiceCycle({
+            userId: user.id,
+            card: freshCard,
+            transactionDate:
+              reference.date,
+          })
         }
 
         const otherContext = payload.context === 'dfl' ? 'personal' : 'dfl'
@@ -760,7 +827,20 @@ function EditTransactionContent() {
       idsToDelete = Array.from(new Set(idsToDelete.filter(Boolean)))
       const deleteSet = new Set(idsToDelete)
 
-      await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
+      await db.transaction(
+        'rw',
+        db.accounts,
+        db.credit_cards,
+        db.credit_invoices,
+        db.transactions,
+        db.syncQueue,
+        async () => {
+        const affectedCardReferences =
+          new Map<string, {
+            cardId: string
+            date: string
+          }>()
+
         for (const txId of idsToDelete) {
           const txRecord: any = await db.transactions.get(txId)
           if (!txRecord) continue
@@ -773,6 +853,30 @@ function EditTransactionContent() {
           if (isManagedSettlement) {
             throw new Error(
               'Esta movimentação é controlada pelo fluxo que a originou e não pode ser excluída por esta tela.'
+            )
+          }
+
+          const isPaidCardPurchase =
+            Boolean(txRecord.credit_card_id) &&
+            txRecord.type === 'expense' &&
+            txRecord.affects_balance === true
+
+          if (isPaidCardPurchase) {
+            throw new Error(
+              'Uma das compras selecionadas pertence a uma fatura já paga e não pode ser excluída por esta tela.'
+            )
+          }
+
+          if (
+            txRecord.credit_card_id &&
+            txRecord.date
+          ) {
+            affectedCardReferences.set(
+              `${txRecord.credit_card_id}:${txRecord.date}`,
+              {
+                cardId: txRecord.credit_card_id,
+                date: txRecord.date,
+              }
             )
           }
 
@@ -821,6 +925,31 @@ function EditTransactionContent() {
             await safeDelete('transactions', txId),
             'Erro ao excluir transação'
           )
+        }
+
+        for (
+          const reference of
+            affectedCardReferences.values()
+        ) {
+          const freshCard =
+            await db.credit_cards.get(
+              reference.cardId
+            )
+
+          if (!freshCard) continue
+
+          if (freshCard.user_id !== user.id) {
+            throw new Error(
+              'Cartão da transação não pertence ao usuário atual.'
+            )
+          }
+
+          await reconcileCardInvoiceCycle({
+            userId: user.id,
+            card: freshCard,
+            transactionDate:
+              reference.date,
+          })
         }
       })
 

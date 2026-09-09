@@ -17,7 +17,10 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useToast } from '@/contexts/ToastContext'
 import { db } from '@/lib/db'
-import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
+import {
+  reconcileCardInvoiceCycle,
+  splitMoneyIntoInstallments,
+} from '@/lib/cardOperations'
 
 export default function CardExpensePage() {
   const router = useRouter()
@@ -97,7 +100,11 @@ export default function CardExpensePage() {
     const selectedCat = categories.find((c: any) => c.id === categoryId)
     const finalDescription = description.trim() || selectedCat?.name || 'Despesa no Cartão'
     const recurringGroupId = installments > 1 ? crypto.randomUUID() : null
-    const installmentAmount = installments > 1 ? amountNum / installments : amountNum
+    const installmentAmounts =
+      splitMoneyIntoInstallments(
+        amountNum,
+        installments
+      )
     const baseDate = new Date(`${date}T12:00:00`)
 
     try {
@@ -124,6 +131,8 @@ export default function CardExpensePage() {
         }
 
         for (let i = 0; i < installments; i++) {
+          const installmentAmount =
+            installmentAmounts[i] || 0
           const installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
           const txId = crypto.randomUUID()
 

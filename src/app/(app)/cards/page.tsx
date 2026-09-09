@@ -26,8 +26,8 @@ import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautif
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
-  getCardBillingCycleForMonth,
-  isTransactionInCardCycle,
+  getCardCycleFinancialSnapshot,
+  getCardOutstandingExposure,
 } from '@/lib/cardOperations'
 
 // ========== CHAVE PARA LOCALSTORAGE ==========
@@ -72,6 +72,11 @@ export default function CardsPage() {
 
   const { data: localTransactions, loading: txLoading, reload: reloadTransactions } = useLocalData({
     table: 'transactions' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localInvoices, loading: invoicesLoading } = useLocalData({
+    table: 'credit_invoices' as any,
     filters: { context: effectiveContext },
   })
 
@@ -178,68 +183,68 @@ export default function CardsPage() {
 
   useEffect(() => {
     if (!user?.id) return
-    if (!cardsLoading && !txLoading) setLoading(false)
-  }, [user?.id, cardsLoading, txLoading])
+    if (!cardsLoading && !txLoading && !invoicesLoading) {
+      setLoading(false)
+    }
+  }, [
+    user?.id,
+    cardsLoading,
+    txLoading,
+    invoicesLoading,
+  ])
 
   const monthLabel = format(currentDate, 'MMM yyyy', { locale: ptBR })
 
-  const cardsById = new Map(
-    (localCards || []).map(
-      (card: any) => [card.id, card]
-    )
-  )
+  const cardsWithInvoice = useMemo(
+    () =>
+      (localCards || []).map(
+        (card: any) => {
+          const cycle =
+            getCardCycleFinancialSnapshot(
+              card,
+              localTransactions || [],
+              localInvoices || [],
+              currentDate
+            )
 
-  const transactionsByCard = (localTransactions || [])
-    .filter(
-      (tx: any) =>
-        tx.credit_card_id &&
-        tx.type === 'expense' &&
-        tx.affects_balance !== true
-    )
-    .reduce(
-      (
-        acc: Record<string, number>,
-        tx: any
-      ) => {
-        const card: any =
-          cardsById.get(tx.credit_card_id)
+          const exposure =
+            getCardOutstandingExposure(
+              card,
+              localTransactions || []
+            )
 
-        if (!card) return acc
-
-        const cycle =
-          getCardBillingCycleForMonth(
-            card,
-            currentDate
-          )
-
-        if (
-          !isTransactionInCardCycle(
-            card,
-            tx.date,
-            cycle.closingDate
-          )
-        ) {
-          return acc
+          return {
+            ...card,
+            faturaAtual:
+              cycle.displayAmount,
+            faturaAberta:
+              cycle.openAmount,
+            invoiceStatus:
+              cycle.status,
+            billingCycle:
+              cycle.billingCycle,
+            usedLimit:
+              exposure,
+          }
         }
-
-        acc[card.id] =
-          (acc[card.id] || 0) +
-          Number(tx.amount || 0)
-
-        return acc
-      },
-      {}
-    )
-
-  const cardsWithInvoice = (localCards || []).map((card: any) => ({
-    ...card,
-    faturaAtual: transactionsByCard[card.id] || 0,
-  }))
-
-  const totalInvoices = cardsWithInvoice.reduce(
-    (sum: number, card: any) => sum + (card.faturaAtual || 0),
-    0
+      ),
+    [
+      localCards,
+      localTransactions,
+      localInvoices,
+      currentDate,
+    ]
   )
+
+  const totalInvoices =
+    cardsWithInvoice.reduce(
+      (sum: number, card: any) =>
+        sum +
+        Number(
+          card.faturaAtual || 0
+        ),
+      0
+    )
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
@@ -552,9 +557,14 @@ export default function CardsPage() {
         ) : (
           <div className="space-y-3">
             {sortedCards.map((card: any, index: number) => {
-              const limitPercent = getLimitPercent(card.faturaAtual || 0, Number(card.limit_amount) || 0)
+              const limitPercent = getLimitPercent(
+                card.usedLimit || 0,
+                Number(card.limit_amount) || 0
+              )
               const limitColor = getLimitColor(limitPercent)
-              const available = (Number(card.limit_amount) || 0) - (card.faturaAtual || 0)
+              const available =
+                (Number(card.limit_amount) || 0) -
+                (card.usedLimit || 0)
               const isNearLimit = limitPercent >= 90
               const cardBgColor = card.color || '#334155'
 
@@ -595,7 +605,11 @@ export default function CardsPage() {
                   <div className="grid grid-cols-2 gap-3 px-4 py-4">
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
-                        Fatura atual
+                        {card.invoiceStatus === 'paid'
+                          ? 'Fatura paga'
+                          : card.invoiceStatus === 'overdue'
+                            ? 'Fatura vencida'
+                            : 'Fatura do ciclo'}
                       </p>
                       <p className="mt-1 text-[20px] font-bold tracking-tight text-gray-900 dark:text-gray-100">
                         {formatCurrency(card.faturaAtual)}
