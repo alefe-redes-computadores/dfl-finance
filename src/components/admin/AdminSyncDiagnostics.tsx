@@ -42,6 +42,11 @@ interface TableDiag {
   remoteError: string | null
 }
 
+interface TransactionDiff {
+  localOnly: string[]
+  remoteOnly: string[]
+}
+
 function Row({ label, value, ok }: { label: string; value: any; ok?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2 border-b border-gray-100 py-1.5 last:border-b-0 dark:border-slate-700/50">
@@ -70,9 +75,15 @@ export function AdminSyncDiagnostics() {
   const [resyncMsg, setResyncMsg] = useState<string>('')
   const [lastPullValue, setLastPullValue] = useState<string>('(vazio)')
   const [sessionUserId, setSessionUserId] = useState<string>('(carregando...)')
+  const [transactionDiff, setTransactionDiff] =
+    useState<TransactionDiff | null>(null)
+  const [transactionDiffError, setTransactionDiffError] =
+    useState<string | null>(null)
 
   const loadDiagnostics = async () => {
     setLoading(true)
+    setTransactionDiff(null)
+    setTransactionDiffError(null)
 
     const { data: sessionData } = await supabase.auth.getSession()
     const uid = sessionData?.session?.user?.id || user?.id
@@ -115,6 +126,92 @@ export function AdminSyncDiagnostics() {
       }
 
       results.push({ table, localCount, remoteCount, remoteError })
+    }
+
+    const transactionDiag =
+      results.find(
+        (item) =>
+          item.table ===
+          'transactions'
+      )
+
+    if (
+      transactionDiag &&
+      transactionDiag.remoteError ===
+        null &&
+      transactionDiag.remoteCount !==
+        null &&
+      transactionDiag.remoteCount !==
+        transactionDiag.localCount
+    ) {
+      try {
+        const localRows =
+          await db.transactions
+            .where('user_id')
+            .equals(uid)
+            .toArray()
+
+        const localIds =
+          new Set(
+            localRows
+              .map((item: any) =>
+                item?.id
+              )
+              .filter(
+                (id: any): id is string =>
+                  typeof id === 'string' &&
+                  id.length > 0
+              )
+          )
+
+        const {
+          data: remoteRows,
+          error: remoteIdsError,
+        } =
+          await supabase
+            .from('transactions')
+            .select('id')
+            .eq('user_id', uid)
+
+        if (remoteIdsError) {
+          throw remoteIdsError
+        }
+
+        const remoteIds =
+          new Set(
+            (remoteRows || [])
+              .map((item: any) =>
+                item?.id
+              )
+              .filter(
+                (id: any): id is string =>
+                  typeof id === 'string' &&
+                  id.length > 0
+              )
+          )
+
+        setTransactionDiff({
+          localOnly:
+            Array.from(
+              localIds
+            ).filter(
+              (id) =>
+                !remoteIds.has(id)
+            ),
+          remoteOnly:
+            Array.from(
+              remoteIds
+            ).filter(
+              (id) =>
+                !localIds.has(id)
+            ),
+        })
+      } catch (error: any) {
+        setTransactionDiffError(
+          error?.message ||
+            'Falha ao comparar IDs de transactions.'
+        )
+      }
     }
 
     setDiags(results)
@@ -250,6 +347,75 @@ export function AdminSyncDiagnostics() {
         <p className="mb-4 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
           As contagens local e remota coincidem nas tabelas consultadas. Isso não prova igualdade de conteúdo.
         </p>
+      )}
+
+      {(transactionDiff ||
+        transactionDiffError) && (
+        <div className="mb-4 rounded-[16px] border border-sky-200 bg-sky-50 p-3 dark:border-sky-900/40 dark:bg-sky-900/10">
+          <p className="text-[12px] font-semibold text-sky-700 dark:text-sky-300">
+            Raio-X de transactions
+          </p>
+
+          {transactionDiffError ? (
+            <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">
+              {transactionDiffError}
+            </p>
+          ) : transactionDiff ? (
+            <div className="mt-2 space-y-3">
+              <div>
+                <p className="text-[11px] font-medium text-gray-700 dark:text-gray-200">
+                  Só no Dexie: {transactionDiff.localOnly.length}
+                </p>
+                {transactionDiff.localOnly.length > 0 ? (
+                  <div className="mt-1 max-h-28 overflow-y-auto rounded-[10px] bg-white/70 p-2 font-mono text-[10px] text-gray-600 dark:bg-slate-950/40 dark:text-gray-300">
+                    {transactionDiff.localOnly.map(
+                      (id) => (
+                        <div
+                          key={`local-${id}`}
+                          className="break-all"
+                        >
+                          {id}
+                        </div>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Nenhum ID exclusivamente local.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-[11px] font-medium text-gray-700 dark:text-gray-200">
+                  Só no Supabase: {transactionDiff.remoteOnly.length}
+                </p>
+                {transactionDiff.remoteOnly.length > 0 ? (
+                  <div className="mt-1 max-h-28 overflow-y-auto rounded-[10px] bg-white/70 p-2 font-mono text-[10px] text-gray-600 dark:bg-slate-950/40 dark:text-gray-300">
+                    {transactionDiff.remoteOnly.map(
+                      (id) => (
+                        <div
+                          key={`remote-${id}`}
+                          className="break-all"
+                        >
+                          {id}
+                        </div>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Nenhum ID exclusivamente remoto.
+                  </p>
+                )}
+              </div>
+
+              <p className="text-[10px] leading-4 text-gray-400 dark:text-gray-500">
+                Diagnóstico somente leitura. Nenhum registro é criado, removido ou alterado.
+              </p>
+            </div>
+          ) : null}
+        </div>
       )}
 
       <button
