@@ -21,6 +21,7 @@ export interface FinancialAssistantContext {
 
 const ASSISTANT_REQUEST_TIMEOUT_MS = 25000
 const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 12000
+const ASSISTANT_META_MARKER = '\n__DFL_ASSISTANT_META__'
 
 function timeoutError() {
   return new Error(
@@ -191,7 +192,18 @@ export async function streamChatMessage(
           }
         )
 
-      onUpdate?.(fullText)
+      const visibleText =
+        fullText.includes(
+          ASSISTANT_META_MARKER
+        )
+          ? fullText.split(
+              ASSISTANT_META_MARKER
+            )[0]
+          : fullText
+
+      onUpdate?.(
+        visibleText
+      )
     }
   } catch (error) {
     controller.abort()
@@ -210,12 +222,76 @@ export async function streamChatMessage(
   fullText +=
     decoder.decode()
 
+  let responseText =
+    fullText
+
+  let finishReason = ''
+  let wasTruncated = false
+
+  const metaIndex =
+    fullText.lastIndexOf(
+      ASSISTANT_META_MARKER
+    )
+
+  if (metaIndex >= 0) {
+    responseText =
+      fullText.slice(
+        0,
+        metaIndex
+      )
+
+    const rawMeta =
+      fullText
+        .slice(
+          metaIndex +
+            ASSISTANT_META_MARKER.length
+        )
+        .trim()
+
+    try {
+      const meta =
+        JSON.parse(
+          rawMeta
+        )
+
+      finishReason =
+        String(
+          meta?.finishReason ||
+            ''
+        )
+
+      wasTruncated =
+        meta?.wasTruncated ===
+        true
+    } catch {
+      finishReason =
+        'INVALID_META'
+    }
+  }
+
   const normalized =
-    fullText.trim()
+    responseText.trim()
 
   if (!normalized) {
     throw new Error(
       'O assistente retornou uma resposta vazia.'
+    )
+  }
+
+  if (
+    wasTruncated
+  ) {
+    throw new Error(
+      'A resposta ficou incompleta antes de terminar. Tente novamente.'
+    )
+  }
+
+  if (
+    finishReason ===
+    'INVALID_META'
+  ) {
+    throw new Error(
+      'O assistente retornou uma resposta inválida. Tente novamente.'
     )
   }
 

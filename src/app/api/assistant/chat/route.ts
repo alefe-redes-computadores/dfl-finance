@@ -711,7 +711,8 @@ REGRAS:
 - valores monetários estão em BRL;
 - não diga que acessou banco, internet ou dados fora do contexto fornecido;
 - quando não houver dados suficientes, diga isso claramente;
-- prefira respostas curtas e úteis;
+- prefira respostas curtas e úteis, normalmente em até 5 parágrafos curtos ou 6 itens;
+- conclua a resposta dentro do limite disponível; não termine uma frase, item ou percentual pela metade;
 - use Markdown simples quando ajudar: **negrito**, listas e pequenos títulos.
 
 CONTEXTO FINANCEIRO ESTRUTURADO:
@@ -757,7 +758,7 @@ ${snapshot}`
           generationConfig: {
             temperature: 0.3,
             maxOutputTokens:
-              900,
+              1400,
           },
         }),
         new Promise<never>(
@@ -804,6 +805,35 @@ ${snapshot}`
                 )
               }
             }
+
+            const response =
+              await result.response
+
+            const candidate =
+              response
+                ?.candidates?.[0]
+
+            const finishReason =
+              String(
+                candidate
+                  ?.finishReason ||
+                  ''
+              )
+
+            const wasTruncated =
+              finishReason ===
+                'MAX_TOKENS' ||
+              finishReason ===
+                'OTHER'
+
+            controller.enqueue(
+              encoder.encode(
+                `\n__DFL_ASSISTANT_META__${JSON.stringify({
+                  finishReason,
+                  wasTruncated,
+                })}`
+              )
+            )
 
             controller.close()
           } catch (error) {
