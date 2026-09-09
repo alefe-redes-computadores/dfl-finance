@@ -19,8 +19,16 @@ export interface FinancialAssistantContext {
   suggestedQuestions: string[]
 }
 
-const ASSISTANT_REQUEST_TIMEOUT_MS = 25000
-const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 12000
+export type AssistantProcessingStage =
+  | 'preparing'
+  | 'connecting'
+  | 'generating'
+  | 'streaming'
+  | 'finalizing'
+
+const ASSISTANT_CONNECT_TIMEOUT_MS = 25000
+const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 20000
+const ASSISTANT_STREAM_MAX_TIMEOUT_MS = 75000
 const ASSISTANT_META_MARKER = '\n__DFL_ASSISTANT_META__'
 
 function timeoutError() {
@@ -100,28 +108,41 @@ export async function streamChatMessage(
     FinancialAssistantContext,
   onUpdate?: (
     fullText: string
+  ) => void,
+  onStage?: (
+    stage: AssistantProcessingStage
   ) => void
 ): Promise<string> {
   const controller =
     new AbortController()
 
-  const requestTimeout =
+  onStage?.('preparing')
+
+  const connectTimeout =
     setTimeout(
       () => controller.abort(),
-      ASSISTANT_REQUEST_TIMEOUT_MS
+      ASSISTANT_CONNECT_TIMEOUT_MS
     )
 
   let response: Response
 
   try {
+    onStage?.('connecting')
+
     response =
       await getAuthenticatedResponse(
         messages,
         financialContext,
         controller.signal
       )
+
+    clearTimeout(
+      connectTimeout
+    )
+
+    onStage?.('generating')
   } catch (error: any) {
-    clearTimeout(requestTimeout)
+    clearTimeout(connectTimeout)
 
     if (
       controller.signal.aborted ||
@@ -134,7 +155,7 @@ export async function streamChatMessage(
   }
 
   if (!response.body) {
-    clearTimeout(requestTimeout)
+    clearTimeout(connectTimeout)
     throw new Error(
       'O servidor não disponibilizou o fluxo da resposta.'
     )
@@ -147,6 +168,12 @@ export async function streamChatMessage(
     new TextDecoder()
 
   let fullText = ''
+
+  const streamMaxTimeout =
+    setTimeout(
+      () => controller.abort(),
+      ASSISTANT_STREAM_MAX_TIMEOUT_MS
+    )
 
   try {
     while (true) {
@@ -201,6 +228,12 @@ export async function streamChatMessage(
             )[0]
           : fullText
 
+      if (
+        visibleText.trim()
+      ) {
+        onStage?.('streaming')
+      }
+
       onUpdate?.(
         visibleText
       )
@@ -216,8 +249,11 @@ export async function streamChatMessage(
 
     throw error
   } finally {
-    clearTimeout(requestTimeout)
+    clearTimeout(connectTimeout)
+    clearTimeout(streamMaxTimeout)
   }
+
+  onStage?.('finalizing')
 
   fullText +=
     decoder.decode()

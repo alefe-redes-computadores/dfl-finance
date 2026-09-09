@@ -14,7 +14,9 @@ import {
 } from 'next/navigation'
 import {
   Bot,
+  CheckCircle2,
   ChevronLeft,
+  Info,
   Loader2,
   MessageSquare,
   RefreshCw,
@@ -87,12 +89,16 @@ function AssistantChatContent() {
   const [loading, setLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [processingStage, setProcessingStage] = useState<
+    'idle' | 'preparing' | 'connecting' | 'generating' | 'streaming' | 'finalizing'
+  >('idle')
   const [failedRequest, setFailedRequest] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showClearSheet, setShowClearSheet] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const seededQueryRef = useRef<string | null>(null)
 
   const sessionTitle = `Assistente:${effectiveContext}`
 
@@ -250,6 +256,7 @@ function AssistantChatContent() {
     setSessionId(null)
     setFailedRequest(false)
     setStreamingContent('')
+    setProcessingStage('idle')
 
     const sessions =
       (localSessions as any[])
@@ -305,12 +312,15 @@ function AssistantChatContent() {
     const query =
       searchParams.get('q')?.trim()
 
-    if (query && !input) {
+    if (
+      query &&
+      seededQueryRef.current !== query
+    ) {
+      seededQueryRef.current = query
       setInput(query)
     }
   }, [
     searchParams,
-    input,
   ])
 
   const persistMessage = async (
@@ -398,6 +408,7 @@ function AssistantChatContent() {
     setIsSending(true)
     setFailedRequest(false)
     setStreamingContent('')
+    setProcessingStage('preparing')
 
     try {
       const response =
@@ -411,8 +422,13 @@ function AssistantChatContent() {
           financialContext,
           (fullText) => {
             setStreamingContent(fullText)
+          },
+          (stage) => {
+            setProcessingStage(stage)
           }
         )
+
+      setProcessingStage('finalizing')
 
       const assistantPayload = {
         id: crypto.randomUUID(),
@@ -440,6 +456,7 @@ function AssistantChatContent() {
       )
 
       success()
+      setProcessingStage('idle')
     } catch (error: any) {
       setStreamingContent('')
       setFailedRequest(true)
@@ -453,6 +470,7 @@ function AssistantChatContent() {
       )
     } finally {
       setIsSending(false)
+      setProcessingStage('idle')
       inputRef.current?.focus()
     }
   }
@@ -601,6 +619,39 @@ function AssistantChatContent() {
     }
   }
 
+  const processingCopy = {
+    preparing: {
+      title: 'Preparando o contexto financeiro',
+      description: 'Organizando os dados locais e os sinais calculados pelo DFL Finance.',
+      progress: 18,
+    },
+    connecting: {
+      title: 'Conectando ao Gemini',
+      description: 'Enviando somente o contexto estruturado necessário para responder.',
+      progress: 38,
+    },
+    generating: {
+      title: 'Analisando sua pergunta',
+      description: 'O Gemini está interpretando os números e prioridades do contexto atual.',
+      progress: 58,
+    },
+    streaming: {
+      title: 'Montando a resposta',
+      description: 'A análise já começou a chegar e está sendo exibida em tempo real.',
+      progress: 82,
+    },
+    finalizing: {
+      title: 'Finalizando',
+      description: 'Validando o término da resposta antes de salvar no histórico.',
+      progress: 96,
+    },
+    idle: {
+      title: 'Preparando o assistente',
+      description: 'Iniciando a análise.',
+      progress: 8,
+    },
+  } as const
+
   const formatTime = (
     date: string
   ) => {
@@ -676,6 +727,16 @@ function AssistantChatContent() {
           </div>
 
           <ContextToggle />
+
+          <div className="mt-3 flex items-start gap-2 rounded-[16px] bg-gray-50 px-3 py-2.5 dark:bg-slate-800/70">
+            <Info
+              size={14}
+              className="mt-0.5 shrink-0 text-teal-600 dark:text-teal-400"
+            />
+            <p className="text-[10px] leading-4 text-gray-500 dark:text-gray-400">
+              Respostas geradas com Gemini usando o contexto financeiro estruturado pelo DFL Finance. Os cálculos e sinais vêm do aplicativo.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -773,7 +834,7 @@ function AssistantChatContent() {
                         }`}
                       >
                         {message.role === 'assistant'
-                          ? 'Assistente'
+                          ? 'Assistente · Gemini'
                           : 'Você'}
                       </span>
 
@@ -816,24 +877,65 @@ function AssistantChatContent() {
                     </div>
 
                     <span className="text-[10px] font-semibold text-gray-400">
-                      Assistente
+                      Assistente · Gemini
                     </span>
                   </div>
 
                   {streamingContent ? (
-                    <AssistantMessageContent
-                      content={streamingContent}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Loader2
-                        size={15}
-                        className="animate-spin text-teal-600"
+                    <>
+                      <AssistantMessageContent
+                        content={streamingContent}
                       />
 
-                      <span className="text-[12px] text-gray-500 dark:text-gray-400">
-                        Comparando seus dados com segurança...
-                      </span>
+                      <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3 dark:border-slate-800">
+                        <Loader2
+                          size={13}
+                          className="animate-spin text-teal-600"
+                        />
+                        <span className="text-[10px] font-medium text-gray-400">
+                          {processingCopy[processingStage].title}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 dark:bg-teal-500/10">
+                          <Loader2
+                            size={16}
+                            className="animate-spin text-teal-600 dark:text-teal-400"
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-semibold text-gray-700 dark:text-gray-200">
+                            {processingCopy[processingStage].title}
+                          </p>
+
+                          <p className="mt-1 text-[10px] leading-4 text-gray-400 dark:text-gray-500">
+                            {processingCopy[processingStage].description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-teal-500 transition-all duration-700 ease-out"
+                          style={{
+                            width: `${processingCopy[processingStage].progress}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2 text-[9px] text-gray-400">
+                        <CheckCircle2
+                          size={12}
+                          className="text-teal-500"
+                        />
+                        <span>
+                          Progresso por etapa — o tempo pode variar conforme a resposta.
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -868,6 +970,15 @@ function AssistantChatContent() {
       </div>
 
       <div className="fixed bottom-24 left-0 right-0 z-40 mx-auto max-w-md px-4">
+        <div className="mb-2 flex items-center justify-between px-2 text-[9px] text-gray-400">
+          <span>
+            Gemini + inteligência financeira do DFL
+          </span>
+          <span>
+            {isSending ? 'Respondendo…' : 'Pronto'}
+          </span>
+        </div>
+
         <div className="flex items-center gap-2 rounded-[24px] border border-gray-200/70 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-900">
           <input
             ref={inputRef}
