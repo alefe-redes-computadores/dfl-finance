@@ -697,6 +697,13 @@ function NewTransactionContent() {
             installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd')
           }
 
+          const todayIso = format(new Date(), 'yyyy-MM-dd')
+          const isFutureOccurrence = installmentDate > todayIso
+          const occurrenceIsSettled =
+            !creditCardId &&
+            isPaid &&
+            !isFutureOccurrence
+
           const txId = crypto.randomUUID()
           const payload: any = {
             id: txId,
@@ -713,12 +720,20 @@ function NewTransactionContent() {
              * O saldo da conta só será alterado quando a fatura
              * for liquidada.
              */
-            affects_balance: creditCardId ? false : isPaid,
+            affects_balance:
+              creditCardId
+                ? false
+                : occurrenceIsSettled,
 
             contact_id: contactId || null,
             tag_ids: selectedTags.length > 0 ? selectedTags : null,
             date: installmentDate,
-            status: creditCardId ? 'pending' : (isPaid ? 'done' : 'pending'),
+            status:
+              creditCardId
+                ? 'pending'
+                : occurrenceIsSettled
+                  ? 'done'
+                  : 'pending',
             context: effectiveContext,
             receipt_url: i === 0 ? receiptUrl : null,
             notes: finalNotes || null,
@@ -737,7 +752,11 @@ function NewTransactionContent() {
           const res = await safeAdd('transactions', payload)
           if (!res.success) throw new Error(res.error)
 
-          if (accountId && !creditCardId && isPaid) {
+          if (
+            accountId &&
+            !creditCardId &&
+            occurrenceIsSettled
+          ) {
             const freshAccount = await db.accounts.get(accountId)
             if (!freshAccount) {
               throw new Error('Conta selecionada não encontrada')

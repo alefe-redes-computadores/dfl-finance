@@ -35,6 +35,7 @@ import {
 } from '@/lib/pendingOperations'
 
 import { getDebtDueState } from '@/lib/debtOperations'
+import { repairFutureScheduledTransactions } from '@/lib/futureTransactionOperations'
 type QuickFilter = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
 type PendingKind = 'all' | 'payable' | 'receivable'
 
@@ -487,6 +488,17 @@ export default function TransactionsPage() {
 
   const [search, setSearch] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    repairFutureScheduledTransactions(user.id).catch((error) => {
+      console.error(
+        'Erro ao reparar lançamentos futuros:',
+        error
+      )
+    })
+  }, [user?.id])
 
   useEffect(() => {
     const filter = searchParams.get('filter')

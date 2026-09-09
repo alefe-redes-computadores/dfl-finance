@@ -19,10 +19,20 @@ export interface FinancialAssistantContext {
   suggestedQuestions: string[]
 }
 
+const ASSISTANT_REQUEST_TIMEOUT_MS = 25000
+const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 12000
+
+function timeoutError() {
+  return new Error(
+    'O assistente demorou mais que o esperado. Tente novamente.'
+  )
+}
+
 async function getAuthenticatedResponse(
   messages: ChatMessage[],
   financialContext:
-    FinancialAssistantContext
+    FinancialAssistantContext,
+  signal: AbortSignal
 ) {
   const {
     data: { session },
@@ -50,6 +60,7 @@ async function getAuthenticatedResponse(
           messages,
           financialContext,
         }),
+        signal,
       }
     )
 
@@ -90,13 +101,39 @@ export async function streamChatMessage(
     fullText: string
   ) => void
 ): Promise<string> {
-  const response =
-    await getAuthenticatedResponse(
-      messages,
-      financialContext
+  const controller =
+    new AbortController()
+
+  const requestTimeout =
+    setTimeout(
+      () => controller.abort(),
+      ASSISTANT_REQUEST_TIMEOUT_MS
     )
 
+  let response: Response
+
+  try {
+    response =
+      await getAuthenticatedResponse(
+        messages,
+        financialContext,
+        controller.signal
+      )
+  } catch (error: any) {
+    clearTimeout(requestTimeout)
+
+    if (
+      controller.signal.aborted ||
+      error?.name === 'AbortError'
+    ) {
+      throw timeoutError()
+    }
+
+    throw error
+  }
+
   if (!response.body) {
+    clearTimeout(requestTimeout)
     throw new Error(
       'O servidor não disponibilizou o fluxo da resposta.'
     )
@@ -110,24 +147,64 @@ export async function streamChatMessage(
 
   let fullText = ''
 
-  while (true) {
-    const {
-      value,
-      done,
-    } =
-      await reader.read()
+  try {
+    while (true) {
+      let idleTimeout:
+        ReturnType<typeof setTimeout> |
+        undefined
 
-    if (done) break
+      const readResult =
+        await Promise.race([
+          reader.read(),
+          new Promise<never>(
+            (_, reject) => {
+              idleTimeout =
+                setTimeout(
+                  () =>
+                    reject(
+                      timeoutError()
+                    ),
+                  ASSISTANT_STREAM_IDLE_TIMEOUT_MS
+                )
+            }
+          ),
+        ]).finally(() => {
+          if (idleTimeout) {
+            clearTimeout(
+              idleTimeout
+            )
+          }
+        })
 
-    fullText +=
-      decoder.decode(
+      const {
         value,
-        {
-          stream: true,
-        }
-      )
+        done,
+      } = readResult
 
-    onUpdate?.(fullText)
+      if (done) break
+
+      fullText +=
+        decoder.decode(
+          value,
+          {
+            stream: true,
+          }
+        )
+
+      onUpdate?.(fullText)
+    }
+  } catch (error) {
+    controller.abort()
+
+    try {
+      await reader.cancel()
+    } catch {
+      // O stream já pode ter sido encerrado.
+    }
+
+    throw error
+  } finally {
+    clearTimeout(requestTimeout)
   }
 
   fullText +=

@@ -25,6 +25,7 @@ import {
   adjustAccountBalance,
   transferBetweenAccounts,
 } from '@/lib/accountOperations'
+import { repairFutureScheduledTransactions } from '@/lib/futureTransactionOperations'
 
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
@@ -78,6 +79,17 @@ function AccountDetailContent() {
   const [transferNotes, setTransferNotes] = useState("")
   const [saving, setSaving] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    repairFutureScheduledTransactions(user.id).catch((error) => {
+      console.error(
+        'Erro ao reparar lançamentos futuros:',
+        error
+      )
+    })
+  }, [user?.id])
 
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -262,9 +274,18 @@ function AccountDetailContent() {
   }
 
   const Icon = ACCOUNT_ICONS[account.type || ''] || Wallet
-  const sortedTransactions = [...(transactions || [])].sort(
-    (a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-  )
+  const todayIso = new Date().toLocaleDateString('en-CA')
+  const sortedTransactions = [...(transactions || [])]
+    .filter(
+      (transaction: any) =>
+        transaction.status === 'done' &&
+        String(transaction.date || '') <= todayIso
+    )
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.date || 0).getTime() -
+        new Date(a.date || 0).getTime()
+    )
   const balance = safeNum(account.balance)
   const balancePositive = balance >= 0
   const bankName = getAccountInstitutionLabel(account)

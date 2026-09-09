@@ -832,7 +832,7 @@ function AssistantChatContent() {
                       />
 
                       <span className="text-[12px] text-gray-500 dark:text-gray-400">
-                        Comparando seus dados...
+                        Comparando seus dados com segurança...
                       </span>
                     </div>
                   )}

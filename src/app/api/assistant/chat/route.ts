@@ -15,6 +15,14 @@ type ChatMessage = {
   content: string
 }
 
+const GEMINI_START_TIMEOUT_MS = 18000
+
+function assistantTimeoutError() {
+  return new Error(
+    'O provedor de IA demorou mais que o esperado.'
+  )
+}
+
 function safeNumber(
   value: unknown
 ) {
@@ -447,6 +455,131 @@ function sanitizeFinancialContext(
 
       topExpenseCategories:
         categories,
+
+      activeBudgetCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.activeBudgetCount
+            )
+          )
+        ),
+
+      warningBudgetCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.warningBudgetCount
+            )
+          )
+        ),
+
+      overBudgetCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.overBudgetCount
+            )
+          )
+        ),
+
+      goalsActiveCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.goalsActiveCount
+            )
+          )
+        ),
+
+      goalsOverdueCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.goalsOverdueCount
+            )
+          )
+        ),
+
+      goalsNearDeadlineCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.goalsNearDeadlineCount
+            )
+          )
+        ),
+
+      creditCardOpenExposure:
+        safeNumber(
+          snapshot?.creditCardOpenExposure
+        ),
+
+      creditCardLimitTotal:
+        safeNumber(
+          snapshot?.creditCardLimitTotal
+        ),
+
+      creditCardUtilizationRate:
+        safeNumber(
+          snapshot?.creditCardUtilizationRate
+        ),
+
+      overdueCardInvoiceAmount:
+        safeNumber(
+          snapshot?.overdueCardInvoiceAmount
+        ),
+
+      overdueCardInvoiceCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.overdueCardInvoiceCount
+            )
+          )
+        ),
+
+      activeLoanRemaining:
+        safeNumber(
+          snapshot?.activeLoanRemaining
+        ),
+
+      overdueLoanCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.overdueLoanCount
+            )
+          )
+        ),
+
+      activeFinancingRemaining:
+        safeNumber(
+          snapshot?.activeFinancingRemaining
+        ),
+
+      overdueFinancingCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot?.overdueFinancingCount
+            )
+          )
+        ),
+
+      committedOutstandingTotal:
+        safeNumber(
+          snapshot?.committedOutstandingTotal
+        ),
     },
 
     insights,
@@ -613,16 +746,39 @@ ${snapshot}`
         })
       )
 
+    let startTimeout:
+      ReturnType<typeof setTimeout> |
+      undefined
+
     const result =
-      await model
-        .generateContentStream({
+      await Promise.race([
+        model.generateContentStream({
           contents,
           generationConfig: {
             temperature: 0.3,
             maxOutputTokens:
-              1400,
+              900,
           },
-        })
+        }),
+        new Promise<never>(
+          (_, reject) => {
+            startTimeout =
+              setTimeout(
+                () =>
+                  reject(
+                    assistantTimeoutError()
+                  ),
+                GEMINI_START_TIMEOUT_MS
+              )
+          }
+        ),
+      ]).finally(() => {
+        if (startTimeout) {
+          clearTimeout(
+            startTimeout
+          )
+        }
+      })
 
     const encoder =
       new TextEncoder()
@@ -683,14 +839,26 @@ ${snapshot}`
       error
     )
 
+    const isTimeout =
+      String(
+        error?.message || ''
+      ).includes(
+        'demorou mais que o esperado'
+      )
+
     return NextResponse.json(
       {
         error:
-          error?.message ||
-          'Erro ao consultar o assistente.',
+          isTimeout
+            ? 'O assistente demorou mais que o esperado. Tente novamente.'
+            : error?.message ||
+              'Erro ao consultar o assistente.',
       },
       {
-        status: 500,
+        status:
+          isTimeout
+            ? 504
+            : 500,
       }
     )
   }
