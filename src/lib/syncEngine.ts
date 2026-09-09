@@ -266,7 +266,8 @@ const LOCAL_ONLY_REMOTE_KEYS =
 function sanitizeRemotePayload(
   source: Record<string, any>,
   recordId: string,
-  userId: string
+  userId: string,
+  table?: LocalSyncQueue['table']
 ) {
   const sanitizedEntries =
     Object.entries(source)
@@ -286,6 +287,42 @@ function sanitizeRemotePayload(
         return !LOCAL_ONLY_REMOTE_KEYS.has(
           normalizedKey
         )
+      })
+      .map(([key, value]) => {
+        const normalizedKey =
+          key
+            .replace(
+              /[^a-zA-Z0-9]/g,
+              ''
+            )
+            .toLowerCase()
+
+        if (
+          normalizedKey ===
+          'updatedat'
+        ) {
+          return [
+            'updated_at',
+            value,
+          ]
+        }
+
+        if (
+          table ===
+            'chat_history' &&
+          key === 'role' &&
+          value === 'assistant'
+        ) {
+          return [
+            'role',
+            'model',
+          ]
+        }
+
+        return [
+          key,
+          value,
+        ]
       })
 
   return Object.fromEntries([
@@ -415,14 +452,22 @@ async function pullRemoteChanges(
       )
 
       if (remoteDataSafeToApply.length > 0) {
-        const localData = remoteDataSafeToApply.map((item: any) => ({
-          ...item,
-          sync_status: 'synced',
-          sync_attempts: 0,
-          last_sync_error: null,
-        }))
+        const localData =
+          remoteDataSafeToApply.map(
+            (item: any) => ({
+              ...item,
+              sync_status:
+                'synced',
+              sync_attempts:
+                0,
+              last_sync_error:
+                null,
+            })
+          )
 
-        await db.table(tableName).bulkPut(localData)
+        await db
+          .table(tableName)
+          .bulkPut(localData)
       }
 
       if (force) {
@@ -610,7 +655,8 @@ async function runSyncCycle(
           const payload = sanitizeRemotePayload(
             localRecord,
             item.record_id,
-            userId
+            userId,
+            item.table
           )
 
           const { error } = await supabaseClient.upsert(payload, {
