@@ -2,21 +2,27 @@
 'use client'
 
 import {
+  Suspense,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react'
-import { useRouter } from 'next/navigation'
+import {
+  useRouter,
+  useSearchParams,
+} from 'next/navigation'
 import {
   Bot,
   ChevronLeft,
   Loader2,
   MessageSquare,
+  RefreshCw,
   Send,
   Trash2,
   User,
   X,
+  Sparkles,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -24,17 +30,20 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, {
   useContext_,
 } from '@/components/ContextToggle'
+import AssistantMessageContent from '@/components/assistant/AssistantMessageContent'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { addToSyncQueue, db } from '@/lib/db'
-import {
-  isRealizedFinancialTransaction,
-} from '@/lib/financialMetrics'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  sendChatMessage,
+  buildFinancialIntelligence,
+  buildFinancialSuggestedQuestions,
+  selectFinancialInsights,
+} from '@/lib/financial-intelligence'
+import {
+  streamChatMessage,
   type FinancialAssistantContext,
 } from '@/lib/services/chatService'
 
@@ -46,29 +55,9 @@ interface Message {
   type?: 'text' | 'insight' | 'suggestion'
 }
 
-const ChatSkeleton = () => (
-  <div className="space-y-4 animate-pulse">
-    {[1, 2, 3].map((item) => (
-      <div
-        key={item}
-        className={`flex ${
-          item % 2 === 0
-            ? 'justify-start'
-            : 'justify-end'
-        }`}
-      >
-        <div className="w-[76%] rounded-[24px] border border-gray-200/70 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-          <div className="mb-2 h-3 w-24 rounded bg-gray-200 dark:bg-slate-700" />
-          <div className="mb-2 h-3 w-full rounded bg-gray-100 dark:bg-slate-700/50" />
-          <div className="h-3 w-2/3 rounded bg-gray-100 dark:bg-slate-700/50" />
-        </div>
-      </div>
-    ))}
-  </div>
-)
-
-export default function AssistantChatPage() {
+function AssistantChatContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const { context, appMode } = useContext_()
 
@@ -93,81 +82,131 @@ export default function AssistantChatPage() {
   const aiEnabled =
     assistantSettings?.preferences.ai_enabled ?? true
 
-  const [messages, setMessages] =
-    useState<Message[]>([])
-
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
-  const [isSending, setIsSending] =
-    useState(false)
+  const [isSending, setIsSending] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [failedRequest, setFailedRequest] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [showClearSheet, setShowClearSheet] = useState(false)
 
-  const [sessionId, setSessionId] =
-    useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const [showClearSheet, setShowClearSheet] =
-    useState(false)
+  const sessionTitle = `Assistente:${effectiveContext}`
 
-  const messagesEndRef =
-    useRef<HTMLDivElement>(null)
+  const { data: localSessions = [] } = useLocalData({
+    table: 'chat_sessions',
+  })
 
-  const inputRef =
-    useRef<HTMLInputElement>(null)
+  const { data: localMessages = [] } = useLocalData({
+    table: 'chat_history',
+    filters: {
+      session_id: sessionId || '',
+    },
+  })
 
-  const { data: localSessions = [] } =
-    useLocalData({
-      table: 'chat_sessions' as any,
-      filters: {
-        user_id: user?.id,
-      },
-    })
+  const tx = useLocalData({
+    table: 'transactions',
+    filters: {
+      context: effectiveContext,
+    },
+  })
 
-  const { data: localMessages = [] } =
-    useLocalData({
-      table: 'chat_history' as any,
-      filters: {
-        user_id: user?.id,
-        session_id: sessionId || '',
-      },
-    })
+  const accounts = useLocalData({
+    table: 'accounts',
+    filters: {
+      context: effectiveContext,
+    },
+  })
 
-  const { data: localTransactions = [] } =
-    useLocalData({
-      table: 'transactions' as any,
-      filters: {
+  const categories = useLocalData({
+    table: 'categories',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const debts = useLocalData({
+    table: 'debts',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const subscriptions = useLocalData({
+    table: 'subscriptions',
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const intelligence = useMemo(
+    () =>
+      buildFinancialIntelligence({
         context: effectiveContext,
-      },
-    })
+        transactions: tx.data as any[],
+        accounts: accounts.data as any[],
+        categories: categories.data as any[],
+        debts: debts.data as any[],
+        subscriptions: subscriptions.data as any[],
+      }),
+    [
+      effectiveContext,
+      tx.data,
+      accounts.data,
+      categories.data,
+      debts.data,
+      subscriptions.data,
+    ]
+  )
 
-  const { data: localAccounts = [] } =
-    useLocalData({
-      table: 'accounts' as any,
-      filters: {
-        context: effectiveContext,
-      },
-    })
+  const suggestedQuestions = useMemo(
+    () =>
+      buildFinancialSuggestedQuestions(
+        intelligence,
+        4
+      ),
+    [intelligence]
+  )
 
-  const { data: localCategories = [] } =
-    useLocalData({
-      table: 'categories' as any,
-      filters: {
-        context: effectiveContext,
-      },
-    })
+  const financialContext = useMemo<FinancialAssistantContext>(
+    () => ({
+      context: effectiveContext,
+      generatedAt: intelligence.generatedAt,
+      snapshot: intelligence.snapshot,
+      insights: selectFinancialInsights(
+        intelligence,
+        { limit: 8 }
+      ),
+      suggestedQuestions,
+    }),
+    [
+      effectiveContext,
+      intelligence,
+      suggestedQuestions,
+    ]
+  )
 
   useEffect(() => {
     if (!user?.id) return
+
+    setMessages([])
+    setSessionId(null)
+    setFailedRequest(false)
+    setStreamingContent('')
 
     const sessions =
       (localSessions as any[])
         .filter(
           (session) =>
             session.user_id === user.id &&
-            session.status === 'active'
+            session.status === 'active' &&
+            session.title === sessionTitle
         )
         .sort((a, b) =>
-          String(
-            b.created_at || ''
-          ).localeCompare(
+          String(b.created_at || '').localeCompare(
             String(a.created_at || '')
           )
         )
@@ -177,15 +216,17 @@ export default function AssistantChatPage() {
     )
 
     setLoading(false)
-  }, [user?.id, localSessions])
+  }, [
+    user?.id,
+    localSessions,
+    sessionTitle,
+  ])
 
   useEffect(() => {
     const sorted =
       [...(localMessages as any[])].sort(
         (a, b) =>
-          String(
-            a.created_at || ''
-          ).localeCompare(
+          String(a.created_at || '').localeCompare(
             String(b.created_at || '')
           )
       )
@@ -199,160 +240,24 @@ export default function AssistantChatPage() {
     messagesEndRef.current?.scrollIntoView({
       behavior: 'smooth',
     })
-  }, [messages, isSending])
+  }, [
+    messages,
+    streamingContent,
+    isSending,
+    failedRequest,
+  ])
 
-  const financialContext =
-    useMemo<FinancialAssistantContext>(() => {
-      const now = new Date()
+  useEffect(() => {
+    const query =
+      searchParams.get('q')?.trim()
 
-      const monthPrefix =
-        `${now.getFullYear()}-` +
-        `${String(
-          now.getMonth() + 1
-        ).padStart(2, '0')}`
-
-      const transactions =
-        (localTransactions as any[])
-          .filter((transaction) =>
-            isRealizedFinancialTransaction(
-              transaction
-            )
-          )
-
-      const currentMonth =
-        transactions.filter(
-          (transaction) =>
-            String(
-              transaction.date || ''
-            ).startsWith(monthPrefix)
-        )
-
-      const currentMonthIncome =
-        currentMonth
-          .filter(
-            (transaction) =>
-              transaction.type === 'income'
-          )
-          .reduce(
-            (sum, transaction) =>
-              sum +
-              Number(
-                transaction.amount || 0
-              ),
-            0
-          )
-
-      const currentMonthExpense =
-        currentMonth
-          .filter(
-            (transaction) =>
-              transaction.type === 'expense' ||
-              transaction.type === 'sangria'
-          )
-          .reduce(
-            (sum, transaction) =>
-              sum +
-              Number(
-                transaction.amount || 0
-              ),
-            0
-          )
-
-      const accountBalance =
-        (localAccounts as any[])
-          .filter(
-            (account) =>
-              account.user_id === user?.id ||
-              !account.user_id
-          )
-          .reduce(
-            (sum, account) =>
-              sum +
-              Number(
-                account.balance || 0
-              ),
-            0
-          )
-
-      const categoryNames =
-        new Map<string, string>(
-          (localCategories as any[])
-            .map((category) => [
-              category.id,
-              category.name,
-            ])
-        )
-
-      const categoryTotals =
-        new Map<string, number>()
-
-      for (
-        const transaction
-        of currentMonth
-      ) {
-        if (
-          transaction.type !== 'expense' &&
-          transaction.type !== 'sangria'
-        ) {
-          continue
-        }
-
-        const categoryId =
-          transaction.category_id ||
-          'uncategorized'
-
-        categoryTotals.set(
-          categoryId,
-          (
-            categoryTotals.get(
-              categoryId
-            ) || 0
-          ) +
-            Number(
-              transaction.amount || 0
-            )
-        )
-      }
-
-      const topExpenseCategories =
-        [...categoryTotals.entries()]
-          .map(
-            ([categoryId, amount]) => ({
-              name:
-                categoryNames.get(
-                  categoryId
-                ) ||
-                'Sem categoria',
-              amount,
-            })
-          )
-          .sort(
-            (a, b) =>
-              b.amount - a.amount
-          )
-          .slice(0, 5)
-
-      return {
-        context: effectiveContext,
-        generatedAt:
-          new Date().toISOString(),
-        accountBalance,
-        currentMonthIncome,
-        currentMonthExpense,
-        currentMonthNet:
-          currentMonthIncome -
-          currentMonthExpense,
-        transactionCount:
-          currentMonth.length,
-        topExpenseCategories,
-      }
-    }, [
-      effectiveContext,
-      localAccounts,
-      localCategories,
-      localTransactions,
-      user?.id,
-    ])
+    if (query && !input) {
+      setInput(query)
+    }
+  }, [
+    searchParams,
+    input,
+  ])
 
   const persistMessage = async (
     payload: Record<string, any>
@@ -395,13 +300,12 @@ export default function AssistantChatPage() {
     }
 
     const id = crypto.randomUUID()
-    const now =
-      new Date().toISOString()
+    const now = new Date().toISOString()
 
     const payload = {
       id,
       user_id: user.id,
-      title: 'Nova conversa',
+      title: sessionTitle,
       status: 'active',
       created_at: now,
       updated_at: now,
@@ -433,6 +337,72 @@ export default function AssistantChatPage() {
     return id
   }
 
+  const requestAssistant = async (
+    history: Message[],
+    currentSessionId: string
+  ) => {
+    setIsSending(true)
+    setFailedRequest(false)
+    setStreamingContent('')
+
+    try {
+      const response =
+        await streamChatMessage(
+          history.map(
+            (message) => ({
+              role: message.role,
+              content: message.content,
+            })
+          ),
+          financialContext,
+          (fullText) => {
+            setStreamingContent(fullText)
+          }
+        )
+
+      const assistantPayload = {
+        id: crypto.randomUUID(),
+        user_id: user!.id,
+        session_id: currentSessionId,
+        role: 'assistant' as const,
+        content: response,
+        type: 'text',
+        created_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
+      }
+
+      await persistMessage(
+        assistantPayload
+      )
+
+      setStreamingContent('')
+
+      setMessages(
+        (current) => [
+          ...current,
+          assistantPayload as Message,
+        ]
+      )
+
+      success()
+    } catch (error: any) {
+      setStreamingContent('')
+      setFailedRequest(true)
+
+      errorHaptic()
+
+      showToast(
+        error?.message ||
+          'Erro ao consultar o assistente.',
+        'error'
+      )
+    } finally {
+      setIsSending(false)
+      inputRef.current?.focus()
+    }
+  }
+
   const handleSend = async () => {
     if (
       !input.trim() ||
@@ -447,18 +417,17 @@ export default function AssistantChatPage() {
       errorHaptic()
 
       showToast(
-        'O Assistente está desativado. Ative-o nas configurações para usar o Chat.',
+        'Ative o Chat inteligente nas configurações para conversar.',
         'warning'
       )
 
       return
     }
 
-    const userMessage =
-      input.trim()
+    const userMessage = input.trim()
 
     setInput('')
-    setIsSending(true)
+    setFailedRequest(false)
 
     vibrate([8])
 
@@ -472,8 +441,7 @@ export default function AssistantChatPage() {
         session_id: currentSessionId,
         role: 'user' as const,
         content: userMessage,
-        created_at:
-          new Date().toISOString(),
+        created_at: new Date().toISOString(),
         sync_status: 'pending',
         sync_attempts: 0,
       }
@@ -489,54 +457,34 @@ export default function AssistantChatPage() {
 
       setMessages(history)
 
-      const response =
-        await sendChatMessage(
-          history.map(
-            (message) => ({
-              role: message.role,
-              content: message.content,
-            })
-          ),
-          financialContext
-        )
-
-      const assistantPayload = {
-        id: crypto.randomUUID(),
-        user_id: user.id,
-        session_id: currentSessionId,
-        role: 'assistant' as const,
-        content: response,
-        type: 'text',
-        created_at:
-          new Date().toISOString(),
-        sync_status: 'pending',
-        sync_attempts: 0,
-      }
-
-      await persistMessage(
-        assistantPayload
+      await requestAssistant(
+        history,
+        currentSessionId
       )
-
-      setMessages(
-        (current) => [
-          ...current,
-          assistantPayload as Message,
-        ]
-      )
-
-      success()
     } catch (error: any) {
       errorHaptic()
 
       showToast(
         error?.message ||
-          'Erro ao consultar o assistente.',
+          'Erro ao preparar a conversa.',
         'error'
       )
-    } finally {
-      setIsSending(false)
-      inputRef.current?.focus()
     }
+  }
+
+  const handleRetry = async () => {
+    if (
+      isSending ||
+      !sessionId ||
+      messages.length === 0
+    ) {
+      return
+    }
+
+    await requestAssistant(
+      messages,
+      sessionId
+    )
   }
 
   const handleClearChat = async () => {
@@ -579,6 +527,7 @@ export default function AssistantChatPage() {
       )
 
       setMessages([])
+      setFailedRequest(false)
       setShowClearSheet(false)
 
       success()
@@ -595,18 +544,6 @@ export default function AssistantChatPage() {
           'Erro ao limpar histórico.',
         'error'
       )
-    }
-  }
-
-  const handleKeyDown = (
-    event: React.KeyboardEvent
-  ) => {
-    if (
-      event.key === 'Enter' &&
-      !event.shiftKey
-    ) {
-      event.preventDefault()
-      handleSend()
     }
   }
 
@@ -635,38 +572,39 @@ export default function AssistantChatPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto min-h-screen max-w-md bg-[#f8f9fa] px-4 pb-28 pt-4 font-sans dark:bg-slate-900">
-        <ChatSkeleton />
+      <div className="mx-auto min-h-screen max-w-md bg-[#f7f8fa] p-5 dark:bg-slate-950">
+        <div className="h-32 animate-pulse rounded-[28px] bg-white dark:bg-slate-900" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-[#f8f9fa] px-4 pb-32 pt-4 font-sans dark:bg-slate-900">
+    <div className="mx-auto min-h-screen max-w-md bg-[#f7f8fa] px-4 pb-36 pt-4 font-sans dark:bg-slate-950">
       <div className="sticky top-0 z-30 pb-3">
-        <div className="rounded-[24px] border border-gray-200/70 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
-          <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="rounded-[24px] border border-gray-200/70 bg-white/95 px-4 py-4 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => router.back()}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-gray-200/70 bg-gray-50 text-gray-500 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900/40 dark:text-gray-300"
+              className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-gray-50 text-gray-500 active:scale-95 dark:bg-slate-800 dark:text-gray-300"
             >
               <ChevronLeft size={20} />
             </button>
 
             <div className="min-w-0 flex-1 text-center">
-              <div className="inline-flex items-center gap-2">
-                <MessageSquare
-                  size={20}
+              <div className="flex items-center justify-center gap-2">
+                <Sparkles
+                  size={17}
                   className="text-teal-600"
                 />
-                <h1 className="text-[18px] font-semibold text-gray-900 dark:text-gray-100">
-                  Assistente
+
+                <h1 className="text-[18px] font-bold text-gray-900 dark:text-white">
+                  Assistente financeiro
                 </h1>
               </div>
 
-              <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">
-                Respostas com base no seu resumo financeiro atual
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                Inteligência do contexto atual
               </p>
             </div>
 
@@ -677,10 +615,9 @@ export default function AssistantChatPage() {
                 setShowClearSheet(true)
               }}
               disabled={messages.length === 0}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-gray-200/70 bg-gray-50 text-gray-400 active:scale-[0.98] disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900/40"
-              title="Limpar histórico"
+              className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-gray-50 text-gray-400 active:scale-95 disabled:opacity-30 dark:bg-slate-800"
             >
-              <Trash2 size={18} />
+              <Trash2 size={17} />
             </button>
           </div>
 
@@ -688,32 +625,30 @@ export default function AssistantChatPage() {
         </div>
       </div>
 
-      <div className="space-y-3 pb-4">
-        {messages.length === 0 ? (
-          <div className="mt-2 rounded-[24px] border border-gray-200/70 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-900/20">
-                <Bot
-                  size={30}
-                  className="text-teal-600 dark:text-teal-400"
-                />
-              </div>
+      <div className="space-y-3">
+        {messages.length === 0 &&
+        !isSending ? (
+          <section className="rounded-[28px] border border-gray-200/70 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-teal-50 dark:bg-teal-500/10">
+              <Bot
+                size={29}
+                className="text-teal-600 dark:text-teal-400"
+              />
+            </div>
 
-              <h2 className="mb-1 text-[16px] font-semibold text-gray-900 dark:text-gray-100">
-                Como posso ajudar?
+            <div className="mt-4 text-center">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">
+                O que quer entender?
               </h2>
 
-              <p className="mb-5 max-w-[270px] text-[12px] leading-5 text-gray-400 dark:text-gray-500">
-                Posso analisar o saldo das contas, o fluxo do mês e as principais categorias de despesa disponíveis no contexto atual.
+              <p className="mx-auto mt-1 max-w-[280px] text-[12px] leading-5 text-gray-400">
+                O aplicativo já analisou tendências, caixa, categorias, recebíveis e qualidade da amostra.
               </p>
+            </div>
 
-              <div className="flex flex-wrap justify-center gap-2">
-                {[
-                  'Qual é o saldo das minhas contas?',
-                  'Como está meu mês?',
-                  'Onde estou gastando mais?',
-                  'O que posso melhorar agora?',
-                ].map((suggestion) => (
+            <div className="mt-5 space-y-2">
+              {suggestedQuestions.map(
+                (suggestion) => (
                   <button
                     type="button"
                     key={suggestion}
@@ -721,130 +656,205 @@ export default function AssistantChatPage() {
                       vibrate([4])
                       setInput(suggestion)
                     }}
-                    className="rounded-[16px] border border-gray-200/70 bg-gray-50 px-3 py-2 text-[12px] font-medium text-gray-700 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900 dark:text-gray-300"
+                    className="flex w-full items-center justify-between rounded-[18px] bg-gray-50 px-4 py-3 text-left active:scale-[0.99] dark:bg-slate-800/70"
                   >
-                    {suggestion}
+                    <span className="text-[12px] font-medium text-gray-700 dark:text-gray-300">
+                      {suggestion}
+                    </span>
+
+                    <MessageSquare
+                      size={15}
+                      className="shrink-0 text-teal-500"
+                    />
                   </button>
-                ))}
-              </div>
+                )
+              )}
             </div>
-          </div>
+          </section>
         ) : (
-          <div className="space-y-3 pt-1">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.role === 'user'
-                    ? 'justify-end'
-                    : 'justify-start'
-                }`}
-              >
+          <div className="space-y-3">
+            {messages.map(
+              (message) => (
                 <div
-                  className={`max-w-[86%] rounded-[24px] border px-4 py-3 shadow-sm ${
+                  key={message.id}
+                  className={`flex ${
                     message.role === 'user'
-                      ? 'border-teal-600 bg-teal-600 text-white'
-                      : 'border-gray-200/70 bg-white dark:border-slate-700 dark:bg-slate-800'
+                      ? 'justify-end'
+                      : 'justify-start'
                   }`}
                 >
-                  <div className="mb-1.5 flex items-center gap-2">
-                    {message.role === 'assistant' ? (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-900/20">
-                        <Bot
-                          size={13}
-                          className="text-teal-600 dark:text-teal-400"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
-                        <User
-                          size={13}
-                          className="text-teal-100"
-                        />
-                      </div>
-                    )}
-
-                    <span
-                      className={`text-[11px] font-semibold ${
-                        message.role === 'user'
-                          ? 'text-teal-50'
-                          : 'text-gray-500 dark:text-gray-400'
-                      }`}
-                    >
-                      {message.role === 'assistant'
-                        ? 'Assistente'
-                        : 'Você'}
-                    </span>
-
-                    <span
-                      className={`text-[10px] ${
-                        message.role === 'user'
-                          ? 'text-teal-100/80'
-                          : 'text-gray-400 dark:text-gray-500'
-                      }`}
-                    >
-                      {formatTime(message.created_at)}
-                    </span>
-                  </div>
-
-                  <p
-                    className={`whitespace-pre-wrap text-[14px] leading-6 ${
+                  <div
+                    className={`max-w-[88%] rounded-[24px] border px-4 py-3 shadow-sm ${
                       message.role === 'user'
-                        ? 'text-white'
-                        : 'text-gray-800 dark:text-gray-200'
+                        ? 'border-teal-600 bg-teal-600 text-white'
+                        : 'border-gray-200/70 bg-white dark:border-slate-800 dark:bg-slate-900'
                     }`}
                   >
-                    {message.content}
-                  </p>
+                    <div className="mb-2 flex items-center gap-2">
+                      <div
+                        className={`flex h-6 w-6 items-center justify-center rounded-full ${
+                          message.role === 'user'
+                            ? 'bg-white/15'
+                            : 'bg-teal-50 dark:bg-teal-500/10'
+                        }`}
+                      >
+                        {message.role === 'assistant' ? (
+                          <Bot
+                            size={13}
+                            className="text-teal-600 dark:text-teal-400"
+                          />
+                        ) : (
+                          <User
+                            size={13}
+                            className="text-white"
+                          />
+                        )}
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-semibold ${
+                          message.role === 'user'
+                            ? 'text-teal-50'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {message.role === 'assistant'
+                          ? 'Assistente'
+                          : 'Você'}
+                      </span>
+
+                      <span
+                        className={`text-[9px] ${
+                          message.role === 'user'
+                            ? 'text-teal-100'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {formatTime(
+                          message.created_at
+                        )}
+                      </span>
+                    </div>
+
+                    {message.role === 'assistant' ? (
+                      <AssistantMessageContent
+                        content={message.content}
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap text-[14px] leading-6 text-white">
+                        {message.content}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
 
             {isSending && (
               <div className="flex justify-start">
-                <div className="rounded-[24px] border border-gray-200/70 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                  <div className="flex items-center gap-2">
-                    <Loader2
-                      size={16}
-                      className="animate-spin text-teal-600"
-                    />
-                    <span className="text-[13px] text-gray-500 dark:text-gray-400">
-                      Analisando...
+                <div className="max-w-[88%] rounded-[24px] border border-gray-200/70 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-500/10">
+                      <Bot
+                        size={13}
+                        className="text-teal-600"
+                      />
+                    </div>
+
+                    <span className="text-[10px] font-semibold text-gray-400">
+                      Assistente
                     </span>
                   </div>
+
+                  {streamingContent ? (
+                    <AssistantMessageContent
+                      content={streamingContent}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Loader2
+                        size={15}
+                        className="animate-spin text-teal-600"
+                      />
+
+                      <span className="text-[12px] text-gray-500 dark:text-gray-400">
+                        Comparando seus dados...
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            <div ref={messagesEndRef} />
+            {failedRequest &&
+              !isSending && (
+              <div className="flex justify-start">
+                <div className="rounded-[22px] border border-red-200 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/20">
+                  <p className="text-[12px] font-semibold text-red-700 dark:text-red-300">
+                    Não consegui concluir esta resposta.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="mt-3 flex items-center gap-2 rounded-[15px] bg-white px-3 py-2 text-[11px] font-bold text-red-600 shadow-sm active:scale-95 dark:bg-slate-900"
+                  >
+                    <RefreshCw size={14} />
+                    Tentar novamente
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div
+              ref={messagesEndRef}
+            />
           </div>
         )}
       </div>
 
-      <div className="fixed bottom-24 left-0 right-0 mx-auto max-w-md px-4">
-        <div className="flex items-end gap-2 rounded-[24px] border border-gray-200/70 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="fixed bottom-24 left-0 right-0 z-40 mx-auto max-w-md px-4">
+        <div className="flex items-center gap-2 rounded-[24px] border border-gray-200/70 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-900">
           <input
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(event) =>
-              setInput(event.target.value)
+              setInput(
+                event.target.value
+              )
             }
-            onKeyDown={handleKeyDown}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey
+              ) {
+                event.preventDefault()
+                handleSend()
+              }
+            }}
+            disabled={
+              isSending ||
+              !aiEnabled ||
+              assistantSettingsLoading
+            }
             placeholder={
               aiEnabled
                 ? 'Pergunte sobre suas finanças...'
-                : 'Assistente desativado'
+                : 'Chat inteligente desativado'
             }
-            className="flex-1 rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] text-gray-800 outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
-            disabled={isSending || !aiEnabled || assistantSettingsLoading}
+            className="min-w-0 flex-1 rounded-[17px] bg-gray-50 px-4 py-3 text-[14px] text-gray-900 outline-none placeholder:text-gray-400 dark:bg-slate-800 dark:text-white"
           />
 
           <button
             type="button"
             onClick={handleSend}
-            disabled={!input.trim() || isSending || !aiEnabled || assistantSettingsLoading}
-            className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-teal-600 text-white shadow-lg shadow-teal-600/20 active:scale-[0.98] disabled:opacity-50"
+            disabled={
+              !input.trim() ||
+              isSending ||
+              !aiEnabled ||
+              assistantSettingsLoading
+            }
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] bg-teal-600 text-white shadow-lg shadow-teal-600/20 active:scale-95 disabled:opacity-40"
           >
             {isSending ? (
               <Loader2
@@ -866,19 +876,19 @@ export default function AssistantChatPage() {
           }
         >
           <div
-            className="w-full max-w-md rounded-t-[32px] bg-white p-5 shadow-2xl dark:bg-slate-800"
+            className="w-full max-w-md rounded-t-[32px] bg-white p-5 shadow-2xl dark:bg-slate-900"
             onClick={(event) =>
               event.stopPropagation()
             }
           >
-            <div className="mb-4 flex items-start justify-between gap-4">
+            <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-[18px] font-semibold text-gray-900 dark:text-gray-100">
+                <h3 className="text-[18px] font-bold text-gray-900 dark:text-white">
                   Limpar conversa?
                 </h3>
 
-                <p className="mt-1 text-[13px] leading-5 text-gray-500 dark:text-gray-400">
-                  As mensagens desta conversa serão removidas do aparelho e sincronizadas como exclusões.
+                <p className="mt-1 text-[12px] leading-5 text-gray-500">
+                  As mensagens deste contexto serão removidas e sincronizadas como exclusões.
                 </p>
               </div>
 
@@ -887,9 +897,9 @@ export default function AssistantChatPage() {
                 onClick={() =>
                   setShowClearSheet(false)
                 }
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-300"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
@@ -899,7 +909,7 @@ export default function AssistantChatPage() {
                 onClick={() =>
                   setShowClearSheet(false)
                 }
-                className="flex-1 rounded-[18px] border border-gray-200 py-3 text-[14px] font-semibold text-gray-700 dark:border-slate-700 dark:text-gray-300"
+                className="flex-1 rounded-[18px] bg-gray-100 py-3 text-[13px] font-semibold dark:bg-slate-800"
               >
                 Cancelar
               </button>
@@ -907,7 +917,7 @@ export default function AssistantChatPage() {
               <button
                 type="button"
                 onClick={handleClearChat}
-                className="flex-1 rounded-[18px] bg-red-600 py-3 text-[14px] font-semibold text-white"
+                className="flex-1 rounded-[18px] bg-red-600 py-3 text-[13px] font-semibold text-white"
               >
                 Limpar
               </button>
@@ -916,5 +926,19 @@ export default function AssistantChatPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function AssistantChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto min-h-screen max-w-md bg-[#f7f8fa] p-5 dark:bg-slate-950">
+          <div className="h-32 animate-pulse rounded-[28px] bg-white dark:bg-slate-900" />
+        </div>
+      }
+    >
+      <AssistantChatContent />
+    </Suspense>
   )
 }

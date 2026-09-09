@@ -32,6 +32,10 @@ import { useLocalData } from '@/hooks/useLocalData'
 import {
   isRealizedFinancialTransaction,
 } from '@/lib/financialMetrics'
+import {
+  buildFinancialIntelligence,
+  selectFinancialInsights,
+} from '@/lib/financial-intelligence'
 import { formatCurrency } from '@/lib/utils'
 
 type Period = '1m' | '3m' | '6m'
@@ -108,6 +112,65 @@ export default function AssistantReportPage() {
       context: effectiveContext,
     },
   })
+
+  const {
+    data: localAccounts = [],
+    loading: accountsLoading,
+  } = useLocalData({
+    table: 'accounts' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localDebts = [],
+    loading: debtsLoading,
+  } = useLocalData({
+    table: 'debts' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const {
+    data: localSubscriptions = [],
+    loading: subscriptionsLoading,
+  } = useLocalData({
+    table: 'subscriptions' as any,
+    filters: {
+      context: effectiveContext,
+    },
+  })
+
+  const intelligence = useMemo(
+    () =>
+      buildFinancialIntelligence({
+        context: effectiveContext,
+        transactions: localTransactions as any[],
+        accounts: localAccounts as any[],
+        categories: localCategories as any[],
+        debts: localDebts as any[],
+        subscriptions: localSubscriptions as any[],
+      }),
+    [
+      effectiveContext,
+      localTransactions,
+      localAccounts,
+      localCategories,
+      localDebts,
+      localSubscriptions,
+    ]
+  )
+
+  const intelligenceHighlights = useMemo(
+    () =>
+      selectFinancialInsights(
+        intelligence,
+        { limit: 4 }
+      ),
+    [intelligence]
+  )
 
   const report = useMemo(() => {
     const now = new Date()
@@ -645,7 +708,10 @@ export default function AssistantReportPage() {
 
   const loading =
     txLoading ||
-    catLoading
+    catLoading ||
+    accountsLoading ||
+    debtsLoading ||
+    subscriptionsLoading
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-[#f8f9fa] px-4 pb-28 pt-4 font-sans dark:bg-slate-900">
@@ -974,29 +1040,38 @@ export default function AssistantReportPage() {
             </div>
           </div>
 
-          {report.insights.length >
-            0 && (
+          {intelligenceHighlights.length > 0 && (
             <div className="rounded-[24px] border border-gray-200/70 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <h2 className="mb-4 text-[15px] font-semibold text-gray-800 dark:text-gray-100">
-                Leitura automática
+              <h2 className="mb-1 text-[15px] font-semibold text-gray-800 dark:text-gray-100">
+                Inteligência financeira
               </h2>
 
+              <p className="mb-4 text-[11px] leading-5 text-gray-400 dark:text-gray-500">
+                Sinais calculados deterministicamente com o histórico disponível.
+              </p>
+
               <div className="space-y-2">
-                {report.insights.map(
-                  (insight, index) => (
+                {intelligenceHighlights.map(
+                  (insight) => (
                     <div
-                      key={`${insight.type}-${index}`}
-                      className={`rounded-[18px] border p-3 ${
-                        insight.type ===
-                        'positive'
-                          ? 'border-emerald-100 bg-emerald-50 dark:border-emerald-900/30 dark:bg-emerald-900/20'
-                          : insight.type ===
-                              'negative'
-                            ? 'border-red-100 bg-red-50 dark:border-red-900/30 dark:bg-red-900/20'
-                            : 'border-gray-200/70 bg-gray-50 dark:border-slate-700 dark:bg-slate-900'
-                      }`}
+                      key={insight.id}
+                      className="rounded-[18px] border border-gray-200/70 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900"
                     >
-                      <p className="text-[13px] leading-relaxed text-gray-800 dark:text-gray-200">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">
+                          {insight.title}
+                        </p>
+
+                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-gray-400">
+                          {insight.confidence === 'high'
+                            ? 'alta confiança'
+                            : insight.confidence === 'medium'
+                              ? 'média confiança'
+                              : 'baixa confiança'}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-[12px] leading-5 text-gray-500 dark:text-gray-400">
                         {insight.message}
                       </p>
                     </div>

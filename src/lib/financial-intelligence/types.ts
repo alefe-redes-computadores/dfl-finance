@@ -1,0 +1,134 @@
+// src/lib/financial-intelligence/types.ts
+
+export type FinancialIntelligenceContext =
+  | 'dfl'
+  | 'personal'
+
+export type InsightSeverity =
+  | 'info'
+  | 'opportunity'
+  | 'attention'
+  | 'warning'
+  | 'critical'
+
+export type InsightConfidence =
+  | 'low'
+  | 'medium'
+  | 'high'
+
+export interface IntelligenceTransactionLike {
+  id?: string
+  context?: string | null
+  type?: string | null
+  amount?: number | null
+  status?: string | null
+  affects_balance?: boolean | null
+  date?: string | null
+  category_id?: string | null
+  account_id?: string | null
+  goal_id?: string | null
+}
+
+export interface IntelligenceAccountLike {
+  id?: string
+  context?: string | null
+  balance?: number | null
+  is_archived?: boolean | null
+}
+
+export interface IntelligenceCategoryLike {
+  id?: string
+  name?: string | null
+  color?: string | null
+}
+
+export interface IntelligenceDebtLike {
+  id?: string
+  context?: string | null
+  total_amount?: number | null
+  paid_amount?: number | null
+  due_date?: string | null
+  status?: string | null
+}
+
+export interface IntelligenceSubscriptionLike {
+  id?: string
+  context?: string | null
+  name?: string | null
+  amount?: number | null
+  billing_cycle?: string | null
+  status?: string | null
+}
+
+export interface FinancialInsight {
+  id: string
+  type: string
+  severity: InsightSeverity
+  confidence: InsightConfidence
+  title: string
+  message: string
+  currentValue?: number
+  baselineValue?: number
+  deltaValue?: number
+  deltaPercent?: number
+  sampleSize: number
+  periodsUsed?: number
+  evidence?: Record<
+    string,
+    string | number | boolean | null
+  >
+  suggestedQuestion?: string
+}
+
+export interface FinancialIntelligenceSnapshot {
+  accountBalance: number
+  currentMonthIncome: number
+  currentMonthExpense: number
+  currentMonthNet: number
+  previousComparableIncome: number
+  previousComparableExpense: number
+  previousComparableNet: number
+  currentWeekIncome: number
+  currentWeekExpense: number
+  previousWeekIncome: number
+  previousWeekExpense: number
+  historicalAverageIncome: number
+  historicalAverageExpense: number
+  historicalAverageNet: number
+  historicalMonthsUsed: number
+  savingsRate: number | null
+  transactionCount: number
+  sampleSize: number
+  confidence: InsightConfidence
+  projectedMonthExpense: number
+  projectedMonthNet: number
+  receivablesOpen: number
+  receivablesOverdue: number
+  overdueReceivablesCount: number
+  recurringMonthlyEquivalent: number
+  topExpenseCategories: Array<{
+    id: string
+    name: string
+    amount: number
+    share: number
+    previousAmount: number
+    deltaPercent: number | null
+  }>
+}
+
+export interface FinancialIntelligenceOutput {
+  context: FinancialIntelligenceContext
+  generatedAt: string
+  snapshot: FinancialIntelligenceSnapshot
+  insights: FinancialInsight[]
+}
+
+export interface BuildFinancialIntelligenceInput {
+  context: FinancialIntelligenceContext
+  now?: Date
+  transactions: IntelligenceTransactionLike[]
+  accounts: IntelligenceAccountLike[]
+  categories: IntelligenceCategoryLike[]
+  debts?: IntelligenceDebtLike[]
+  subscriptions?: IntelligenceSubscriptionLike[]
+}

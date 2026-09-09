@@ -1,239 +1,682 @@
 // src/app/api/assistant/chat/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { createClient } from '@supabase/supabase-js'
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server'
+import {
+  GoogleGenerativeAI,
+} from '@google/generative-ai'
+import {
+  createClient,
+} from '@supabase/supabase-js'
 
 type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
 }
 
-type FinancialAssistantContext = {
-  context: string
-  generatedAt: string
-  accountBalance: number
-  currentMonthIncome: number
-  currentMonthExpense: number
-  currentMonthNet: number
-  transactionCount: number
-  topExpenseCategories: Array<{
-    name: string
-    amount: number
-  }>
+function safeNumber(
+  value: unknown
+) {
+  const parsed =
+    Number(value)
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0
 }
 
 function getAuthClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const url =
+    process.env
+      .NEXT_PUBLIC_SUPABASE_URL
+
+  const anonKey =
+    process.env
+      .NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!url || !anonKey) {
-    throw new Error('Supabase não configurado no servidor.')
+    throw new Error(
+      'Supabase não configurado no servidor.'
+    )
   }
 
-  return createClient(url, anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  })
+  return createClient(
+    url,
+    anonKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  )
 }
 
-function sanitizeMessages(input: unknown): ChatMessage[] {
-  if (!Array.isArray(input)) return []
+function sanitizeMessages(
+  input: unknown
+): ChatMessage[] {
+  if (!Array.isArray(input)) {
+    return []
+  }
 
   return input
     .slice(-30)
-    .flatMap((item: any) => {
-      const role =
-        item?.role === 'assistant'
-          ? 'assistant'
-          : item?.role === 'user'
-            ? 'user'
-            : null
+    .flatMap(
+      (item: any) => {
+        const role =
+          item?.role ===
+          'assistant'
+            ? 'assistant'
+            : item?.role ===
+                'user'
+              ? 'user'
+              : null
 
-      const content =
-        typeof item?.content === 'string'
-          ? item.content.trim().slice(0, 4000)
-          : ''
+        const content =
+          typeof item?.content ===
+          'string'
+            ? item.content
+                .trim()
+                .slice(0, 4000)
+            : ''
 
-      if (!role || !content) return []
+        if (
+          !role ||
+          !content
+        ) {
+          return []
+        }
 
-      return [{ role, content }]
-    })
+        return [
+          {
+            role,
+            content,
+          },
+        ]
+      }
+    )
 }
 
 function sanitizeFinancialContext(
   input: any
-): FinancialAssistantContext {
-  const safeNumber = (value: unknown) => {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : 0
-  }
+) {
+  const snapshot =
+    input?.snapshot &&
+    typeof input.snapshot ===
+      'object'
+      ? input.snapshot
+      : {}
 
-  const categories = Array.isArray(
-    input?.topExpenseCategories
-  )
-    ? input.topExpenseCategories
-        .slice(0, 8)
-        .flatMap((item: any) => {
-          const name =
-            typeof item?.name === 'string'
-              ? item.name.trim().slice(0, 80)
-              : ''
+  const categories =
+    Array.isArray(
+      snapshot
+        ?.topExpenseCategories
+    )
+      ? snapshot
+          .topExpenseCategories
+          .slice(0, 8)
+          .map(
+            (item: any) => ({
+              name:
+                String(
+                  item?.name ||
+                    ''
+                )
+                  .trim()
+                  .slice(
+                    0,
+                    80
+                  ),
+              amount:
+                safeNumber(
+                  item?.amount
+                ),
+              share:
+                safeNumber(
+                  item?.share
+                ),
+              previousAmount:
+                safeNumber(
+                  item?.previousAmount
+                ),
+              deltaPercent:
+                item?.deltaPercent ===
+                null
+                  ? null
+                  : safeNumber(
+                      item
+                        ?.deltaPercent
+                    ),
+            })
+          )
+          .filter(
+            (item: any) =>
+              item.name
+          )
+      : []
 
-          const amount = safeNumber(item?.amount)
-
-          return name ? [{ name, amount }] : []
-        })
-    : []
+  const insights =
+    Array.isArray(
+      input?.insights
+    )
+      ? input.insights
+          .slice(0, 8)
+          .map(
+            (item: any) => ({
+              type:
+                String(
+                  item?.type ||
+                    ''
+                ).slice(
+                  0,
+                  60
+                ),
+              severity:
+                String(
+                  item?.severity ||
+                    'info'
+                ).slice(
+                  0,
+                  20
+                ),
+              confidence:
+                String(
+                  item?.confidence ||
+                    'low'
+                ).slice(
+                  0,
+                  20
+                ),
+              title:
+                String(
+                  item?.title ||
+                    ''
+                )
+                  .trim()
+                  .slice(
+                    0,
+                    120
+                  ),
+              message:
+                String(
+                  item?.message ||
+                    ''
+                )
+                  .trim()
+                  .slice(
+                    0,
+                    400
+                  ),
+              currentValue:
+                item
+                  ?.currentValue ===
+                undefined
+                  ? null
+                  : safeNumber(
+                      item
+                        ?.currentValue
+                    ),
+              baselineValue:
+                item
+                  ?.baselineValue ===
+                undefined
+                  ? null
+                  : safeNumber(
+                      item
+                        ?.baselineValue
+                    ),
+              deltaPercent:
+                item
+                  ?.deltaPercent ===
+                undefined
+                  ? null
+                  : safeNumber(
+                      item
+                        ?.deltaPercent
+                    ),
+              sampleSize:
+                Math.max(
+                  0,
+                  Math.trunc(
+                    safeNumber(
+                      item
+                        ?.sampleSize
+                    )
+                  )
+                ),
+            })
+          )
+          .filter(
+            (item: any) =>
+              item.title &&
+              item.message
+          )
+      : []
 
   return {
     context:
-      typeof input?.context === 'string'
-        ? input.context.slice(0, 40)
+      typeof input?.context ===
+      'string'
+        ? input.context.slice(
+            0,
+            40
+          )
         : 'unknown',
+
     generatedAt:
-      typeof input?.generatedAt === 'string'
-        ? input.generatedAt.slice(0, 40)
-        : new Date().toISOString(),
-    accountBalance: safeNumber(input?.accountBalance),
-    currentMonthIncome: safeNumber(
-      input?.currentMonthIncome
-    ),
-    currentMonthExpense: safeNumber(
-      input?.currentMonthExpense
-    ),
-    currentMonthNet: safeNumber(
-      input?.currentMonthNet
-    ),
-    transactionCount: Math.max(
-      0,
-      Math.trunc(
-        safeNumber(input?.transactionCount)
-      )
-    ),
-    topExpenseCategories: categories,
+      typeof input
+        ?.generatedAt ===
+      'string'
+        ? input
+            .generatedAt
+            .slice(
+              0,
+              50
+            )
+        : new Date()
+            .toISOString(),
+
+    snapshot: {
+      accountBalance:
+        safeNumber(
+          snapshot
+            ?.accountBalance
+        ),
+
+      currentMonthIncome:
+        safeNumber(
+          snapshot
+            ?.currentMonthIncome
+        ),
+
+      currentMonthExpense:
+        safeNumber(
+          snapshot
+            ?.currentMonthExpense
+        ),
+
+      currentMonthNet:
+        safeNumber(
+          snapshot
+            ?.currentMonthNet
+        ),
+
+      previousComparableIncome:
+        safeNumber(
+          snapshot
+            ?.previousComparableIncome
+        ),
+
+      previousComparableExpense:
+        safeNumber(
+          snapshot
+            ?.previousComparableExpense
+        ),
+
+      previousComparableNet:
+        safeNumber(
+          snapshot
+            ?.previousComparableNet
+        ),
+
+      currentWeekIncome:
+        safeNumber(
+          snapshot
+            ?.currentWeekIncome
+        ),
+
+      currentWeekExpense:
+        safeNumber(
+          snapshot
+            ?.currentWeekExpense
+        ),
+
+      previousWeekIncome:
+        safeNumber(
+          snapshot
+            ?.previousWeekIncome
+        ),
+
+      previousWeekExpense:
+        safeNumber(
+          snapshot
+            ?.previousWeekExpense
+        ),
+
+      historicalAverageIncome:
+        safeNumber(
+          snapshot
+            ?.historicalAverageIncome
+        ),
+
+      historicalAverageExpense:
+        safeNumber(
+          snapshot
+            ?.historicalAverageExpense
+        ),
+
+      historicalAverageNet:
+        safeNumber(
+          snapshot
+            ?.historicalAverageNet
+        ),
+
+      savingsRate:
+        snapshot
+          ?.savingsRate ===
+        null
+          ? null
+          : safeNumber(
+              snapshot
+                ?.savingsRate
+            ),
+
+      transactionCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot
+                ?.transactionCount
+            )
+          )
+        ),
+
+      sampleSize:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot
+                ?.sampleSize
+            )
+          )
+        ),
+
+      confidence:
+        String(
+          snapshot
+            ?.confidence ||
+            'low'
+        ).slice(
+          0,
+          20
+        ),
+
+      projectedMonthExpense:
+        safeNumber(
+          snapshot
+            ?.projectedMonthExpense
+        ),
+
+      projectedMonthNet:
+        safeNumber(
+          snapshot
+            ?.projectedMonthNet
+        ),
+
+      receivablesOpen:
+        safeNumber(
+          snapshot
+            ?.receivablesOpen
+        ),
+
+      receivablesOverdue:
+        safeNumber(
+          snapshot
+            ?.receivablesOverdue
+        ),
+
+      overdueReceivablesCount:
+        Math.max(
+          0,
+          Math.trunc(
+            safeNumber(
+              snapshot
+                ?.overdueReceivablesCount
+            )
+          )
+        ),
+
+      recurringMonthlyEquivalent:
+        safeNumber(
+          snapshot
+            ?.recurringMonthlyEquivalent
+        ),
+
+      topExpenseCategories:
+        categories,
+    },
+
+    insights,
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest
+) {
   try {
     const authorization =
-      request.headers.get('authorization')
+      request.headers.get(
+        'authorization'
+      )
 
     const accessToken =
-      authorization?.startsWith('Bearer ')
-        ? authorization.slice(7).trim()
+      authorization
+        ?.startsWith(
+          'Bearer '
+        )
+        ? authorization
+            .slice(7)
+            .trim()
         : ''
 
     if (!accessToken) {
       return NextResponse.json(
-        { error: 'Sessão não autenticada.' },
-        { status: 401 }
+        {
+          error:
+            'Sessão não autenticada.',
+        },
+        {
+          status: 401,
+        }
       )
     }
 
-    const supabase = getAuthClient()
+    const supabase =
+      getAuthClient()
 
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser(accessToken)
+    } =
+      await supabase.auth
+        .getUser(
+          accessToken
+        )
 
-    if (authError || !user) {
+    if (
+      authError ||
+      !user
+    ) {
       return NextResponse.json(
-        { error: 'Sessão inválida ou expirada.' },
-        { status: 401 }
+        {
+          error:
+            'Sessão inválida ou expirada.',
+        },
+        {
+          status: 401,
+        }
       )
     }
 
-    const apiKey = process.env.GEMINI_API_KEY
+    const apiKey =
+      process.env
+        .GEMINI_API_KEY
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'Gemini não configurado no servidor.' },
-        { status: 503 }
+        {
+          error:
+            'Gemini não configurado no servidor.',
+        },
+        {
+          status: 503,
+        }
       )
     }
 
-    const body = await request.json()
+    const body =
+      await request.json()
 
     const messages =
-      sanitizeMessages(body?.messages)
+      sanitizeMessages(
+        body?.messages
+      )
+
+    if (
+      messages.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Mensagem obrigatória.',
+        },
+        {
+          status: 400,
+        }
+      )
+    }
 
     const financialContext =
       sanitizeFinancialContext(
         body?.financialContext
       )
 
-    if (messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Mensagem obrigatória.' },
-        { status: 400 }
+    const snapshot =
+      JSON.stringify(
+        financialContext,
+        null,
+        2
       )
-    }
 
-    const snapshot = JSON.stringify(
-      financialContext,
-      null,
-      2
-    )
+    const systemInstruction =
+`Você é o assistente financeiro do DFL Finance.
 
-    const systemInstruction = `Você é o assistente financeiro do DFL Finance.
+Responda em português do Brasil, de forma natural, clara, prática e objetiva.
 
-Responda em português do Brasil, de forma clara, prática e concisa.
+A verdade numérica vem exclusivamente do CONTEXTO FINANCEIRO ESTRUTURADO abaixo.
 
-Use o snapshot financeiro abaixo como a única fonte para números atuais do usuário.
-Nunca invente saldo, gasto, receita, categoria, tendência ou transação que não esteja no snapshot ou nas mensagens.
-Quando a pergunta exigir um dado que o snapshot não contém, diga explicitamente que esse dado não está disponível no contexto atual.
-Não afirme que tem acesso direto a banco, conta bancária, internet ou dados fora do snapshot.
-Diferencie saldo das contas de fluxo do mês.
-Valores estão em BRL.
+REGRAS:
+- nunca invente saldo, receita, despesa, tendência, categoria, cobrança ou comparação;
+- os insights já foram calculados deterministicamente pelo aplicativo;
+- você pode explicar, relacionar e priorizar esses fatos, mas não deve substituir os cálculos;
+- respeite confidence e sampleSize: quando a confiança for baixa, deixe a limitação clara;
+- diferencie saldo atual de fluxo mensal;
+- diferencie valores a receber de despesas;
+- valores monetários estão em BRL;
+- não diga que acessou banco, internet ou dados fora do contexto fornecido;
+- quando não houver dados suficientes, diga isso claramente;
+- prefira respostas curtas e úteis;
+- use Markdown simples quando ajudar: **negrito**, listas e pequenos títulos.
 
-SNAPSHOT FINANCEIRO:
+CONTEXTO FINANCEIRO ESTRUTURADO:
 ${snapshot}`
 
     const genAI =
-      new GoogleGenerativeAI(apiKey)
+      new GoogleGenerativeAI(
+        apiKey
+      )
 
     const model =
       genAI.getGenerativeModel({
-        model: 'gemini-3.6-flash',
+        model:
+          'gemini-3.6-flash',
         systemInstruction,
       })
 
     const contents =
-      messages.map((message) => ({
-        role:
-          message.role === 'assistant'
-            ? 'model'
-            : 'user',
-        parts: [{ text: message.content }],
-      }))
+      messages.map(
+        (message) => ({
+          role:
+            message.role ===
+            'assistant'
+              ? 'model'
+              : 'user',
+          parts: [
+            {
+              text:
+                message.content,
+            },
+          ],
+        })
+      )
 
     const result =
-      await model.generateContent({
-        contents,
-        generationConfig: {
-          temperature: 0.35,
-          maxOutputTokens: 1200,
+      await model
+        .generateContentStream({
+          contents,
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens:
+              1400,
+          },
+        })
+
+    const encoder =
+      new TextEncoder()
+
+    const stream =
+      new ReadableStream({
+        async start(
+          controller
+        ) {
+          try {
+            for await (
+              const chunk
+              of result.stream
+            ) {
+              const text =
+                chunk.text()
+
+              if (text) {
+                controller.enqueue(
+                  encoder.encode(
+                    text
+                  )
+                )
+              }
+            }
+
+            controller.close()
+          } catch (error) {
+            console.error(
+              'Erro durante streaming do assistente:',
+              error
+            )
+
+            controller.error(
+              error
+            )
+          }
         },
       })
 
-    const message =
-      result.response.text()?.trim()
-
-    if (!message) {
-      return NextResponse.json(
-        {
-          error:
-            'O assistente retornou uma resposta vazia.',
+    return new Response(
+      stream,
+      {
+        status: 200,
+        headers: {
+          'Content-Type':
+            'text/plain; charset=utf-8',
+          'Cache-Control':
+            'no-cache, no-transform',
+          'X-Accel-Buffering':
+            'no',
         },
-        { status: 502 }
-      )
-    }
-
-    return NextResponse.json({ message })
+      }
+    )
   } catch (error: any) {
     console.error(
       'Erro no assistente financeiro:',
@@ -246,7 +689,9 @@ ${snapshot}`
           error?.message ||
           'Erro ao consultar o assistente.',
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     )
   }
 }

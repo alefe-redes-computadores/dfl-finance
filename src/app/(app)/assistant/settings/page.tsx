@@ -260,7 +260,7 @@ export default function AssistantSettingsPage() {
                 <ChevronLeft size={20} />
               </button>
               <h2 className="text-[20px] font-semibold text-gray-800 dark:text-gray-100">
-                Configurações IA
+                Inteligência financeira
               </h2>
               <div className="w-10" />
             </div>
@@ -304,7 +304,7 @@ export default function AssistantSettingsPage() {
             <div className="min-w-0 flex-1 text-center">
               <h2 className="flex items-center justify-center gap-2 text-[20px] font-semibold tracking-tight text-gray-800 dark:text-gray-100">
                 <Settings size={20} className="text-teal-600" />
-                Configurações IA
+                Inteligência financeira
               </h2>
               <p className="mt-0.5 text-[12px] text-gray-400 dark:text-gray-500">
                 Preferências sincronizadas entre seus dispositivos
@@ -352,17 +352,17 @@ export default function AssistantSettingsPage() {
             </div>
             <div>
               <h3 className="text-[15px] font-semibold text-gray-800 dark:text-gray-100">
-                Assistente IA
+                Chat inteligente
               </h3>
               <p className="text-[12px] text-gray-400 dark:text-gray-500">
-                Comportamento preferido do assistente
+                Preferências do módulo inteligente
               </p>
             </div>
           </div>
 
           <div className="space-y-2.5">
             <SettingToggle
-              label="Habilitar IA"
+              label="Habilitar Chat inteligente"
               description="Controla o acesso ao Chat inteligente. Desativado, o Chat não envia solicitações ao serviço de IA."
               checked={draft.ai_enabled}
               onChange={() => toggleSetting('ai_enabled')}
