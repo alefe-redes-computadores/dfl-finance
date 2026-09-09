@@ -1,3 +1,4 @@
+// src/app/(app)/accounts/details/page.tsx
 'use client'
 
 import { Suspense, useState, useRef, useMemo, useCallback, useEffect } from "react"
@@ -18,6 +19,8 @@ import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
 import BankLogo from '@/components/BankLogo'
+import { getBankIcon } from '@/lib/BankIcons'
+import { getAccountInstitutionLabel, getAccountTypeLabel, isAccountArchived, sortAccountsByBalance } from '@/lib/accountPresentation'
 import {
   adjustAccountBalance,
   transferBetweenAccounts,
@@ -32,97 +35,11 @@ const ACCOUNT_ICONS: Record<string, any> = {
   other: Wallet,
 }
 
-const ACCOUNT_LABELS: Record<string, string> = {
-  checking: "Conta Corrente",
-  savings: "Poupança",
-  investment: "Investimento",
-  credit_card: "Cartão de Crédito",
-  wallet: "Carteira",
-  other: "Outro",
-}
-
-const BANK_META: Record<string, { label: string; color: string; icon: string }> = {
-  nubank: { label: "Nubank", color: "#8A05BE", icon: "N" },
-  itau: { label: "Itaú", color: "#EC7000", icon: "I" },
-  itaú: { label: "Itaú", color: "#EC7000", icon: "I" },
-  bradesco: { label: "Bradesco", color: "#CC092F", icon: "B" },
-  santander: { label: "Santander", color: "#EC0000", icon: "S" },
-  inter: { label: "Inter", color: "#FF7A00", icon: "I" },
-  "banco do brasil": { label: "Banco do Brasil", color: "#FFCD00", icon: "BB" },
-  caixa: { label: "Caixa", color: "#005CA9", icon: "C" },
-  c6: { label: "C6 Bank", color: "#111111", icon: "C6" },
-  picpay: { label: "PicPay", color: "#21C25E", icon: "P" },
-  original: { label: "Original", color: "#005C5A", icon: "O" },
-  next: { label: "Next", color: "#00E36E", icon: "N" },
-  safra: { label: "Safra", color: "#0B3A6E", icon: "S" },
-  will: { label: "Will Bank", color: "#7B61FF", icon: "W" },
-}
-
-const safeNum = (val: any): number => {
-  if (val === null || val === undefined || val === '') return 0
-  if (typeof val === 'number') return isNaN(val) ? 0 : val
-  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ''))
-  return isNaN(parsed) ? 0 : parsed
-}
-
-const normalizeBankKey = (bank?: string | null) =>
-  (bank || '').trim().toLowerCase().replace(/\s+/g, ' ')
-
-function BankBadge({ bank }: { bank?: string | null }) {
-  const key = normalizeBankKey(bank)
-  const meta = BANK_META[key]
-
-  if (meta) {
-    return (
-      <div
-        className="flex items-center gap-3 rounded-[18px] border border-black/5 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-slate-900"
-      >
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-[14px] text-[12px] font-black text-white shadow-sm"
-          style={{ backgroundColor: meta.color }}
-        >
-          {meta.icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium text-slate-400">Instituição</p>
-          <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-            {meta.label}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!bank?.trim()) {
-    return (
-      <div className="flex items-center gap-3 rounded-[18px] border border-dashed border-black/10 bg-gray-50 px-4 py-3 dark:border-white/10 dark:bg-slate-900/60">
-        <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gray-200 text-[12px] font-black text-gray-500 dark:bg-slate-700 dark:text-gray-300">
-          --
-        </div>
-        <div className="min-w-0">
-          <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Instituição</p>
-          <p className="truncate text-[14px] font-semibold text-gray-400 dark:text-gray-500">
-            Sem banco definido
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  const fallback = bank.trim().slice(0, 2).toUpperCase()
-  return (
-    <div className="flex items-center gap-3 rounded-[18px] border border-black/5 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-slate-900">
-      <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-teal-600 text-[12px] font-black text-white shadow-sm">
-        {fallback}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Instituição</p>
-        <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
-          {bank}
-        </p>
-      </div>
-    </div>
-  )
+const safeNum = (value: unknown): number => {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const parsed = Number.parseFloat(String(value).replace(',', '.').replace(/[^0-9.-]+/g, ''))
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function AccountDetailContent() {
@@ -139,7 +56,6 @@ function AccountDetailContent() {
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
   const { pendingCount } = useLocalSync()
-  const { context } = useContext_()
   const { user } = useAuth()
   const { safeDelete } = useSafeDb()
 
@@ -161,6 +77,7 @@ function AccountDetailContent() {
   const [transferToAccount, setTransferToAccount] = useState("")
   const [transferNotes, setTransferNotes] = useState("")
   const [saving, setSaving] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -331,34 +248,28 @@ function AccountDetailContent() {
   const handleDelete = async () => {
     if (!user) return
     vibrate([10, 50])
-
-    if (!confirm("Tem certeza que deseja excluir esta conta?")) return
-
     try {
       const result = await safeDelete('accounts', accountId)
-
-      if (!result.success) {
-        throw new Error(result.error || 'Erro ao excluir conta')
-      }
-
+      if (!result.success) throw new Error(result.error || 'Erro ao excluir conta')
       success()
-      showToast("Conta excluída com sucesso!", "success")
-      router.push('/accounts')
+      showToast('Conta excluída com sucesso!', 'success')
+      setShowDeleteModal(false)
+      router.replace('/accounts')
     } catch (err: any) {
       errorHaptic()
-      showToast(` Erro ao excluir: ${err.message}`, "error")
+      showToast(`Erro ao excluir: ${err.message}`, 'error')
     }
   }
 
-  const Icon = ACCOUNT_ICONS[account.type] || Wallet
+  const Icon = ACCOUNT_ICONS[account.type || ''] || Wallet
   const sortedTransactions = [...(transactions || [])].sort(
     (a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
   )
   const balance = safeNum(account.balance)
   const balancePositive = balance >= 0
-  const bankName = account.bank || ""
+  const bankName = getAccountInstitutionLabel(account)
 
-  const targetAccounts = (allAccounts || []).filter((a: any) => a.id !== accountId)
+  const targetAccounts = sortAccountsByBalance((allAccounts || []).filter((a: any) => a.id !== accountId && !isAccountArchived(a)))
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
@@ -414,7 +325,7 @@ function AccountDetailContent() {
             </button>
 
             <button
-              onClick={handleDelete}
+              onClick={() => { vibrate([10]); setShowDeleteModal(true) }}
               className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-red-100 bg-white text-red-500 shadow-sm transition-all active:scale-95 dark:border-red-900/30 dark:bg-slate-900"
             >
               <Trash2 size={17} />
@@ -436,7 +347,7 @@ function AccountDetailContent() {
               <div className="relative">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <BankLogo color={account.color} name={account.name} size="lg" />
+                    <BankLogo color={account.color} name={bankName || account.name} size="lg" />
                     <div className="min-w-0">
                       <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
                         Saldo atual
@@ -450,10 +361,13 @@ function AccountDetailContent() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300">
-                    {ACCOUNT_LABELS[account.type] || account.type}
+                    {getAccountTypeLabel(account.type)}
                   </span>
 
-                  <BankBadge bank={bankName} />
+                  <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300">
+                    <span className="h-5 w-5 overflow-hidden rounded-[7px]">{getBankIcon(bankName)}</span>
+                    <span>{bankName}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -574,6 +488,21 @@ function AccountDetailContent() {
           </section>
         </div>
       </div>
+
+      {showDeleteModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setShowDeleteModal(false)}>
+          <div className="w-full max-w-sm rounded-t-[32px] bg-white p-6 shadow-2xl dark:bg-slate-900 sm:rounded-[32px]" onClick={(event) => event.stopPropagation()}>
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10"><Trash2 size={28} /></div>
+            <h3 className="text-center text-[20px] font-semibold text-gray-900 dark:text-gray-100">Excluir conta</h3>
+            <p className="mt-2 text-center text-[13px] leading-5 text-gray-500 dark:text-gray-400">A conta só será excluída se não houver dependências que precisem ser preservadas.</p>
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={() => setShowDeleteModal(false)} className="flex-1 rounded-[18px] bg-gray-100 py-3.5 text-[14px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-gray-300">Cancelar</button>
+              <button type="button" onClick={handleDelete} className="flex-1 rounded-[18px] bg-red-500 py-3.5 text-[14px] font-semibold text-white shadow-lg shadow-red-500/20">Excluir</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {showAdjustModal && createPortal(
         <div
@@ -720,10 +649,8 @@ function AccountDetailContent() {
                     </div>
                   ) : (
                     targetAccounts.map((a: any) => {
-                      const key = normalizeBankKey(a.bank)
-                      const meta = BANK_META[key]
+                      const institution = getAccountInstitutionLabel(a)
                       const selected = transferToAccount === a.id
-                      const TypeIcon = ACCOUNT_ICONS[a.type] || Wallet
 
                       return (
                         <button
@@ -736,15 +663,8 @@ function AccountDetailContent() {
                               : 'border-black/5 bg-white hover:bg-gray-50 dark:border-white/10 dark:bg-slate-900 dark:hover:bg-slate-800'
                           }`}
                         >
-                          <div
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-white shadow-sm"
-                            style={{ backgroundColor: meta?.color || '#0f766e' }}
-                          >
-                            {meta?.icon ? (
-                              <span className="text-[12px] font-black">{meta.icon}</span>
-                            ) : (
-                              <TypeIcon size={18} />
-                            )}
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-[14px] shadow-sm">
+                            {getBankIcon(institution)}
                           </div>
 
                           <div className="min-w-0 flex-1">
@@ -752,7 +672,7 @@ function AccountDetailContent() {
                               {a.name}
                             </p>
                             <p className="truncate text-[12px] text-gray-500 dark:text-gray-400">
-                              {meta?.label || a.bank || 'Sem banco'} • {ACCOUNT_LABELS[a.type] || a.type}
+                              {institution} • {getAccountTypeLabel(a.type)}
                             </p>
                           </div>
 

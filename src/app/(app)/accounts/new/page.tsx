@@ -1,3 +1,4 @@
+// src/app/(app)/accounts/new/page.tsx
 'use client'
 
 import { useState, useEffect, Suspense, useMemo } from "react"
@@ -21,8 +22,10 @@ import { useLocalData } from "@/hooks/useLocalData"
 import { useContext_ } from "@/components/ContextToggle"
 import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
-import { safeAdd, safeUpdate } from "@/lib/safeDb"
+import { useSafeDb } from "@/hooks/useSafeDb"
 import BankLogo from '@/components/BankLogo'
+import { getBankColor, getBankIcon } from '@/lib/BankIcons'
+import { COMMON_BANKS, canonicalizeBankName } from '@/lib/accountPresentation'
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Conta Corrente", icon: Wallet },
@@ -72,10 +75,11 @@ function AccountFormContent() {
     return rawEditId.trim()
   }, [rawEditId])
   
-  const { context } = useContext_()
+  const { effectiveContext } = useContext_()
   const { user } = useAuth()
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
+  const { safeAdd, safeUpdate } = useSafeDb()
 
   const [saving, setSaving] = useState(false)
   const [initialized, setInitialized] = useState(!editId)
@@ -138,7 +142,7 @@ function AccountFormContent() {
           </div>
         </div>
         <div className="flex-1 px-4 pt-4">
-          <Skeleton count={5} height="96px" borderRadius="24px" />
+          <Skeleton count={5} className="h-24 rounded-[24px]" />
         </div>
       </div>
     )
@@ -148,7 +152,7 @@ function AccountFormContent() {
     return (
       <div className="flex min-h-[100dvh] flex-col bg-[#f8f9fa] dark:bg-slate-950">
         <div className="flex-1 px-4 pt-4">
-          <Skeleton count={5} height="96px" borderRadius="24px" />
+          <Skeleton count={5} className="h-24 rounded-[24px]" />
         </div>
       </div>
     )
@@ -167,6 +171,17 @@ function AccountFormContent() {
   const handleSelectColor = (color: string) => {
     vibrate([5])
     setFormData((prev) => ({ ...prev, color }))
+  }
+
+  const handleSelectBank = (bank: string) => {
+    const canonical = canonicalizeBankName(bank)
+    const bankColor = getBankColor(canonical)
+    vibrate([5])
+    setFormData((prev) => ({
+      ...prev,
+      bank: canonical,
+      color: bankColor || prev.color,
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -191,7 +206,7 @@ function AccountFormContent() {
       const basePayload = {
         name: formData.name.trim(),
         type: formData.type,
-        bank: formData.bank.trim() || null,
+        bank: canonicalizeBankName(formData.bank) || null,
         color: formData.color || "#0f766e",
         icon: formData.icon || "wallet",
         user_id: user.id,
@@ -202,7 +217,7 @@ function AccountFormContent() {
         const result = await safeUpdate("accounts", editId, {
           ...basePayload,
           id: editId,
-          context: accountData?.context || context,
+          context: accountData?.context || effectiveContext,
         })
         if (!result.success) {
           throw new Error(result.error || "Erro ao atualizar conta")
@@ -215,7 +230,8 @@ function AccountFormContent() {
           ...basePayload,
           id: newId,
           balance: amount,
-          context,
+          context: effectiveContext,
+          is_archived: false,
           created_at: new Date().toISOString(),
           sync_status: "pending",
           sync_attempts: 0,
@@ -328,17 +344,28 @@ function AccountFormContent() {
           </div>
 
           <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
-            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
-              Banco / Instituição
-            </label>
-            <input
-              type="text"
-              name="bank"
-              value={formData.bank}
-              onChange={handleChange}
-              placeholder="Ex: Nubank, Itaú, Inter..."
-              className="w-full rounded-[14px] border border-black/5 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-teal-500/40 focus:ring-2 focus:ring-teal-500/10 dark:border-white/10 dark:bg-slate-800 dark:text-gray-100"
-            />
+            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Banco / Instituição</label>
+            <div className="flex items-center gap-3 rounded-[16px] border border-black/5 bg-gray-50 px-3 py-3 dark:border-white/10 dark:bg-slate-800">
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-[13px]">{getBankIcon(formData.bank || 'Banco')}</div>
+              <input
+                type="text"
+                name="bank"
+                list="account-bank-options"
+                value={formData.bank}
+                onChange={handleChange}
+                onBlur={() => formData.bank && handleSelectBank(formData.bank)}
+                placeholder="Ex: Nubank, Itaú, Inter..."
+                className="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100"
+              />
+              <datalist id="account-bank-options">
+                {COMMON_BANKS.map((bank) => <option key={bank} value={bank} />)}
+              </datalist>
+            </div>
+            <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto pb-1">
+              {COMMON_BANKS.slice(0, 8).map((bank) => (
+                <button key={bank} type="button" onClick={() => handleSelectBank(bank)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-95 ${canonicalizeBankName(formData.bank) === bank ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300' : 'border-black/5 bg-gray-50 text-gray-500 dark:border-white/10 dark:bg-slate-800 dark:text-gray-400'}`}>{bank}</button>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
@@ -447,7 +474,7 @@ function AccountFormContent() {
 
 export default function AccountFormPage() {
   return (
-    <Suspense fallback={<Skeleton count={5} height="96px" borderRadius="24px" />}>
+    <Suspense fallback={<Skeleton count={5} className="h-24 rounded-[24px]" />}>
       <AccountFormContent />
     </Suspense>
   )

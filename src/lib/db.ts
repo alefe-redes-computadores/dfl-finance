@@ -52,6 +52,9 @@ export interface LocalAccount {
   user_id: string
   context: 'dfl' | 'personal'
   name: string
+  type?: 'checking' | 'savings' | 'investment' | 'credit_card' | 'wallet' | 'other' | null
+  bank?: string | null
+  icon?: string | null
   color: string
   balance: number
   is_archived: boolean
@@ -400,23 +403,25 @@ export const db = new DFLDatabase()
 export async function clearAllLocalData() {
   await db.transaction(
     'rw',
-    db.transactions,
-    db.accounts,
-    db.categories,
-    db.debts,
-    db.loans,
-    db.financings,
-    db.subscriptions,
-    db.tags,
-    db.contacts,
-    db.budgets,
-    db.goals,
-    db.credit_cards,
-    db.credit_invoices,
-    db.notifications,
-    db.chat_history,
-    db.chat_sessions,
-    db.syncQueue,
+    [
+      db.transactions,
+      db.accounts,
+      db.categories,
+      db.debts,
+      db.loans,
+      db.financings,
+      db.subscriptions,
+      db.tags,
+      db.contacts,
+      db.budgets,
+      db.goals,
+      db.credit_cards,
+      db.credit_invoices,
+      db.notifications,
+      db.chat_history,
+      db.chat_sessions,
+      db.syncQueue,
+    ],
     async () => {
       await db.transactions.clear()
       await db.accounts.clear()
