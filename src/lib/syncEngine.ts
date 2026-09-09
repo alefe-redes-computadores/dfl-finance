@@ -256,25 +256,43 @@ export async function getSyncQueueDiagnostics(
   }))
 }
 
+const LOCAL_ONLY_REMOTE_KEYS =
+  new Set([
+    'syncstatus',
+    'syncattempts',
+    'lastsyncerror',
+  ])
+
 function sanitizeRemotePayload(
   source: Record<string, any>,
   recordId: string,
   userId: string
 ) {
-  const {
-    sync_status: _syncStatus,
-    sync_attempts: _syncAttempts,
-    last_sync_error: _lastSyncError,
-    ...rest
-  } = source
+  const sanitizedEntries =
+    Object.entries(source)
+      .filter(([key, value]) => {
+        if (value === undefined) {
+          return false
+        }
 
-  return Object.fromEntries(
-    Object.entries({
-      ...rest,
-      id: recordId,
-      user_id: userId,
-    }).filter(([, value]) => value !== undefined)
-  )
+        const normalizedKey =
+          key
+            .replace(
+              /[^a-zA-Z0-9]/g,
+              ''
+            )
+            .toLowerCase()
+
+        return !LOCAL_ONLY_REMOTE_KEYS.has(
+          normalizedKey
+        )
+      })
+
+  return Object.fromEntries([
+    ...sanitizedEntries,
+    ['id', recordId],
+    ['user_id', userId],
+  ])
 }
 
 function retryDelayMs(attempts: number) {
