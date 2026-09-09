@@ -122,13 +122,42 @@ function EditTransactionContent() {
 
   // useMemo (hook) também no topo
   const categories = useMemo(() => {
-    return (localCategories || []).sort((a: any, b: any) => {
-      const orderA = a.order_index ?? 9999
-      const orderB = b.order_index ?? 9999
-      if (orderA !== orderB) return orderA - orderB
-      return (a.name || '').localeCompare(b.name || '')
-    })
-  }, [localCategories])
+    const expectedType =
+      txType === 'income'
+        ? 'income'
+        : 'expense'
+
+    return (localCategories || [])
+      .filter(
+        (category: any) =>
+          category.context ===
+            (tx?.context ||
+              effectiveContext) &&
+          category.type ===
+            expectedType &&
+          !category.parent_id
+      )
+      .sort((a: any, b: any) => {
+        const orderA =
+          a.order_index ?? 9999
+        const orderB =
+          b.order_index ?? 9999
+
+        if (orderA !== orderB) {
+          return orderA - orderB
+        }
+
+        return String(a.name || '')
+          .localeCompare(
+            String(b.name || '')
+          )
+      })
+  }, [
+    localCategories,
+    txType,
+    tx?.context,
+    effectiveContext,
+  ])
 
   // MOVIDOS PARA O TOPO (antes de qualquer return condicional)
   const toggleTag = useCallback((tagId: string) => {
@@ -1722,7 +1751,18 @@ function EditTransactionContent() {
               </div>
             </div>
             <div className="space-y-2 pb-6">
-              {(subcategories[selectedParentCat.id] || []).map((sub: any) => {
+              {(subcategories[selectedParentCat.id] || [])
+                .filter(
+                  (sub: any) =>
+                    sub.type ===
+                      (txType === 'income'
+                        ? 'income'
+                        : 'expense') &&
+                    sub.context ===
+                      (tx?.context ||
+                        effectiveContext)
+                )
+                .map((sub: any) => {
                 const SubIcon = getDynamicIcon(sub.icon)
                 const isActive = sub.id === categoryId
                 return (

@@ -12,7 +12,10 @@ import { useToast } from '@/contexts/ToastContext'
 import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
 import { db } from '@/lib/db'
-import { normalizeContactSearch } from '@/lib/contactOperations'
+import {
+  getDebtPaymentAppliedAmount,
+  normalizeContactSearch,
+} from '@/lib/contactOperations'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
@@ -54,7 +57,10 @@ function NewDebtContent() {
 
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
-    filters: { context: debtContext, type: 'expense' },
+    filters: {
+      context: debtContext,
+      type: 'income',
+    },
   })
 
   const { data: localAccounts } = useLocalData({
@@ -126,10 +132,17 @@ function NewDebtContent() {
             .and(isDebtPayment)
             .toArray()
 
-          const paidAmountCents = paymentTransactions.reduce(
-            (sum, tx) => sum + Math.round(Number(tx.amount || 0) * 100),
-            0
-          )
+          const paidAmountCents =
+            paymentTransactions.reduce(
+              (sum, payment) =>
+                sum +
+                Math.round(
+                  getDebtPaymentAppliedAmount(
+                    payment
+                  ) * 100
+                ),
+              0
+            )
 
           const finalAmountCents = Math.round(finalAmount * 100)
 

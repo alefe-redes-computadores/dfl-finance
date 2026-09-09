@@ -23,14 +23,15 @@ import { useToast } from '@/contexts/ToastContext'
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 import { createPortal } from 'react-dom'
 import {
+  buildDebtPaymentTotals,
   getDebtRemainingAmount,
   getDebtStatusFromAmounts,
-  isDebtPayment,
 } from '@/lib/debtOperations'
 import {
   getPendingDirection,
   getPendingLabel,
   isStandalonePendingReceivable,
+  isUrgentDebtDue,
 } from '@/lib/pendingOperations'
 
 import { getDebtDueState } from '@/lib/debtOperations'
@@ -553,23 +554,13 @@ export default function TransactionsPage() {
     })
   }, [transactions, localCategories, localAccounts])
 
-  const debtPaymentsById = useMemo(() => {
-    const result = new Map<string, number>()
-
-    for (const tx of transactions || []) {
-      if (!isDebtPayment(tx) || !tx.debt_id) {
-        continue
-      }
-
-      result.set(
-        tx.debt_id,
-        (result.get(tx.debt_id) || 0) +
-          Math.round(safeNum(tx.amount) * 100)
-      )
-    }
-
-    return result
-  }, [transactions])
+  const debtPaymentsById = useMemo(
+    () =>
+      buildDebtPaymentTotals(
+        transactions || []
+      ),
+    [transactions]
+  )
 
   const openDebtReceivables = useMemo(() => {
     return (localDebts || [])
@@ -611,31 +602,18 @@ export default function TransactionsPage() {
     format(new Date(), 'yyyy-MM')
 
   const debtReceivablesForPeriod = useMemo(() => {
+    if (!isCurrentMonth) {
+      return []
+    }
+
     return openDebtReceivables.filter(
-      (debt: any) => {
-        const dueDate = String(
-          debt.due_date || ''
+      (debt: any) =>
+        isUrgentDebtDue(
+          debt.due_date
         )
-
-        if (!dueDate) {
-          return isCurrentMonth
-        }
-
-        const dueState = getDebtDueState(debt.due_date)
-        if (dueState.isOverdue || dueState.isToday) {
-          return true
-        }
-
-        return (
-          isCurrentMonth &&
-          dueDate < startMonth
-        )
-      }
     )
   }, [
     openDebtReceivables,
-    startMonth,
-    endMonth,
     isCurrentMonth,
   ])
 

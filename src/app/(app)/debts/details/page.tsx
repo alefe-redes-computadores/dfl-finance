@@ -501,7 +501,7 @@ function DebtDetailContent() {
             const reversedBalance =
               (
                 Math.round(Number(account.balance || 0) * 100) -
-                Math.round(getDebtPaymentAppliedAmount(paymentToDelete) * 100)
+                Math.round(Number(paymentToDelete.amount || 0) * 100)
               ) / 100
 
             const result = await safeUpdate(
@@ -520,9 +520,24 @@ function DebtDetailContent() {
         const result = await safeDelete('transactions', paymentToDelete.id)
         if (!result.success) throw new Error(`Erro deletar pagamento: ${result.error}`)
 
-        const updatedPayments = payments.filter((p) => p.id !== paymentToDelete.id)
-        const nextTotalPaid = updatedPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-        const nextTotalPaidCents = Math.round(nextTotalPaid * 100)
+        const updatedPayments =
+          payments.filter(
+            (payment) =>
+              payment.id !==
+              paymentToDelete.id
+          )
+
+        const nextTotalPaidCents =
+          updatedPayments.reduce(
+            (sum, payment) =>
+              sum +
+              Math.round(
+                getDebtPaymentAppliedAmount(
+                  payment
+                ) * 100
+              ),
+            0
+          )
 
         const nextStatus: DebtStatus = getDebtStatusFromAmounts(
           totalAmountCents,
