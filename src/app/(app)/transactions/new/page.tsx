@@ -1189,7 +1189,7 @@ function NewTransactionContent() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.name} size="sm" />}
+                    {selectedAcc && <BankLogo color={selectedAcc.color} name={selectedAcc.bank || selectedAcc.name} size="sm" />}
                     <ChevronRight size={18} className="text-gray-300" />
                   </div>
                 </button>
@@ -1558,7 +1558,7 @@ function NewTransactionContent() {
                 const isActive = acc.id === accountId
                 return (
                   <button key={acc.id} onClick={() => { vibrate([5]); setAccountId(acc.id); setShowAccModal(false) }} className={`w-full p-4 flex items-center gap-4 rounded-[20px] transition-transform active:scale-[0.98] ${isActive ? 'bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800/50' : 'bg-gray-50 dark:bg-slate-700/40 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
-                    <BankLogo color={acc.color} name={acc.name} size="md" />
+                    <BankLogo color={acc.color} name={acc.bank || acc.name} size="md" />
                     <span className={`flex-1 text-left text-[15px] font-bold ${isActive ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-200'}`}>{acc.name}</span>
                     {isActive && <Check size={20} className="text-teal-700 dark:text-teal-400" />}
                   </button>

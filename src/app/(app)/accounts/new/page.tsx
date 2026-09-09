@@ -282,7 +282,7 @@ function AccountFormContent() {
               </div>
             </div>
 
-            <BankLogo color={formData.color} name={formData.name} size="lg" />
+            <BankLogo color={formData.color} name={formData.bank || formData.name} size="lg" />
           </div>
         </div>
       </div>
@@ -330,7 +330,7 @@ function AccountFormContent() {
 
             <div className="mt-4 rounded-[18px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center gap-3">
-                <BankLogo color={formData.color} name={formData.name} size="md" />
+                <BankLogo color={formData.color} name={formData.bank || formData.name} size="md" />
                 <div className="min-w-0">
                   <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400">
                     Pré-visualização

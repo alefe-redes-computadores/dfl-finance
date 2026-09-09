@@ -1851,7 +1851,7 @@ function HomeContent() {
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <BankLogo color={acc.color} name={acc.name} size="md" />
+                        <BankLogo color={acc.color} name={acc.bank || acc.name} size="md" />
                         <div className="min-w-0">
                           <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
                             {acc.name}
