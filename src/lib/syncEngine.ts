@@ -313,6 +313,7 @@ function sanitizeRemotePayload(
             .toLowerCase()
 
         const legacyRemoteKeyAliases: Record<string, string> = {
+          userid: 'user_id',
           accountid: 'account_id',
           categoryid: 'category_id',
           creditcardid: 'credit_card_id',
