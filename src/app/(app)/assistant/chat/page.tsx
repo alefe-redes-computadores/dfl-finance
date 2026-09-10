@@ -1065,12 +1065,28 @@ function AssistantChatContent() {
       </div>
 
       <div className="fixed bottom-24 left-0 right-0 z-40 mx-auto max-w-md px-4">
-        <div className="mb-2 flex items-center justify-between px-2 text-[9px] text-gray-400">
-          <span>
-            Gemini + inteligência financeira do DFL
+        <div className="mb-2 flex items-center justify-between rounded-[14px] border border-gray-200/70 bg-white/95 px-3 py-2 text-[10px] font-medium text-gray-600 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 dark:text-gray-300">
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                isSending
+                  ? 'animate-pulse bg-teal-500'
+                  : 'bg-emerald-500'
+              }`}
+            />
+            <span className="truncate">
+              Gemini + inteligência financeira do DFL
+            </span>
           </span>
-          <span>
-            {isSending ? 'Respondendo…' : 'Pronto'}
+
+          <span
+            className={`ml-3 shrink-0 font-semibold ${
+              isSending
+                ? 'text-teal-600 dark:text-teal-400'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {isSending ? 'Analisando…' : 'Pronto'}
           </span>
         </div>
 
