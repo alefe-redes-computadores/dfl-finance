@@ -15,7 +15,7 @@ type ChatMessage = {
   content: string
 }
 
-const GEMINI_START_TIMEOUT_MS = 18000
+const GEMINI_START_TIMEOUT_MS = 30000
 
 function assistantTimeoutError() {
   return new Error(
@@ -836,15 +836,34 @@ ${snapshot}`
             )
 
             controller.close()
-          } catch (error) {
+          } catch (error: any) {
             console.error(
               'Erro durante streaming do assistente:',
               error
             )
 
-            controller.error(
-              error
+            const message =
+              String(
+                error?.message ||
+                  'O provedor interrompeu a resposta.'
+              )
+                .trim()
+                .slice(0, 240)
+
+            controller.enqueue(
+              encoder.encode(
+                `\n__DFL_ASSISTANT_META__${JSON.stringify({
+                  finishReason:
+                    'STREAM_ERROR',
+                  wasTruncated: false,
+                  error:
+                    message ||
+                    'O provedor interrompeu a resposta.',
+                })}`
+              )
             )
+
+            controller.close()
           }
         },
       })

@@ -26,14 +26,56 @@ export type AssistantProcessingStage =
   | 'streaming'
   | 'finalizing'
 
-const ASSISTANT_CONNECT_TIMEOUT_MS = 25000
-const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 20000
-const ASSISTANT_STREAM_MAX_TIMEOUT_MS = 75000
+const ASSISTANT_CONNECT_TIMEOUT_MS = 35000
+const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 30000
+const ASSISTANT_STREAM_MAX_TIMEOUT_MS = 120000
 const ASSISTANT_META_MARKER = '\n__DFL_ASSISTANT_META__'
 
-function timeoutError() {
-  return new Error(
-    'O assistente demorou mais que o esperado. Tente novamente.'
+export type AssistantErrorCode =
+  | 'auth'
+  | 'connect_timeout'
+  | 'stream_idle'
+  | 'stream_timeout'
+  | 'provider'
+  | 'truncated'
+  | 'invalid_response'
+  | 'empty_response'
+  | 'network'
+  | 'unknown'
+
+export class AssistantChatError extends Error {
+  code: AssistantErrorCode
+  retryable: boolean
+  partialText: string
+
+  constructor(
+    code: AssistantErrorCode,
+    message: string,
+    options?: {
+      retryable?: boolean
+      partialText?: string
+    }
+  ) {
+    super(message)
+    this.name = 'AssistantChatError'
+    this.code = code
+    this.retryable = options?.retryable ?? true
+    this.partialText = options?.partialText || ''
+  }
+}
+
+function assistantError(
+  code: AssistantErrorCode,
+  message: string,
+  options?: {
+    retryable?: boolean
+    partialText?: string
+  }
+) {
+  return new AssistantChatError(
+    code,
+    message,
+    options
   )
 }
 
@@ -49,8 +91,10 @@ async function getAuthenticatedResponse(
     await supabase.auth.getSession()
 
   if (!session?.access_token) {
-    throw new Error(
-      'Sessão expirada. Entre novamente.'
+    throw assistantError(
+      'auth',
+      'Sua sessão expirou. Entre novamente para usar o Assistente.',
+      { retryable: false }
     )
   }
 
@@ -96,7 +140,23 @@ async function getAuthenticatedResponse(
       }
     }
 
-    throw new Error(message)
+    const code: AssistantErrorCode =
+      response.status === 401
+        ? 'auth'
+        : response.status === 504
+          ? 'connect_timeout'
+          : response.status >= 500
+            ? 'provider'
+            : 'unknown'
+
+    throw assistantError(
+      code,
+      message,
+      {
+        retryable:
+          response.status !== 401,
+      }
+    )
   }
 
   return response
@@ -148,7 +208,10 @@ export async function streamChatMessage(
       controller.signal.aborted ||
       error?.name === 'AbortError'
     ) {
-      throw timeoutError()
+      throw assistantError(
+        'connect_timeout',
+        'A conexão com o Assistente demorou mais que o esperado.',
+      )
     }
 
     throw error
@@ -156,8 +219,9 @@ export async function streamChatMessage(
 
   if (!response.body) {
     clearTimeout(connectTimeout)
-    throw new Error(
-      'O servidor não disponibilizou o fluxo da resposta.'
+    throw assistantError(
+      'invalid_response',
+      'O servidor respondeu sem disponibilizar o fluxo da resposta.',
     )
   }
 
@@ -169,9 +233,14 @@ export async function streamChatMessage(
 
   let fullText = ''
 
+  let streamMaxExpired = false
+
   const streamMaxTimeout =
     setTimeout(
-      () => controller.abort(),
+      () => {
+        streamMaxExpired = true
+        controller.abort()
+      },
       ASSISTANT_STREAM_MAX_TIMEOUT_MS
     )
 
@@ -190,7 +259,20 @@ export async function streamChatMessage(
                 setTimeout(
                   () =>
                     reject(
-                      timeoutError()
+                      assistantError(
+                        'stream_idle',
+                        'A resposta parou de chegar por tempo demais.',
+                        {
+                          partialText:
+                            fullText.includes(
+                              ASSISTANT_META_MARKER
+                            )
+                              ? fullText.split(
+                                  ASSISTANT_META_MARKER
+                                )[0].trim()
+                              : fullText.trim(),
+                        }
+                      )
                     ),
                   ASSISTANT_STREAM_IDLE_TIMEOUT_MS
                 )
@@ -238,7 +320,7 @@ export async function streamChatMessage(
         visibleText
       )
     }
-  } catch (error) {
+  } catch (error: any) {
     controller.abort()
 
     try {
@@ -247,7 +329,37 @@ export async function streamChatMessage(
       // O stream já pode ter sido encerrado.
     }
 
-    throw error
+    if (
+      error instanceof AssistantChatError
+    ) {
+      throw error
+    }
+
+    const partialText =
+      fullText.includes(
+        ASSISTANT_META_MARKER
+      )
+        ? fullText.split(
+            ASSISTANT_META_MARKER
+          )[0].trim()
+        : fullText.trim()
+
+    if (
+      streamMaxExpired ||
+      error?.name === 'AbortError'
+    ) {
+      throw assistantError(
+        'stream_timeout',
+        'A geração levou tempo demais e foi interrompida.',
+        { partialText }
+      )
+    }
+
+    throw assistantError(
+      'network',
+      'A conexão foi interrompida enquanto a resposta chegava.',
+      { partialText }
+    )
   } finally {
     clearTimeout(connectTimeout)
     clearTimeout(streamMaxTimeout)
@@ -263,6 +375,7 @@ export async function streamChatMessage(
 
   let finishReason = ''
   let wasTruncated = false
+  let providerError = ''
 
   const metaIndex =
     fullText.lastIndexOf(
@@ -299,6 +412,11 @@ export async function streamChatMessage(
       wasTruncated =
         meta?.wasTruncated ===
         true
+
+      providerError =
+        typeof meta?.error === 'string'
+          ? meta.error
+          : ''
     } catch {
       finishReason =
         'INVALID_META'
@@ -308,17 +426,32 @@ export async function streamChatMessage(
   const normalized =
     responseText.trim()
 
+  if (providerError) {
+    throw assistantError(
+      'provider',
+      providerError,
+      {
+        partialText: normalized,
+      }
+    )
+  }
+
   if (!normalized) {
-    throw new Error(
-      'O assistente retornou uma resposta vazia.'
+    throw assistantError(
+      'empty_response',
+      'O provedor terminou sem devolver uma resposta.',
     )
   }
 
   if (
     wasTruncated
   ) {
-    throw new Error(
-      'A resposta ficou incompleta antes de terminar. Tente novamente.'
+    throw assistantError(
+      'truncated',
+      'A resposta atingiu o limite antes de concluir.',
+      {
+        partialText: normalized,
+      }
     )
   }
 
@@ -326,8 +459,12 @@ export async function streamChatMessage(
     finishReason ===
     'INVALID_META'
   ) {
-    throw new Error(
-      'O assistente retornou uma resposta inválida. Tente novamente.'
+    throw assistantError(
+      'invalid_response',
+      'O Assistente recebeu um encerramento inválido do provedor.',
+      {
+        partialText: normalized,
+      }
     )
   }
 

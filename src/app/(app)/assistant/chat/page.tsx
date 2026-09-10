@@ -13,6 +13,7 @@ import {
   useSearchParams,
 } from 'next/navigation'
 import {
+  AlertTriangle,
   Bot,
   CheckCircle2,
   ChevronLeft,
@@ -45,7 +46,9 @@ import {
   selectFinancialInsights,
 } from '@/lib/financial-intelligence'
 import {
+  AssistantChatError,
   streamChatMessage,
+  type AssistantErrorCode,
   type FinancialAssistantContext,
 } from '@/lib/services/chatService'
 
@@ -93,6 +96,13 @@ function AssistantChatContent() {
     'idle' | 'preparing' | 'connecting' | 'generating' | 'streaming' | 'finalizing'
   >('idle')
   const [failedRequest, setFailedRequest] = useState(false)
+  const [requestError, setRequestError] = useState<{
+    code: AssistantErrorCode
+    title: string
+    message: string
+    retryable: boolean
+    partialText: string
+  } | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showClearSheet, setShowClearSheet] = useState(false)
 
@@ -255,6 +265,7 @@ function AssistantChatContent() {
     setMessages([])
     setSessionId(null)
     setFailedRequest(false)
+    setRequestError(null)
     setStreamingContent('')
     setProcessingStage('idle')
 
@@ -407,6 +418,7 @@ function AssistantChatContent() {
   ) => {
     setIsSending(true)
     setFailedRequest(false)
+    setRequestError(null)
     setStreamingContent('')
     setProcessingStage('preparing')
 
@@ -458,16 +470,75 @@ function AssistantChatContent() {
       success()
       setProcessingStage('idle')
     } catch (error: any) {
+      const typed =
+        error instanceof AssistantChatError
+          ? error
+          : new AssistantChatError(
+              'unknown',
+              error?.message ||
+                'Erro ao consultar o assistente.'
+            )
+
+      const errorCopy: Record<
+        AssistantErrorCode,
+        { title: string; message: string }
+      > = {
+        auth: {
+          title: 'Sessão expirada',
+          message: 'Entre novamente para continuar usando o Assistente.',
+        },
+        connect_timeout: {
+          title: 'Demorou para conectar',
+          message: 'O provedor não iniciou a resposta dentro do tempo esperado.',
+        },
+        stream_idle: {
+          title: 'A resposta parou no caminho',
+          message: 'O provedor ficou tempo demais sem enviar novos dados.',
+        },
+        stream_timeout: {
+          title: 'A resposta demorou demais',
+          message: 'A geração ultrapassou o limite de segurança desta tentativa.',
+        },
+        provider: {
+          title: 'Gemini interrompeu a resposta',
+          message: 'O provedor encerrou esta tentativa antes da conclusão.',
+        },
+        truncated: {
+          title: 'A resposta ficou incompleta',
+          message: 'O limite de geração foi atingido antes de a resposta terminar.',
+        },
+        invalid_response: {
+          title: 'Resposta inválida',
+          message: 'O provedor encerrou a resposta em um formato inesperado.',
+        },
+        empty_response: {
+          title: 'Resposta vazia',
+          message: 'O provedor respondeu, mas não devolveu conteúdo útil.',
+        },
+        network: {
+          title: 'Conexão interrompida',
+          message: 'A resposta começou, mas a conexão caiu durante o recebimento.',
+        },
+        unknown: {
+          title: 'Não consegui concluir',
+          message: 'Ocorreu um erro inesperado nesta tentativa.',
+        },
+      }
+
+      const copy = errorCopy[typed.code] || errorCopy.unknown
+
       setStreamingContent('')
       setFailedRequest(true)
+      setRequestError({
+        code: typed.code,
+        title: copy.title,
+        message: typed.message || copy.message,
+        retryable: typed.retryable,
+        partialText: typed.partialText,
+      })
 
       errorHaptic()
-
-      showToast(
-        error?.message ||
-          'Erro ao consultar o assistente.',
-        'error'
-      )
+      showToast(copy.title, 'error')
     } finally {
       setIsSending(false)
       setProcessingStage('idle')
@@ -500,6 +571,7 @@ function AssistantChatContent() {
 
     setInput('')
     setFailedRequest(false)
+    setRequestError(null)
 
     vibrate([8])
 
@@ -600,6 +672,7 @@ function AssistantChatContent() {
 
       setMessages([])
       setFailedRequest(false)
+      setRequestError(null)
       setShowClearSheet(false)
 
       success()
@@ -623,32 +696,26 @@ function AssistantChatContent() {
     preparing: {
       title: 'Preparando o contexto financeiro',
       description: 'Organizando os dados locais e os sinais calculados pelo DFL Finance.',
-      progress: 18,
     },
     connecting: {
       title: 'Conectando ao Gemini',
-      description: 'Enviando somente o contexto estruturado necessário para responder.',
-      progress: 38,
+      description: 'Abrindo uma conexão segura com o provedor de IA.',
     },
     generating: {
       title: 'Analisando sua pergunta',
       description: 'O Gemini está interpretando os números e prioridades do contexto atual.',
-      progress: 58,
     },
     streaming: {
       title: 'Montando a resposta',
       description: 'A análise já começou a chegar e está sendo exibida em tempo real.',
-      progress: 82,
     },
     finalizing: {
       title: 'Finalizando',
       description: 'Validando o término da resposta antes de salvar no histórico.',
-      progress: 96,
     },
     idle: {
       title: 'Preparando o assistente',
       description: 'Iniciando a análise.',
-      progress: 8,
     },
   } as const
 
@@ -919,12 +986,7 @@ function AssistantChatContent() {
                       </div>
 
                       <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-teal-500 transition-all duration-700 ease-out"
-                          style={{
-                            width: `${processingCopy[processingStage].progress}%`,
-                          }}
-                        />
+                        <div className="h-full w-1/3 animate-pulse rounded-full bg-teal-500" />
                       </div>
 
                       <div className="mt-3 flex items-center gap-2 text-[9px] text-gray-400">
@@ -933,7 +995,7 @@ function AssistantChatContent() {
                           className="text-teal-500"
                         />
                         <span>
-                          Progresso por etapa — o tempo pode variar conforme a resposta.
+                          Etapa atual — o tempo varia conforme a resposta e a conexão.
                         </span>
                       </div>
                     </div>
@@ -945,19 +1007,52 @@ function AssistantChatContent() {
             {failedRequest &&
               !isSending && (
               <div className="flex justify-start">
-                <div className="rounded-[22px] border border-red-200 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/20">
-                  <p className="text-[12px] font-semibold text-red-700 dark:text-red-300">
-                    Não consegui concluir esta resposta.
-                  </p>
+                <div className="max-w-[92%] rounded-[22px] border border-red-200 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/20">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">
+                      <AlertTriangle size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12px] font-bold text-red-700 dark:text-red-300">
+                        {requestError?.title || 'Não consegui concluir'}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-5 text-red-600/90 dark:text-red-300/80">
+                        {requestError?.message || 'Ocorreu um erro nesta tentativa.'}
+                      </p>
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleRetry}
-                    className="mt-3 flex items-center gap-2 rounded-[15px] bg-white px-3 py-2 text-[11px] font-bold text-red-600 shadow-sm active:scale-95 dark:bg-slate-900"
-                  >
-                    <RefreshCw size={14} />
-                    Tentar novamente
-                  </button>
+                  {requestError?.partialText && (
+                    <div className="mt-3 rounded-[16px] border border-red-200/70 bg-white/70 p-3 dark:border-red-900/30 dark:bg-slate-900/70">
+                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.08em] text-red-500">
+                        Trecho recebido antes da interrupção
+                      </p>
+                      <AssistantMessageContent content={requestError.partialText} />
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex items-center gap-2">
+                    {requestError?.retryable !== false && (
+                      <button
+                        type="button"
+                        onClick={handleRetry}
+                        className="flex items-center gap-2 rounded-[15px] bg-white px-3 py-2 text-[11px] font-bold text-red-600 shadow-sm active:scale-95 dark:bg-slate-900"
+                      >
+                        <RefreshCw size={14} />
+                        Tentar novamente
+                      </button>
+                    )}
+
+                    {requestError?.code === 'auth' && (
+                      <button
+                        type="button"
+                        onClick={() => router.push('/login')}
+                        className="rounded-[15px] bg-red-600 px-3 py-2 text-[11px] font-bold text-white active:scale-95"
+                      >
+                        Entrar novamente
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
