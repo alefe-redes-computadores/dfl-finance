@@ -409,7 +409,7 @@ function GoalDetailContent() {
   const handleContribution = async () => {
     if (!user?.id || contribAmountNum <= 0 || !goal) {
       errorHaptic()
-      showToast('⚠️ Digite um valor válido.', 'warning')
+      showToast('Digite um valor válido.', 'warning')
       return
     }
 
@@ -444,7 +444,7 @@ function GoalDetailContent() {
       setContribNote('')
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro ao registrar: ${err.message}`, 'error')
+      showToast(`Erro ao registrar: ${err.message}`, 'error')
     }
   }
 

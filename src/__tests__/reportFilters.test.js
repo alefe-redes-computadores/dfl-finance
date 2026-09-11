@@ -5,7 +5,7 @@ function applyCrossFilters(transactions, filters) {
   if (filters.tags && filters.tags.length > 0) {
     result = result.filter(tx => {
       if (!tx.tag_ids || tx.tag_ids.length === 0) return false
-      return tx.tag_ids.some((tagId: string) => filters.tags.includes(tagId))
+      return tx.tag_ids.some((tagId) => filters.tags.includes(tagId))
     })
   }
 
@@ -22,7 +22,7 @@ function applyCrossFilters(transactions, filters) {
 
 // Simula o agrupamento de transações por período (dia)
 function groupByDate(transactions) {
-  const groups: Record<string, any[]> = {}
+  const groups = {}
   transactions.forEach(tx => {
     const key = tx.date
     if (!groups[key]) groups[key] = []

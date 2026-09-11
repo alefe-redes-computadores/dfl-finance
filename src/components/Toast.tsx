@@ -61,7 +61,6 @@ export default function Toast({ message, type, onClose }: ToastProps) {
       window.clearTimeout(timer)
     }
     // startClose usa refs para manter um único ciclo por toast.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, message])
 
   const urgent = type === 'error' || type === 'warning'

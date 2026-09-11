@@ -1,5 +1,7 @@
 'use client'
 
+import { Clock3 } from 'lucide-react'
+
 interface ComingSoonModalProps {
   isOpen: boolean
   onClose: () => void
@@ -10,18 +12,18 @@ export default function ComingSoonModal({ isOpen, onClose, title = "Funcionalida
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-6" onClick={onClose}>
-      <div className="bg-white w-full max-w-sm rounded-3xl p-8 text-center" onClick={e => e.stopPropagation()}>
-        <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl">🚀</span>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm dark:bg-black/70" onClick={onClose}>
+      <div className="app-surface w-full max-w-sm p-8 text-center" onClick={e => e.stopPropagation()}>
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400">
+          <Clock3 size={28} />
         </div>
-        <h3 className="font-bold text-xl mb-2">{title}</h3>
-        <p className="text-sm text-gray-500 mb-8">
+        <h3 className="mb-2 text-xl font-bold text-gray-900 dark:text-gray-100">{title}</h3>
+        <p className="mb-8 text-sm leading-6 text-gray-500 dark:text-gray-400">
           Ops! Esta funcionalidade estará disponível em breve no nosso aplicativo. Estamos trabalhando para deixar tudo pronto para você.
         </p>
         <button 
           onClick={onClose} 
-          className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold"
+          className="app-primary-action w-full"
         >
           Entendido
         </button>

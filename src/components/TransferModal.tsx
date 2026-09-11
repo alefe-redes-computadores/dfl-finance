@@ -77,18 +77,18 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
   const handleTransfer = async () => {
     if (!user) {
-      showToast('⚠️ Usuário não autenticado.', 'warning')
+      showToast('Usuário não autenticado.', 'warning')
       return
     }
 
     if (!fromAccountId || !toAccountId || amountNum <= 0) {
-      showToast('⚠️ Preencha todos os campos corretamente.', 'warning')
+      showToast('Preencha todos os campos corretamente.', 'warning')
       hapticError()
       return
     }
 
     if (fromAccountId === toAccountId && fromContext === toContext) {
-      showToast('⚠️ As contas de origem e destino devem ser diferentes.', 'warning')
+      showToast('As contas de origem e destino devem ser diferentes.', 'warning')
       hapticError()
       return
     }
@@ -105,13 +105,13 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
       })
 
       hapticSuccess()
-      showToast('✅ Transferência realizada com sucesso!', 'success')
+      showToast('Transferência realizada com sucesso.', 'success')
       onComplete?.()
       onClose()
       router.refresh()
     } catch (e: any) {
       hapticError()
-      showToast('❌ Erro: ' + (e?.message || 'erro desconhecido'), 'error')
+      showToast('Erro: ' + (e?.message || 'erro desconhecido'), 'error')
     } finally {
       setLoading(false)
     }

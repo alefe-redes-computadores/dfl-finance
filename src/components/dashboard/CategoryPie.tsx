@@ -28,7 +28,7 @@ function CategoryPieComponent({ pfData, pjData, title = 'Distribuição de Gasto
     }).format(val)
   }
 
-  const createTooltip = (scopeData: CategoryData[]) => ({ active, payload }: any) => {
+  const createTooltip = (scopeData: CategoryData[]) => function CategoryTooltip({ active, payload }: any) {
     if (active && payload && payload.length) {
       const data = payload[0].payload
       const total = (scopeData || []).reduce((sum, item) => sum + item.value, 0)

@@ -392,6 +392,11 @@ function NewGoalContent() {
     }
   }, [editId, goalData, initialized])
 
+  const selectedCat = useMemo(
+    () => categories.find((c: any) => c.id === categoryId),
+    [categories, categoryId]
+  )
+
   // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
   if (editId && notFound && !loading) {
     return <NotFoundState onBack={() => router.push('/goals')} />
@@ -411,15 +416,10 @@ function NewGoalContent() {
     )
   }
 
-  const selectedCat = useMemo(
-    () => categories.find((c: any) => c.id === categoryId),
-    [categories, categoryId]
-  )
-
   const handleSave = async () => {
     if (!user?.id || !name.trim() || targetAmountNum <= 0 || !deadline) {
       errorHaptic()
-      showToast('⚠️ Preencha nome, valor e data limite.', 'warning')
+      showToast('Preencha nome, valor e data limite.', 'warning')
       return
     }
 
@@ -495,7 +495,7 @@ function NewGoalContent() {
       router.back()
     } catch (err: any) {
       errorHaptic()
-      showToast(`❌ Erro: ${err.message}`, 'error')
+      showToast(`Erro: ${err.message}`, 'error')
     } finally {
       setSaving(false)
     }

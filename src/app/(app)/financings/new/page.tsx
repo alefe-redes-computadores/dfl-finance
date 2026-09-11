@@ -118,60 +118,6 @@ function NewFinancingContent() {
     }
   }, [editId, financing, initialized])
 
-  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
-  if (editId && notFound && !loading) {
-    return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-950">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
-          <Percent size={32} className="text-red-500" />
-        </div>
-
-        <h2 className="mb-2 text-xl font-bold text-gray-800 dark:text-gray-200">
-          Financiamento não encontrado
-        </h2>
-
-        <p className="mb-6 max-w-xs text-center text-sm text-gray-500 dark:text-gray-400">
-          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
-        </p>
-
-        <button
-          onClick={() => router.push("/financings")}
-          className="rounded-full bg-teal-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-teal-700 active:scale-95"
-        >
-          Voltar para listagem
-        </button>
-      </div>
-    )
-  }
-
-  if (editId && loading) {
-    return (
-      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
-        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pt-6 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
-          <div className="flex items-center justify-between">
-            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
-            <div className="h-6 w-32 animate-pulse rounded bg-gray-200 dark:bg-slate-700" />
-            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
-          </div>
-        </div>
-
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
-  if (!initialized) {
-    return (
-      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
-        <div className="flex-1 px-4 pt-4">
-          <Skeleton count={6} />
-        </div>
-      </div>
-    )
-  }
-
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -306,6 +252,61 @@ function NewFinancingContent() {
     showToast,
     router,
   ])
+
+  // SÓ REDIRECIONA SE NOTFOUND E NÃO ESTÁ CARREGANDO
+  if (editId && notFound && !loading) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-gray-50 px-4 dark:bg-slate-950">
+        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
+          <Percent size={32} className="text-red-500" />
+        </div>
+
+        <h2 className="mb-2 text-xl font-bold text-gray-800 dark:text-gray-200">
+          Financiamento não encontrado
+        </h2>
+
+        <p className="mb-6 max-w-xs text-center text-sm text-gray-500 dark:text-gray-400">
+          O financiamento que você está tentando editar pode ter sido excluído ou você não tem permissão para acessá-lo.
+        </p>
+
+        <button
+          onClick={() => router.push("/financings")}
+          className="rounded-full bg-teal-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-teal-700 active:scale-95"
+        >
+          Voltar para listagem
+        </button>
+      </div>
+    )
+  }
+
+  if (editId && loading) {
+    return (
+      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="sticky top-0 z-30 border-b border-gray-100 bg-white/90 px-4 pt-6 pb-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-center justify-between">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
+            <div className="h-6 w-32 animate-pulse rounded bg-gray-200 dark:bg-slate-700" />
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-slate-700" />
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
+  if (!initialized) {
+    return (
+      <div className="flex h-[100dvh] flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-900">
+        <div className="flex-1 px-4 pt-4">
+          <Skeleton count={6} />
+        </div>
+      </div>
+    )
+  }
+
 
   const sectionClass =
     "rounded-[28px] border border-gray-100/80 bg-white/92 dark:border-slate-700/70 dark:bg-slate-800/92"

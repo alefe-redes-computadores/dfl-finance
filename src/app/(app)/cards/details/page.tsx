@@ -133,27 +133,6 @@ function CardDetailContent() {
   const { showToast } = useToast()
   const { vibrate, success, error: hapticError } = useHapticFeedback()
 
-  if (!id) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
-        <div className="max-w-sm text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
-            <X size={32} />
-          </div>
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Cartão não identificado</p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">O ID do cartão não foi fornecido.</p>
-          <button
-            onClick={() => router.back()}
-            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
-          >
-            <ChevronLeft size={18} />
-            Voltar
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [showPayModal, setShowPayModal] = useState(false)
@@ -395,6 +374,27 @@ function CardDetailContent() {
     } finally {
       setPaying(false)
     }
+  }
+
+  if (!id) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-500/10">
+            <X size={32} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">Cartão não identificado</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">O ID do cartão não foi fornecido.</p>
+          <button
+            onClick={() => router.back()}
+            className="mt-6 inline-flex items-center gap-2 rounded-[20px] bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+          >
+            <ChevronLeft size={18} />
+            Voltar
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (cardLoading) {

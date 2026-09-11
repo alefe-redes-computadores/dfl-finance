@@ -42,7 +42,7 @@ const nextConfig = {
   // TypeScript volta a ser gate real do build.
   // O projeto está com tsc --noEmit global zerado.
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
 
   images: {
