@@ -4,6 +4,9 @@ const withPWA = require('next-pwa')({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  // Código adicional do service worker vive em worker/index.js.
+  // next-pwa continua sendo o único gerador/registrador de /sw.js.
+  customWorkerDir: 'worker',
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -36,9 +39,8 @@ const nextConfig = {
   // O build web/Vercel usa o runtime normal do Next.
   // O export estático do Capacitor será tratado por um build mobile dedicado.
   
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // TypeScript volta a ser gate real do build.
+  // O projeto está com tsc --noEmit global zerado.
   eslint: {
     ignoreDuringBuilds: true,
   },
