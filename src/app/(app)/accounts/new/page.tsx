@@ -24,7 +24,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { useSafeDb } from "@/hooks/useSafeDb"
 import BankLogo from '@/components/BankLogo'
-import { getBankColor, getBankIcon } from '@/lib/BankIcons'
+import { getBankColor } from '@/lib/BankIcons'
 import { COMMON_BANKS, canonicalizeBankName } from '@/lib/accountPresentation'
 
 const ACCOUNT_TYPES = [
@@ -346,7 +346,7 @@ function AccountFormContent() {
           <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
             <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Banco / Instituição</label>
             <div className="flex items-center gap-3 rounded-[16px] border border-black/5 bg-gray-50 px-3 py-3 dark:border-white/10 dark:bg-slate-800">
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-[13px]">{getBankIcon(formData.bank || 'Banco')}</div>
+              <BankLogo color={formData.color} name={formData.bank || 'Banco'} size="md" />
               <input
                 type="text"
                 name="bank"

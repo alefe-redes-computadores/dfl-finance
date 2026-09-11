@@ -153,8 +153,19 @@ export function sortAccountsByBalance<T extends { balance?: number | null; name?
   })
 }
 
+export function sortAccountsAlphabetically<T extends { name?: string | null }>(accounts: T[]) {
+  return [...accounts].sort((a, b) =>
+    String(a.name || '').localeCompare(
+      String(b.name || ''),
+      'pt-BR',
+      { sensitivity: 'base' }
+    )
+  )
+}
+
 export function groupAccountsByInstitution<T extends { bank?: string | null; type?: string | null; balance?: number | null; name?: string | null }>(accounts: T[]) {
   const groups = new Map<string, T[]>()
+
   for (const account of accounts) {
     const label = getAccountInstitutionLabel(account)
     const current = groups.get(label) || []
@@ -165,12 +176,14 @@ export function groupAccountsByInstitution<T extends { bank?: string | null; typ
   return Array.from(groups.entries())
     .map(([institution, items]) => ({
       institution,
-      accounts: sortAccountsByBalance(items),
+      accounts: sortAccountsAlphabetically(items),
       balance: items.reduce((sum, item) => sum + Number(item.balance || 0), 0),
     }))
-    .sort((a, b) => {
-      const balanceDiff = b.balance - a.balance
-      if (balanceDiff !== 0) return balanceDiff
-      return a.institution.localeCompare(b.institution, 'pt-BR')
-    })
+    .sort((a, b) =>
+      a.institution.localeCompare(
+        b.institution,
+        'pt-BR',
+        { sensitivity: 'base' }
+      )
+    )
 }

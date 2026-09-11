@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Plus, RefreshCw, Search, Trash2, Wallet, X } from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
+import BankLogo from '@/components/BankLogo'
 import Skeleton from '@/components/Skeleton'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -13,7 +14,6 @@ import { useAccountsList } from '@/hooks/useAccountsList'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { getBankIcon } from '@/lib/BankIcons'
 import {
   getAccountInstitutionLabel,
   getAccountTypeLabel,
@@ -201,7 +201,7 @@ function AccountsContent() {
               <section key={group.institution} className="overflow-hidden rounded-[22px] border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
                 <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-slate-700/60">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-[13px]">{getBankIcon(group.institution)}</div>
+                    <BankLogo name={group.institution} size="md" />
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-semibold text-gray-950 dark:text-gray-100">{group.institution}</p>
                       <p className="text-[11px] text-gray-400 dark:text-gray-500">{group.accounts.length} {group.accounts.length === 1 ? 'conta' : 'contas'}</p>

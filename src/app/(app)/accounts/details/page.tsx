@@ -19,7 +19,6 @@ import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
 import BankLogo from '@/components/BankLogo'
-import { getBankIcon } from '@/lib/BankIcons'
 import { getAccountInstitutionLabel, getAccountTypeLabel, isAccountArchived, sortAccountsByBalance } from '@/lib/accountPresentation'
 import {
   adjustAccountBalance,
@@ -386,7 +385,7 @@ function AccountDetailContent() {
                   </span>
 
                   <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300">
-                    <span className="h-5 w-5 overflow-hidden rounded-[7px]">{getBankIcon(bankName)}</span>
+                    <BankLogo name={bankName} size="sm" />
                     <span>{bankName}</span>
                   </div>
                 </div>
@@ -684,9 +683,7 @@ function AccountDetailContent() {
                               : 'border-black/5 bg-white hover:bg-gray-50 dark:border-white/10 dark:bg-slate-900 dark:hover:bg-slate-800'
                           }`}
                         >
-                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-[14px] shadow-sm">
-                            {getBankIcon(institution)}
-                          </div>
+                          <BankLogo name={institution} size="lg" />
 
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-[14px] font-semibold text-gray-900 dark:text-gray-100">
