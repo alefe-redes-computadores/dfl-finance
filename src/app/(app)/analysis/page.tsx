@@ -572,12 +572,12 @@ function AnalysisContent() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="min-w-0 flex-1 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2">
+          <div className="grid grid-cols-1 gap-2.5 mb-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+            <div className="min-w-0 w-full rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2 overflow-hidden">
               <ContextToggle />
             </div>
 
-            <div className="flex items-center gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 px-1.5 py-1 shrink-0">
+            <div className="flex w-full items-center justify-between gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 px-1.5 py-1 sm:w-auto sm:justify-start">
               <button
                 type="button"
                 onClick={() => setCurrentDate(subMonths(currentDate, 1))}
@@ -586,7 +586,7 @@ function AnalysisContent() {
                 <ChevronLeft size={17} />
               </button>
 
-              <span className="min-w-[92px] text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize">
+              <span className="min-w-0 flex-1 text-center text-[13px] font-semibold text-gray-800 dark:text-gray-200 capitalize sm:min-w-[92px] sm:flex-none">
                 {monthLabel}
               </span>
 
