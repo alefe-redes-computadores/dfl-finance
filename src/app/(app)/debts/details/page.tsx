@@ -268,21 +268,40 @@ function DebtDetailContent() {
   const totalPaidCents = useMemo(
     () =>
       payments.reduce(
-        (acc, p) => acc + Math.round(Number(p.amount || 0) * 100),
+        (acc, payment) =>
+          acc +
+          Math.round(
+            getDebtPaymentAppliedAmount(payment) * 100
+          ),
         0
       ),
     [payments]
   )
 
-  const totalPaid = totalPaidCents / 100
-  const totalAmountCents = Math.round(Number(debt?.total_amount || 0) * 100)
-  const remainingCents = totalAmountCents - totalPaidCents
+  const totalAmountCents = Math.max(
+    0,
+    Math.round(Number(debt?.total_amount || 0) * 100)
+  )
+  const appliedPaidCents = Math.min(
+    totalAmountCents,
+    totalPaidCents
+  )
+  const totalPaid = appliedPaidCents / 100
+  const remainingCents = Math.max(
+    0,
+    totalAmountCents - appliedPaidCents
+  )
   const remaining = remainingCents / 100
   const percent =
     totalAmountCents > 0
-      ? (totalPaidCents / totalAmountCents) * 100
+      ? Math.min(
+          100,
+          (appliedPaidCents / totalAmountCents) * 100
+        )
       : 0
-  const isPaid = totalAmountCents > 0 && remainingCents <= 0
+  const isPaid =
+    totalAmountCents > 0 &&
+    appliedPaidCents >= totalAmountCents
 
   const dueState = getDebtDueState(debt?.due_date)
   const daysUntilDue = dueState.daysUntilDue
@@ -568,6 +587,15 @@ function DebtDetailContent() {
   const payAmountCents =
     Math.round(payAmountNum * 100)
 
+  const previewAppliedCents = Math.min(
+    Math.max(0, payAmountCents),
+    remainingCents
+  )
+  const previewCreditCents = Math.max(
+    0,
+    payAmountCents - previewAppliedCents
+  )
+
   const handlePayment = async () => {
     if (isSubmitting || !user?.id || !debt) return
 
@@ -594,6 +622,14 @@ function DebtDetailContent() {
     try {
       const targetAccountId = payAccountId || debt.account_id || null
       const txId = crypto.randomUUID()
+      const appliedPaymentCents = Math.min(
+        payAmountCents,
+        remainingCents
+      )
+      const excessCreditCents = Math.max(
+        0,
+        payAmountCents - appliedPaymentCents
+      )
 
       const newTx = {
         id: txId,
@@ -604,10 +640,10 @@ function DebtDetailContent() {
         account_id: targetAccountId,
         debt_id: debtId,
         contact_id: debt.contact_id || null,
-        debt_applied_amount: Math.min(payAmountCents, remainingCents) / 100,
+        debt_applied_amount: appliedPaymentCents / 100,
         contact_credit_delta:
-          payAmountCents > remainingCents
-            ? (payAmountCents - remainingCents) / 100
+          excessCreditCents > 0
+            ? excessCreditCents / 100
             : null,
         date: payDate,
         status: 'done',
@@ -653,7 +689,10 @@ function DebtDetailContent() {
           }
         }
 
-        const newTotalPaidCents = totalPaidCents + payAmountCents
+        const newTotalPaidCents = Math.min(
+          totalAmountCents,
+          appliedPaidCents + appliedPaymentCents
+        )
         const newStatus: DebtStatus = getDebtStatusFromAmounts(
           totalAmountCents,
           newTotalPaidCents
@@ -661,7 +700,7 @@ function DebtDetailContent() {
 
         const debtResult = await safeUpdate('debts', debtId, {
           status: newStatus,
-          paid_amount: Math.min(totalAmountCents, newTotalPaidCents) / 100,
+          paid_amount: newTotalPaidCents / 100,
           updated_at: new Date().toISOString(),
         })
 
@@ -671,7 +710,12 @@ function DebtDetailContent() {
       success()
       setShowPaymentModal(false)
       resetPaymentForm()
-      showToast('Pagamento registrado com sucesso!', 'success')
+      showToast(
+        excessCreditCents > 0
+          ? `Recebimento registrado. ${formatCurrency(excessCreditCents / 100)} ficaram como crédito do contato.`
+          : 'Pagamento registrado com sucesso!',
+        'success'
+      )
       loadData()
     } catch (err: any) {
       errorHaptic()
@@ -919,11 +963,48 @@ function DebtDetailContent() {
               />
             </div>
 
-            <p className="mt-2 text-[10px] font-bold text-emerald-600/70">
-              {payAmountCents > remainingCents
-                ? `Excedente de ${formatCurrency((payAmountCents - remainingCents) / 100)} será salvo como crédito do contato.`
-                : `Saldo desta cobrança: ${formatCurrency(remaining)}`}
-            </p>
+            {payAmountCents > 0 ? (
+              <div className="mt-3 space-y-2 rounded-[16px] border border-gray-200/80 bg-white/80 p-3 dark:border-slate-600/60 dark:bg-slate-800/50">
+                <div className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="font-semibold text-gray-500 dark:text-gray-400">
+                    Recebimento
+                  </span>
+                  <span className="font-black text-gray-800 dark:text-gray-100">
+                    {formatCurrency(payAmountCents / 100)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="font-semibold text-gray-500 dark:text-gray-400">
+                    Aplicado à cobrança
+                  </span>
+                  <span className="font-black text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(previewAppliedCents / 100)}
+                  </span>
+                </div>
+
+                {previewCreditCents > 0 && (
+                  <div className="flex items-center justify-between gap-3 border-t border-gray-200/70 pt-2 text-[11px] dark:border-slate-600/60">
+                    <span className="font-semibold text-gray-500 dark:text-gray-400">
+                      Crédito para o contato
+                    </span>
+                    <span className="font-black text-sky-600 dark:text-sky-400">
+                      {formatCurrency(previewCreditCents / 100)}
+                    </span>
+                  </div>
+                )}
+
+                <p className="pt-0.5 text-[10px] font-semibold leading-relaxed text-gray-400 dark:text-gray-500">
+                  {previewCreditCents > 0
+                    ? 'O valor total entra na conta; somente a parte aplicada amortiza esta cobrança.'
+                    : `Saldo desta cobrança após o recebimento: ${formatCurrency(Math.max(0, remainingCents - previewAppliedCents) / 100)}`}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-[10px] font-bold text-emerald-600/70">
+                Saldo desta cobrança: {formatCurrency(remaining)}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
