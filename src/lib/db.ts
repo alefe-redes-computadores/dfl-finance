@@ -102,10 +102,15 @@ export interface LocalLoan {
   id: string
   user_id: string
   context: 'dfl' | 'personal'
-  description?: string
+  description?: string | null
+  direction?: 'lent' | 'borrowed'
+  lender?: string | null
+  date?: string
   amount: number
   remaining_amount: number
   due_date?: string
+  interest_rate?: number | null
+  notes?: string | null
   status: 'active' | 'paid' | 'overdue'
   created_at: string
   updated_at: string
@@ -116,13 +121,28 @@ export interface LocalFinancing {
   id: string
   user_id: string
   context: 'dfl' | 'personal'
+
+  // Contrato legado mantido para registros antigos.
   name: string
-  description?: string
-  total_amount: number
   current_installment: number
   total_installments: number
   installment_value: number
   next_due_date?: string
+
+  // Contrato atual usado pelo fluxo de cadastro/detalhes.
+  description?: string | null
+  installments_count?: number
+  installment_amount?: number
+  remaining_amount?: number
+  interest_rate?: number | null
+  bank?: string | null
+  asset_type?: 'vehicle' | 'property' | 'other' | string
+  asset?: string | null
+  start_date?: string
+  first_due_date?: string | null
+  notes?: string | null
+
+  total_amount: number
   status: 'active' | 'paid' | 'overdue'
   created_at: string
   updated_at: string
@@ -137,6 +157,10 @@ export interface LocalSubscription {
   amount: number
   billing_cycle: string
   due_day: number
+  category?: string | null
+  next_due_date?: string | null
+  payment_method?: string | null
+  notes?: string | null
   status: 'active' | 'paused' | 'cancelled'
   created_at: string
   updated_at: string
@@ -210,6 +234,10 @@ export interface LocalGoal {
   target_amount: number
   saved_amount: number
   deadline?: string
+  category_id?: string | null
+  color?: string | null
+  icon?: string | null
+  description?: string | null
   status: 'active' | 'completed' | 'cancelled'
   created_at: string
   updated_at: string
@@ -356,9 +384,9 @@ class DFLDatabase extends Dexie {
   constructor() {
     super('DFLFinanceDB')
 
-    this.version(5).stores({
+    this.version(6).stores({
       transactions:
-        'id, user_id, context, date, status, sync_status, account_id, category_id, debt_id, credit_card_id, created_at, updated_at, [user_id+debt_id], [user_id+context], [user_id+date], [user_id+status], [user_id+account_id], [user_id+credit_card_id]',
+        'id, user_id, context, date, status, sync_status, account_id, category_id, debt_id, credit_card_id, created_at, updated_at, [user_id+debt_id], [user_id+context], [user_id+date], [user_id+status], [user_id+account_id], [user_id+credit_card_id], [user_id+context+date], [user_id+contact_id], [user_id+goal_id], [user_id+loan_id], [user_id+financing_id]',
       accounts:
         'id, user_id, context, sync_status, is_archived, created_at, updated_at, [user_id+context]',
       categories:
@@ -390,7 +418,7 @@ class DFLDatabase extends Dexie {
       chat_sessions:
         'id, user_id, status, sync_status, created_at, updated_at, [user_id+status]',
       syncQueue:
-        'id, user_id, table, operation, record_id, created_at, [user_id+table], [user_id+created_at]',
+        'id, user_id, table, operation, record_id, created_at, [user_id+table], [user_id+created_at], [user_id+table+record_id]',
     })
   }
 }
@@ -500,9 +528,8 @@ export async function addToSyncQueue(
 ) {
   return db.transaction('rw', db.syncQueue, async () => {
     const existingItems = await db.syncQueue
-      .where('[user_id+table]')
-      .equals([userId, table])
-      .filter((item) => item.record_id === recordId)
+      .where('[user_id+table+record_id]')
+      .equals([userId, table, recordId])
       .sortBy('created_at')
 
     if (existingItems.length === 0) {

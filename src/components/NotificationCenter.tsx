@@ -169,7 +169,10 @@ export default function NotificationCenter({
 
       setLocalNotifs(updated)
 
-      const unread = updated.filter((n) => !isNotificationRead(n)).length
+      const unread = updated.filter((n) => !isNotificationRead({
+        read: n.read ?? false,
+        is_read: n.is_read,
+      })).length
       emitReadChange(unread)
     } catch (err: any) {
       console.error('Erro ao marcar como lida:', err)
@@ -182,7 +185,10 @@ export default function NotificationCenter({
   const markAllAsRead = useCallback(async () => {
     if (!user?.id) return
 
-    const unreadIds = localNotifs.filter((n) => !isNotificationRead(n)).map((n) => n.id)
+    const unreadIds = localNotifs.filter((n) => !isNotificationRead({
+        read: n.read ?? false,
+        is_read: n.is_read,
+      })).map((n) => n.id)
 
     if (unreadIds.length > 0) {
       success()
@@ -193,7 +199,10 @@ export default function NotificationCenter({
   }, [user?.id, localNotifs, markAsRead, showToast, success, vibrate])
 
   const activeNotifs = useMemo(
-    () => localNotifs.filter((n) => !isNotificationRead(n)),
+    () => localNotifs.filter((n) => !isNotificationRead({
+        read: n.read ?? false,
+        is_read: n.is_read,
+      })),
     [localNotifs]
   )
 

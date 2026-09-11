@@ -1,7 +1,7 @@
 // src/lib/cardOperations.ts
 
 import { format } from 'date-fns'
-import { db, addToSyncQueue } from './db'
+import { db, addToSyncQueue, type LocalTransaction } from './db'
 
 const safeNum = (value: unknown): number => {
   if (value === null || value === undefined || value === '') return 0
@@ -774,7 +774,7 @@ export async function payCardInvoice({
       const paymentTransactionId =
         crypto.randomUUID()
 
-      const paymentTransaction = {
+      const paymentTransaction: LocalTransaction = {
         id: paymentTransactionId,
 
         user_id: userId,

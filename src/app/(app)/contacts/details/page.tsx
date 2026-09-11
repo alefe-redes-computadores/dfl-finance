@@ -288,8 +288,9 @@ function ContactDetailContent() {
     setCreatingReceivable(true)
 
     try {
+      const debtId = crypto.randomUUID()
       const result = await safeAdd('debts', {
-        id: crypto.randomUUID(),
+        id: debtId,
         user_id: user.id,
         context: recordContext,
         person_name: contact.name,
@@ -310,10 +311,10 @@ function ContactDetailContent() {
       if (!result.success) throw new Error(result.error)
 
       let appliedCredit = 0
-      if (applyAvailableCredit && financial.creditBalance > 0 && result.id) {
+      if (applyAvailableCredit && financial.creditBalance > 0 && debtId) {
         const creditResult = await applyContactCreditToDebt({
           userId: user.id,
-          debtId: result.id,
+          debtId,
           requestedAmount: Math.min(amount, financial.creditBalance),
         })
         appliedCredit = creditResult.applied

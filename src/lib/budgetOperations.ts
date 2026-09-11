@@ -1,4 +1,5 @@
 // src/lib/budgetOperations.ts
+import type { LocalTransaction } from './db'
 
 export type BudgetPeriod = 'monthly' | 'biweekly' | 'weekly'
 

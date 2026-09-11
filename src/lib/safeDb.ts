@@ -76,7 +76,7 @@ export async function safeAdd<T extends Record<string, any>>(
       user_id: userId,
       created_at: data.created_at ?? new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      sync_status: 'pending',
+      sync_status: 'pending' as const,
     }
 
     await db.transaction('rw', db.table(table), db.syncQueue, async () => {
@@ -136,7 +136,7 @@ export async function safeUpdate(
       id,
       user_id: userId,
       updated_at: new Date().toISOString(),
-      sync_status: 'pending',
+      sync_status: 'pending' as const,
     }
 
     await db.transaction('rw', db.table(table), db.syncQueue, async () => {
@@ -212,14 +212,14 @@ export async function safeReorderCategories(
       ...first,
       order_index: secondOrder,
       updated_at: now,
-      sync_status: 'pending',
+      sync_status: 'pending' as const,
     }
 
     const secondRecord = {
       ...second,
       order_index: firstOrder,
       updated_at: now,
-      sync_status: 'pending',
+      sync_status: 'pending' as const,
     }
 
     await db.transaction('rw', db.categories, db.syncQueue, async () => {
@@ -349,7 +349,7 @@ export async function safeDelete(
             ...tx,
             tag_ids: remainingTagIds.length > 0 ? remainingTagIds : null,
             updated_at: now,
-            sync_status: 'pending',
+            sync_status: 'pending' as const,
           }
 
           await db.transactions.put(updatedTransaction)
@@ -399,7 +399,7 @@ export async function safeDelete(
               ...tx,
               goal_id: null,
               updated_at: now,
-              sync_status: 'pending',
+              sync_status: 'pending' as const,
             }
 
             await db.transactions.put(updatedTransaction)
@@ -465,7 +465,7 @@ export async function safeDelete(
               ...tx,
               contact_id: null,
               updated_at: now,
-              sync_status: 'pending',
+              sync_status: 'pending' as const,
             }
 
             await db.transactions.put(updatedTransaction)
@@ -483,7 +483,7 @@ export async function safeDelete(
               ...debt,
               contact_id: null,
               updated_at: now,
-              sync_status: 'pending',
+              sync_status: 'pending' as const,
             }
 
             await db.debts.put(updatedDebt)

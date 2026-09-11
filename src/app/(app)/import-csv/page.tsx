@@ -19,8 +19,8 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
-import { useSafeDb } from '@/hooks/useSafeDb'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { importAccountTransactions } from '@/lib/importOperations'
 import {
   findImportColumn,
   normalizeImportHeader,
@@ -60,7 +60,6 @@ export default function ImportCSVPage() {
   const { user } = useAuth()
   const { effectiveContext } = useContext_()
   const { showToast } = useToast()
-  const { safeAdd } = useSafeDb()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
 
   const [file, setFile] = useState<File | null>(null)
@@ -72,6 +71,7 @@ export default function ImportCSVPage() {
   const [importProgress, setImportProgress] = useState(0)
   const [importedCount, setImportedCount] = useState(0)
   const [errorCount, setErrorCount] = useState(0)
+  const [accountId, setAccountId] = useState('')
   const [status, setStatus] = useState<
     'idle' | 'processing' | 'ready' | 'importing' | 'done' | 'error'
   >('idle')
@@ -80,6 +80,11 @@ export default function ImportCSVPage() {
 
   const { data: localCategories } = useLocalData({
     table: 'categories' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: accounts = [] } = useLocalData({
+    table: 'accounts' as any,
     filters: { context: effectiveContext },
   })
 
@@ -163,6 +168,7 @@ export default function ImportCSVPage() {
     setImportProgress(0)
     setImportedCount(0)
     setErrorCount(0)
+    setAccountId('')
 
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -179,6 +185,12 @@ export default function ImportCSVPage() {
     if (!fileContent) {
       errorHaptic()
       showToast('Nenhum arquivo pronto para importar.', 'warning')
+      return
+    }
+
+    if (!accountId) {
+      errorHaptic()
+      showToast('Escolha a conta afetada antes de importar.', 'warning')
       return
     }
 
@@ -245,107 +257,106 @@ export default function ImportCSVPage() {
         ])
       )
 
-      let successCount = 0
+      const candidates: Array<{
+        type: 'income' | 'expense'
+        amount: number
+        description: string
+        date: string
+        category_id?: string | null
+        notes?: string | null
+      }> = []
+
       let failCount = 0
 
       for (let index = 0; index < dataRows.length; index++) {
         const row = dataRows[index]
-        setImportProgress(((index + 1) / dataRows.length) * 100)
+        setImportProgress(((index + 1) / dataRows.length) * 50)
 
-        try {
-          const dateRaw = row[headerRow[colMap.date]] || ''
-          const description =
-            (row[headerRow[colMap.description]] || '').trim()
-          const amountRaw = row[headerRow[colMap.amount]] || ''
+        const dateRaw = row[headerRow[colMap.date]] || ''
+        const description =
+          (row[headerRow[colMap.description]] || '').trim()
+        const amountRaw = row[headerRow[colMap.amount]] || ''
 
-          const typeRaw =
-            colMap.type !== -1
-              ? (row[headerRow[colMap.type]] || '').trim()
-              : ''
+        const typeRaw =
+          colMap.type !== -1
+            ? (row[headerRow[colMap.type]] || '').trim()
+            : ''
 
-          const categoryName =
-            colMap.category !== -1
-              ? (row[headerRow[colMap.category]] || '').trim()
-              : ''
+        const categoryName =
+          colMap.category !== -1
+            ? (row[headerRow[colMap.category]] || '').trim()
+            : ''
 
-          const date = parseCivilDateISO(dateRaw)
-          const parsedAmount = parseFlexibleAmount(amountRaw)
+        const date = parseCivilDateISO(dateRaw)
+        const parsedAmount = parseFlexibleAmount(amountRaw)
 
-          if (!date || !description || parsedAmount === null) {
-            failCount++
-            continue
-          }
-
-          const normalizedType = normalizeImportHeader(typeRaw)
-
-          if (
-            normalizedType.includes('transfer') ||
-            normalizedType.includes('transferencia')
-          ) {
-            failCount++
-            continue
-          }
-
-          let type: 'income' | 'expense' = 'expense'
-
-          if (
-            normalizedType.includes('receita') ||
-            normalizedType.includes('income') ||
-            normalizedType.includes('entrada') ||
-            normalizedType.includes('credito')
-          ) {
-            type = 'income'
-          } else if (parsedAmount < 0) {
-            type = 'expense'
-          }
-
-          const amount = Math.abs(parsedAmount)
-          if (!(amount > 0)) {
-            failCount++
-            continue
-          }
-
-          const categoryId = categoryName
-            ? categoryByName.get(normalizeImportHeader(categoryName)) || null
-            : null
-
-          const now = new Date().toISOString()
-
-          const result = await safeAdd('transactions', {
-            id: crypto.randomUUID(),
-            user_id: user.id,
-            context: effectiveContext,
-            type,
-            amount,
-            description,
-            date,
-            status: 'done',
-            affects_balance: true,
-            category_id: categoryId,
-            notes:
-              colMap.notes !== -1
-                ? row[headerRow[colMap.notes]] || null
-                : null,
-            created_at: now,
-            updated_at: now,
-            sync_status: 'pending',
-            sync_attempts: 0,
-          })
-
-          if (!result.success) {
-            failCount++
-            console.error(
-              `Erro ao importar linha ${index + 2}: ${result.error}`
-            )
-            continue
-          }
-
-          successCount++
-        } catch (error) {
+        if (!date || !description || parsedAmount === null) {
           failCount++
-          console.error(`Erro ao importar linha ${index + 2}:`, error)
+          continue
         }
+
+        const normalizedType = normalizeImportHeader(typeRaw)
+
+        if (
+          normalizedType.includes('transfer') ||
+          normalizedType.includes('transferencia')
+        ) {
+          failCount++
+          continue
+        }
+
+        let type: 'income' | 'expense' = 'expense'
+
+        if (
+          normalizedType.includes('receita') ||
+          normalizedType.includes('income') ||
+          normalizedType.includes('entrada') ||
+          normalizedType.includes('credito')
+        ) {
+          type = 'income'
+        }
+
+        const amount = Math.abs(parsedAmount)
+        if (!(amount > 0)) {
+          failCount++
+          continue
+        }
+
+        const categoryId = categoryName
+          ? categoryByName.get(normalizeImportHeader(categoryName)) || null
+          : null
+
+        candidates.push({
+          type,
+          amount,
+          description,
+          date,
+          category_id: categoryId,
+          notes:
+            colMap.notes !== -1
+              ? row[headerRow[colMap.notes]] || null
+              : null,
+        })
       }
+
+      if (candidates.length === 0) {
+        throw new Error('Nenhuma linha válida para importar.')
+      }
+
+      setImportProgress(65)
+
+      const result = await importAccountTransactions({
+        userId: user.id,
+        context: effectiveContext,
+        accountId,
+        source: 'csv',
+        transactions: candidates,
+      })
+
+      setImportProgress(100)
+
+      const successCount = result.imported
+      failCount += result.duplicates
 
       setImportedCount(successCount)
       setErrorCount(failCount)
@@ -360,7 +371,7 @@ export default function ImportCSVPage() {
       } else {
         vibrate([20, 40, 20])
         showToast(
-          `${successCount} importadas e ${failCount} ignoradas. Linhas inválidas ou transferências sem contas não foram criadas.`,
+          `${successCount} importadas e ${failCount} ignoradas. Linhas inválidas, transferências ou duplicidades não foram criadas.`,
           'warning'
         )
       }
@@ -573,7 +584,28 @@ export default function ImportCSVPage() {
               </div>
             )}
 
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4">
+              <label className="mb-1 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+                Conta afetada
+              </label>
+              <select
+                value={accountId}
+                onChange={(event) => setAccountId(event.target.value)}
+                disabled={importing}
+                className="mb-3 w-full rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
+              >
+                <option value="">Selecione a conta</option>
+                {(accounts as any[])
+                  .filter((account) => !account.is_archived)
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={handleImport}
@@ -587,7 +619,7 @@ export default function ImportCSVPage() {
                 )}
                 {importing
                   ? 'Importando...'
-                  : `Importar ${previewData.length} do preview`}
+                  : 'Importar arquivo completo'}
               </button>
 
               <button

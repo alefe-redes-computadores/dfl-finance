@@ -32,6 +32,82 @@ interface UseLocalDataProps {
   orderDir?: 'asc' | 'desc'
 }
 
+type IndexCandidate = {
+  index: string
+  keys: string[]
+}
+
+const INDEX_CANDIDATES: Partial<Record<AllTables, IndexCandidate[]>> = {
+  transactions: [
+    { index: '[user_id+debt_id]', keys: ['debt_id'] },
+    { index: '[user_id+account_id]', keys: ['account_id'] },
+    { index: '[user_id+credit_card_id]', keys: ['credit_card_id'] },
+    { index: '[user_id+contact_id]', keys: ['contact_id'] },
+    { index: '[user_id+goal_id]', keys: ['goal_id'] },
+    { index: '[user_id+loan_id]', keys: ['loan_id'] },
+    { index: '[user_id+financing_id]', keys: ['financing_id'] },
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  accounts: [
+    { index: '[user_id+context]', keys: ['context'] },
+  ],
+  categories: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+type]', keys: ['type'] },
+  ],
+  debts: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  loans: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  financings: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  subscriptions: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  tags: [
+    { index: '[user_id+context]', keys: ['context'] },
+  ],
+  contacts: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+type]', keys: ['type'] },
+  ],
+  budgets: [
+    { index: '[user_id+context]', keys: ['context'] },
+  ],
+  goals: [
+    { index: '[user_id+context]', keys: ['context'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  credit_cards: [
+    { index: '[user_id+context]', keys: ['context'] },
+  ],
+  credit_invoices: [
+    { index: '[user_id+credit_card_id]', keys: ['credit_card_id'] },
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+  notifications: [
+    { index: '[user_id+read]', keys: ['read'] },
+  ],
+  chat_history: [
+    { index: '[user_id+session_id]', keys: ['session_id'] },
+  ],
+  chat_sessions: [
+    { index: '[user_id+status]', keys: ['status'] },
+  ],
+}
+
+function isActiveFilter(value: unknown) {
+  return value !== undefined && value !== null && value !== ''
+}
+
 export function useLocalData<T = any>({
   table,
   filters = {},
@@ -42,23 +118,49 @@ export function useLocalData<T = any>({
   const { user } = useAuth()
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const filtersKey = useMemo(() => JSON.stringify(filters || {}), [filters])
+  const filtersKey = useMemo(
+    () => JSON.stringify(filters || {}),
+    [filters]
+  )
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let results = await db.table(table)
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
-
     const activeFilters = Object.entries(filters).filter(
-      ([, value]) => value !== undefined && value !== null && value !== ''
+      ([key, value]) =>
+        key !== 'user_id' &&
+        isActiveFilter(value)
     )
+
+    const candidate = (INDEX_CANDIDATES[table] || []).find(
+      ({ keys }) =>
+        keys.every((key) => isActiveFilter(filters[key]))
+    )
+
+    const tableRef: any = db.table(table)
+
+    let results: any[]
+
+    if (candidate) {
+      results = await tableRef
+        .where(candidate.index)
+        .equals([
+          user.id,
+          ...candidate.keys.map((key) => filters[key]),
+        ])
+        .toArray()
+    } else {
+      results = await tableRef
+        .where('user_id')
+        .equals(user.id)
+        .toArray()
+    }
 
     if (activeFilters.length > 0) {
       results = results.filter((item: any) =>
-        activeFilters.every(([key, value]) => item[key] === value)
+        activeFilters.every(
+          ([key, value]) => item[key] === value
+        )
       )
     }
 
@@ -67,22 +169,37 @@ export function useLocalData<T = any>({
         const valA = a?.[orderBy]
         const valB = b?.[orderBy]
 
-        if (['date', 'created_at', 'updated_at', 'due_date'].includes(orderBy)) {
-          const dateA = typeof valA === 'string' ? valA : ''
-          const dateB = typeof valB === 'string' ? valB : ''
+        if (
+          ['date', 'created_at', 'updated_at', 'due_date'].includes(
+            orderBy
+          )
+        ) {
+          const dateA =
+            typeof valA === 'string' ? valA : ''
+          const dateB =
+            typeof valB === 'string' ? valB : ''
 
           return orderDir === 'desc'
             ? dateB.localeCompare(dateA)
             : dateA.localeCompare(dateB)
         }
 
-        if (typeof valA === 'number' && typeof valB === 'number') {
-          return orderDir === 'desc' ? valB - valA : valA - valB
+        if (
+          typeof valA === 'number' &&
+          typeof valB === 'number'
+        ) {
+          return orderDir === 'desc'
+            ? valB - valA
+            : valA - valB
         }
 
         return orderDir === 'desc'
-          ? String(valB ?? '').localeCompare(String(valA ?? ''))
-          : String(valA ?? '').localeCompare(String(valB ?? ''))
+          ? String(valB ?? '').localeCompare(
+              String(valA ?? '')
+            )
+          : String(valA ?? '').localeCompare(
+              String(valB ?? '')
+            )
       })
     }
 
@@ -91,10 +208,18 @@ export function useLocalData<T = any>({
     }
 
     return results as T[]
-  }, [user?.id, table, filtersKey, limit, orderBy, orderDir, refreshKey])
+  }, [
+    user?.id,
+    table,
+    filtersKey,
+    limit,
+    orderBy,
+    orderDir,
+    refreshKey,
+  ])
 
   const reload = useCallback(async () => {
-    setRefreshKey((k) => k + 1)
+    setRefreshKey((key) => key + 1)
   }, [])
 
   return {

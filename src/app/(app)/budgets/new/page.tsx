@@ -62,7 +62,7 @@ function SectionHeader({
   title,
   description,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: React.ComponentType<{ size?: string | number; className?: string }>
   title: string
   description?: string
 }) {

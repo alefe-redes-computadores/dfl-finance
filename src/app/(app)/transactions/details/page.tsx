@@ -87,7 +87,14 @@ function EditTransactionContent() {
   const [accountId, setAccountId] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
   const [contactId, setContactId] = useState('')
-  const [txType, setTxType] = useState<'income' | 'expense'>('expense')
+  const [txType, setTxType] = useState<
+    | 'income'
+    | 'expense'
+    | 'transfer'
+    | 'sangria'
+    | 'loan_payment'
+    | 'financing_installment'
+  >('expense')
 
   const [showDetails, setShowDetails] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -388,7 +395,7 @@ function EditTransactionContent() {
           )
         }
 
-        for (const reference of uniqueCardReferences.values()) {
+        for (const reference of Array.from(uniqueCardReferences.values())) {
           const freshCard =
             await db.credit_cards.get(
               reference.cardId
@@ -958,7 +965,7 @@ function EditTransactionContent() {
 
         for (
           const reference of
-            affectedCardReferences.values()
+            Array.from(affectedCardReferences.values())
         ) {
           const freshCard =
             await db.credit_cards.get(

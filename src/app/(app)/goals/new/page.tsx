@@ -216,7 +216,7 @@ function CategoryModal({
   categories: any[]
   categoryId: string
   onSelect: (id: string) => void
-  vibrate: (pattern?: number | number[]) => void
+  vibrate: (pattern: number | number[]) => void
 }) {
   if (!open) return null
 

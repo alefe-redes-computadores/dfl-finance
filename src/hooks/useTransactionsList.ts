@@ -1,6 +1,7 @@
 // src/hooks/useTransactionsList.ts
 'use client'
 
+import Dexie from 'dexie'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -12,45 +13,85 @@ export function useTransactionsList(
   endDate?: string | null
 ) {
   const { user } = useAuth()
+  const filtersKey = JSON.stringify(filters || {})
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let items = await db.transactions
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
+    let items
 
-    // Filtra por contexto
-    if (context) {
-      items = items.filter((item) => item.context === context)
+    if (context && (startDate || endDate)) {
+      items = await db.transactions
+        .where('[user_id+context+date]')
+        .between(
+          [
+            user.id,
+            context,
+            startDate || Dexie.minKey,
+          ],
+          [
+            user.id,
+            context,
+            endDate || Dexie.maxKey,
+          ],
+          true,
+          true
+        )
+        .toArray()
+    } else if (context) {
+      items = await db.transactions
+        .where('[user_id+context]')
+        .equals([user.id, context])
+        .toArray()
+    } else if (startDate || endDate) {
+      items = await db.transactions
+        .where('[user_id+date]')
+        .between(
+          [user.id, startDate || Dexie.minKey],
+          [user.id, endDate || Dexie.maxKey],
+          true,
+          true
+        )
+        .toArray()
+    } else {
+      items = await db.transactions
+        .where('user_id')
+        .equals(user.id)
+        .toArray()
     }
 
-    // Filtros adicionais
     if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          items = items.filter((item) => item[key] === value)
+      for (const [key, value] of Object.entries(filters)) {
+        if (
+          value !== undefined &&
+          value !== null &&
+          value !== ''
+        ) {
+          items = items.filter(
+            (item: any) => item[key] === value
+          )
         }
-      })
+      }
     }
 
-    // Filtra por período
-    if (startDate) {
-      items = items.filter((item) => item.date >= startDate)
-    }
-    if (endDate) {
-      items = items.filter((item) => item.date <= endDate)
-    }
-
-    // Datas ISO/locais ordenam corretamente de forma lexical,
-    // sem interpretação de timezone pelo Date.
     return items.sort((a, b) => {
-      const dateA = typeof a.date === 'string' ? a.date : ''
-      const dateB = typeof b.date === 'string' ? b.date : ''
-      return dateB.localeCompare(dateA)
+      const dateCompare = String(b.date || '').localeCompare(
+        String(a.date || '')
+      )
+
+      if (dateCompare !== 0) return dateCompare
+
+      return String(b.created_at || '').localeCompare(
+        String(a.created_at || '')
+      )
     })
-  }, [user?.id, context, JSON.stringify(filters), startDate, endDate])
+  }, [
+    user?.id,
+    context,
+    filtersKey,
+    startDate,
+    endDate,
+  ])
 
   return {
     data: data ?? [],

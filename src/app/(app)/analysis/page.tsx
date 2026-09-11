@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Loader2,
   TrendingUp,
   TrendingDown,

@@ -393,7 +393,7 @@ function DebtsContent() {
                         )}
                         {isOverdue && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-900/30 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400">
-                            <AlertTriangle size={10} /> Atrasado {Math.abs(daysUntilDue)}d
+                            <AlertTriangle size={10} /> Atrasado {Math.abs(daysUntilDue ?? 0)}d
                           </span>
                         )}
                         {isDueToday && (

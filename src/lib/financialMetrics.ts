@@ -313,7 +313,7 @@ export function buildCategoryDistribution(
     .filter(isExpenseTransaction)
     .forEach((transaction) => {
       const category = categoryById.get(
-        transaction.category_id
+        transaction.category_id ?? ''
       )
 
       const name =

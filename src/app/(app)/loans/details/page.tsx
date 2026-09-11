@@ -219,7 +219,7 @@ function LoanDetailContent() {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  const formatDate = (date: string | null) => 
+  const formatDate = (date: string | null | undefined) =>
     date ? new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR") : "—"
 
   // TRATAMENTO DE LOADING

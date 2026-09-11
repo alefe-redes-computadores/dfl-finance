@@ -6,6 +6,7 @@ interface SkeletonProps {
   width?: string
   height?: string
   count?: number
+  borderRadius?: string
 }
 
 export default function Skeleton({
@@ -14,6 +15,7 @@ export default function Skeleton({
   width,
   height,
   count = 1,
+  borderRadius,
 }: SkeletonProps) {
   const baseClass = 'animate-pulse bg-gray-200 dark:bg-slate-700 rounded'
 
@@ -28,6 +30,7 @@ export default function Skeleton({
 
   if (width) style.width = width
   if (height) style.height = height
+  if (borderRadius) style.borderRadius = borderRadius
 
   if (variant === 'circle') {
     style.width = width || '48px'

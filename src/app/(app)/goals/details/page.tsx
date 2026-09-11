@@ -30,6 +30,7 @@ import { useGoalTransactions } from '@/hooks/useGoalTransactions'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
+import { useLocalData } from '@/hooks/useLocalData'
 
 const GoalDetailSkeleton = () => (
   <div className="animate-pulse space-y-4 px-4 pt-6">
@@ -261,7 +262,7 @@ function ContributionModal({
   onDateChange: (value: string) => void
   onNoteChange: (value: string) => void
   onConfirm: () => void
-  vibrate: (pattern?: number | number[]) => void
+  vibrate: (pattern: number | number[]) => void
 }) {
   if (!open) return null
 
@@ -376,6 +377,10 @@ function GoalDetailContent() {
 
   const { data: goal, loading: goalsLoading, notFound } = useGoalById(id)
   const { data: transactions, loading: txLoading } = useGoalTransactions(id)
+  const { data: goalCategories = [] } = useLocalData({
+    table: 'categories' as any,
+    filters: { context: effectiveContext },
+  })
 
   const loading = goalsLoading || txLoading
 
@@ -525,6 +530,11 @@ const formatCurrency = (val: number) =>
   if (!goal) return null
 
   const IconComp = getDynamicIcon(goal.icon || 'target')
+  const goalColor = goal.color || '#14b8a6'
+  const goalCategoryName =
+    (goalCategories as any[]).find(
+      (category) => category.id === goal.category_id
+    )?.name || null
   const remaining = Number(goal.target_amount) - saved
   const percent =
     Number(goal.target_amount) > 0
@@ -571,15 +581,15 @@ const formatCurrency = (val: number) =>
           <div
             className="relative mb-5 overflow-hidden rounded-[24px] p-5"
             style={{
-              background: `linear-gradient(135deg, ${goal.color}15, ${goal.color}08)`,
+              background: `linear-gradient(135deg, ${goalColor}15, ${goalColor}08)`,
             }}
           >
             <div className="flex items-center gap-4">
               <div
                 className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] shadow-sm"
                 style={{
-                  backgroundColor: `${goal.color}20`,
-                  color: goal.color,
+                  backgroundColor: `${goalColor}20`,
+                  color: goalColor,
                 }}
               >
                 <IconComp size={24} />
@@ -590,7 +600,7 @@ const formatCurrency = (val: number) =>
                   {goal.name}
                 </p>
                 <p className="mt-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                  {goal.category ? `Meta para ${goal.category}` : 'Meta geral'}
+                  {goalCategoryName ? `Meta para ${goalCategoryName}` : 'Meta geral'}
                 </p>
               </div>
             </div>

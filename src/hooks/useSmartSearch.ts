@@ -46,7 +46,15 @@ export function useSmartSearch(
       .toArray()
 
     const matches = all.filter(
-      (t) => t.description?.toLowerCase().includes(term) && (!type || t.type === type)
+      (t) =>
+        t.description?.toLowerCase().includes(term) &&
+        (!type || t.type === type) &&
+        (
+          t.type === 'income' ||
+          t.type === 'expense' ||
+          t.type === 'transfer' ||
+          t.type === 'sangria'
+        )
     )
 
     const grouped = new Map<string, SmartSearchSuggestion>()
@@ -62,7 +70,7 @@ export function useSmartSearch(
           account_id: (t as any).account_id ?? null,
           credit_card_id: (t as any).credit_card_id ?? null,
           amount: t.amount,
-          type: t.type,
+          type: t.type as SmartSearchSuggestion['type'],
           count: 1,
           last_date: t.date,
         })

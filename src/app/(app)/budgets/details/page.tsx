@@ -26,6 +26,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { db } from '@/lib/db'
 import Skeleton from '@/components/Skeleton'
+import { useLocalData } from '@/hooks/useLocalData'
 
 // ============================================================
 // COMPONENTES VISUAIS
@@ -193,6 +194,10 @@ function BudgetDetailContent() {
 
   const { data: budgetData, loading: budgetLoading, notFound } = useBudgetById(budgetId)
   const { data: budgetTransactions, loading: txLoading } = useBudgetTransactions(budgetId)
+  const { data: localCategories = [] } = useLocalData({
+    table: 'categories' as any,
+    filters: { context },
+  })
 
   const [currentDate, setCurrentDate] = useState(new Date())
 const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -360,6 +365,12 @@ const [showDeleteModal, setShowDeleteModal] = useState(false)
     budgetData?.period
   )
   const IconComp = getDynamicIcon(budgetData?.icon || 'tag')
+  const budgetColor = budgetData.color || '#14b8a6'
+  const budgetCategoryName =
+    (localCategories as any[]).find(
+      (category) => category.id === budgetData.category_id
+    )?.name || 'Geral'
+
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -375,15 +386,6 @@ const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 px-4 pt-4 pb-28 font-sans transition-colors duration-300">
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-5 pointer-events-none">
-          <div className="rounded-full bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08)] border border-gray-100 dark:border-slate-700/60 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-            <RefreshCw size={15} className="animate-spin text-teal-600" />
-            <span className="text-[12px] font-semibold text-teal-700 dark:text-teal-400">Atualizando...</span>
-          </div>
-        </div>
-      )}
-
       <div className="sticky top-0 z-20 -mx-4 bg-[#f8f9fa]/94 px-4 pb-3 pt-2 backdrop-blur-xl dark:bg-slate-950/94">
         <div className="mb-3 flex items-center justify-between">
           <button
@@ -478,7 +480,7 @@ const [showDeleteModal, setShowDeleteModal] = useState(false)
           <div className="mb-4 flex items-center gap-3">
             <div
               className="flex h-11 w-11 items-center justify-center rounded-[14px]"
-              style={{ backgroundColor: `${budgetData.color}18`, color: budgetData.color }}
+              style={{ backgroundColor: `${budgetColor}18`, color: budgetColor }}
             >
               <IconComp size={20} />
             </div>
@@ -488,7 +490,7 @@ const [showDeleteModal, setShowDeleteModal] = useState(false)
                 {budgetData.name}
               </h2>
               <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">
-                {budgetData.categories?.name || 'Geral'} •{' '}
+                {budgetCategoryName} •{' '}
                 {getBudgetPeriodName(
                   budgetData.period
                 )}

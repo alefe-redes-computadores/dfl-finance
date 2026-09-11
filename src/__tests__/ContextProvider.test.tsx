@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { ContextProvider, useContext_, ContextToggle } from '@/components/ContextToggle'
+import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 
 // Mock do localStorage
 const localStorageMock = (() => {

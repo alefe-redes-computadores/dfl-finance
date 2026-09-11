@@ -31,7 +31,12 @@ import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import { useLocalData } from '@/hooks/useLocalData'
 import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
-import { db, addToSyncQueue } from '@/lib/db'
+import {
+  db,
+  addToSyncQueue,
+  type LocalTransaction,
+  type LocalNotification,
+} from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { supabase } from '@/lib/supabase'
@@ -436,7 +441,7 @@ export default function ImportInvoicePage() {
 
           const now = new Date().toISOString()
 
-          const payload = transactions.map((transaction) => {
+          const payload: LocalTransaction[] = transactions.map((transaction) => {
             const suggestedCategoryId =
               transaction.suggested_category
                 ? categoryByName.get(
@@ -560,7 +565,7 @@ export default function ImportInvoicePage() {
           }
 
           const notificationId = crypto.randomUUID()
-          const notificationPayload = {
+          const notificationPayload: LocalNotification = {
             id: notificationId,
             user_id: user.id,
             type: 'import_done',
@@ -574,10 +579,10 @@ export default function ImportInvoicePage() {
                 freshAccount?.name ||
                 'Destino',
             },
+            read: false,
             is_read: false,
             created_at: now,
             sync_status: 'pending',
-            sync_attempts: 0,
           }
 
           await db.notifications.add(notificationPayload)

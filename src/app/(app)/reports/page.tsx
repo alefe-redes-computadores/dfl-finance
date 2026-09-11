@@ -15,6 +15,7 @@ import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { useTransactionsList } from '@/hooks/useTransactionsList'
+import { useLocalData } from '@/hooks/useLocalData'
 import { exportTransactionsToCSV, downloadCSV } from '@/lib/services/exportService'
 import { isRealizedFinancialTransaction } from '@/lib/financialMetrics'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
@@ -123,6 +124,21 @@ export default function ReportsPage() {
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
 
   const { data: localTransactions, loading: txLoading } = useTransactionsList(effectiveContext)
+  const { data: localCategories = [] } = useLocalData({
+    table: 'categories' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const categoryById = useMemo(
+    () =>
+      new Map(
+        (localCategories as any[]).map((category) => [
+          category.id,
+          category.name,
+        ])
+      ),
+    [localCategories]
+  )
 
   const transactions = localTransactions || []
   const loading = txLoading
@@ -170,7 +186,8 @@ export default function ReportsPage() {
       totalExpense += expense
 
       if (expense > 0) {
-        const categoryName = transaction.categories?.name || 'Outros'
+        const categoryName =
+          categoryById.get(transaction.category_id || '') || 'Outros'
         categories.set(categoryName, (categories.get(categoryName) || 0) + expense)
       }
 
@@ -229,7 +246,7 @@ export default function ReportsPage() {
       monthlyData,
       dailyData,
     }
-  }, [transactions, startISO, endISO, filterType])
+  }, [transactions, startISO, endISO, filterType, categoryById])
 
   const {
     filteredTransactions,

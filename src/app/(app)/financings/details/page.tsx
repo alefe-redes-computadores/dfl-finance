@@ -345,13 +345,16 @@ function FinancingDetailContent() {
     loading: installmentsLoading,
   } = useFinancingInstallments(financingId)
 
+  // O hook já filtra exclusivamente as parcelas deste financiamento.
+  const financingInstallments = installments as Installment[]
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(val)
 
-  const formatDate = (date: string | null) =>
+  const formatDate = (date: string | null | undefined) =>
     date ? new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR") : ""
 
   const getStatusBadge = (status: string) => {
@@ -383,7 +386,7 @@ function FinancingDetailContent() {
     }
   }
 
-  const getAssetIcon = (type: string) => {
+  const getAssetIcon = (type?: string) => {
     switch (type) {
       case "vehicle":
         return <Car size={22} className="text-teal-600 dark:text-teal-400" />
@@ -407,10 +410,10 @@ function FinancingDetailContent() {
       const res1 = await safeUpdate("transactions", installment.id, updateData)
       if (!res1.success) throw new Error(res1.error)
 
-      const updatedInstallments = installments.map((i: Installment) =>
+      const updatedInstallments = financingInstallments.map((i) =>
         i.id === installment.id ? { ...i, paid: true } : i
       )
-      const allPaid = updatedInstallments.every((i: Installment) => i.paid)
+      const allPaid = updatedInstallments.every((i) => i.paid)
 
       if (allPaid && financingData?.status !== "paid") {
         const statusUpdate = {
@@ -483,7 +486,7 @@ function FinancingDetailContent() {
     vibrate([10, 50])
 
     try {
-      for (const inst of installments) {
+      for (const inst of financingInstallments) {
         const res1 = await safeDelete("transactions", inst.id)
         if (!res1.success) throw new Error(res1.error)
       }
@@ -502,13 +505,13 @@ function FinancingDetailContent() {
   }
 
   const paidInstallments = useMemo(
-    () => installments.filter((i: Installment) => i.paid),
-    [installments]
+    () => financingInstallments.filter((i) => i.paid),
+    [financingInstallments]
   )
 
   const sortedInstallments = useMemo(
-    () => [...installments].sort((a: Installment, b: Installment) => a.number - b.number),
-    [installments]
+    () => [...financingInstallments].sort((a, b) => a.number - b.number),
+    [financingInstallments]
   )
 
   const visibleInstallments = useMemo(
@@ -517,7 +520,7 @@ function FinancingDetailContent() {
   )
 
   const totalPaid = useMemo(
-    () => paidInstallments.reduce((sum: number, i: Installment) => sum + (i.amount || 0), 0),
+    () => paidInstallments.reduce((sum, i) => sum + (i.amount || 0), 0),
     [paidInstallments]
   )
 

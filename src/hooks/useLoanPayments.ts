@@ -5,20 +5,29 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import { useAuth } from '@/lib/hooks/useAuth'
 
-export function useLoanPayments(loanId?: string | null) {
+export function useLoanPayments(
+  loanId?: string | null
+) {
   const { user } = useAuth()
 
   const data = useLiveQuery(async () => {
     if (!user?.id || !loanId) return []
 
     const transactions = await db.transactions
-      .where('user_id')
-      .equals(user.id)
+      .where('[user_id+loan_id]')
+      .equals([user.id, loanId])
       .toArray()
 
     return transactions
-      .filter((item: any) => item.loan_id === loanId && item.type === 'loan_payment')
-      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .filter(
+        (item: any) =>
+          item.type === 'loan_payment'
+      )
+      .sort((a, b) =>
+        String(b.date || '').localeCompare(
+          String(a.date || '')
+        )
+      )
   }, [user?.id, loanId])
 
   return {

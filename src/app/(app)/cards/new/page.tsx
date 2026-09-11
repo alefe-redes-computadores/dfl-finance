@@ -196,7 +196,7 @@ function NewCardContent() {
 
     try {
       if (editId) {
-        const result = await safeUpdate('credit_cards', editId, payload)
+        const result = await safeUpdate('credit_cards', editId, payload, user.id)
         if (!result?.success) throw new Error(result?.error || 'Erro ao atualizar cartão')
         showToast('Cartão atualizado!', 'success')
       } else {
@@ -208,7 +208,7 @@ function NewCardContent() {
           sync_status: 'pending',
           sync_attempts: 0,
         }
-        const result = await safeAdd('credit_cards', fullPayload)
+        const result = await safeAdd('credit_cards', fullPayload, user.id)
         if (!result?.success) throw new Error(result?.error || 'Erro ao criar cartão')
         showToast('Cartão criado!', 'success')
       }

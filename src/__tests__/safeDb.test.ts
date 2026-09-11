@@ -142,7 +142,7 @@ describe('🧪 TESTE DE BLINDAGEM — safeDb', () => {
     mockGet.mockResolvedValue({ id: 'tx-123', amount: 100 })
 
     const mockDelete = jest.spyOn(db.table('transactions'), 'delete')
-    mockDelete.mockResolvedValue(1)
+    mockDelete.mockResolvedValue(undefined)
 
     const result = await safeDelete('transactions', 'tx-123', 'user-123')
 

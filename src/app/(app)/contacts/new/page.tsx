@@ -248,8 +248,9 @@ function ContactForm() {
         return
       }
 
+      const contactId = crypto.randomUUID()
       const result = await safeAdd('contacts', {
-        id: crypto.randomUUID(),
+        id: contactId,
         user_id: user.id,
         ...payload,
       })
@@ -259,11 +260,7 @@ function ContactForm() {
       success()
       showToast('Contato criado.', 'success')
 
-      if (result.id) {
-        router.replace(`/contacts/details?id=${result.id}`)
-      } else {
-        router.replace('/contacts')
-      }
+      router.replace(`/contacts/details?id=${contactId}`)
     } catch (error: any) {
       hapticError()
       showToast(error?.message || 'Erro ao salvar contato.', 'error')

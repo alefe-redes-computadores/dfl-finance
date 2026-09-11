@@ -184,26 +184,30 @@ export default function NotificationsPage() {
     }
   }, [user, notifications, safeUpdate, loadNotifications, showToast, hapticSuccess, hapticError, vibrate])
 
-  const handleClearAll = useCallback(async () => {
+  const handleClearAll = useCallback(() => {
     if (!user?.id) return
-    
+
     if (!isAdmin) {
-      showToast('⚠️ Apenas administradores podem limpar todas as notificações.', 'warning')
+      showToast('Apenas administradores podem limpar todas as notificações.', 'warning')
       return
     }
 
     setShowClearAllSheet(true)
-      return
-setProcessing(true)
+  }, [user?.id, isAdmin, showToast])
+
+  const confirmClearAll = useCallback(async () => {
+    if (!user?.id || processing) return
+
+    setProcessing(true)
     try {
       const result = await clearAllNotifications(user.id)
       if (!result.success) {
         throw new Error(result.error)
       }
-      
+
       setNotifications([])
       setUnreadCount(0)
-      
+
       hapticSuccess()
       vibrate([20, 10])
       showToast('Todas as notificações foram removidas!', 'success')
@@ -213,7 +217,15 @@ setProcessing(true)
     } finally {
       setProcessing(false)
     }
-  }, [user, isAdmin, showToast, hapticSuccess, hapticError, vibrate])
+  }, [
+    user?.id,
+    processing,
+    hapticSuccess,
+    hapticError,
+    vibrate,
+    showToast,
+  ])
+
 
   // Adicione isto dentro do deleteNotification
     const deleteNotification = useCallback(async (id: string) => {

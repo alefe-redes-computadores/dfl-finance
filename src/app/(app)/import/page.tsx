@@ -25,8 +25,9 @@ import ContextToggle, {
 import MoneyInput from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
-import { useSafeDb } from '@/hooks/useSafeDb'
+import { useLocalData } from '@/hooks/useLocalData'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { importAccountTransactions } from '@/lib/importOperations'
 import { supabase } from '@/lib/supabase'
 
 const SavingSkeleton = () => (
@@ -50,7 +51,6 @@ function ImportContent() {
   const router = useRouter()
   const { user } = useAuth()
   const { effectiveContext } = useContext_()
-  const { safeAdd } = useSafeDb()
   const { showToast } = useToast()
   const { vibrate, success, error: errorHaptic } = useHapticFeedback()
 
@@ -71,6 +71,12 @@ function ImportContent() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [accountId, setAccountId] = useState('')
+
+  const { data: accounts = [] } = useLocalData({
+    table: 'accounts' as any,
+    filters: { context: effectiveContext },
+  })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -218,6 +224,7 @@ function ImportContent() {
 
     if (amountNum <= 0) newErrors.amount = 'Valor inválido'
     if (!formData.date) newErrors.date = 'Data obrigatória'
+    if (!accountId) newErrors.account = 'Conta obrigatória'
 
     if (Object.keys(newErrors).length > 0) {
       errorHaptic()
@@ -230,32 +237,32 @@ function ImportContent() {
     setStep('saving')
 
     try {
-      const now = new Date().toISOString()
-
-      const result = await safeAdd('transactions', {
-        id: crypto.randomUUID(),
-        user_id: user.id,
-        amount: amountNum,
-        type: 'expense',
-        status: 'done',
-        date: formData.date,
-        description: formData.description || 'Comprovante importado',
-        category_id: null,
-        credit_card_id: null,
-        notes: formData.notes || null,
-        receipt_url: receiptUrl,
+      const result = await importAccountTransactions({
+        userId: user.id,
         context: effectiveContext,
-        affects_balance: true,
-        created_at: now,
-        updated_at: now,
-        sync_status: 'pending',
-        sync_attempts: 0,
+        accountId,
+        source: 'receipt',
+        transactions: [
+          {
+            amount: amountNum,
+            type: 'expense',
+            date: formData.date,
+            description: formData.description || 'Comprovante importado',
+            category_id: null,
+            notes: formData.notes || null,
+            receipt_url: receiptUrl,
+          },
+        ],
       })
 
-      if (!result.success) throw new Error(result.error)
+      if (result.imported === 0 && result.duplicates > 0) {
+        throw new Error(
+          'Este comprovante já parece ter sido importado para esta conta.'
+        )
+      }
 
       success()
-      showToast('Comprovante importado e transação salva.', 'success')
+      showToast('Comprovante importado e saldo atualizado.', 'success')
       router.push('/home')
     } catch (error: any) {
       errorHaptic()
@@ -277,6 +284,7 @@ function ImportContent() {
     setReceiptPath(null)
     setOcrResult(null)
     setAmountNum(0)
+    setAccountId('')
     setFormData({
       date: format(new Date(), 'yyyy-MM-dd'),
       description: '',
@@ -430,6 +438,36 @@ function ImportContent() {
             </div>
 
             <div className="space-y-4">
+              <div>
+                <label className="mb-1 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+                  Conta
+                </label>
+                <select
+                  value={accountId}
+                  onChange={(event) => setAccountId(event.target.value)}
+                  className={`w-full rounded-[16px] border bg-gray-50 px-4 py-3 text-gray-800 outline-none dark:bg-slate-900 dark:text-gray-200 ${
+                    errors.account
+                      ? 'border-red-400 dark:border-red-500'
+                      : 'border-gray-200 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700'
+                  }`}
+                >
+                  <option value="">Selecione a conta afetada</option>
+                  {(accounts as any[])
+                    .filter((account) => !account.is_archived)
+                    .map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                </select>
+                {errors.account && (
+                  <p className="mt-1 flex items-center gap-1 text-[10px] text-red-500">
+                    <AlertCircle size={12} />
+                    {errors.account}
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="mb-1 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
                   Valor

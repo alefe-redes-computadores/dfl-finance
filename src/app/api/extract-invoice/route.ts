@@ -3,6 +3,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 
+import {
+  AI_MODEL,
+  MAX_AI_FILE_BYTES,
+  MAX_EXTRACTED_TRANSACTIONS,
+  extractJsonArray,
+  isAiTimeoutError,
+  logServerFailure,
+  normalizeAiText,
+  normalizeCivilDate,
+  normalizePositiveAmount,
+  withAiTimeout,
+} from '@/lib/server/aiSafety'
+
 type ExtractedTransaction = {
   date: string
   description: string
@@ -10,8 +23,6 @@ type ExtractedTransaction = {
   type: 'income' | 'expense'
   suggested_category?: string
 }
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 function getServerSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -29,72 +40,50 @@ function getServerSupabase() {
   })
 }
 
-function normalizeDate(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-
-  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!match) return null
-
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const date = new Date(year, month - 1, day)
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null
-  }
-
-  return `${match[1]}-${match[2]}-${match[3]}`
-}
-
 function sanitizeTransactions(input: unknown): ExtractedTransaction[] {
   if (!Array.isArray(input)) return []
 
-  return input.flatMap((item: any) => {
-    const date = normalizeDate(item?.date)
-    const description =
-      typeof item?.description === 'string'
-        ? item.description.trim()
-        : ''
-    const amount = Math.abs(Number(item?.amount))
-    const type =
-      item?.type === 'income'
-        ? 'income'
-        : item?.type === 'expense'
-          ? 'expense'
-          : null
+  return input
+    .slice(0, MAX_EXTRACTED_TRANSACTIONS + 1)
+    .flatMap((item: any) => {
+      const date = normalizeCivilDate(item?.date)
+      const description = normalizeAiText(item?.description, 200)
+      const amount = normalizePositiveAmount(item?.amount)
+      const type =
+        item?.type === 'income'
+          ? 'income'
+          : item?.type === 'expense'
+            ? 'expense'
+            : null
 
-    if (
-      !date ||
-      !description ||
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !type
-    ) {
-      return []
-    }
+      if (!date || !description || amount === null || !type) return []
 
-    const suggestedCategory =
-      typeof item?.suggested_category === 'string'
-        ? item.suggested_category.trim()
-        : ''
+      const suggestedCategory = normalizeAiText(item?.suggested_category, 80)
 
-    return [
-      {
-        date,
-        description,
-        amount,
-        type,
-        ...(suggestedCategory
-          ? { suggested_category: suggestedCategory }
-          : {}),
-      },
-    ]
-  })
+      return [
+        {
+          date,
+          description,
+          amount,
+          type,
+          ...(suggestedCategory
+            ? { suggested_category: suggestedCategory }
+            : {}),
+        },
+      ]
+    })
+}
+
+function isPdfBuffer(buffer: Buffer) {
+  return (
+    buffer.length >= 5 &&
+    buffer.subarray(0, 5).toString('ascii') === '%PDF-'
+  )
+}
+
+function looksLikeOfx(text: string) {
+  const header = text.slice(0, 16384).toUpperCase()
+  return header.includes('OFXHEADER') || header.includes('<OFX')
 }
 
 export async function POST(request: NextRequest) {
@@ -124,9 +113,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const formData = await request.formData()
-    const file = formData.get('file')
+    let formData: FormData
+    try {
+      formData = await request.formData()
+    } catch {
+      return NextResponse.json(
+        { error: 'Não foi possível ler o arquivo enviado.' },
+        { status: 400 }
+      )
+    }
 
+    const file = formData.get('file')
     if (!(file instanceof File)) {
       return NextResponse.json(
         { error: 'Arquivo obrigatório.' },
@@ -134,14 +131,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
+    if (file.size <= 0 || file.size > MAX_AI_FILE_BYTES) {
       return NextResponse.json(
         { error: 'O arquivo deve ter no máximo 10 MB.' },
         { status: 400 }
       )
     }
 
-    const lowerName = file.name.toLowerCase()
+    const lowerName = file.name.trim().toLowerCase()
     const isOfx = lowerName.endsWith('.ofx')
     const isPdf = lowerName.endsWith('.pdf')
 
@@ -155,24 +152,36 @@ export async function POST(request: NextRequest) {
     let transactions: ExtractedTransaction[] = []
 
     if (isOfx) {
-      transactions = sanitizeTransactions(
-        parseOFX(await file.text())
-      )
+      const ofxText = await file.text()
+
+      if (!looksLikeOfx(ofxText)) {
+        return NextResponse.json(
+          { error: 'O arquivo OFX enviado não parece válido.' },
+          { status: 400 }
+        )
+      }
+
+      transactions = sanitizeTransactions(parseOFX(ofxText))
     } else {
       const apiKey = process.env.GEMINI_API_KEY
 
       if (!apiKey) {
         return NextResponse.json(
-          { error: 'Gemini não configurado no servidor.' },
+          { error: 'Serviço de leitura temporariamente indisponível.' },
           { status: 503 }
         )
       }
 
       const buffer = Buffer.from(await file.arrayBuffer())
+      if (!isPdfBuffer(buffer)) {
+        return NextResponse.json(
+          { error: 'O arquivo enviado não é um PDF válido.' },
+          { status: 400 }
+        )
+      }
+
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-3.6-flash',
-      })
+      const model = genAI.getGenerativeModel({ model: AI_MODEL })
 
       const prompt = `Extraia as movimentações financeiras deste documento.
 
@@ -186,23 +195,22 @@ Cada objeto deve conter:
 - "suggested_category": string curta quando houver uma categoria evidente; caso contrário, ""
 
 Não invente lançamentos, datas ou valores.
-Exemplo:
-[{"date":"2026-06-15","description":"UBER TRIP","amount":25.5,"type":"expense","suggested_category":"Transporte"}]`
+Não retorne mais de ${MAX_EXTRACTED_TRANSACTIONS} lançamentos.`
 
-      const result = await model.generateContent([
-        {
-          inlineData: {
-            data: buffer.toString('base64'),
-            mimeType: 'application/pdf',
+      const result = await withAiTimeout(
+        model.generateContent([
+          {
+            inlineData: {
+              data: buffer.toString('base64'),
+              mimeType: 'application/pdf',
+            },
           },
-        },
-        prompt,
-      ])
+          prompt,
+        ])
+      )
 
-      const text = result.response.text()
-      const jsonMatch = text.match(/\[[\s\S]*\]/)
-
-      if (!jsonMatch) {
+      const jsonText = extractJsonArray(result.response.text())
+      if (!jsonText) {
         return NextResponse.json(
           { error: 'Não foi possível interpretar o documento.' },
           { status: 422 }
@@ -210,9 +218,8 @@ Exemplo:
       }
 
       let parsed: unknown
-
       try {
-        parsed = JSON.parse(jsonMatch[0])
+        parsed = JSON.parse(jsonText)
       } catch {
         return NextResponse.json(
           { error: 'A leitura retornou dados inválidos.' },
@@ -220,7 +227,24 @@ Exemplo:
         )
       }
 
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > MAX_EXTRACTED_TRANSACTIONS
+      ) {
+        return NextResponse.json(
+          { error: 'O documento possui movimentações demais para uma única importação.' },
+          { status: 422 }
+        )
+      }
+
       transactions = sanitizeTransactions(parsed)
+    }
+
+    if (transactions.length > MAX_EXTRACTED_TRANSACTIONS) {
+      return NextResponse.json(
+        { error: 'O arquivo possui movimentações demais para uma única importação.' },
+        { status: 422 }
+      )
     }
 
     if (transactions.length === 0) {
@@ -233,18 +257,21 @@ Exemplo:
     return NextResponse.json({
       success: true,
       transactions,
-      file_name: file.name,
+      file_name: normalizeAiText(file.name, 180),
       file_type: isOfx ? 'ofx' : 'pdf',
     })
-  } catch (error: any) {
-    console.error('Erro na extração da fatura:', error)
+  } catch (error) {
+    logServerFailure('extract-invoice', error)
+
+    if (isAiTimeoutError(error)) {
+      return NextResponse.json(
+        { error: 'A leitura demorou mais que o esperado. Tente novamente.' },
+        { status: 504 }
+      )
+    }
 
     return NextResponse.json(
-      {
-        error:
-          error?.message ||
-          'Erro ao processar o arquivo.',
-      },
+      { error: 'Erro ao processar o arquivo.' },
       { status: 500 }
     )
   }
@@ -258,8 +285,9 @@ function parseOFX(ofxText: string): ExtractedTransaction[] {
   let match: RegExpExecArray | null
 
   while ((match = blockRegex.exec(ofxText)) !== null) {
-    const block = match[1]
+    if (transactions.length > MAX_EXTRACTED_TRANSACTIONS) break
 
+    const block = match[1]
     const dateMatch = block.match(/<DTPOSTED>(\d{8})/i)
     const amountMatch = block.match(/<TRNAMT>([-+]?\d+(?:[.,]\d+)?)/i)
     const memoMatch =
@@ -268,24 +296,18 @@ function parseOFX(ofxText: string): ExtractedTransaction[] {
 
     if (!dateMatch || !amountMatch) continue
 
-    const rawAmount = Number(
-      amountMatch[1].replace(',', '.')
-    )
-
-    if (!Number.isFinite(rawAmount) || rawAmount === 0) {
-      continue
-    }
+    const rawAmount = Number(amountMatch[1].replace(',', '.'))
+    if (!Number.isFinite(rawAmount) || rawAmount === 0) continue
 
     const rawDate = dateMatch[1]
-    const date =
-      `${rawDate.slice(0, 4)}-` +
-      `${rawDate.slice(4, 6)}-` +
-      `${rawDate.slice(6, 8)}`
+    const date = normalizeCivilDate(
+      `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+    )
+    if (!date) continue
 
     transactions.push({
       date,
-      description:
-        memoMatch?.[1]?.trim() || 'Transação OFX',
+      description: normalizeAiText(memoMatch?.[1], 200) || 'Transação OFX',
       amount: Math.abs(rawAmount),
       type: rawAmount > 0 ? 'income' : 'expense',
     })

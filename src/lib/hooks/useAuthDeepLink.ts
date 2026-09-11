@@ -85,7 +85,9 @@ export function useAuthDeepLink() {
     })
 
     return () => {
-      listener.remove().catch(() => {})
+      void listener
+        .then((handle) => handle.remove())
+        .catch(() => {})
     }
   }, [router])
 

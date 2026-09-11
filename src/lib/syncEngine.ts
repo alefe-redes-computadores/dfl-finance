@@ -453,11 +453,28 @@ async function pullRemoteChanges(
           .map((pendingItem) => pendingItem.record_id)
       )
 
-      const localRows = await db
-        .table(tableName)
-        .where('user_id')
-        .equals(userId)
-        .toArray()
+      const remoteIdsForLookup = remoteData
+        .map((item: any) => item?.id)
+        .filter(
+          (id: any): id is string =>
+            typeof id === 'string' && id.length > 0
+        )
+
+      const localRows = force
+        ? await db
+            .table(tableName)
+            .where('user_id')
+            .equals(userId)
+            .toArray()
+        : (
+            await db
+              .table(tableName)
+              .bulkGet(remoteIdsForLookup)
+          ).filter(
+            (item: any) =>
+              Boolean(item) &&
+              item.user_id === userId
+          )
 
       const localRowsById = new Map(
         localRows

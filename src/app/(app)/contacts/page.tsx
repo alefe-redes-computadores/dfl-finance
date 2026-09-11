@@ -103,7 +103,7 @@ export default function ContactsPage() {
     let payable = 0
     let credit = 0
 
-    for (const summary of summaryByContact.values()) {
+    for (const summary of Array.from(summaryByContact.values())) {
       receivable += summary.receivable
       payable += summary.payable
       credit += summary.creditBalance
