@@ -88,7 +88,7 @@ export function usePaginatedTransactions({
         setPage(1)
       })
       .finally(() => setLoading(false))
-  }, [context, category, startDate, endDate, search])
+  }, [fetchTransactions])
 
   return { 
     transactions, 

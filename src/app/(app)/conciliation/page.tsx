@@ -74,8 +74,8 @@ export default function ConciliationPage() {
     }
   }, [user?.id, effectiveContext])
 
-  const pendingTransactions = data?.transactions ?? []
-  const accounts = data?.accounts ?? []
+  const pendingTransactions = useMemo(() => data?.transactions ?? [], [data?.transactions])
+  const accounts = useMemo(() => data?.accounts ?? [], [data?.accounts])
   const loading = !hydrated || data === undefined
 
   const accountMap = useMemo(

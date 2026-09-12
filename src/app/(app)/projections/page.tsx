@@ -88,13 +88,13 @@ export default function ProjectionsPage() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     if (window.scrollY > 10 || loading) return
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
-  }
+  }, [loading])
 
-  const handleTouchMove = (e: TouchEvent) => {
+  const handleTouchMove = useCallback((e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
     const pullDistance = e.touches[0].clientY - pullStartY.current
     if (pullDistance > 60) {
@@ -102,11 +102,11 @@ export default function ProjectionsPage() {
       isPulling.current = false
       setTimeout(() => setRefreshing(false), 400)
     }
-  }
+  }, [refreshing])
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     isPulling.current = false
-  }
+  }, [])
 
   useEffect(() => {
     const container = containerRef.current
@@ -119,7 +119,7 @@ export default function ProjectionsPage() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [loading, refreshing])
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
   // CÁLCULO DE PROJEÇÃO COM BLINDAGEM
   // Projeção determinística baseada em saldo real + média de meses completos.

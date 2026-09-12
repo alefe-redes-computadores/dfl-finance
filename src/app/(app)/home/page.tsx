@@ -12,7 +12,7 @@ import { getDynamicIcon } from '@/lib/iconUtils'
 import {
   Eye, EyeOff, ChevronRight, ChevronLeft, ArrowDown, ArrowUp,
   Plus, Clock, Check, CreditCard, Wallet, Settings2,
-  AlertTriangle, Image, Paperclip,
+  AlertTriangle, Image as ImageIcon, Paperclip,
   Sun, Moon, Sunrise, Sunset, RefreshCw, ArrowRightLeft, Building2, User,
   SearchX, Sparkles,
 } from 'lucide-react'
@@ -224,7 +224,7 @@ function HomeContent() {
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const today = useMemo(() => new Date(), [])
 
-  const getCardDueDate = (
+  const getCardDueDate = useCallback((
     dueDay: number | null | undefined,
     year: number,
     month: number
@@ -238,9 +238,9 @@ function HomeContent() {
     const clampedDay = Math.min(normalizedDueDay, lastDayOfMonth)
 
     return new Date(year, month, clampedDay, 12, 0, 0, 0)
-  }
+  }, [])
 
-  const getNextCardDueDate = (
+  const getNextCardDueDate = useCallback((
     dueDay: number | null | undefined,
     referenceDate: Date = new Date()
   ) => {
@@ -279,9 +279,9 @@ function HomeContent() {
     }
 
     return dueDate
-  }
+  }, [getCardDueDate])
 
-  const getDaysUntilCardDue = (
+  const getDaysUntilCardDue = useCallback((
     dueDay: number | null | undefined,
     referenceDate: Date = new Date()
   ) => {
@@ -299,7 +299,7 @@ function HomeContent() {
       getNextCardDueDate(dueDay, reference),
       reference
     )
-  }
+  }, [getNextCardDueDate])
 
   const categoryById = useMemo(
     () => new Map(localCategories.map((category: any) => [category.id, category])),
@@ -658,7 +658,7 @@ function HomeContent() {
         a.severity - b.severity ||
         b.amount - a.amount
     )
-  }, [debtsList, localTransactions, cards, today])
+  }, [debtsList, localTransactions, cards, today, getDaysUntilCardDue])
 
   const visiblePriorityAlerts = homePriorityAlerts.slice(0, 3)
   const hiddenPriorityAlertsCount = Math.max(
@@ -845,13 +845,13 @@ function HomeContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     if (window.scrollY > 10 || isDataLoading) return
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
-  }
+  }, [isDataLoading])
 
-  const handleTouchMove = async (e: TouchEvent) => {
+  const handleTouchMove = useCallback(async (e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
     const pullDistance = e.touches[0].clientY - pullStartY.current
     if (pullDistance > 60) {
@@ -867,9 +867,9 @@ function HomeContent() {
       showToast('Dados atualizados!', 'success')
       hapticSuccess()
     }
-  }
+  }, [refreshing, forceSync, vibrate, showToast, hapticSuccess])
 
-  const handleTouchEnd = () => { isPulling.current = false }
+  const handleTouchEnd = useCallback(() => { isPulling.current = false }, [])
 
   useEffect(() => {
     const container = containerRef.current
@@ -882,7 +882,7 @@ function HomeContent() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [isDataLoading, refreshing, forceSync])
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
   const toggleSection = (id: string) => { setPersonalizeEnabled(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const moveSection = (id: string, direction: 'up' | 'down') => { setPersonalizeOrder((prev) => { const currentIndex = prev.findIndex((item) => item.id === id); if (currentIndex === -1) return prev; const newOrder = [...prev]; const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1; if (targetIndex >= 0 && targetIndex < newOrder.length) { [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]] } return newOrder }) }
@@ -915,7 +915,7 @@ function HomeContent() {
     if (!url) return null;
     const isDocument = /\.(pdf|doc|docx|xls|xlsx|csv|txt)(\?|$)/i.test(url.toLowerCase());
     if (isDocument) return <Paperclip size={12} className="text-gray-500 shrink-0" />;
-    return <Image size={12} className="text-blue-500 shrink-0" />;
+    return <ImageIcon size={12} className="text-blue-500 shrink-0" />;
   }
 
   const handleHideCard = (sectionId: string, sectionLabel: string) => {

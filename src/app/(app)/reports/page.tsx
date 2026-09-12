@@ -140,7 +140,7 @@ export default function ReportsPage() {
     [localCategories]
   )
 
-  const transactions = localTransactions || []
+  const transactions = useMemo(() => localTransactions || [], [localTransactions])
   const loading = txLoading
 
   const endDate = new Date()
@@ -224,8 +224,9 @@ export default function ReportsPage() {
     const monthlyData = Array.from(months.values())
       .sort((a, b) => a.month.localeCompare(b.month))
 
-    const dailyStart = subMonths(endDate, 1)
-    const dailyData = eachDayOfInterval({ start: dailyStart, end: endDate }).map(day => {
+    const reportEndDate = new Date(`${endISO}T12:00:00`)
+    const dailyStart = subMonths(reportEndDate, 1)
+    const dailyData = eachDayOfInterval({ start: dailyStart, end: reportEndDate }).map(day => {
       const key = format(day, 'yyyy-MM-dd')
       const values = days.get(key) || { income: 0, expense: 0 }
 

@@ -12,7 +12,7 @@ import {
   CheckCircle,
   ChevronLeft,
   Edit2,
-  Image,
+  Image as ImageIcon,
   Paperclip,
   Plus,
   RefreshCw,
@@ -468,7 +468,7 @@ function GoalDetailContent() {
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="text-blue-500 shrink-0" />
+    if (isImage) return <ImageIcon size={12} className="text-blue-500 shrink-0" />
     return <Paperclip size={12} className="text-gray-500 shrink-0" />
   }
 

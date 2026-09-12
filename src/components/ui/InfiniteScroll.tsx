@@ -32,14 +32,16 @@ export function InfiniteScroll({
       { threshold: 0.1 }
     )
 
-    if (observerRef.current) {
-      observer.observe(observerRef.current)
+    const observerNode = observerRef.current
+    if (observerNode) {
+      observer.observe(observerNode)
     }
 
     return () => {
-      if (observerRef.current) {
-        observer.unobserve(observerRef.current)
+      if (observerNode) {
+        observer.unobserve(observerNode)
       }
+      observer.disconnect()
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 

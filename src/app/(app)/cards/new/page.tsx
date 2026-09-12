@@ -67,7 +67,7 @@ function NewCardContent() {
     filters: { context: effectiveContext },
   })
 
-  const accounts = localAccounts || []
+  const accounts = useMemo(() => localAccounts || [], [localAccounts])
 
   const [initialized, setInitialized] = useState(!editId)
   const [saving, setSaving] = useState(false)

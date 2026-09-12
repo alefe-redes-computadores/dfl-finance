@@ -27,6 +27,7 @@ import { db } from '@/lib/db'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import Skeleton from '@/components/Skeleton'
 import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
 
 const safeNum = (val: any): number => {
@@ -124,6 +125,23 @@ function EditTransactionContent() {
   const [showLoanModal, setShowLoanModal] = useState(false)
 
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [confirmRequest, setConfirmRequest] = useState<{
+    title: string
+    description: string
+    confirmLabel?: string
+    resolve: (value: boolean) => void
+  } | null>(null)
+
+  const requestConfirm = useCallback((title: string, description: string, confirmLabel = 'Confirmar') =>
+    new Promise<boolean>((resolve) => {
+      setConfirmRequest({ title, description, confirmLabel, resolve })
+    }), [])
+
+  const resolveConfirm = useCallback((value: boolean) => {
+    if (!confirmRequest) return
+    confirmRequest.resolve(value)
+    setConfirmRequest(null)
+  }, [confirmRequest])
 
   const [initialized, setInitialized] = useState(!id || id === 'new')
 
@@ -764,7 +782,11 @@ function EditTransactionContent() {
 
               if (similarTxs && similarTxs.length > 0) {
                 const tx = similarTxs[0]
-                const confirmed = confirm(`Deseja anexar este comprovante a despesa "${tx.description}" existente?`)
+                const confirmed = await requestConfirm(
+                  'Vincular comprovante?',
+                  `Encontramos uma despesa pendente parecida: “${tx.description}”. Deseja anexar este comprovante a ela?`,
+                  'Vincular'
+                )
                 if (confirmed) {
                   await safeUpdate('transactions', tx.id, { receipt_url: urlData.publicUrl })
                   showToast('Comprovante vinculado.', 'success')
@@ -1869,6 +1891,15 @@ function EditTransactionContent() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmRequest)}
+        title={confirmRequest?.title || 'Confirmar ação'}
+        description={confirmRequest?.description || ''}
+        confirmLabel={confirmRequest?.confirmLabel}
+        onCancel={() => resolveConfirm(false)}
+        onConfirm={() => resolveConfirm(true)}
+      />
 
       {/* Modal Tags */}
       {showTagModal && (

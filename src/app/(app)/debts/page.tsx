@@ -2,7 +2,7 @@
 'use client'
 
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
@@ -146,13 +146,13 @@ function DebtsContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     if (window.scrollY > 10 || loading) return
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
-  }
+  }, [loading])
 
-  const handleTouchMove = (e: TouchEvent) => {
+  const handleTouchMove = useCallback((e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
 
     if (e.touches[0].clientY - pullStartY.current > 60) {
@@ -164,11 +164,11 @@ function DebtsContent() {
         setRefreshing(false)
       }, 500)
     }
-  }
+  }, [refreshing, vibrate])
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     isPulling.current = false
-  }
+  }, [])
 
   useEffect(() => {
     const c = containerRef.current
@@ -183,7 +183,7 @@ function DebtsContent() {
       c.removeEventListener('touchmove', handleTouchMove)
       c.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [loading, refreshing, vibrate])
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
   const formatCurrency = (val: number) =>
     `R$ ${(val || 0).toLocaleString('pt-BR', {

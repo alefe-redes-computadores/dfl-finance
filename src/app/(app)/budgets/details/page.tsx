@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  ChevronLeft, ChevronRight, Edit2, RefreshCw, Image, Paperclip,
+  ChevronLeft, ChevronRight, Edit2, RefreshCw, Image as ImageIcon, Paperclip,
   Clock, AlertTriangle, CheckCircle, ArrowLeft, Calendar, Wallet, TrendingUp, TrendingDown,
   Trash2, X
 } from 'lucide-react'
@@ -380,7 +380,7 @@ const [showDeleteModal, setShowDeleteModal] = useState(false)
   const getAttachmentIcon = (url: string | null) => {
     if (!url) return null
     const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url)
-    if (isImage) return <Image size={12} className="shrink-0 text-blue-500" />
+    if (isImage) return <ImageIcon size={12} className="shrink-0 text-blue-500" />
     return <Paperclip size={12} className="shrink-0 text-slate-400" />
   }
 

@@ -320,7 +320,7 @@ function AnalysisContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [user?.id, effectiveContext, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
+  }, [user?.id, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
 
   useEffect(() => {
     if (user?.id && effectiveContext) {
@@ -332,13 +332,13 @@ function AnalysisContent() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  const handleTouchStart = (e: TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     if (window.scrollY > 10 || loading) return
     pullStartY.current = e.touches[0].clientY
     isPulling.current = true
-  }
+  }, [loading])
 
-  const handleTouchMove = (e: TouchEvent) => {
+  const handleTouchMove = useCallback((e: TouchEvent) => {
     if (!isPulling.current || refreshing) return
     const pullDistance = e.touches[0].clientY - pullStartY.current
     if (pullDistance > 60) {
@@ -346,11 +346,11 @@ function AnalysisContent() {
       isPulling.current = false
       Promise.all([loadData(), reloadMetrics()]).finally(() => setRefreshing(false))
     }
-  }
+  }, [refreshing, loadData, reloadMetrics])
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     isPulling.current = false
-  }
+  }, [])
 
   useEffect(() => {
     const container = containerRef.current
@@ -363,7 +363,7 @@ function AnalysisContent() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [loading, refreshing])
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
   const formatCurrency = (val: number) => `R$ ${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const calcVariation = (current: number, previous: number) => { if (previous === 0) return current > 0 ? 100 : current < 0 ? -100 : 0; return ((current - previous) / Math.abs(previous)) * 100 }

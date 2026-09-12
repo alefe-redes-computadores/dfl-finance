@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 
 interface QRCodeScannerProps {
@@ -12,6 +12,23 @@ export default function QRCodeScanner({ onResult, onClose }: QRCodeScannerProps)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const [starting, setStarting] = useState(true)
   const [error, setError] = useState('')
+
+  const stopScanner = useCallback(async (shouldClose = true) => {
+    try {
+      const scanner = scannerRef.current
+      if (scanner) {
+        const state = scanner.getState()
+        if (state === 2 || state === 3) {
+          await scanner.stop()
+        }
+        await scanner.clear()
+      }
+    } catch {
+    } finally {
+      scannerRef.current = null
+      if (shouldClose) onClose()
+    }
+  }, [onClose])
 
   useEffect(() => {
     let mounted = true
@@ -46,24 +63,7 @@ export default function QRCodeScanner({ onResult, onClose }: QRCodeScannerProps)
       mounted = false
       stopScanner(false)
     }
-  }, [])
-
-  const stopScanner = async (shouldClose = true) => {
-    try {
-      const scanner = scannerRef.current
-      if (scanner) {
-        const state = scanner.getState()
-        if (state === 2 || state === 3) {
-          await scanner.stop()
-        }
-        await scanner.clear()
-      }
-    } catch {
-    } finally {
-      scannerRef.current = null
-      if (shouldClose) onClose()
-    }
-  }
+  }, [onResult, stopScanner])
 
   return (
     <div className="fixed inset-0 z-[300] bg-black flex flex-col">

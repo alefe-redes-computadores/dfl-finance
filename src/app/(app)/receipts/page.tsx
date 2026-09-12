@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -81,12 +81,7 @@ export default function ReceiptsPage() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
 
-  useEffect(() => {
-    if (!user?.id) return
-    loadReceipts()
-  }, [user?.id])
-
-  const loadReceipts = async (showPulse = true) => {
+  const loadReceipts = useCallback(async (showPulse = true) => {
     if (showPulse) setLoadingPulse(true)
     setLoading(true)
     setError('')
@@ -175,7 +170,12 @@ export default function ReceiptsPage() {
       setLoadingPulse(false)
       setRefreshing(false)
     }
-  }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) return
+    loadReceipts()
+  }, [user?.id, loadReceipts])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -334,7 +334,7 @@ export default function ReceiptsPage() {
       container.removeEventListener('touchmove', onTouchMove)
       container.removeEventListener('touchend', onTouchEnd)
     }
-  }, [loading, refreshing, vibrate])
+  }, [loading, refreshing, vibrate, loadReceipts])
 
   return (
     <div

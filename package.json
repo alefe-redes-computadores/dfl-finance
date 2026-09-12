@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "node ./node_modules/eslint/bin/eslint.js src --ext .js,.jsx,.ts,.tsx --report-unused-disable-directives",
+    "lint": "node ./node_modules/eslint/bin/eslint.js src --ext .js,.jsx,.ts,.tsx --report-unused-disable-directives --max-warnings=0",
     "test": "jest",
     "build:mobile": "node -e \"console.error('Build mobile temporariamente separado do build web. Finalizar arquitetura Capacitor antes de gerar out/.'); process.exit(1)\""
   },

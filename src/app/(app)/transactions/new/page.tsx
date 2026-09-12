@@ -816,7 +816,7 @@ function NewTransactionContent() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, loanId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, vibrate, success, hapticError, accounts, safeAdd, safeUpdate, date, selectedCat])
+  }, [isSubmitting, user, amountNum, type, categoryId, desc, repetition, installments, frequency, creditCardId, isRefund, isPaid, accountId, contactId, selectedTags, receiptUrl, notes, financingId, loanId, isReimbursable, isOnline, router, showToast, effectiveContext, customInterval, customParcels, success, hapticError, safeAdd, safeUpdate, date, selectedCat, isIncome])
 
   const AttachmentIcon = useMemo(() => {
     if (uploading) return <Loader2 size={20} className="animate-spin text-teal-600" />

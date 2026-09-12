@@ -1,7 +1,7 @@
 // src/app/(app)/assistant/settings/page.tsx
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Bell,
@@ -149,13 +149,13 @@ export default function AssistantSettingsPage() {
     [draft, baseline]
   )
 
-  const handleTouchStart = (event: TouchEvent) => {
+  const handleTouchStart = useCallback((event: TouchEvent) => {
     if (window.scrollY > 10 || loading) return
     pullStartY.current = event.touches[0].clientY
     isPulling.current = true
-  }
+  }, [loading])
 
-  const handleTouchMove = (event: TouchEvent) => {
+  const handleTouchMove = useCallback((event: TouchEvent) => {
     if (!isPulling.current || refreshing) return
 
     const distance = event.touches[0].clientY - pullStartY.current
@@ -168,11 +168,11 @@ export default function AssistantSettingsPage() {
         setRefreshing(false)
       })
     }
-  }
+  }, [refreshing, refresh])
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     isPulling.current = false
-  }
+  }, [])
 
   useEffect(() => {
     const container = containerRef.current
@@ -193,7 +193,7 @@ export default function AssistantSettingsPage() {
       container.removeEventListener('touchmove', handleTouchMove)
       container.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [loading, refreshing, refresh])
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd])
 
   const toggleSetting = (
     key: keyof Pick<
