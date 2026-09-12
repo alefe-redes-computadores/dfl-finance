@@ -73,8 +73,8 @@ function ProfileEditModal({ isOpen, onClose, name, setName, isGoogleLogin, onSav
   if (!isOpen) return null
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-2xl animate-in fade-in zoom-in-95">
+      <div className="app-overlay absolute" onClick={onClose} />
+      <div className="app-modal-panel max-w-sm p-6 animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Editar Perfil</h3>
           <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} /></button>
@@ -121,8 +121,9 @@ function QuickSettingsModal({ isOpen, onClose, notificationsEnabled, toggleNotif
   const isDevMode = typeof window !== 'undefined' && localStorage.getItem('devMode') === 'true'
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-t-[32px] sm:rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={onClose}>
+      <div className="app-overlay absolute" />
+      <div className="app-sheet-panel relative p-6 sm:mb-auto sm:max-w-sm sm:rounded-[28px] animate-in slide-in-from-bottom-10 duration-300" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-[20px] bg-gray-100 dark:bg-slate-700 flex items-center justify-center">

@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback, useRef, lazy, Suspense, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import ProjectionChart from '@/components/ProjectionChart'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -21,12 +20,9 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import NotificationBell from '@/components/NotificationBell'
-import NotificationCenter from '@/components/NotificationCenter'
 import SyncButton from '@/components/SyncButton'
-import SyncStatusModal from '@/components/SyncStatusModal'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
-import PersonalizeModal from '@/components/PersonalizeModal'
 import Skeleton from '@/components/Skeleton'
 import { UndoToast } from '@/components/ui/UndoToast'
 import { useLocalData } from '@/hooks/useLocalData'
@@ -39,6 +35,11 @@ import {
   safeNavigate,
 } from '@/lib/safe'
 import EmptyState from '@/components/EmptyState'
+
+const ProjectionChart = lazy(() => import('@/components/ProjectionChart'))
+const NotificationCenter = lazy(() => import('@/components/NotificationCenter'))
+const SyncStatusModal = lazy(() => import('@/components/SyncStatusModal'))
+const PersonalizeModal = lazy(() => import('@/components/PersonalizeModal'))
 import {
   getOpenCardInvoiceSnapshot,
 } from '@/lib/cardOperations'
@@ -1141,10 +1142,12 @@ function HomeContent() {
               </button>
             )}
 
-            <ProjectionChart
-              hideBalance={hideBalance}
-              formatCurrency={formatCurrency}
-            />
+            <Suspense fallback={<Skeleton variant="card" height="220px" borderRadius="24px" />}>
+              <ProjectionChart
+                hideBalance={hideBalance}
+                formatCurrency={formatCurrency}
+              />
+            </Suspense>
           </div>
         )
       case 'loans':
@@ -2145,31 +2148,39 @@ function HomeContent() {
       </button>
 
 
-      <PersonalizeModal
-        isOpen={showPersonalizeModal}
-        onClose={() => setShowPersonalizeModal(false)}
-        sections={ALL_SECTIONS}
-        enabled={personalizeEnabled}
-        order={personalizeOrder}
-        onToggle={toggleSection}
-        onMove={moveSection}
-        onSave={handleSavePersonalize}
-      />
-
-      {notificationsEnabled && (
-        <NotificationCenter
-          isOpen={showNotifications}
-          onClose={() => setShowNotifications(false)}
-          notifications={notificationsMap}
-          onReadChange={() => reloadNotifs()}
-        />
+      {showPersonalizeModal && (
+        <Suspense fallback={null}>
+          <PersonalizeModal
+            isOpen={showPersonalizeModal}
+            onClose={() => setShowPersonalizeModal(false)}
+            sections={ALL_SECTIONS}
+            enabled={personalizeEnabled}
+            order={personalizeOrder}
+            onToggle={toggleSection}
+            onMove={moveSection}
+            onSave={handleSavePersonalize}
+          />
+        </Suspense>
       )}
 
-      {isClient && (
-        <SyncStatusModal
-          isOpen={isSyncModalOpen}
-          onClose={() => setIsSyncModalOpen(false)}
-        />
+      {notificationsEnabled && showNotifications && (
+        <Suspense fallback={null}>
+          <NotificationCenter
+            isOpen={showNotifications}
+            onClose={() => setShowNotifications(false)}
+            notifications={notificationsMap}
+            onReadChange={() => reloadNotifs()}
+          />
+        </Suspense>
+      )}
+
+      {isClient && isSyncModalOpen && (
+        <Suspense fallback={null}>
+          <SyncStatusModal
+            isOpen={isSyncModalOpen}
+            onClose={() => setIsSyncModalOpen(false)}
+          />
+        </Suspense>
       )}
     </div>
   )

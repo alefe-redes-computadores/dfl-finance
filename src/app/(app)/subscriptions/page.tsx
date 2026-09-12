@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import {
@@ -26,6 +26,7 @@ export default function SubscriptionsPage() {
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
 
   const [search, setSearch] = useState("")
+  const deferredSearch = useDeferredValue(search)
   const [showSearch, setShowSearch] = useState(false)
   const [sortBy, setSortBy] = useState("updated_at")
   const [sortOrder, setSortOrder] = useState("desc")
@@ -51,33 +52,47 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const filteredSubscriptions = (subscriptions || []).filter((sub: any) => {
-    if (!search) return true
-    const s = search.toLowerCase()
-    return (
-      (sub.name && sub.name.toLowerCase().includes(s)) ||
-      (sub.category && sub.category.toLowerCase().includes(s)) ||
-      (sub.notes && sub.notes.toLowerCase().includes(s))
-    )
-  })
+  const filteredSubscriptions = useMemo(() => {
+    const normalizedSearch = deferredSearch.trim().toLocaleLowerCase('pt-BR')
 
-  const sortedSubscriptions = [...filteredSubscriptions].sort((a: any, b: any) => {
-    let valA = a[sortBy] || ""
-    let valB = b[sortBy] || ""
+    if (!normalizedSearch) return subscriptions || []
 
-    if (sortBy === "amount" || sortBy === "monthly_total") {
-      return sortOrder === "desc"
-        ? Number(b[sortBy]) - Number(a[sortBy])
-        : Number(a[sortBy]) - Number(b[sortBy])
-    }
+    return (subscriptions || []).filter((sub: any) => {
+      const name = String(sub.name || '').toLocaleLowerCase('pt-BR')
+      const category = String(sub.category || '').toLocaleLowerCase('pt-BR')
+      const notes = String(sub.notes || '').toLocaleLowerCase('pt-BR')
 
-    return sortOrder === "desc"
-      ? String(valB).localeCompare(String(valA))
-      : String(valA).localeCompare(String(valB))
-  })
+      return (
+        name.includes(normalizedSearch) ||
+        category.includes(normalizedSearch) ||
+        notes.includes(normalizedSearch)
+      )
+    })
+  }, [subscriptions, deferredSearch])
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
+  const sortedSubscriptions = useMemo(() => {
+    return [...filteredSubscriptions].sort((a: any, b: any) => {
+      const valA = a[sortBy] || ''
+      const valB = b[sortBy] || ''
+
+      if (sortBy === 'amount' || sortBy === 'monthly_total') {
+        return sortOrder === 'desc'
+          ? Number(b[sortBy]) - Number(a[sortBy])
+          : Number(a[sortBy]) - Number(b[sortBy])
+      }
+
+      return sortOrder === 'desc'
+        ? String(valB).localeCompare(String(valA), 'pt-BR')
+        : String(valA).localeCompare(String(valB), 'pt-BR')
+    })
+  }, [filteredSubscriptions, sortBy, sortOrder])
+
+  const currencyFormatter = useMemo(
+    () => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }),
+    []
+  )
+
+  const formatCurrency = (val: number) => currencyFormatter.format(val)
 
   const formatDate = (date: string | null) => {
     if (!date) return ""
@@ -109,17 +124,22 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const monthlyTotal = (subscriptions || []).reduce((sum: number, sub: any) => {
-    if (sub.status !== "active") return sum
-    let monthlyAmount = sub.amount || 0
-    switch (sub.billing_cycle) {
-      case "yearly": monthlyAmount = monthlyAmount / 12; break
-      case "weekly": monthlyAmount = monthlyAmount * 4.33; break
-      case "quarterly": monthlyAmount = monthlyAmount / 3; break
-      case "semiannually": monthlyAmount = monthlyAmount / 6; break
-    }
-    return sum + monthlyAmount
-  }, 0)
+  const monthlyTotal = useMemo(
+    () => (subscriptions || []).reduce((sum: number, sub: any) => {
+      if (sub.status !== 'active') return sum
+
+      let monthlyAmount = Number(sub.amount || 0)
+      switch (sub.billing_cycle) {
+        case 'yearly': monthlyAmount /= 12; break
+        case 'weekly': monthlyAmount *= 4.33; break
+        case 'quarterly': monthlyAmount /= 3; break
+        case 'semiannually': monthlyAmount /= 6; break
+      }
+
+      return sum + monthlyAmount
+    }, 0),
+    [subscriptions]
+  )
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#f8f9fa] dark:bg-slate-900 font-sans transition-colors duration-300">

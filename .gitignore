@@ -31,3 +31,15 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+# DFL surgery / audit artifacts
+.dfl-backups/
+.dfl-*-stage-*/
+.dfl-*-audit/
+.dfl-*-files.txt
+.dfl-*-manifest*.txt
+dfl-*-audit*.tar.gz
+*-base-20*.txt
+*-auditoria-20*.txt
+*-pos-aborto-20*.txt
+operar-*.sh
+/0
