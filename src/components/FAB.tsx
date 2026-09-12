@@ -223,10 +223,10 @@ export default function FAB({
           className="fixed inset-0 z-[600] flex items-end justify-center"
           onClick={closeAll}
         >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="app-overlay" />
 
           <div
-            className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="app-sheet-panel max-h-[90dvh] overflow-y-auto p-6 pb-[max(1.5rem,var(--safe-area-bottom))]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full mx-auto mb-6" />
@@ -238,7 +238,7 @@ export default function FAB({
               <button
                 type="button"
                 onClick={closeAll}
-                className="p-2 text-gray-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full transition-colors active:scale-95"
+                className="app-icon-action"
               >
                 <X size={20} />
               </button>
@@ -431,7 +431,7 @@ export default function FAB({
           className="fixed inset-0 z-[610] flex items-end justify-center"
           onClick={() => setShowAccModal(false)}
         >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="app-overlay" />
           <div
             className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[70vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}

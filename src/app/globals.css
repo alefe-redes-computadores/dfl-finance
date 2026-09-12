@@ -33,6 +33,7 @@ body {
 
 body {
   min-height: 100dvh;
+  overscroll-behavior-y: none;
 }
 
 .page-transition {
@@ -98,6 +99,25 @@ html {
   }
   .app-secondary-action {
     @apply min-h-12 rounded-2xl border border-gray-200 bg-white px-4 font-semibold text-gray-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200;
+  }
+  .app-page {
+    @apply min-h-dvh bg-gray-50 text-gray-900 dark:bg-slate-900 dark:text-gray-100;
+  }
+  .app-page-content {
+    @apply mx-auto w-full max-w-2xl px-4;
+  }
+  .app-header {
+    @apply sticky top-0 z-30 border-b border-gray-200/70 bg-white/90 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90;
+    padding-top: var(--safe-area-top);
+  }
+  .app-header-inner {
+    @apply mx-auto flex min-h-14 w-full max-w-2xl items-center gap-3 px-4;
+  }
+  .app-form-label {
+    @apply mb-2 block text-[12px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400;
+  }
+  .app-inline-status {
+    @apply rounded-2xl border border-gray-200/70 bg-white/90 px-4 py-3 text-sm text-gray-600 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 dark:text-gray-300;
   }
 }
 button, a, input, select, textarea { touch-action: manipulation; }

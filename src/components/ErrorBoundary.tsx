@@ -39,8 +39,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-          <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-6">
+        <div className="app-page flex min-h-[70dvh] items-center justify-center px-4 py-10 text-center">
+          <div className="app-surface w-full max-w-md px-6 py-8">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-red-50 dark:bg-red-950/30">
             <AlertCircle size={40} className="text-red-500" />
           </div>
           <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">
@@ -50,14 +51,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             Ocorreu um erro inesperado. Tente recarregar a página.
           </p>
           <button
+            type="button"
             onClick={this.handleRetry}
-            className="flex items-center gap-2 px-6 py-3 bg-teal-700 text-white rounded-full font-bold hover:bg-teal-800 transition-colors"
+            className="app-primary-action mx-auto flex items-center justify-center gap-2 px-6"
           >
             <RefreshCw size={18} />
             Recarregar
           </button>
           {process.env.NODE_ENV === 'development' && this.state.error && (
-            <div className="mt-6 p-4 bg-gray-100 dark:bg-slate-800 rounded-xl text-left w-full max-w-md overflow-auto">
+            <div className="mt-6 w-full overflow-auto rounded-2xl bg-gray-100 p-4 text-left dark:bg-slate-950/60">
               <p className="text-xs font-mono text-red-600 dark:text-red-400">
                 {this.state.error.message}
               </p>
@@ -66,6 +68,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               </p>
             </div>
           )}
+          </div>
         </div>
       )
     }

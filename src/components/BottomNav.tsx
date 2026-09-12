@@ -92,7 +92,7 @@ export default function BottomNav() {
       />
 
       <div
-        className={`fixed bottom-[82px] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 ${
+        className={`fixed bottom-[calc(82px+var(--safe-area-bottom))] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 ${
           isOpen
             ? 'translate-y-0 scale-100 opacity-100 pointer-events-auto'
             : 'translate-y-3 scale-[0.97] opacity-0 pointer-events-none'
@@ -170,8 +170,8 @@ export default function BottomNav() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-[40] h-[72px] border-t border-gray-200/70 bg-white/95 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 dark:border-slate-700/80 dark:bg-slate-800/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.18)]">
-        <div className="relative mx-auto flex h-full max-w-md items-center justify-around px-2">
+      <div className="fixed bottom-0 left-0 right-0 z-[40] h-[calc(72px+max(var(--safe-area-bottom),16px))] border-t border-gray-200/70 bg-white/95 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 dark:border-slate-700/80 dark:bg-slate-800/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.18)]">
+        <div className="relative mx-auto flex h-[72px] max-w-md items-center justify-around px-2">
           <div className="absolute left-1/2 top-0 z-[45] -translate-x-1/2 -translate-y-[42%]">
             <div className="rounded-full border border-gray-200/70 bg-gray-50 p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <button
@@ -207,6 +207,7 @@ export default function BottomNav() {
                     type="button"
                     onClick={() => handleNavigate(tab.href)}
                     title={tab.label}
+                    aria-current={active ? 'page' : undefined}
                     className="group relative flex min-w-[56px] flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-[0.95]"
                   >
                     <div
@@ -244,6 +245,7 @@ export default function BottomNav() {
                 key={tab.href}
                 onClick={() => handleNavigate(tab.href)}
                 title={tab.label}
+                aria-current={active ? 'page' : undefined}
                 className="group relative flex min-w-[56px] flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-[0.95]"
               >
                 <div

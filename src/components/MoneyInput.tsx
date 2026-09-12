@@ -68,6 +68,9 @@ export default function MoneyInput({
     <input
       type="text"
       inputMode="numeric"
+      enterKeyHint="done"
+      autoComplete="off"
+      spellCheck={false}
       value={displayValue}
       onChange={handleChange}
       className={className}

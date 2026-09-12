@@ -16,7 +16,7 @@ export default function NetworkStatus({ isOnline, pendingCount, isSyncing = fals
   if (isOnline && pendingCount === 0 && !isSyncing) return null
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-[300] px-4 py-2.5 text-center text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+    <div role="status" aria-live="polite" className={`fixed top-0 left-0 right-0 z-[300] px-4 pb-2.5 pt-[calc(0.625rem+var(--safe-area-top))] text-center text-xs font-bold flex items-center justify-center gap-2 transition-all ${
       isOnline && isSyncing
         ? 'bg-emerald-600 text-white animate-pulse'
         : isOnline
@@ -44,8 +44,10 @@ export default function NetworkStatus({ isOnline, pendingCount, isSyncing = fals
       
       {(pendingCount > 0 || isSyncing) && (
         <button
+          type="button"
           onClick={() => setDismissed(true)}
-          className="ml-2 p-0.5 rounded-full hover:bg-white/20 transition-colors"
+          aria-label="Ocultar status de sincronização"
+          className="ml-2 rounded-full p-1 transition-colors hover:bg-white/20"
         >
           <X size={12} />
         </button>

@@ -49,6 +49,23 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
     if (isOpen) setViewDate(parseLocalDate(value))
   }, [isOpen, value])
 
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isOpen, onClose])
+
   const days = useMemo(() => {
     const year = viewDate.getFullYear()
     const month = viewDate.getMonth()
@@ -76,12 +93,12 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[145000] flex items-end justify-center bg-black/55 backdrop-blur-sm"
+      className="app-overlay z-[145000] flex items-end justify-center"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="w-full max-w-lg rounded-t-[32px] border border-b-0 border-gray-200/70 bg-white px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_60px_rgba(15,23,42,0.18)] animate-in slide-in-from-bottom-6 duration-200 dark:border-slate-700 dark:bg-slate-900"
+        className="app-sheet-panel animate-in slide-in-from-bottom-6 px-5 pb-[max(1.5rem,var(--safe-area-bottom))] pt-3 duration-200"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -104,7 +121,7 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
             type="button"
             onClick={onClose}
             aria-label="Fechar calendário"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500 active:scale-[0.97] dark:bg-slate-800 dark:text-gray-400"
+            className="app-icon-action"
           >
             <X size={19} />
           </button>

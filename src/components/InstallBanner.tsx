@@ -44,8 +44,8 @@ export default function InstallBanner() {
   if (!mounted || !show) return null
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-10 duration-500">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-xl border border-gray-100 dark:border-slate-700">
+    <div className="fixed bottom-[calc(84px+var(--safe-area-bottom))] left-4 right-4 z-50 animate-in slide-in-from-bottom-10 duration-500">
+      <div className="app-surface mx-auto max-w-md p-4 shadow-xl">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
             <PlusSquare size={20} className="text-teal-600 dark:text-teal-400" />
@@ -63,7 +63,8 @@ export default function InstallBanner() {
           <button
             type="button"
             onClick={handleDismiss}
-            className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
+            aria-label="Fechar aviso de instalação"
+            className="app-icon-action h-8 w-8"
           >
             <X size={18} />
           </button>
