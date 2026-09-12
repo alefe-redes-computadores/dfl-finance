@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { X, Save, LayoutGrid, GripVertical, Eye, EyeOff, Lock } from 'lucide-react'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 

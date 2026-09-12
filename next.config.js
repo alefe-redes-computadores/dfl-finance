@@ -46,8 +46,14 @@ const nextConfig = {
   },
 
   images: {
-    domains: ['bwggczkzsqcdeayyysmx.supabase.co'],
-    unoptimized: true, 
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'bwggczkzsqcdeayyysmx.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+    unoptimized: true,
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
