@@ -81,6 +81,24 @@ html {
   .app-primary-action {
     @apply min-h-12 rounded-2xl bg-teal-700 px-4 font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-600;
   }
+  .app-overlay {
+    @apply fixed inset-0 bg-black/55 backdrop-blur-sm;
+  }
+  .app-sheet-panel {
+    @apply relative w-full max-w-lg overflow-hidden rounded-t-[32px] border border-b-0 border-gray-200/70 bg-white shadow-[0_-16px_60px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-900;
+  }
+  .app-modal-panel {
+    @apply relative w-full max-w-md overflow-hidden rounded-[28px] border border-gray-200/70 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.2)] dark:border-slate-700 dark:bg-slate-900;
+  }
+  .app-icon-action {
+    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition active:scale-[0.96] dark:bg-slate-800 dark:text-gray-400;
+  }
+  .app-section-card {
+    @apply rounded-[22px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700/70 dark:bg-slate-800/80;
+  }
+  .app-secondary-action {
+    @apply min-h-12 rounded-2xl border border-gray-200 bg-white px-4 font-semibold text-gray-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200;
+  }
 }
 button, a, input, select, textarea { touch-action: manipulation; }
 :focus-visible { outline: 2px solid rgb(13 148 136 / 0.75); outline-offset: 2px; }

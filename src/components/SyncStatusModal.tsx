@@ -72,11 +72,11 @@ export default function SyncStatusModal({ isOpen, onClose }: SyncStatusModalProp
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+        className="app-overlay absolute transition-opacity duration-300"
         onClick={onClose}
       />
       <div
-        className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
+        className="app-modal-panel max-w-md p-6 transform transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
         style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
       >
         <div className="flex items-center justify-between mb-6">

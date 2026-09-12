@@ -17,7 +17,7 @@ export default function Skeleton({
   count = 1,
   borderRadius,
 }: SkeletonProps) {
-  const baseClass = 'animate-pulse bg-gray-200 dark:bg-slate-700 rounded'
+  const baseClass = 'animate-pulse bg-gray-200/85 dark:bg-slate-700/85 rounded'
 
   const variantClass = {
     text: 'h-4 w-full rounded-md',
@@ -42,6 +42,7 @@ export default function Skeleton({
       key={i}
       className={`${baseClass} ${variantClass[variant]} ${className}`}
       style={style}
+      aria-hidden="true"
     />
   ))
 

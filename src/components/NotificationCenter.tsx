@@ -273,8 +273,8 @@ export default function NotificationCenter({
 
   const modalContent = (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.25)] overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-bottom-4 border border-white/20 dark:border-slate-700/50 pointer-events-auto max-h-[90vh] flex flex-col">
+      <div className="app-overlay absolute transition-opacity" onClick={onClose} />
+      <div className="app-modal-panel max-h-[90dvh] pointer-events-auto flex flex-col animate-in fade-in zoom-in-95 slide-in-from-bottom-4">
         <div className="flex-shrink-0 flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-700/50">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-[18px] bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center">

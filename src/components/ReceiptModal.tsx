@@ -32,7 +32,7 @@ export default function ReceiptModal({ isOpen, onClose, onCamera, onFileSelect }
       role="presentation"
     >
       <div
-        className="w-full max-w-lg rounded-t-[32px] border border-b-0 border-gray-200/70 bg-white px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_60px_rgba(15,23,42,0.18)] animate-in slide-in-from-bottom-6 duration-200 dark:border-slate-700 dark:bg-slate-900"
+        className="app-sheet-panel px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 animate-in slide-in-from-bottom-6 duration-200"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"

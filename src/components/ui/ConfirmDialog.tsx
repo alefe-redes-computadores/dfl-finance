@@ -45,7 +45,7 @@ export default function ConfirmDialog({
       <button
         type="button"
         aria-label="Fechar confirmação"
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="app-overlay absolute bg-black/60"
         onClick={() => !busy && onCancel()}
       />
       <section
@@ -53,7 +53,7 @@ export default function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-description"
-        className="app-sheet relative w-full max-w-md rounded-t-[30px] p-5 sm:rounded-[28px]"
+        className="app-sheet-panel max-w-md p-5 sm:rounded-[28px] sm:border-b"
       >
         <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700 sm:hidden" />
         <div className="flex items-start gap-4">

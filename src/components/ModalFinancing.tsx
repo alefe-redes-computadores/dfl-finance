@@ -128,9 +128,9 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div className="app-overlay absolute transition-opacity" />
       <div
-        className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[85vh] overflow-y-auto animate-in slide-in-from-bottom-8 shadow-[0_-8px_30px_rgba(0,0,0,0.12)]"
+        className="app-sheet-panel h-[85dvh] overflow-y-auto p-5 animate-in slide-in-from-bottom-8"
         onClick={e => e.stopPropagation()}
       >
         <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
@@ -389,9 +389,9 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
         {/* Modal Categorias */}
         {showCatModal && (
           <div className="fixed inset-0 z-[300] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+            <div className="app-overlay absolute transition-opacity" />
             <div
-              className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[70vh] overflow-y-auto animate-in slide-in-from-bottom-8"
+              className="app-sheet-panel h-[70dvh] overflow-y-auto p-5 animate-in slide-in-from-bottom-8"
               onClick={e => e.stopPropagation()}
             >
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />
@@ -454,9 +454,9 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
         {/* Modal Contas */}
         {showAccModal && (
           <div className="fixed inset-0 z-[300] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+            <div className="app-overlay absolute transition-opacity" />
             <div
-              className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-[32px] p-5 h-[70vh] overflow-y-auto animate-in slide-in-from-bottom-8"
+              className="app-sheet-panel h-[70dvh] overflow-y-auto p-5 animate-in slide-in-from-bottom-8"
               onClick={e => e.stopPropagation()}
             >
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-5" />

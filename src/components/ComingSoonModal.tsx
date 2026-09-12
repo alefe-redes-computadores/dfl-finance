@@ -13,7 +13,7 @@ export default function ComingSoonModal({ isOpen, onClose, title = "Funcionalida
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm dark:bg-black/70" onClick={onClose}>
-      <div className="app-surface w-full max-w-sm p-8 text-center" onClick={e => e.stopPropagation()}>
+      <div className="app-modal-panel max-w-sm p-8 text-center" onClick={e => e.stopPropagation()}>
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400">
           <Clock3 size={28} />
         </div>

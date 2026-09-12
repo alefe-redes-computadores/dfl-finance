@@ -117,12 +117,12 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center" onClick={close}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="app-overlay absolute" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Novo empréstimo"
-        className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-[32px] bg-[#f6f7f8] dark:bg-slate-900 p-5 pb-8 shadow-[0_-16px_50px_rgba(0,0,0,0.18)] animate-in slide-in-from-bottom-8 duration-300"
+        className="app-sheet-panel max-h-[90dvh] overflow-y-auto bg-[#f6f7f8] p-5 pb-8 dark:bg-slate-900 animate-in slide-in-from-bottom-8 duration-300"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />

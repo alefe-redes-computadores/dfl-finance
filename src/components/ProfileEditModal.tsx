@@ -85,10 +85,10 @@ export function ProfileEditModal({
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="app-overlay absolute"
         onClick={loading ? undefined : onClose}
       />
-      <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative animate-in zoom-in-95">
+      <div className="app-modal-panel max-w-sm p-6 animate-in zoom-in-95">
         <h2 className="text-xl font-bold mb-4 dark:text-white">Editar perfil</h2>
 
         <div className="mb-4">

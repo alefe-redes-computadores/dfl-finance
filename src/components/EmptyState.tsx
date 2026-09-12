@@ -19,8 +19,8 @@ export default function EmptyState({
   onAction
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[18px] bg-gray-50 text-gray-400 dark:bg-slate-800/50 dark:text-gray-500 shadow-sm border border-gray-100 dark:border-slate-700/50">
+    <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] border border-gray-200/70 bg-white text-gray-400 shadow-sm dark:border-slate-700/70 dark:bg-slate-800 dark:text-gray-500">
         <Icon size={28} strokeWidth={1.5} />
       </div>
       
@@ -35,7 +35,7 @@ export default function EmptyState({
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="mt-5 rounded-full bg-teal-50 px-5 py-2 text-[13px] font-semibold text-teal-600 transition-colors hover:bg-teal-100 active:scale-95 dark:bg-teal-500/10 dark:text-teal-400 dark:hover:bg-teal-500/20"
+          className="app-primary-action mt-5 min-h-10 rounded-[16px] px-5 text-[13px]"
         >
           {actionLabel}
         </button>

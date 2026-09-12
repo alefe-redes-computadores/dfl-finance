@@ -124,9 +124,9 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
   return (
     <div className="fixed inset-0 z-[150] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div className="app-overlay absolute transition-opacity" />
       <div
-        className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 z-10 max-h-[90vh] overflow-y-auto"
+        className="app-sheet-panel z-10 max-w-md max-h-[90dvh] overflow-y-auto p-6 animate-in slide-in-from-bottom-8 duration-300"
         onClick={e => e.stopPropagation()}
       >
         <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
@@ -280,8 +280,8 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
         {showFromAccs && (
           <div className="fixed inset-0 z-[160] flex items-end justify-center" onClick={() => setShowFromAccs(false)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[60vh] overflow-y-auto z-10 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
+            <div className="app-overlay absolute" />
+            <div className="app-sheet-panel z-10 max-w-md max-h-[60dvh] overflow-y-auto p-6 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2">
                 <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Conta de Origem</h3>
                 <button onClick={() => setShowFromAccs(false)} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95">
@@ -324,8 +324,8 @@ export default function TransferModal({ isOpen, onClose, onComplete, context: fo
 
         {showToAccs && (
           <div className="fixed inset-0 z-[160] flex items-end justify-center" onClick={() => setShowToAccs(false)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-[32px] p-6 max-h-[60vh] overflow-y-auto z-10 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
+            <div className="app-overlay absolute" />
+            <div className="app-sheet-panel z-10 max-w-md max-h-[60dvh] overflow-y-auto p-6 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2">
                 <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Conta de Destino</h3>
                 <button onClick={() => setShowToAccs(false)} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95">

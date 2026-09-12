@@ -48,7 +48,7 @@ export default function IconPicker({ isOpen, onClose, selectedIcon, onSelect }: 
       role="presentation"
     >
       <div
-        className="flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[32px] border border-b-0 border-gray-200/70 bg-white shadow-[0_-16px_60px_rgba(15,23,42,0.18)] animate-in slide-in-from-bottom-6 duration-200 dark:border-slate-700 dark:bg-slate-900"
+        className="app-sheet-panel flex max-h-[88dvh] flex-col animate-in slide-in-from-bottom-6 duration-200"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"

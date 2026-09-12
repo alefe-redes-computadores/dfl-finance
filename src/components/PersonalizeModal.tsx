@@ -101,10 +101,10 @@ export default function PersonalizeModal({
 
   const modalContent = (
     <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div className="app-overlay absolute transition-opacity" />
       
       <div
-        className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-[32px] shadow-2xl flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-8 duration-300"
+        className="app-sheet-panel flex max-h-[85dvh] flex-col animate-in slide-in-from-bottom-8 duration-300"
         onClick={e => e.stopPropagation()}
       >
         {/* Handle */}
