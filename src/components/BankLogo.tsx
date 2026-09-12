@@ -1,4 +1,10 @@
-import { canonicalizeBankName } from '@/lib/accountPresentation'
+import {
+  getBankIcon,
+  hasBrandedBankIcon,
+} from '@/lib/BankIcons'
+import {
+  canonicalizeBankName,
+} from '@/lib/accountPresentation'
 
 interface BankLogoProps {
   name: string
@@ -6,92 +12,69 @@ interface BankLogoProps {
   size?: 'sm' | 'md' | 'lg'
 }
 
-type AssetMode =
-  | 'contain'
-  | 'left-mark'
-
 interface BrandAsset {
   src: string
   background: string
-  mode: AssetMode
-  imageClassName?: string
+  imageClassName: string
 }
 
-const BRAND_ASSETS: Record<string, BrandAsset> = {
+const BRAND_ASSETS: Record<
+  string,
+  BrandAsset
+> = {
   PagBank: {
     src: '/banks/pagbank.svg',
     background: '#FFFFFF',
-    mode: 'left-mark',
-    imageClassName: 'h-[84%]',
+    imageClassName:
+      'h-[72%] w-[72%] object-cover object-left',
   },
+
   PicPay: {
     src: '/banks/picpay.svg',
     background: '#FFFFFF',
-    mode: 'left-mark',
-    imageClassName: 'h-[78%]',
+    imageClassName:
+      'h-[68%] w-[72%] object-cover object-left',
   },
+
   'Mercado Pago': {
     src: '/banks/mercado-pago.svg',
     background: '#00AEEF',
-    mode: 'contain',
     imageClassName:
-      'h-[62%] w-[62%] brightness-0 invert',
+      'h-[58%] w-[58%] object-contain brightness-0 invert',
   },
+
   Stone: {
     src: '/banks/stone.svg',
-    background: '#00A868',
-    mode: 'left-mark',
-    imageClassName: 'h-[74%]',
+    background: '#FFFFFF',
+    imageClassName:
+      'h-[64%] w-[78%] object-cover object-left',
   },
 }
 
-const BRAND_COLORS: Record<
-  string,
-  {
-    background: string
-    foreground: string
+function getFallbackLabel(
+  name: string
+) {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (parts.length === 0) {
+    return 'B'
   }
-> = {
-  Nubank: {
-    background: '#820AD1',
-    foreground: '#FFFFFF',
-  },
-  Inter: {
-    background: '#FF7A00',
-    foreground: '#FFFFFF',
-  },
-  'Itaú': {
-    background: '#EC7000',
-    foreground: '#FFFFFF',
-  },
-  Bradesco: {
-    background: '#CC092F',
-    foreground: '#FFFFFF',
-  },
-  Santander: {
-    background: '#EC0000',
-    foreground: '#FFFFFF',
-  },
-  Caixa: {
-    background: '#005CA9',
-    foreground: '#FFFFFF',
-  },
-  'Banco do Brasil': {
-    background: '#FFED00',
-    foreground: '#003D7C',
-  },
-  'C6 Bank': {
-    background: '#151515',
-    foreground: '#FFFFFF',
-  },
-  'iFood Pago': {
-    background: '#EA1D2C',
-    foreground: '#FFFFFF',
-  },
-  InfinitePay: {
-    background: '#111827',
-    foreground: '#FFFFFF',
-  },
+
+  if (parts.length === 1) {
+    return parts[0]
+      .slice(0, 2)
+      .toUpperCase()
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) =>
+      part.charAt(0).toUpperCase()
+    )
+    .join('')
 }
 
 export default function BankLogo({
@@ -99,83 +82,99 @@ export default function BankLogo({
   color,
   size = 'md',
 }: BankLogoProps) {
-  const sizeClasses = {
-    sm: 'h-7 w-7 rounded-[9px]',
-    md: 'h-10 w-10 rounded-[13px]',
-    lg: 'h-12 w-12 rounded-[15px]',
-  }
-
   const canonicalName =
     canonicalizeBankName(name)
 
   const asset =
     BRAND_ASSETS[canonicalName]
 
-  const brandColor =
-    BRAND_COLORS[canonicalName]
+  const sizeClasses = {
+    sm: 'h-7 w-7 rounded-[9px]',
+    md: 'h-10 w-10 rounded-[13px]',
+    lg: 'h-12 w-12 rounded-[15px]',
+  }
 
-  const fallbackLabel =
-    (canonicalName || name || 'Banco')
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map(
-        (part) =>
-          part[0]?.toUpperCase()
-      )
-      .join('') || 'B'
+  /*
+   * Os quatro assets abaixo são arquivos SVG
+   * locais reais do projeto.
+   */
+  if (asset) {
+    return (
+      <div
+        className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-sm ring-1 ring-black/5 dark:ring-white/10`}
+        style={{
+          backgroundColor:
+            asset.background,
+        }}
+        title={canonicalName}
+      >
+        <img
+          src={asset.src}
+          alt={`${canonicalName} logo`}
+          className={
+            asset.imageClassName
+          }
+          draggable={false}
+        />
+      </div>
+    )
+  }
 
+  /*
+   * Para instituições para as quais o projeto
+   * já possui uma identidade específica no
+   * BankIcons, preservamos essa representação.
+   *
+   * Isso recupera, entre outros:
+   * - iFood Pago
+   * - InfinitePay
+   * - Carteira
+   * - Nubank
+   * - Inter
+   * - Itaú
+   * - Bradesco
+   * - Santander
+   * - BB
+   * - Caixa
+   * - C6
+   */
+  if (
+    hasBrandedBankIcon(canonicalName)
+  ) {
+    return (
+      <div
+        className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden shadow-sm ring-1 ring-black/5 dark:ring-white/10`}
+        title={canonicalName}
+      >
+        {getBankIcon(
+          canonicalName,
+          color
+        )}
+      </div>
+    )
+  }
+
+  /*
+   * Somente instituição realmente desconhecida
+   * cai no fallback neutro.
+   */
   return (
     <div
-      className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden shadow-sm ring-1 ring-black/5 dark:ring-white/10`}
-      style={
-        asset
-          ? {
-              backgroundColor:
-                asset.background,
-            }
-          : {
-              backgroundColor:
-                brandColor?.background ||
-                color ||
-                '#E5E7EB',
-              color:
-                brandColor?.foreground ||
-                '#475569',
-            }
-      }
+      className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden bg-slate-100 shadow-sm ring-1 ring-black/5 dark:bg-slate-800 dark:ring-white/10`}
       title={
         canonicalName ||
         name ||
         'Instituição financeira'
       }
     >
-      {asset ? (
-        asset.mode === 'left-mark' ? (
-          <div className="absolute inset-[7%] overflow-hidden">
-            <img
-              src={asset.src}
-              alt={`${canonicalName} logo`}
-              className={`${asset.imageClassName || 'h-full'} w-auto max-w-none object-contain object-left`}
-              draggable={false}
-            />
-          </div>
-        ) : (
-          <img
-            src={asset.src}
-            alt={`${canonicalName} logo`}
-            className={`${asset.imageClassName || 'h-[70%] w-[70%]'} object-contain`}
-            draggable={false}
-          />
-        )
-      ) : (
-        <span
-          className="select-none text-[10px] font-black tracking-[-0.04em]"
-          aria-hidden="true"
-        >
-          {fallbackLabel}
-        </span>
-      )}
+      <span
+        className="select-none text-[9px] font-black uppercase tracking-[-0.03em] text-slate-600 dark:text-slate-300"
+        aria-hidden="true"
+      >
+        {getFallbackLabel(
+          canonicalName || name
+        )}
+      </span>
     </div>
   )
 }
