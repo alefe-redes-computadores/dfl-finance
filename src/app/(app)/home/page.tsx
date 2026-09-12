@@ -443,7 +443,7 @@ function HomeContent() {
   )
 
   const intelligenceHighlights = useMemo(
-    () => selectFinancialInsights(financialIntelligence, { limit: 2 }),
+    () => selectFinancialInsights(financialIntelligence, { limit: 1 }),
     [financialIntelligence]
   )
 
@@ -1074,55 +1074,50 @@ function HomeContent() {
           </div>
         )
       case 'intelligence': {
-        const snapshot = financialIntelligence.snapshot
-        const confidenceLabel = snapshot.confidence === 'high' ? 'Confiança alta' : snapshot.confidence === 'medium' ? 'Confiança média' : 'Confiança baixa'
+        const priorityInsight =
+          intelligenceHighlights[0] as
+            | FinancialInsight
+            | undefined
 
         return (
-          <div key="intelligence" className="mb-5">
-            <div className="overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <button type="button" onClick={() => router.push('/assistant')} className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/40">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400">
-                    <Sparkles size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">Inteligência financeira</p>
-                    <h3 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">O que seus dados estão dizendo</h3>
-                  </div>
-                </div>
-                <ChevronRight size={18} className="shrink-0 text-gray-300 dark:text-gray-600" />
-              </button>
-
-              <div className="border-t border-gray-100 px-4 py-3 dark:border-slate-700/60">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:bg-slate-700 dark:text-gray-300">{confidenceLabel}</span>
-                  <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{snapshot.sampleSize} movimentações na amostra</span>
-                  {snapshot.historicalMonthsUsed > 0 && (
-                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">· {snapshot.historicalMonthsUsed} meses históricos válidos</span>
-                  )}
-                </div>
-
-                {intelligenceHighlights.length === 0 ? (
-                  <div className="rounded-[17px] bg-emerald-50/60 px-3 py-3 dark:bg-emerald-500/5">
-                    <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">Nenhum desvio financeiro relevante foi detectado agora.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {intelligenceHighlights.map((insight: FinancialInsight) => (
-                      <button key={insight.id} type="button" onClick={() => router.push(insight.suggestedQuestion ? `/assistant/chat?q=${encodeURIComponent(insight.suggestedQuestion)}` : '/assistant')} className="w-full rounded-[17px] border border-gray-200/70 bg-gray-50 px-3 py-3 text-left transition-transform active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900/50">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-semibold text-gray-900 dark:text-gray-100">{insight.title}</p>
-                            <p className="mt-1 text-[11px] leading-5 text-gray-500 dark:text-gray-400">{insight.message}</p>
-                          </div>
-                          <ChevronRight size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+          <div
+            key="intelligence"
+            className="mb-5"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                router.push('/analysis')
+              }
+              className="flex w-full items-center gap-3 rounded-[22px] border border-gray-200/70 bg-white px-4 py-3.5 text-left shadow-sm transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400">
+                <Sparkles size={18} />
               </div>
-            </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+                  Inteligência financeira
+                </p>
+
+                <p className="mt-0.5 truncate text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                  {priorityInsight?.title ||
+                    'Finanças dentro do padrão atual'}
+                </p>
+
+                <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                  {priorityInsight?.message ||
+                    'Nenhum desvio relevante foi detectado agora.'}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400">
+                <span>
+                  Ver análise
+                </span>
+                <ChevronRight size={15} />
+              </div>
+            </button>
           </div>
         )
       }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
@@ -11,6 +11,7 @@ import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname() || ''
   const [mounted, setMounted] = useState(false)
 
   const bottomNavVisible = useBottomNavVisible()
@@ -18,6 +19,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    document.documentElement.style.overflow = ''
+    document.documentElement.style.touchAction = ''
+    document.body.style.overflow = ''
+    document.body.style.touchAction = ''
+  }, [pathname])
 
   useEffect(() => {
     if (!loading && !user && mounted) {
@@ -40,10 +48,19 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="app-page transition-colors duration-300"
-      style={bottomNavVisible ? { paddingBottom: 'calc(72px + max(var(--safe-area-bottom), 16px))' } : undefined}
+      className="app-page h-[100dvh] overflow-y-auto overscroll-y-contain transition-colors duration-300"
+      style={{
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+        ...(bottomNavVisible
+          ? {
+              paddingBottom:
+                'calc(68px + var(--safe-area-bottom))',
+            }
+          : {}),
+      }}
     >
-      <div className="page-transition">
+      <div className="page-transition min-h-full">
         {children}
       </div>
       <BottomNav />

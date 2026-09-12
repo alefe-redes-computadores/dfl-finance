@@ -165,7 +165,7 @@ function AccountsContent() {
         </div>
       </div>
 
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-28 pt-3">
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-[max(2rem,var(--safe-area-bottom))] pt-3">
         {!loading && (
           <div className="mx-auto mb-3 w-full max-w-2xl overflow-hidden rounded-[22px] bg-slate-950 px-5 py-4 text-white shadow-sm dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
@@ -211,16 +211,19 @@ function AccountsContent() {
                 </div>
 
                 {group.accounts.map((account: any, index: number) => (
-                  <div key={account.id} onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${account.id}`) }} className={`flex cursor-pointer items-center justify-between gap-3 px-4 py-3.5 transition-colors active:bg-gray-50 dark:active:bg-slate-800 ${index !== group.accounts.length - 1 ? 'border-b border-gray-100 dark:border-slate-700/50' : ''}`}>
+                  <div key={account.id} onClick={() => { vibrate([5]); router.push(`/accounts/details?id=${account.id}`) }} className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors active:bg-gray-50 dark:active:bg-slate-800 ${index !== group.accounts.length - 1 ? 'border-b border-gray-100 dark:border-slate-700/50' : ''}`}>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-semibold text-gray-950 dark:text-gray-100">{account.name}</p>
-                      <p className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">{getAccountTypeLabel(account.type)}</p>
-                      <p className={`mt-1 text-[14px] font-semibold ${Number(account.balance || 0) > 0 ? 'text-emerald-500 dark:text-emerald-400' : Number(account.balance || 0) < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400'}`}>{formatCurrency(Number(account.balance || 0))}</p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-[14px] font-semibold text-gray-950 dark:text-gray-100">{account.name}</p>
+                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[9.5px] font-semibold text-gray-500 dark:bg-slate-800 dark:text-gray-400">{getAccountTypeLabel(account.type)}</span>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button onClick={(event) => { event.stopPropagation(); vibrate([10]); setDeleteModal(account.id) }} className="rounded-full p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20" aria-label="Excluir conta"><Trash2 size={16} /></button>
-                      <ChevronRight size={16} className="text-gray-400" />
-                    </div>
+
+                    <p className={`shrink-0 text-[14px] font-semibold ${Number(account.balance || 0) > 0 ? 'text-emerald-500 dark:text-emerald-400' : Number(account.balance || 0) < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400'}`}>{formatCurrency(Number(account.balance || 0))}</p>
+
+                    <button onClick={(event) => { event.stopPropagation(); vibrate([10]); setDeleteModal(account.id) }} className="shrink-0 rounded-full p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20" aria-label="Excluir conta"><Trash2 size={16} /></button>
+
+                    <ChevronRight size={16} className="shrink-0 text-gray-300 dark:text-gray-600" />
                   </div>
                 ))}
               </section>

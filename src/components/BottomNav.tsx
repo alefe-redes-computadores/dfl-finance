@@ -42,10 +42,34 @@ export default function BottomNav() {
 
   if (!isVisible) return null
 
+  const navigateSafely = (path: string) => {
+    router.push(path)
+
+    if (typeof window === 'undefined') return
+
+    const targetPath =
+      path.split('?')[0]
+
+    window.setTimeout(() => {
+      const currentPath =
+        window.location.pathname
+
+      const arrived =
+        currentPath === targetPath ||
+        currentPath.startsWith(
+          `${targetPath}/`
+        )
+
+      if (!arrived) {
+        window.location.assign(path)
+      }
+    }, 700)
+  }
+
   const handleNavigate = (path: string) => {
     vibrate([10])
     setIsOpen(false)
-    router.push(path)
+    navigateSafely(path)
   }
 
   const handleOpenTransfer = () => {
@@ -58,7 +82,7 @@ export default function BottomNav() {
     e.preventDefault()
     vibrate([10])
     setIsOpen(false)
-    router.push('/transactions/card-expense')
+    navigateSafely('/transactions/card-expense')
   }
 
   const toggleMenu = () => {
@@ -72,7 +96,7 @@ export default function BottomNav() {
     if (pathname === '/transactions') {
       vibrate([15])
       setIsOpen(false)
-      router.push('/transactions/new')
+      navigateSafely('/transactions/new')
       return
     }
 
@@ -92,7 +116,7 @@ export default function BottomNav() {
       />
 
       <div
-        className={`fixed bottom-[calc(82px+var(--safe-area-bottom))] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 ${
+        className={`fixed bottom-[calc(76px+var(--safe-area-bottom))] left-4 right-4 z-[60] mx-auto max-w-md origin-bottom transition-all duration-200 ${
           isOpen
             ? 'translate-y-0 scale-100 opacity-100 pointer-events-auto'
             : 'translate-y-3 scale-[0.97] opacity-0 pointer-events-none'
@@ -170,98 +194,55 @@ export default function BottomNav() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-[40] h-[calc(72px+max(var(--safe-area-bottom),16px))] border-t border-gray-200/70 bg-white/95 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 dark:border-slate-700/80 dark:bg-slate-800/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.18)]">
-        <div className="relative mx-auto flex h-[72px] max-w-md items-center justify-around px-2">
-          <div className="absolute left-1/2 top-0 z-[45] -translate-x-1/2 -translate-y-[42%]">
-            <div className="rounded-full border border-gray-200/70 bg-gray-50 p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-              <button
-                type="button"
-                onClick={handleCentralAction}
-                className={`relative flex h-[54px] w-[54px] items-center justify-center rounded-full text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] ${
-                  !isTransactionsRoot && isOpen
-                    ? 'rotate-45 bg-slate-700 dark:bg-slate-600'
-                    : 'rotate-0 bg-teal-700 dark:bg-teal-600'
-                }`}
-                aria-label={
-                  isTransactionsRoot
-                    ? 'Nova transação'
-                    : isOpen
-                      ? 'Fechar menu'
-                      : 'Abrir menu'
-                }
-                aria-expanded={isTransactionsRoot ? false : isOpen}
-              >
-                <Plus size={26} />
-              </button>
-            </div>
-          </div>
-
-          {tabs.map((tab, i) => {
-            const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`) || pathname.startsWith(`${tab.href}?`)
-            const Icon = tab.icon
-
-            if (i === 1) {
-              return (
-                <React.Fragment key="fab-group">
-                  <button
-                    type="button"
-                    onClick={() => handleNavigate(tab.href)}
-                    title={tab.label}
-                    aria-current={active ? 'page' : undefined}
-                    className="group relative flex min-w-[56px] flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-[0.95]"
-                  >
-                    <div
-                      className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
-                        active ? 'bg-teal-50 dark:bg-teal-950/40' : ''
-                      }`}
-                    >
-                      <Icon
-                        size={20}
-                        className={
-                          active
-                            ? 'text-teal-700 dark:text-teal-400'
-                            : 'text-gray-400 dark:text-gray-500'
-                        }
-                      />
-                    </div>
-                    <span
-                      className={
-                        active
-                          ? 'text-[9.5px] font-semibold text-teal-700 dark:text-teal-400'
-                          : 'text-[9.5px] font-medium text-gray-400 dark:text-gray-500'
-                      }
-                    >
-                      {tab.label}
-                    </span>
-                  </button>
-                  <div className="w-[72px]" />
-                </React.Fragment>
+      <div
+        className="fixed bottom-0 left-0 right-0 z-[40] h-[calc(68px+var(--safe-area-bottom))] border-t border-gray-200/70 bg-white/95 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 dark:border-slate-700/80 dark:bg-slate-800/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.18)]"
+        style={{
+          paddingBottom:
+            'var(--safe-area-bottom)',
+        }}
+      >
+        <div className="relative mx-auto grid h-[68px] max-w-md grid-cols-5 items-center px-2">
+          {tabs.slice(0, 2).map((tab) => {
+            const active =
+              pathname === tab.href ||
+              pathname.startsWith(
+                `${tab.href}/`
               )
-            }
+
+            const Icon = tab.icon
 
             return (
               <button
                 type="button"
                 key={tab.href}
-                onClick={() => handleNavigate(tab.href)}
+                onClick={() =>
+                  handleNavigate(tab.href)
+                }
                 title={tab.label}
-                aria-current={active ? 'page' : undefined}
-                className="group relative flex min-w-[56px] flex-col items-center gap-1 px-3 py-1 transition-transform active:scale-[0.95]"
+                aria-current={
+                  active
+                    ? 'page'
+                    : undefined
+                }
+                className="group relative flex min-w-0 flex-col items-center gap-1 px-1 py-1 transition-transform active:scale-[0.95]"
               >
                 <div
-                      className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
-                        active ? 'bg-teal-50 dark:bg-teal-950/40' : ''
-                      }`}
-                    >
-                      <Icon
-                        size={20}
-                        className={
-                          active
-                            ? 'text-teal-700 dark:text-teal-400'
-                            : 'text-gray-400 dark:text-gray-500'
-                        }
-                      />
-                    </div>
+                  className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
+                    active
+                      ? 'bg-teal-50 dark:bg-teal-950/40'
+                      : ''
+                  }`}
+                >
+                  <Icon
+                    size={20}
+                    className={
+                      active
+                        ? 'text-teal-700 dark:text-teal-400'
+                        : 'text-gray-400 dark:text-gray-500'
+                    }
+                  />
+                </div>
+
                 <span
                   className={
                     active
@@ -274,6 +255,91 @@ export default function BottomNav() {
               </button>
             )
           })}
+
+          <div aria-hidden="true" />
+
+          {tabs.slice(2).map((tab) => {
+            const active =
+              pathname === tab.href ||
+              pathname.startsWith(
+                `${tab.href}/`
+              )
+
+            const Icon = tab.icon
+
+            return (
+              <button
+                type="button"
+                key={tab.href}
+                onClick={() =>
+                  handleNavigate(tab.href)
+                }
+                title={tab.label}
+                aria-current={
+                  active
+                    ? 'page'
+                    : undefined
+                }
+                className="group relative flex min-w-0 flex-col items-center gap-1 px-1 py-1 transition-transform active:scale-[0.95]"
+              >
+                <div
+                  className={`flex h-7 min-w-9 items-center justify-center rounded-full px-2 transition-colors ${
+                    active
+                      ? 'bg-teal-50 dark:bg-teal-950/40'
+                      : ''
+                  }`}
+                >
+                  <Icon
+                    size={20}
+                    className={
+                      active
+                        ? 'text-teal-700 dark:text-teal-400'
+                        : 'text-gray-400 dark:text-gray-500'
+                    }
+                  />
+                </div>
+
+                <span
+                  className={
+                    active
+                      ? 'text-[9.5px] font-semibold text-teal-700 dark:text-teal-400'
+                      : 'text-[9.5px] font-medium text-gray-400 dark:text-gray-500'
+                  }
+                >
+                  {tab.label}
+                </span>
+              </button>
+            )
+          })}
+
+          <div className="pointer-events-none absolute left-1/2 top-0 z-[45] -translate-x-1/2 -translate-y-[38%]">
+            <div className="pointer-events-auto rounded-full border border-gray-200/70 bg-gray-50 p-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={handleCentralAction}
+                className={`relative flex h-[56px] w-[56px] items-center justify-center rounded-full text-white shadow-[0_7px_22px_rgba(15,118,110,0.30)] transition-all duration-200 active:scale-[0.92] ${
+                  !isTransactionsRoot &&
+                  isOpen
+                    ? 'rotate-45 bg-slate-700 dark:bg-slate-600'
+                    : 'rotate-0 bg-teal-700 dark:bg-teal-600'
+                }`}
+                aria-label={
+                  isTransactionsRoot
+                    ? 'Nova transação'
+                    : isOpen
+                      ? 'Fechar menu'
+                      : 'Abrir menu'
+                }
+                aria-expanded={
+                  isTransactionsRoot
+                    ? false
+                    : isOpen
+                }
+              >
+                <Plus size={27} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
