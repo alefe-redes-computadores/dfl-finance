@@ -14,6 +14,11 @@ import { useContext_ } from '@/components/ContextToggle'
 import ContextToggle from '@/components/ContextToggle'
 import Skeleton from '@/components/Skeleton'
 import { useSafeDb } from '@/hooks/useSafeDb'
+import {
+  formatSubscriptionDateShort,
+  subscriptionCycleShortLabel,
+  subscriptionMonthlyEquivalent,
+} from '@/lib/subscriptionUtils'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
@@ -30,6 +35,9 @@ export default function SubscriptionsPage() {
   const [showSearch, setShowSearch] = useState(false)
   const [sortBy, setSortBy] = useState("updated_at")
   const [sortOrder, setSortOrder] = useState("desc")
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'paused' | 'cancelled'
+  >('all')
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
 
   const { data: subscriptions, loading } = useSubscriptionsList(effectiveContext)
@@ -55,9 +63,18 @@ export default function SubscriptionsPage() {
   const filteredSubscriptions = useMemo(() => {
     const normalizedSearch = deferredSearch.trim().toLocaleLowerCase('pt-BR')
 
-    if (!normalizedSearch) return subscriptions || []
+    const statusFiltered =
+      (subscriptions || []).filter(
+        (sub: any) =>
+          statusFilter === 'all' ||
+          sub.status === statusFilter
+      )
 
-    return (subscriptions || []).filter((sub: any) => {
+    if (!normalizedSearch) {
+      return statusFiltered
+    }
+
+    return statusFiltered.filter((sub: any) => {
       const name = String(sub.name || '').toLocaleLowerCase('pt-BR')
       const category = String(sub.category || '').toLocaleLowerCase('pt-BR')
       const notes = String(sub.notes || '').toLocaleLowerCase('pt-BR')
@@ -68,7 +85,11 @@ export default function SubscriptionsPage() {
         notes.includes(normalizedSearch)
       )
     })
-  }, [subscriptions, deferredSearch])
+  }, [
+    subscriptions,
+    deferredSearch,
+    statusFilter,
+  ])
 
   const sortedSubscriptions = useMemo(() => {
     return [...filteredSubscriptions].sort((a: any, b: any) => {
@@ -94,12 +115,6 @@ export default function SubscriptionsPage() {
 
   const formatCurrency = (val: number) => currencyFormatter.format(val)
 
-  const formatDate = (date: string | null) => {
-    if (!date) return ""
-    const d = new Date(date + 'T12:00:00')
-    return d.toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })
-  }
-
   const getStatusInfo = (status: string) => {
     switch (status) {
       case "active":
@@ -113,31 +128,48 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const getBillingCycleLabel = (cycle: string) => {
-    switch (cycle) {
-      case "monthly": return "mensal"
-      case "yearly": return "anual"
-      case "weekly": return "semanal"
-      case "quarterly": return "trimestral"
-      case "semiannually": return "semestral"
-      default: return cycle
-    }
-  }
-
   const monthlyTotal = useMemo(
-    () => (subscriptions || []).reduce((sum: number, sub: any) => {
-      if (sub.status !== 'active') return sum
+    () =>
+      (subscriptions || [])
+        .filter(
+          (sub: any) =>
+            sub.status === 'active'
+        )
+        .reduce(
+          (
+            sum: number,
+            sub: any
+          ) =>
+            sum +
+            subscriptionMonthlyEquivalent(
+              sub.amount,
+              sub.billing_cycle
+            ),
+          0
+        ),
+    [subscriptions]
+  )
 
-      let monthlyAmount = Number(sub.amount || 0)
-      switch (sub.billing_cycle) {
-        case 'yearly': monthlyAmount /= 12; break
-        case 'weekly': monthlyAmount *= 4.33; break
-        case 'quarterly': monthlyAmount /= 3; break
-        case 'semiannually': monthlyAmount /= 6; break
-      }
-
-      return sum + monthlyAmount
-    }, 0),
+  const statusCounts = useMemo(
+    () => ({
+      all:
+        subscriptions?.length || 0,
+      active:
+        subscriptions?.filter(
+          (sub: any) =>
+            sub.status === 'active'
+        ).length || 0,
+      paused:
+        subscriptions?.filter(
+          (sub: any) =>
+            sub.status === 'paused'
+        ).length || 0,
+      cancelled:
+        subscriptions?.filter(
+          (sub: any) =>
+            sub.status === 'cancelled'
+        ).length || 0,
+    }),
     [subscriptions]
   )
 
@@ -250,7 +282,56 @@ export default function SubscriptionsPage() {
           </div>
         )}
 
-        {!loading && sortedSubscriptions.length > 0 && (
+        {!loading && (subscriptions?.length || 0) > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+            {[
+              {
+                key: 'all',
+                label: 'Todas',
+              },
+              {
+                key: 'active',
+                label: 'Ativas',
+              },
+              {
+                key: 'paused',
+                label: 'Pausadas',
+              },
+              {
+                key: 'cancelled',
+                label: 'Canceladas',
+              },
+            ].map((filter) => (
+              <button
+                type="button"
+                key={filter.key}
+                onClick={() =>
+                  setStatusFilter(
+                    filter.key as typeof statusFilter
+                  )
+                }
+                className={`h-10 px-3.5 rounded-[18px] border whitespace-nowrap shrink-0 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                  statusFilter === filter.key
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200/70 dark:border-slate-700'
+                }`}
+              >
+                {filter.label}
+                <span className={`ml-1.5 text-[11px] ${
+                  statusFilter === filter.key
+                    ? 'text-white/70'
+                    : 'text-gray-400'
+                }`}>
+                  {statusCounts[
+                    filter.key as keyof typeof statusCounts
+                  ]}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!loading && filteredSubscriptions.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-1">
             {[
               { key: 'updated_at', label: 'Mais recentes' },
@@ -284,12 +365,20 @@ export default function SubscriptionsPage() {
               <Repeat size={28} className="opacity-30 text-gray-500" />
             </div>
             <p className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 text-center">
-              {search ? "Nenhuma assinatura encontrada" : "Nenhuma assinatura ativa"}
+              {search
+                ? "Nenhuma assinatura encontrada"
+                : statusFilter !== 'all'
+                  ? "Nenhuma assinatura neste status"
+                  : "Nenhuma assinatura cadastrada"}
             </p>
             <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-1 text-center max-w-[260px]">
-              {search ? "Tente buscar com outro termo." : "Cadastre serviços, planos e contratos recorrentes para acompanhar o impacto mensal."}
+              {search
+                ? "Tente buscar com outro termo."
+                : statusFilter !== 'all'
+                  ? "Escolha outro filtro para visualizar suas assinaturas."
+                  : "Cadastre serviços, planos e contratos recorrentes para acompanhar o impacto mensal."}
             </p>
-            {!search && (
+            {!search && statusFilter === 'all' && (
               <button
                 type="button"
                 onClick={() => router.push('/subscriptions/new')}
@@ -328,7 +417,7 @@ export default function SubscriptionsPage() {
                             {sub.name || "Assinatura"}
                           </p>
                           <div className="mt-1 flex items-center gap-1.5 min-w-0 text-[12px] text-gray-400 dark:text-gray-500">
-                            <span>{getBillingCycleLabel(sub.billing_cycle)}</span>
+                            <span>{subscriptionCycleShortLabel(sub.billing_cycle)}</span>
                             {sub.category && (
                               <>
                                 <span className="text-gray-300 dark:text-slate-600">•</span>
@@ -359,7 +448,7 @@ export default function SubscriptionsPage() {
                         {sub.next_due_date && (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[14px] bg-gray-50 dark:bg-slate-700/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
                             <Calendar size={12} />
-                            <span>Vence {formatDate(sub.next_due_date)}</span>
+                            <span>Vence {formatSubscriptionDateShort(sub.next_due_date)}</span>
                           </div>
                         )}
                       </div>

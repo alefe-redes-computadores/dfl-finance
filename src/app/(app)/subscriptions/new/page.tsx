@@ -12,16 +12,13 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
 import Skeleton from '@/components/Skeleton'
+import {
+  SUBSCRIPTION_CYCLES,
+  subscriptionCycleLabel,
+  subscriptionDueDay,
+} from '@/lib/subscriptionUtils'
 
 const CATEGORIES = ["Streaming", "Software", "Academia", "Clube", "Seguro", "Internet", "Telefone", "TV", "Educação", "Saúde", "Outros"]
-
-const BILLING_CYCLES = [
-  { value: "monthly", label: "Mensal" },
-  { value: "yearly", label: "Anual" },
-  { value: "weekly", label: "Semanal" },
-  { value: "quarterly", label: "Trimestral" },
-  { value: "semiannually", label: "Semestral" },
-]
 
 function NewSubscriptionContent() {
   const router = useRouter()
@@ -129,12 +126,21 @@ function NewSubscriptionContent() {
     setSaving(true)
 
     try {
+      const derivedDueDay =
+        subscriptionDueDay(
+          nextDueDate
+        )
+
       const payload = {
         name: name.trim(),
         amount: amountNum,
         billing_cycle: billingCycle,
         category: category || null,
         next_due_date: nextDueDate || null,
+        due_day:
+          derivedDueDay ??
+          subscription?.due_day ??
+          null,
         payment_method: paymentMethod.trim() || null,
         notes: notes.trim() || null,
         status,
@@ -160,8 +166,20 @@ function NewSubscriptionContent() {
       }
 
       success()
-      showToast(editId ? "Assinatura atualizada" : "Assinatura criada", "success")
-      router.back()
+      showToast(
+        editId
+          ? "Assinatura atualizada"
+          : "Assinatura criada",
+        "success"
+      )
+
+      /*
+       * Destino canônico evita loop de histórico depois de
+       * criar/editar via atalhos diferentes.
+       */
+      router.replace(
+        '/subscriptions'
+      )
     } catch (err: any) {
       errorHaptic()
       showToast(err?.message || "Não foi possível salvar a assinatura.", "error")
@@ -181,7 +199,12 @@ function NewSubscriptionContent() {
       <div className="sticky top-0 z-30 bg-[#f6f7f8]/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/5 px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => { vibrate([5]); router.back(); }}
+            onClick={() => {
+              vibrate([5])
+              router.replace(
+                '/subscriptions'
+              )
+            }}
             className="p-2 -ml-2 rounded-full text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"
           >
             <ArrowLeft size={24} />
@@ -244,7 +267,7 @@ function NewSubscriptionContent() {
               onChange={(e) => { vibrate([5]); setBillingCycle(e.target.value) }}
               className="w-full bg-transparent text-[15px] font-semibold text-gray-900 dark:text-gray-100 outline-none appearance-none cursor-pointer"
             >
-              {BILLING_CYCLES.map((cycle) => (
+              {SUBSCRIPTION_CYCLES.map((cycle) => (
                 <option key={cycle.value} value={cycle.value}>
                   {cycle.label}
                 </option>
@@ -337,7 +360,7 @@ function NewSubscriptionContent() {
           <div className="mb-4 rounded-[18px] bg-teal-50/80 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/20 px-4 py-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-700 dark:text-teal-300">Resumo da recorrência</p>
             <p className="mt-1 text-[13px] text-teal-800/80 dark:text-teal-200/80">
-              {billingCycle === 'weekly' ? 'Cobrança semanal' : billingCycle === 'yearly' ? 'Cobrança anual' : billingCycle === 'quarterly' ? 'Cobrança trimestral' : billingCycle === 'semiannually' ? 'Cobrança semestral' : 'Cobrança mensal'}
+              Cobrança {subscriptionCycleLabel(billingCycle).toLocaleLowerCase('pt-BR')}
               {nextDueDate ? ` com próxima cobrança em ${nextDueDate.split('-').reverse().join('/')}` : ''}.
             </p>
           </div>

@@ -156,7 +156,14 @@ export interface LocalSubscription {
   name: string
   amount: number
   billing_cycle: string
-  due_day: number
+  /**
+   * Dia derivado de next_due_date quando disponível.
+   *
+   * Registros legados podem não possuir este campo, pois o
+   * formulário antigo não o persistia apesar de ele existir
+   * no tipo/índice do Dexie.
+   */
+  due_day?: number | null
   category?: string | null
   next_due_date?: string | null
   payment_method?: string | null

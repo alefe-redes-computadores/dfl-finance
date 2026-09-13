@@ -23,44 +23,18 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import { useToast } from '@/contexts/ToastContext'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
-
-const CYCLE_LABELS: Record<string, string> = {
-  weekly: 'Semanal',
-  monthly: 'Mensal',
-  quarterly: 'Trimestral',
-  semiannually: 'Semestral',
-  yearly: 'Anual',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  active: 'Ativa',
-  paused: 'Pausada',
-  cancelled: 'Cancelada',
-}
-
-function toMonthlyAmount(amount: number, cycle: string) {
-  switch (cycle) {
-    case 'weekly': return amount * 4.33
-    case 'quarterly': return amount / 3
-    case 'semiannually': return amount / 6
-    case 'yearly': return amount / 12
-    default: return amount
-  }
-}
+import {
+  formatSubscriptionDate,
+  SUBSCRIPTION_STATUS_LABELS,
+  subscriptionCycleLabel,
+  subscriptionMonthlyEquivalent,
+} from '@/lib/subscriptionUtils'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(Number(value) || 0)
-}
-
-function formatLocalDate(value?: string | null) {
-  if (!value) return 'Não informada'
-  const iso = String(value).split('T')[0]
-  const [year, month, day] = iso.split('-')
-  if (!year || !month || !day) return value
-  return `${day}/${month}/${year}`
 }
 
 function SubscriptionDetailsContent() {
@@ -77,7 +51,10 @@ function SubscriptionDetailsContent() {
 
   const monthlyEquivalent = useMemo(() => {
     if (!subscription) return 0
-    return toMonthlyAmount(Number(subscription.amount) || 0, subscription.billing_cycle)
+    return subscriptionMonthlyEquivalent(
+      subscription.amount,
+      subscription.billing_cycle
+    )
   }, [subscription])
 
   if (loading) {
@@ -154,7 +131,7 @@ function SubscriptionDetailsContent() {
     <div className="max-w-md mx-auto min-h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 pb-28 transition-colors">
       <header className="sticky top-0 z-30 bg-[#f6f7f8]/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-black/5 dark:border-white/5 px-4 pt-5 pb-4">
         <div className="flex items-center justify-between gap-3">
-          <button onClick={() => { vibrate([5]); router.back() }} className="h-10 w-10 rounded-[16px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 flex items-center justify-center active:scale-95 transition-transform">
+          <button onClick={() => { vibrate([5]); router.replace('/subscriptions') }} className="h-10 w-10 rounded-[16px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 flex items-center justify-center active:scale-95 transition-transform">
             <ArrowLeft size={20} />
           </button>
           <div className="text-center min-w-0">
@@ -171,10 +148,10 @@ function SubscriptionDetailsContent() {
         <section className="rounded-[32px] bg-gradient-to-br from-slate-900 via-slate-900 to-teal-950 dark:from-slate-800 dark:via-slate-900 dark:to-teal-950 text-white p-6 shadow-xl shadow-slate-900/10">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone}`}>{STATUS_LABELS[status] || status}</span>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone}`}>{SUBSCRIPTION_STATUS_LABELS[status as keyof typeof SUBSCRIPTION_STATUS_LABELS] || status}</span>
               <p className="mt-5 text-[12px] font-medium text-white/60">Valor por cobrança</p>
               <p className="mt-1 text-[34px] leading-none font-black tracking-tight">{formatCurrency(subscription.amount)}</p>
-              <p className="mt-3 text-[13px] text-white/65">{CYCLE_LABELS[subscription.billing_cycle] || subscription.billing_cycle}</p>
+              <p className="mt-3 text-[13px] text-white/65">{subscriptionCycleLabel(subscription.billing_cycle)}</p>
             </div>
             <div className="w-14 h-14 rounded-[20px] bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
               <Repeat size={25} className="text-teal-300" />
@@ -188,17 +165,26 @@ function SubscriptionDetailsContent() {
             </div>
             <div className="rounded-[18px] bg-white/5 border border-white/10 p-3">
               <p className="text-[10px] uppercase tracking-[0.12em] font-bold text-white/45">Próxima cobrança</p>
-              <p className="mt-1 text-[16px] font-bold">{formatLocalDate(subscription.next_due_date)}</p>
+              <p className="mt-1 text-[16px] font-bold">{formatSubscriptionDate(subscription.next_due_date)}</p>
             </div>
           </div>
         </section>
 
+        <section className="rounded-[22px] border border-teal-100 dark:border-teal-500/20 bg-teal-50/70 dark:bg-teal-500/10 px-4 py-3.5">
+          <p className="text-[12px] font-bold text-teal-800 dark:text-teal-200">
+            Planejamento recorrente
+          </p>
+          <p className="mt-1 text-[12px] leading-5 text-teal-800/70 dark:text-teal-200/70">
+            A assinatura acompanha o compromisso e a próxima cobrança. Ela não movimenta o saldo automaticamente.
+          </p>
+        </section>
+
         <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 overflow-hidden">
           {[
-            { icon: CalendarDays, label: 'Ciclo', value: CYCLE_LABELS[subscription.billing_cycle] || subscription.billing_cycle || 'Não informado' },
+            { icon: CalendarDays, label: 'Ciclo', value: subscriptionCycleLabel(subscription.billing_cycle) },
             { icon: Tag, label: 'Categoria', value: subscription.category || 'Não informada' },
             { icon: CreditCard, label: 'Forma de pagamento', value: subscription.payment_method || 'Não informada' },
-            { icon: CircleDollarSign, label: 'Próxima cobrança', value: formatLocalDate(subscription.next_due_date) },
+            { icon: CircleDollarSign, label: 'Próxima cobrança', value: formatSubscriptionDate(subscription.next_due_date) },
           ].map((item, index) => (
             <div key={item.label} className={`flex items-center gap-3 px-4 py-4 ${index ? 'border-t border-black/5 dark:border-white/5' : ''}`}>
               <div className="w-10 h-10 rounded-[14px] bg-gray-50 dark:bg-slate-800 flex items-center justify-center shrink-0">
