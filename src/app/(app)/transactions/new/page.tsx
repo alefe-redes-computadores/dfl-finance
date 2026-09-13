@@ -738,8 +738,26 @@ function NewTransactionContent() {
             receipt_url: i === 0 ? receiptUrl : null,
             notes: finalNotes || null,
             recurring_group_id: recurringGroupId,
-            installment_index: totalParcels > 1 ? i + 1 : 1,
-            total_installments: totalParcels > 1 ? totalParcels : 1,
+
+            /*
+             * Parcelamento e recorrência passam a ter contratos
+             * distinguíveis sem coluna nova:
+             *
+             * - parcelamento possui total_installments;
+             * - recorrência possui grupo + índice da ocorrência,
+             *   mas total_installments permanece null.
+             */
+            installment_index:
+              repetition === 'once'
+                ? 1
+                : i + 1,
+
+            total_installments:
+              repetition === 'installments'
+                ? totalParcels
+                : repetition === 'recurring'
+                  ? null
+                  : 1,
             financing_id: financingId,
             loan_id: loanId,
             is_reimbursable: isReimbursable,
@@ -1345,7 +1363,7 @@ function NewTransactionContent() {
                           {frequency === 'custom' && (
                             <div className="bg-teal-50 dark:bg-teal-900/10 p-3 rounded-[16px] text-center">
                               <p className="text-[12px] font-semibold text-teal-700 dark:text-teal-400">
-                                {customParcels} parcelas, a cada {customInterval} mês(es).
+                                {customParcels} lançamentos, a cada {customInterval} mês(es).
                               </p>
                             </div>
                           )}

@@ -27,8 +27,11 @@ function isRepairableFutureScheduledTransaction(
   todayIso: string
 ) {
   return (
+    /*
+     * Qualquer ocorrência pertencente a uma série pode precisar
+     * de reparo. Recorrências novas não usam total_installments.
+     */
     Boolean(tx.recurring_group_id) &&
-    Number(tx.total_installments || 0) > 1 &&
     String(tx.date || '') > todayIso &&
     tx.status === 'done' &&
     tx.affects_balance !== false &&

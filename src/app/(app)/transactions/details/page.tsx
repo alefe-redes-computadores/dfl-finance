@@ -29,6 +29,12 @@ import Skeleton from '@/components/Skeleton'
 import DatePickerSheet, { formatDateLabel } from '@/components/DatePickerSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { reconcileCardInvoiceCycle } from '@/lib/cardOperations'
+import {
+  getTransactionSeriesKind,
+  hasTransactionSeries,
+  propagatePendingTransactionSeriesUpdate,
+  type TransactionSeriesScope,
+} from '@/lib/transactionSeriesOperations'
 
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
@@ -125,6 +131,8 @@ function EditTransactionContent() {
   const [showLoanModal, setShowLoanModal] = useState(false)
 
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showEditScopeModal, setShowEditScopeModal] = useState(false)
+
   const [confirmRequest, setConfirmRequest] = useState<{
     title: string
     description: string
@@ -194,7 +202,9 @@ function EditTransactionContent() {
     })
   }, [vibrate])
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (
+    seriesScope: TransactionSeriesScope = 'single'
+  ) => {
     if (!user?.id) { showToast('Sessão expirada. Entre novamente.', 'error'); return }
     setSaving(true)
 
@@ -539,9 +549,71 @@ function EditTransactionContent() {
         }
       })
 
+      let seriesPropagation = {
+        updated: 0,
+        preservedRealized: 0,
+      }
+
+      if (
+        !isNew &&
+        tx &&
+        tx.recurring_group_id &&
+        seriesScope !== 'single'
+      ) {
+        seriesPropagation =
+          await propagatePendingTransactionSeriesUpdate({
+            userId: user.id,
+            source: tx,
+            scope: seriesScope,
+            patch: {
+              type: txType,
+              amount: rawAmount,
+              description:
+                finalDescription,
+              category_id:
+                categoryId || null,
+              account_id:
+                creditCardId
+                  ? null
+                  : accountId || null,
+              credit_card_id:
+                creditCardId || null,
+              contact_id:
+                contactId || null,
+              tag_ids:
+                selectedTags.length > 0
+                  ? selectedTags
+                  : null,
+              notes:
+                finalNotes || null,
+              financing_id:
+                financingId,
+              loan_id:
+                loanId,
+            },
+          })
+      }
+
       vibrate([10, 50])
       setSaved(true)
-      showToast(`${txType === 'income' ? 'Receita' : 'Despesa'} ${isNew ? 'adicionada' : 'atualizada'}.`, 'success')
+
+      const baseMessage =
+        `${txType === 'income' ? 'Receita' : 'Despesa'} ${isNew ? 'adicionada' : 'atualizada'}.`
+
+      const scopeMessage =
+        seriesPropagation.updated > 0
+          ? ` ${seriesPropagation.updated} ocorrência(s) pendente(s) da série também foram atualizadas.`
+          : ''
+
+      const historyMessage =
+        seriesPropagation.preservedRealized > 0
+          ? ` ${seriesPropagation.preservedRealized} ocorrência(s) já realizadas foram preservadas no histórico.`
+          : ''
+
+      showToast(
+        `${baseMessage}${scopeMessage}${historyMessage}`,
+        'success'
+      )
       setTimeout(() => { router.refresh(); router.back() }, 800)
     } catch (err: any) {
       hapticError()
@@ -845,7 +917,14 @@ function EditTransactionContent() {
     setAmountInput(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
 
-  const hasInstallments = tx?.recurring_group_id && tx?.total_installments && tx.total_installments > 1
+  const seriesKind =
+    getTransactionSeriesKind(tx)
+
+  const hasSeries =
+    hasTransactionSeries(tx)
+
+  const hasInstallments =
+    seriesKind === 'installments'
 
   const confirmDelete = async (mode: 'single' | 'future' | 'all') => {
     if (!user?.id) return
@@ -860,7 +939,7 @@ function EditTransactionContent() {
     try {
       let idsToDelete: string[] = []
 
-      if (mode === 'single' || !hasInstallments) {
+      if (mode === 'single' || !hasSeries) {
         idsToDelete = [id as string]
       } else if (mode === 'future' && tx?.recurring_group_id) {
         // recurring_group_id não é índice no Dexie v5; filter evita WhereClause inválida.
@@ -1073,9 +1152,11 @@ function EditTransactionContent() {
             <h1 className="text-[18px] font-bold text-gray-900 dark:text-white">
               {isNew ? `Nova ${isIncome ? 'receita' : 'despesa'}` : `Editar ${isIncome ? 'receita' : 'despesa'}`}
             </h1>
-            {parcelaLabel && (
+            {hasSeries && (
               <span className="mt-1 inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">
-                Parcela {parcelaLabel}
+                {seriesKind === 'installments'
+                  ? `Parcela ${parcelaLabel || ''}`
+                  : `Recorrência ${tx?.installment_index || ''}`}
               </span>
             )}
           </div>
@@ -1085,7 +1166,9 @@ function EditTransactionContent() {
               <button
                 onClick={() => {
                   vibrate([10])
-                  hasInstallments ? setShowDeleteModal(true) : confirmDelete('single')
+                  hasSeries
+                    ? setShowDeleteModal(true)
+                    : confirmDelete('single')
                 }}
                 className="h-10 w-10 rounded-full flex items-center justify-center text-red-500 active:scale-95 transition-transform"
               >
@@ -1667,7 +1750,18 @@ function EditTransactionContent() {
         <button
           onClick={() => {
             vibrate([10, 50])
-            handleSave()
+            if (
+              !isNew &&
+              hasSeries
+            ) {
+              setShowEditScopeModal(
+                true
+              )
+            } else {
+              handleSave(
+                'single'
+              )
+            }
           }}
           disabled={saving || saved}
           className={`w-[70px] h-[70px] rounded-full flex items-center justify-center text-white pointer-events-auto transition-all duration-300 shadow-[0_10px_30px_rgba(15,118,110,0.28)] ${
@@ -1684,6 +1778,108 @@ function EditTransactionContent() {
         </button>
       </div>
 
+      {/* ESCOPO DE EDIÇÃO DA SÉRIE */}
+      {showEditScopeModal && (
+        <div
+          className="fixed inset-0 z-[620] flex items-end justify-center"
+          onClick={() =>
+            setShowEditScopeModal(
+              false
+            )
+          }
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+          <div
+            className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:bg-slate-800"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-[20px] font-bold text-gray-900 dark:text-gray-100">
+                  Atualizar série
+                </h3>
+                <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
+                  Escolha até onde aplicar as alterações.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowEditScopeModal(
+                    false
+                  )
+                }
+                className="rounded-full bg-gray-100 p-2.5 text-gray-400 active:scale-95 dark:bg-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditScopeModal(
+                    false
+                  )
+                  handleSave('single')
+                }}
+                className="w-full rounded-[20px] bg-gray-50 p-4 text-left active:scale-[0.98] dark:bg-slate-700/50"
+              >
+                <p className="text-[14px] font-bold text-gray-900 dark:text-gray-100">
+                  Apenas esta ocorrência
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                  Altera somente o lançamento aberto.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditScopeModal(
+                    false
+                  )
+                  handleSave('future')
+                }}
+                className="w-full rounded-[20px] bg-amber-50 p-4 text-left active:scale-[0.98] dark:bg-amber-500/10"
+              >
+                <p className="text-[14px] font-bold text-amber-700 dark:text-amber-300">
+                  Esta e as próximas
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-amber-700/70 dark:text-amber-300/70">
+                  Atualiza esta ocorrência e propaga os novos dados às próximas que ainda não foram realizadas.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditScopeModal(
+                    false
+                  )
+                  handleSave('all')
+                }}
+                className="w-full rounded-[20px] bg-teal-50 p-4 text-left active:scale-[0.98] dark:bg-teal-500/10"
+              >
+                <p className="text-[14px] font-bold text-teal-700 dark:text-teal-300">
+                  Toda a série
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-teal-700/70 dark:text-teal-300/70">
+                  Atualiza as ocorrências pendentes da série. Lançamentos já realizados permanecem intactos no histórico.
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE DELETE */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowDeleteModal(false)}>
@@ -1695,20 +1891,28 @@ function EditTransactionContent() {
               <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
             </div>
             <p className="text-[14px] font-medium text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
-              Esta transação faz parte de um parcelamento de <strong>{tx?.total_installments}</strong> vezes. Como deseja prosseguir?
+              {seriesKind === 'installments' ? (
+                <>
+                  Esta transação faz parte de um parcelamento de <strong>{tx?.total_installments}</strong> parcelas. Como deseja prosseguir?
+                </>
+              ) : (
+                <>
+                  Esta transação faz parte de uma série recorrente. Como deseja prosseguir?
+                </>
+              )}
             </p>
             <div className="space-y-3 pb-6">
               <button onClick={() => { vibrate([10]); confirmDelete('single'); }} className="w-full p-4 bg-gray-50 dark:bg-slate-700/50 rounded-[20px] text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors active:scale-[0.98]">
-                <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Apenas esta parcela</p>
-                <p className="text-[12px] font-medium text-gray-500 mt-0.5">As demais continuam existindo.</p>
+                <p className="font-bold text-[15px] text-gray-800 dark:text-gray-200">Apenas esta ocorrência</p>
+                <p className="text-[12px] font-medium text-gray-500 mt-0.5">As demais ocorrências continuam existindo.</p>
               </button>
               <button onClick={() => { vibrate([10]); confirmDelete('future'); }} className="w-full p-4 bg-orange-50 dark:bg-orange-900/20 rounded-[20px] text-left hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors active:scale-[0.98]">
                 <p className="font-bold text-[15px] text-orange-600 dark:text-orange-400">Esta e as próximas</p>
-                <p className="text-[12px] font-medium text-orange-600/70 dark:text-orange-400/70 mt-0.5">Exclui o que falta pagar do grupo.</p>
+                <p className="text-[12px] font-medium text-orange-600/70 dark:text-orange-400/70 mt-0.5">Exclui esta ocorrência e as seguintes da série.</p>
               </button>
               <button onClick={() => { vibrate([10, 50]); confirmDelete('all'); }} className="w-full p-4 bg-red-50 dark:bg-red-900/20 rounded-[20px] text-left hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors active:scale-[0.98]">
-                <p className="font-bold text-[15px] text-red-600 dark:text-red-400">Todas as parcelas</p>
-                <p className="text-[12px] font-medium text-red-600/70 dark:text-red-400/70 mt-0.5">Apaga completamente todas as parcelas.</p>
+                <p className="font-bold text-[15px] text-red-600 dark:text-red-400">Toda a série</p>
+                <p className="text-[12px] font-medium text-red-600/70 dark:text-red-400/70 mt-0.5">Exclui todas as ocorrências desta série.</p>
               </button>
             </div>
           </div>
