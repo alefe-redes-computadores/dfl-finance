@@ -47,3 +47,32 @@ export function buildFinancialSuggestedQuestions(
 
   return questions.slice(0, limit)
 }
+
+
+export function selectFinancialInsightsV2(
+  intelligence: FinancialIntelligenceOutput,
+  {
+    limit = 3,
+    minimumSample = 0,
+    minimumConfidence = 'low',
+  }: {
+    limit?: number
+    minimumSample?: number
+    minimumConfidence?: 'low' | 'medium' | 'high'
+  } = {}
+): FinancialInsight[] {
+  const confidenceRank = {
+    low: 0,
+    medium: 1,
+    high: 2,
+  } as const
+
+  return intelligence.insights
+    .filter(
+      (insight) =>
+        insight.sampleSize >= minimumSample &&
+        confidenceRank[insight.confidence] >=
+          confidenceRank[minimumConfidence]
+    )
+    .slice(0, limit)
+}

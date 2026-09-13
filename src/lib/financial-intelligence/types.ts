@@ -132,6 +132,16 @@ export interface IntelligenceCreditInvoiceLike {
   status?: string | null
 }
 
+export interface FinancialInsightEvidence {
+  currentValue?: number | null
+  baselineValue?: number | null
+  deltaValue?: number | null
+  deltaPercent?: number | null
+  sampleSize: number
+  confidence: InsightConfidence
+  periodLabel?: string | null
+}
+
 export interface FinancialInsight {
   id: string
   type: string

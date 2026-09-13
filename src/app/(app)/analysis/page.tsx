@@ -56,6 +56,12 @@ import CategoryPie from '@/components/dashboard/CategoryPie'
 import { useToast } from '@/contexts/ToastContext'
 
 import { exportAnalysisToCSV, downloadCSV } from '@/lib/services/exportService'
+import {
+  filterRealizedFinancialTransactions,
+  getFinancialFlowForRange,
+  getFinancialFlowSummary,
+  isExpenseTransaction,
+} from '@/lib/financialMetrics'
 import { createPortal } from 'react-dom' // IMPORT ADICIONADO
 
 // SKELETON ATUALIZADO
@@ -208,21 +214,55 @@ function AnalysisContent() {
       if (filterAccount) currentTxs = currentTxs.filter((t: any) => t.account_id === filterAccount)
       if (filterCategory) currentTxs = currentTxs.filter((t: any) => t.category_id === filterCategory)
 
-      const income = currentTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      const expense = currentTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      setSummary({ income, expense, balance: income - expense })
+      currentTxs = filterRealizedFinancialTransactions(
+        currentTxs,
+        {
+          context: effectiveContext,
+          accountId: filterAccount || null,
+          categoryId: filterCategory || null,
+        }
+      )
+
+      const currentFlow =
+        getFinancialFlowSummary(currentTxs)
+      const income = currentFlow.income
+      const expense = currentFlow.expense
+
+      setSummary({
+        income,
+        expense,
+        balance: currentFlow.balance,
+      })
 
       const prevStart = format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
       const prevEnd = format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
       let prevTxs = txs.filter((t: any) => t.date >= prevStart && t.date <= prevEnd)
       if (filterAccount) prevTxs = prevTxs.filter((t: any) => t.account_id === filterAccount)
       if (filterCategory) prevTxs = prevTxs.filter((t: any) => t.category_id === filterCategory)
-      const prevIncome = prevTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      const prevExpense = prevTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-      setPreviousSummary({ income: prevIncome, expense: prevExpense, balance: prevIncome - prevExpense })
+      prevTxs = filterRealizedFinancialTransactions(
+        prevTxs,
+        {
+          context: effectiveContext,
+          accountId: filterAccount || null,
+          categoryId: filterCategory || null,
+        }
+      )
+
+      const previousFlow =
+        getFinancialFlowSummary(prevTxs)
+
+      setPreviousSummary({
+        income: previousFlow.income,
+        expense: previousFlow.expense,
+        balance: previousFlow.balance,
+      })
 
       const catMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-      currentTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').forEach((t: any) => {
+      currentTxs
+        .filter((t: any) =>
+          isExpenseTransaction(t)
+        )
+        .forEach((t: any) => {
         const key = t.category_id ?? 'sem'
         if (!catMap[key]) {
           catMap[key] = { name: t.categories?.name ?? 'Sem categoria', color: t.categories?.color ?? '#64748b', icon: t.categories?.icon ?? 'other', total: 0 }
@@ -238,10 +278,26 @@ function AnalysisContent() {
         const d = subMonths(currentDate, i)
         const s = format(startOfMonth(d), 'yyyy-MM-dd')
         const e = format(endOfMonth(d), 'yyyy-MM-dd')
-        const monthTxs = txs.filter((t: any) => t.date >= s && t.date <= e)
-        const inc = monthTxs.filter((t: any) => t.type === 'income' && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-        const exp = monthTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').reduce((a: number, t: any) => a + Number(t.amount || 0), 0)
-        flowData.push({ name: format(d, 'MMM', { locale: ptBR }).toUpperCase(), Receitas: inc, Despesas: exp })
+        const monthFlow =
+          getFinancialFlowForRange(
+            txs,
+            { start: s, end: e },
+            {
+              context: effectiveContext,
+              accountId:
+                filterAccount || null,
+              categoryId:
+                filterCategory || null,
+            }
+          )
+
+        flowData.push({
+          name: format(d, 'MMM', {
+            locale: ptBR,
+          }).toUpperCase(),
+          Receitas: monthFlow.income,
+          Despesas: monthFlow.expense,
+        })
       }
       setMonthlyFlow(flowData)
 
@@ -291,8 +347,21 @@ function AnalysisContent() {
       const last = patrimData[patrimData.length - 1]?.Patrimônio || 0
       setPatrimonyGrowth(first !== 0 ? ((last - first) / Math.abs(first)) * 100 : 0)
 
-      const prevCatIds = new Set(prevTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done').map((t: any) => t.category_id).filter(Boolean))
-      const newOnes = currentTxs.filter((t: any) => (t.type === 'expense' || t.type === 'sangria') && t.status === 'done' && t.category_id && !prevCatIds.has(t.category_id))
+      const prevCatIds = new Set(
+        prevTxs
+          .filter((t: any) =>
+            isExpenseTransaction(t)
+          )
+          .map((t: any) => t.category_id)
+          .filter(Boolean)
+      )
+
+      const newOnes = currentTxs.filter(
+        (t: any) =>
+          isExpenseTransaction(t) &&
+          t.category_id &&
+          !prevCatIds.has(t.category_id)
+      )
 
       const newCatMap: Record<string, { name: string; color: string; icon: string; total: number }> = {}
       newOnes.forEach((t: any) => {
@@ -320,7 +389,7 @@ function AnalysisContent() {
       setLoading(false)
       setLoadingPulse(false)
     }
-  }, [user?.id, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
+  }, [user?.id, effectiveContext, currentDate, filterAccount, filterCategory, localTransactions, localCategories, localAccounts])
 
   useEffect(() => {
     if (user?.id && effectiveContext) {

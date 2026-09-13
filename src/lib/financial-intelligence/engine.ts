@@ -790,10 +790,27 @@ export function buildFinancialIntelligence({
         confidence?: InsightConfidence
       }
   ) => {
+    const resolvedSampleSize =
+      insight.sampleSize ?? sampleSize
+    const resolvedConfidence =
+      insight.confidence ?? confidence
+
     insights.push({
       ...insight,
-      sampleSize: insight.sampleSize ?? sampleSize,
-      confidence: insight.confidence ?? confidence,
+      sampleSize: resolvedSampleSize,
+      confidence: resolvedConfidence,
+      evidence: insight.evidence ?? {
+        currentValue:
+          insight.currentValue ?? null,
+        baselineValue:
+          insight.baselineValue ?? null,
+        deltaValue:
+          insight.deltaValue ?? null,
+        deltaPercent:
+          insight.deltaPercent ?? null,
+        sampleSize: resolvedSampleSize,
+        confidence: resolvedConfidence,
+      },
     })
   }
 

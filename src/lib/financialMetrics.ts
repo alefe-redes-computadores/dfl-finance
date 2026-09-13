@@ -23,6 +23,18 @@ export interface FinancialTransactionLike {
   goal_id?: string | null
 }
 
+export interface FinancialFlowSummary {
+  income: number
+  expense: number
+  balance: number
+  count: number
+}
+
+export interface FinancialPeriodRange {
+  start: string
+  end: string
+}
+
 export interface FinancialAccountLike {
   id?: string
   context?: string | null
@@ -57,6 +69,110 @@ export function isExpenseTransaction(
   return (
     transaction.type === 'expense' ||
     transaction.type === 'sangria'
+  )
+}
+
+export function filterRealizedFinancialTransactions(
+  transactions: FinancialTransactionLike[],
+  options: {
+    context?: FinancialContext
+    start?: string
+    end?: string
+    accountId?: string | null
+    categoryId?: string | null
+  } = {}
+) {
+  const {
+    context,
+    start,
+    end,
+    accountId,
+    categoryId,
+  } = options
+
+  return transactions.filter((transaction) => {
+    if (!isRealizedFinancialTransaction(transaction)) {
+      return false
+    }
+
+    if (
+      context &&
+      transaction.context !== context
+    ) {
+      return false
+    }
+
+    if (
+      start &&
+      (!transaction.date ||
+        transaction.date < start)
+    ) {
+      return false
+    }
+
+    if (
+      end &&
+      (!transaction.date ||
+        transaction.date > end)
+    ) {
+      return false
+    }
+
+    if (
+      accountId &&
+      transaction.account_id !== accountId
+    ) {
+      return false
+    }
+
+    if (
+      categoryId &&
+      transaction.category_id !== categoryId
+    ) {
+      return false
+    }
+
+    return true
+  })
+}
+
+export function getFinancialFlowSummary(
+  transactions: FinancialTransactionLike[]
+): FinancialFlowSummary {
+  const realized =
+    transactions.filter(
+      isRealizedFinancialTransaction
+    )
+
+  const income = sumIncome(realized)
+  const expense = sumExpense(realized)
+
+  return {
+    income,
+    expense,
+    balance: income - expense,
+    count: realized.length,
+  }
+}
+
+export function getFinancialFlowForRange(
+  transactions: FinancialTransactionLike[],
+  range: FinancialPeriodRange,
+  options: {
+    context?: FinancialContext
+    accountId?: string | null
+    categoryId?: string | null
+  } = {}
+): FinancialFlowSummary {
+  return getFinancialFlowSummary(
+    filterRealizedFinancialTransactions(
+      transactions,
+      {
+        ...options,
+        start: range.start,
+        end: range.end,
+      }
+    )
   )
 }
 
@@ -144,14 +260,9 @@ export function getMonthlyFlow(
     context
   )
 
-  const income = sumIncome(monthTransactions)
-  const expense = sumExpense(monthTransactions)
-
-  return {
-    income,
-    expense,
-    balance: income - expense,
-  }
+  return getFinancialFlowSummary(
+    monthTransactions
+  )
 }
 
 export function getHistoricalMonthlyAverages(
