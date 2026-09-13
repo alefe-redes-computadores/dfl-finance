@@ -451,6 +451,42 @@ export async function safeDelete(
         .filter((debt: any) => debt.contact_id === id)
         .toArray()
 
+      /*
+       * Crédito do contato é um ledger financeiro.
+       * Desvincular o contato enquanto existir saldo positivo
+       * tornaria esse crédito órfão e impossível de consumir
+       * corretamente depois.
+       */
+      const creditLedgerCents =
+        linkedTransactions.reduce(
+          (sum: number, tx: any) =>
+            sum +
+            Math.round(
+              Number(
+                tx.contact_credit_delta ||
+                  0
+              ) * 100
+            ),
+          0
+        )
+
+      if (creditLedgerCents > 0) {
+        return logOperation(
+          'delete',
+          table,
+          id,
+          {
+            success: false,
+            error:
+              'Este contato possui crédito disponível. Use ou zere o crédito antes de excluir o contato.',
+            operation:
+              'delete' as const,
+            table,
+            id,
+          }
+        )
+      }
+
       const now = new Date().toISOString()
 
       await db.transaction(

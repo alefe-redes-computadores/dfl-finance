@@ -131,6 +131,114 @@ export function buildDebtPaymentTotals(transactions: DebtPaymentTransactionLike[
   return result
 }
 
+
+export interface DebtLedgerState {
+  totalAmount: number
+  totalCents: number
+  paidAmount: number
+  paidCents: number
+  remainingAmount: number
+  remainingCents: number
+  percent: number
+  status: 'pending' | 'partial' | 'paid'
+}
+
+/**
+ * O ledger de transações é a fonte de verdade para a amortização.
+ *
+ * `debt.paid_amount` continua existindo como snapshot/cache sincronizado,
+ * mas telas e operações financeiras devem preferir este cálculo quando
+ * possuem acesso às transações vinculadas.
+ */
+export function getDebtPaidAmountFromTransactions(
+  debtId: string,
+  transactions: DebtPaymentTransactionLike[]
+) {
+  if (!debtId) return 0
+
+  const cents = transactions.reduce(
+    (sum, tx) => {
+      if (
+        tx.debt_id !== debtId
+      ) {
+        return sum
+      }
+
+      return (
+        sum +
+        Math.round(
+          getDebtAppliedPaymentAmount(tx) *
+            100
+        )
+      )
+    },
+    0
+  )
+
+  return Math.max(0, cents) / 100
+}
+
+export function getDebtLedgerState(
+  totalAmount: number,
+  debtId: string,
+  transactions: DebtPaymentTransactionLike[]
+): DebtLedgerState {
+  const totalCents = Math.max(
+    0,
+    Math.round(
+      Number(totalAmount || 0) * 100
+    )
+  )
+
+  const ledgerPaidCents = Math.max(
+    0,
+    Math.round(
+      getDebtPaidAmountFromTransactions(
+        debtId,
+        transactions
+      ) * 100
+    )
+  )
+
+  /*
+   * A amortização jamais ultrapassa a cobrança.
+   * Eventual excedente pertence ao ledger de crédito do contato,
+   * não ao saldo pago desta dívida.
+   */
+  const paidCents = Math.min(
+    totalCents,
+    ledgerPaidCents
+  )
+
+  const remainingCents = Math.max(
+    0,
+    totalCents - paidCents
+  )
+
+  const percent =
+    totalCents > 0
+      ? Math.min(
+          100,
+          (paidCents / totalCents) * 100
+        )
+      : 0
+
+  return {
+    totalAmount: totalCents / 100,
+    totalCents,
+    paidAmount: paidCents / 100,
+    paidCents,
+    remainingAmount:
+      remainingCents / 100,
+    remainingCents,
+    percent,
+    status: getDebtStatusFromAmounts(
+      totalCents,
+      paidCents
+    ),
+  }
+}
+
 export function getDebtStatusFromAmounts(
   totalAmountCents: number,
   paidAmountCents: number

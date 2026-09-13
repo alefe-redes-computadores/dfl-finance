@@ -13,13 +13,16 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useDebtById } from '@/hooks/useDebtById'
 import { db } from '@/lib/db'
 import {
-  getDebtPaymentAppliedAmount,
   normalizeContactSearch,
 } from '@/lib/contactOperations'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import MoneyInput from '@/components/MoneyInput'
-import { getDebtStatusFromAmounts, isDebtPayment } from '@/lib/debtOperations'
+import {
+  getDebtPaidAmountFromTransactions,
+  getDebtStatusFromAmounts,
+  isDebtPayment,
+} from '@/lib/debtOperations'
 
 const COLORS = ['#14b8a6', '#ef4444', '#f97316', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308', '#64748b', '#000000']
 const CONTEXTS: Array<'dfl' | 'personal'> = ['dfl', 'personal']
@@ -133,15 +136,11 @@ function NewDebtContent() {
             .toArray()
 
           const paidAmountCents =
-            paymentTransactions.reduce(
-              (sum, payment) =>
-                sum +
-                Math.round(
-                  getDebtPaymentAppliedAmount(
-                    payment
-                  ) * 100
-                ),
-              0
+            Math.round(
+              getDebtPaidAmountFromTransactions(
+                editId,
+                paymentTransactions
+              ) * 100
             )
 
           const finalAmountCents = Math.round(finalAmount * 100)
@@ -186,16 +185,17 @@ function NewDebtContent() {
       } else {
         const id = crypto.randomUUID()
 
-        const contactCandidates = await db.contacts
-
-
-          .where('user_id')
-
-
-          .equals(user.id)
-
-
-          .toArray()
+        const contactCandidates =
+          (
+            await db.contacts
+              .where('user_id')
+              .equals(user.id)
+              .toArray()
+          ).filter(
+            (contact) =>
+              contact.context ===
+              debtContext
+          )
 
 
         const normalizedDebtPerson = normalizeContactSearch(String(payload.person_name || ''))
@@ -264,7 +264,7 @@ function NewDebtContent() {
           O empréstimo que você está tentando editar pode ter sido excluído ou você não tem permissão.
         </p>
         <button
-          onClick={() => router.push('/debts')}
+          onClick={() => router.replace('/debts')}
           className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors active:scale-95"
         >
           Voltar para listagem
@@ -293,7 +293,7 @@ function NewDebtContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                router.back()
+                router.replace('/debts')
               }}
               className="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition-transform active:scale-95 dark:text-gray-200"
               aria-label="Voltar"

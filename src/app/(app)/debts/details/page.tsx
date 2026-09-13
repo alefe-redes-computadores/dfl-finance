@@ -32,10 +32,17 @@ import { useSafeDb } from '@/hooks/useSafeDb'
 import MoneyInput from '@/components/MoneyInput'
 import {
   getDebtDueState,
+  getDebtLedgerState,
   getDebtStatusFromAmounts,
 } from '@/lib/debtOperations'
-import { getDebtPaymentAppliedAmount } from '@/lib/contactOperations'
-import { assertCreditSourceCanBeRemoved } from '@/lib/debtCreditOperations'
+import {
+  getContactCreditBalance,
+  getDebtPaymentAppliedAmount,
+} from '@/lib/contactOperations'
+import {
+  applyContactCreditToDebt,
+  assertCreditSourceCanBeRemoved,
+} from '@/lib/debtCreditOperations'
 
 type DebtStatus = 'pending' | 'partial' | 'paid'
 
@@ -196,7 +203,16 @@ function PaymentHistoryItem({
     <div className="flex items-center justify-between gap-3 rounded-[20px] border border-gray-100 bg-gray-50 p-3.5 dark:border-slate-700/50 dark:bg-slate-700/40">
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-black text-emerald-600 dark:text-emerald-400">
-          + {formatCurrency(payment.affects_balance === false ? getDebtPaymentAppliedAmount(payment) : Number(payment.amount) || 0)}
+          + {formatCurrency(
+            payment.affects_balance === false
+              ? Number(
+                  payment.debt_applied_amount ||
+                    0
+                )
+              : Number(
+                  payment.amount
+                ) || 0
+          )}
         </p>
         <p className="mt-0.5 truncate text-[11px] font-medium text-gray-400 dark:text-gray-500">
           {format(new Date(`${payment.date}T12:00:00`), "dd 'de' MMM yyyy", {
@@ -242,6 +258,17 @@ function DebtDetailContent() {
     orderDir: 'desc',
   })
 
+
+  const {
+    data: contextTransactions,
+  } = useLocalData<LocalTransaction>({
+    table: 'transactions',
+    filters: {
+      context:
+        debt?.context || 'dfl',
+    },
+  })
+
   const [loadingPulse, setLoadingPulse] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -265,43 +292,51 @@ function DebtDetailContent() {
   const payments = useMemo(() => (localTransactions || []) as PaymentTransaction[], [localTransactions])
   const accounts = useMemo(() => (localAccounts || []) as Account[], [localAccounts])
 
-  const totalPaidCents = useMemo(
-    () =>
-      payments.reduce(
-        (acc, payment) =>
-          acc +
-          Math.round(
-            getDebtPaymentAppliedAmount(payment) * 100
+  const debtLedger =
+    useMemo(
+      () =>
+        getDebtLedgerState(
+          Number(
+            debt?.total_amount || 0
           ),
-        0
-      ),
-    [payments]
-  )
+          debt?.id || '',
+          payments
+        ),
+      [
+        debt?.id,
+        debt?.total_amount,
+        payments,
+      ]
+    )
 
-  const totalAmountCents = Math.max(
-    0,
-    Math.round(Number(debt?.total_amount || 0) * 100)
-  )
-  const appliedPaidCents = Math.min(
-    totalAmountCents,
-    totalPaidCents
-  )
-  const totalPaid = appliedPaidCents / 100
-  const remainingCents = Math.max(
-    0,
-    totalAmountCents - appliedPaidCents
-  )
-  const remaining = remainingCents / 100
+  const totalAmountCents =
+    debtLedger.totalCents
+
+  const appliedPaidCents =
+    debtLedger.paidCents
+
+  const totalPaid =
+    debtLedger.paidAmount
+
+  const remainingCents =
+    debtLedger.remainingCents
+
+  const remaining =
+    debtLedger.remainingAmount
+
   const percent =
-    totalAmountCents > 0
-      ? Math.min(
-          100,
-          (appliedPaidCents / totalAmountCents) * 100
+    debtLedger.percent
+
+  const isPaid =
+    debtLedger.status === 'paid'
+
+  const availableContactCredit =
+    debt?.contact_id
+      ? getContactCreditBalance(
+          debt.contact_id,
+          contextTransactions || []
         )
       : 0
-  const isPaid =
-    totalAmountCents > 0 &&
-    appliedPaidCents >= totalAmountCents
 
   const dueState = getDebtDueState(debt?.due_date)
   const daysUntilDue = dueState.daysUntilDue
@@ -596,6 +631,62 @@ function DebtDetailContent() {
     payAmountCents - previewAppliedCents
   )
 
+  const handleApplyAvailableCredit =
+    async () => {
+      if (
+        isSubmitting ||
+        !user?.id ||
+        !debt ||
+        !debtId ||
+        remainingCents <= 0 ||
+        availableContactCredit <= 0
+      ) {
+        return
+      }
+
+      setIsSubmitting(true)
+
+      try {
+        const requestedAmount =
+          Math.min(
+            remaining,
+            availableContactCredit
+          )
+
+        const result =
+          await applyContactCreditToDebt({
+            userId: user.id,
+            debtId,
+            requestedAmount,
+          })
+
+        success()
+
+        showToast(
+          `${formatCurrency(
+            result.applied
+          )} de crédito aplicado à cobrança.`,
+          'success'
+        )
+
+        setShowPaymentModal(false)
+        resetPaymentForm()
+        loadData()
+      } catch (err: any) {
+        errorHaptic()
+
+        showToast(
+          `Erro: ${
+            err?.message ||
+            'Não foi possível aplicar o crédito.'
+          }`,
+          'error'
+        )
+      } finally {
+        setIsSubmitting(false)
+      }
+    }
+
   const handlePayment = async () => {
     if (isSubmitting || !user?.id || !debt) return
 
@@ -766,7 +857,7 @@ function DebtDetailContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                router.back()
+                router.replace('/debts')
               }}
               className="rounded-full p-2 text-gray-800 transition-transform active:scale-95 dark:text-gray-200"
             >
@@ -896,16 +987,48 @@ function DebtDetailContent() {
         </SectionCard>
 
         {!isPaid && (
-          <button
-            onClick={() => {
-              vibrate([5])
-              setShowPaymentModal(true)
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/25 transition-transform active:scale-[0.98]"
-          >
-            <Wallet size={18} />
-            Registrar recebimento
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                vibrate([5])
+                setShowPaymentModal(true)
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/25 transition-transform active:scale-[0.98]"
+            >
+              <Wallet size={18} />
+              Registrar recebimento
+            </button>
+
+            {availableContactCredit > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  vibrate([5])
+                  handleApplyAvailableCredit()
+                }}
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-between gap-3 rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-3.5 text-left transition active:scale-[0.98] disabled:opacity-50 dark:border-sky-900/50 dark:bg-sky-950/25"
+              >
+                <div>
+                  <p className="text-[12px] font-bold text-sky-800 dark:text-sky-300">
+                    Usar crédito disponível
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-sky-700/70 dark:text-sky-400/70">
+                    Abate esta cobrança sem gerar nova entrada na conta.
+                  </p>
+                </div>
+
+                <span className="shrink-0 text-[13px] font-black text-sky-700 dark:text-sky-400">
+                  {formatCurrency(
+                    Math.min(
+                      availableContactCredit,
+                      remaining
+                    )
+                  )}
+                </span>
+              </button>
+            )}
+          </div>
         )}
 
         <SectionCard className="p-5">
@@ -947,6 +1070,26 @@ function DebtDetailContent() {
         title="Registrar recebimento"
       >
         <div className="space-y-4">
+          {availableContactCredit > 0 && (
+            <div className="rounded-[18px] border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900/50 dark:bg-sky-950/25">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-bold text-sky-800 dark:text-sky-300">
+                    Crédito do contato
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-sky-700/60 dark:text-sky-400/60">
+                    Use a ação na tela da cobrança para abatê-lo sem criar nova receita.
+                  </p>
+                </div>
+                <span className="shrink-0 text-[13px] font-black text-sky-700 dark:text-sky-400">
+                  {formatCurrency(
+                    availableContactCredit
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-[20px] border border-gray-100 bg-gray-50 p-4 dark:border-slate-700/50 dark:bg-slate-700/40">
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
               Valor recebido

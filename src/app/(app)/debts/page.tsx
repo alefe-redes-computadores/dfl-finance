@@ -8,9 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { Plus, Users, Wallet, RefreshCw, AlertTriangle, Clock, Check, ChevronLeft } from 'lucide-react'
 import {
   getDebtDueState,
-  getDebtRemainingAmount,
-  getDebtStatusFromAmounts,
-  isDebtPayment,
+  getDebtLedgerState,
 } from '@/lib/debtOperations'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { getDynamicIcon } from '@/lib/iconUtils'
@@ -19,7 +17,6 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import Skeleton from '@/components/Skeleton'
 
-import { getDebtPaymentAppliedAmount } from '@/lib/contactOperations'
 function DebtsContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -40,59 +37,46 @@ function DebtsContent() {
 
   const loading = debtsLoading || transactionsLoading || !user?.id || !context
 
-  const debtPaymentsById = useMemo(() => {
-    const result = new Map<string, number>()
-
-    for (const tx of localTransactions || []) {
-      if (!isDebtPayment(tx) || !tx.debt_id) {
-        continue
-      }
-
-      result.set(
-        tx.debt_id,
-        (result.get(tx.debt_id) || 0) + Math.round(getDebtPaymentAppliedAmount(tx) * 100)
-      )
-    }
-
-    return result
-  }, [localTransactions])
-
   const enrichedDebts = useMemo(() => {
-    return (localDebts || []).map((debt: any) => {
-      const totalCents = Math.round(
-        Number(debt.total_amount || 0) * 100
-      )
-      const paidCents =
-        debtPaymentsById.get(debt.id) || 0
-      const computedStatus =
-        debt.status === 'cancelled'
-          ? 'cancelled'
-          : getDebtStatusFromAmounts(
-              totalCents,
-              paidCents
-            )
-      const paidAmount = paidCents / 100
-      const remaining = getDebtRemainingAmount(
-        Number(debt.total_amount || 0),
-        paidAmount
-      )
-      const percent =
-        totalCents > 0
-          ? Math.min(
-              (paidCents / totalCents) * 100,
-              100
-            )
-          : 0
+    return (localDebts || []).map(
+      (debt: any) => {
+        const ledger =
+          getDebtLedgerState(
+            Number(
+              debt.total_amount || 0
+            ),
+            debt.id,
+            localTransactions || []
+          )
 
-      return {
-        ...debt,
-        paid_amount: paidAmount,
-        remaining,
-        percent,
-        status: computedStatus,
+        return {
+          ...debt,
+
+          /*
+           * Snapshot visual derivado do ledger.
+           * paid_amount persistido permanece compatível,
+           * mas não governa o saldo exibido.
+           */
+          paid_amount:
+            ledger.paidAmount,
+
+          remaining:
+            ledger.remainingAmount,
+
+          percent:
+            ledger.percent,
+
+          status:
+            debt.status === 'cancelled'
+              ? 'cancelled'
+              : ledger.status,
+        }
       }
-    })
-  }, [localDebts, debtPaymentsById])
+    )
+  }, [
+    localDebts,
+    localTransactions,
+  ])
 
   const activeDebts = useMemo(
     () =>
@@ -344,10 +328,10 @@ function DebtsContent() {
             {debts.map((debt: any) => {
               const IconComp = getDynamicIcon(debt.icon || 'user')
               const isPaid = debt.status === 'paid'
-              const remaining = getDebtRemainingAmount(
-                Number(debt.total_amount),
-                Number(debt.paid_amount || 0)
-              )
+              const remaining =
+                Number(
+                  debt.remaining || 0
+                )
               const dueState = getDebtDueState(debt.due_date)
               const daysUntilDue = dueState.daysUntilDue
               const isOverdue = dueState.isOverdue && !isPaid
