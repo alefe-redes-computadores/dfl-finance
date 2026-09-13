@@ -37,6 +37,10 @@ import {
   reconcileCardInvoiceCycle,
   splitMoneyIntoInstallments,
 } from '@/lib/cardOperations'
+import {
+  filterTransactionCategories,
+  findCompatibleCategory,
+} from '@/lib/transactionCategoryOperations'
 
 type TxType = 'income' | 'expense' | 'transfer'
 type Repetition = 'once' | 'installments' | 'recurring'
@@ -173,13 +177,19 @@ function NewTransactionContent() {
   const { data: budgets } = useLocalData({ table: 'budgets' as any, filters: { context: effectiveContext } })
   const requestedContactId = searchParams.get('contact_id')
 
-  const validCategories = useMemo(() => {
-    const expectedType = type === 'income' ? 'income' : 'expense'
-
-    return (localCategories || []).filter(
-      (category: any) => category.type === expectedType
-    )
-  }, [localCategories, type])
+  const validCategories = useMemo(
+    () =>
+      filterTransactionCategories(
+        localCategories || [],
+        type,
+        effectiveContext
+      ),
+    [
+      localCategories,
+      type,
+      effectiveContext,
+    ]
+  )
 
   const mainCategories = useMemo(() => {
     return validCategories
@@ -287,7 +297,13 @@ function NewTransactionContent() {
         ? 'Fica pendente e não entra no saldo até você receber.'
         : 'Fica pendente e não reduz o saldo até você pagar.'
 
-  const selectedCat = allCategoriesFlat.find((c: any) => c.id === categoryId)
+  const selectedCat =
+    findCompatibleCategory(
+      allCategoriesFlat,
+      categoryId,
+      type,
+      effectiveContext
+    )
   const selectedAcc = (accounts || []).find((a: any) => a.id === accountId)
   const selectedCard = (creditCards || []).find((c: any) => c.id === creditCardId)
   const selectedContact = (contacts || []).find((c: any) => c.id === contactId)
@@ -827,7 +843,7 @@ function NewTransactionContent() {
           : `${transactionLabel} salva no dispositivo e aguardando sincronização.`,
         'success'
       )
-      router.push('/transactions')
+      router.replace('/transactions')
     } catch (e: any) {
       hapticError()
       showToast(`Erro ao salvar transação: ${e.message}`, 'error')
@@ -853,7 +869,7 @@ function NewTransactionContent() {
         <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <button
-              onClick={() => { vibrate([5]); router.back(); }}
+              onClick={() => { vibrate([5]); router.replace('/transactions'); }}
               className="h-10 w-10 flex items-center justify-center rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 active:scale-[0.98] transition-transform shrink-0"
             >
               <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
@@ -1693,7 +1709,20 @@ function NewTransactionContent() {
       {showQRScanner && <QRCodeScanner onClose={() => setShowQRScanner(false)} onResult={handleQRResult} />}
       {showFinancingModal && <ModalFinancing isOpen={showFinancingModal} onClose={() => setShowFinancingModal(false)} onSave={(id) => setFinancingId(id)} />}
       {showLoanModal && <ModalEmprestimo isOpen={showLoanModal} onClose={() => setShowLoanModal(false)} onSave={(id) => setLoanId(id)} />}
-      <IconPicker isOpen={showIconPicker} onClose={() => setShowIconPicker(false)} selectedIcon={newCatIcon} onSelect={setNewCatIcon} />
+      <IconPicker
+        isOpen={showIconPicker}
+        onClose={() =>
+          setShowIconPicker(false)
+        }
+        selectedIcon={newCatIcon}
+        onSelect={(iconName) => {
+          setNewCatIcon(
+            normalizeIconName(iconName) ||
+              'Tag'
+          )
+          setShowIconPicker(false)
+        }}
+      />
 
       {/* MODAIS DE CRIAÇÃO */}
       {showCreateCatModal && createPortal(

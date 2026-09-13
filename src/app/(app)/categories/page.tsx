@@ -574,9 +574,18 @@ export default function CategoriesPage() {
 
       <IconPicker
         isOpen={showIconModal}
-        onClose={() => setShowIconModal(false)}
+        onClose={() =>
+          setShowIconModal(false)
+        }
         selectedIcon={icon}
-        onSelect={setIcon}
+        onSelect={(iconName) => {
+          setIcon(
+            normalizeIconName(
+              iconName
+            ) || 'Tag'
+          )
+          setShowIconModal(false)
+        }}
       />
     </div>
   )

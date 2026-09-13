@@ -1,7 +1,11 @@
 // src/components/IconPicker.tsx
 'use client'
 
-import { useMemo, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Search, X } from 'lucide-react'
 import * as Icons from 'lucide-react'
@@ -16,6 +20,69 @@ interface IconPickerProps {
 
 export default function IconPicker({ isOpen, onClose, selectedIcon, onSelect }: IconPickerProps) {
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      typeof document === 'undefined'
+    ) {
+      return
+    }
+
+    /*
+     * O picker vive em portal próprio. Travamos somente o scroll
+     * do documento e restauramos exatamente o estado anterior.
+     * Isso evita body preso/cinza depois de fechar um picker
+     * aberto por cima de outro sheet.
+     */
+    const body =
+      document.body
+
+    const html =
+      document.documentElement
+
+    const previousBodyOverflow =
+      body.style.overflow
+
+    const previousHtmlOverflow =
+      html.style.overflow
+
+    body.style.overflow =
+      'hidden'
+
+    html.style.overflow =
+      'hidden'
+
+    const handleEscape = (
+      event: KeyboardEvent
+    ) => {
+      if (event.key === 'Escape') {
+        setSearchQuery('')
+        onClose()
+      }
+    }
+
+    window.addEventListener(
+      'keydown',
+      handleEscape
+    )
+
+    return () => {
+      body.style.overflow =
+        previousBodyOverflow
+
+      html.style.overflow =
+        previousHtmlOverflow
+
+      window.removeEventListener(
+        'keydown',
+        handleEscape
+      )
+    }
+  }, [
+    isOpen,
+    onClose,
+  ])
 
   const filteredCategories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()

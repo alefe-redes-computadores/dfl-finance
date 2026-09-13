@@ -35,6 +35,10 @@ import {
   propagatePendingTransactionSeriesUpdate,
   type TransactionSeriesScope,
 } from '@/lib/transactionSeriesOperations'
+import {
+  filterTransactionCategories,
+  findCompatibleCategory,
+} from '@/lib/transactionCategoryOperations'
 
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
@@ -154,43 +158,24 @@ function EditTransactionContent() {
   const [initialized, setInitialized] = useState(!id || id === 'new')
 
   // useMemo (hook) também no topo
-  const categories = useMemo(() => {
-    const expectedType =
-      txType === 'income'
-        ? 'income'
-        : 'expense'
-
-    return (localCategories || [])
-      .filter(
+  const categories = useMemo(
+    () =>
+      filterTransactionCategories(
+        localCategories || [],
+        txType,
+        tx?.context ||
+          effectiveContext
+      ).filter(
         (category: any) =>
-          category.context ===
-            (tx?.context ||
-              effectiveContext) &&
-          category.type ===
-            expectedType &&
           !category.parent_id
-      )
-      .sort((a: any, b: any) => {
-        const orderA =
-          a.order_index ?? 9999
-        const orderB =
-          b.order_index ?? 9999
-
-        if (orderA !== orderB) {
-          return orderA - orderB
-        }
-
-        return String(a.name || '')
-          .localeCompare(
-            String(b.name || '')
-          )
-      })
-  }, [
-    localCategories,
-    txType,
-    tx?.context,
-    effectiveContext,
-  ])
+      ),
+    [
+      localCategories,
+      txType,
+      tx?.context,
+      effectiveContext,
+    ]
+  )
 
   // MOVIDOS PARA O TOPO (antes de qualquer return condicional)
   const toggleTag = useCallback((tagId: string) => {
@@ -228,7 +213,19 @@ function EditTransactionContent() {
       return
     }
 
-    const selectedCat = categories.find((c) => c.id === categoryId) || Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
+    const selectedCat =
+      findCompatibleCategory(
+        [
+          ...categories,
+          ...Object.values(
+            subcategories
+          ).flat(),
+        ] as any[],
+        categoryId,
+        txType,
+        tx?.context ||
+          effectiveContext
+      )
     const finalDescription = description.trim() || selectedCat?.name || 'Transação sem nome'
 
     // Remove flags antigas antes de reconstruí-las para não duplicar a cada edição.
@@ -614,7 +611,9 @@ function EditTransactionContent() {
         `${baseMessage}${scopeMessage}${historyMessage}`,
         'success'
       )
-      setTimeout(() => { router.refresh(); router.back() }, 800)
+      setTimeout(() => {
+        router.replace('/transactions')
+      }, 500)
     } catch (err: any) {
       hapticError()
       showToast(`Erro ao salvar transação: ${err.message}`, 'error')
@@ -642,9 +641,24 @@ function EditTransactionContent() {
         setContacts(contactsData.filter((c: any) => c.context === effectiveContext))
         setTags(tagData.filter((t: any) => t.context === effectiveContext))
 
-        const allCats = catData.filter((c: any) => c.context === effectiveContext && c.type === txType)
-        const mainCats = allCats.filter((c: any) => !c.parent_id)
-        const subCats = allCats.filter((c: any) => c.parent_id)
+        const allCats =
+          filterTransactionCategories(
+            catData,
+            txType,
+            effectiveContext
+          )
+
+        const mainCats =
+          allCats.filter(
+            (c: any) =>
+              !c.parent_id
+          )
+
+        const subCats =
+          allCats.filter(
+            (c: any) =>
+              c.parent_id
+          )
         const subsMap: Record<string, any[]> = {}
         subCats.forEach((sub: any) => {
           if (!subsMap[sub.parent_id]) subsMap[sub.parent_id] = []
@@ -1092,8 +1106,7 @@ function EditTransactionContent() {
 
       success()
       showToast('Transação excluída.', 'success')
-      router.refresh()
-      router.back()
+      router.replace('/transactions')
     } catch (err: any) {
       hapticError()
       showToast(`Erro ao excluir transação: ${err.message}`, 'error')
@@ -1125,7 +1138,19 @@ function EditTransactionContent() {
         ? 'Pendente até o recebimento. Ainda não entra no saldo.'
         : 'Pendente até o pagamento. Ainda não reduz o saldo.'
 
-  const selectedCat = categories.find((c) => c.id === categoryId) || Object.values(subcategories).flat().find((s: any) => s.id === categoryId)
+  const selectedCat =
+    findCompatibleCategory(
+      [
+        ...categories,
+        ...Object.values(
+          subcategories
+        ).flat(),
+      ] as any[],
+      categoryId,
+      txType,
+      tx?.context ||
+        effectiveContext
+    )
   const selectedAcc = (accounts || []).find((a) => a.id === accountId)
   const selectedCard = (creditCards || []).find((c) => c.id === creditCardId)
   const selectedContact = (contacts || []).find((c) => c.id === contactId)
@@ -1141,7 +1166,7 @@ function EditTransactionContent() {
           <button
             onClick={() => {
               vibrate([5])
-              router.back()
+              router.replace('/transactions')
             }}
             className="h-10 w-10 rounded-full flex items-center justify-center text-gray-800 dark:text-gray-200 active:scale-95 transition-transform"
           >

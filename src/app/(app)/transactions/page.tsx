@@ -36,6 +36,9 @@ import {
 
 import { getDebtDueState } from '@/lib/debtOperations'
 import { repairFutureScheduledTransactions } from '@/lib/futureTransactionOperations'
+import {
+  filterTransactionCategories,
+} from '@/lib/transactionCategoryOperations'
 type QuickFilter = 'all' | 'income' | 'expense' | 'transfer' | 'pending'
 type PendingKind = 'all' | 'payable' | 'receivable'
 
@@ -554,6 +557,87 @@ export default function TransactionsPage() {
   })
 
   // ✅ useMemo para consolidar dados
+  const filterCategoryType =
+    quickFilter === 'income'
+      ? 'income'
+      : quickFilter === 'expense'
+        ? 'expense'
+        : quickFilter === 'pending'
+          ? pendingKind === 'receivable'
+            ? 'income'
+            : pendingKind === 'payable'
+              ? 'expense'
+              : null
+          : null
+
+  const drawerCategories =
+    useMemo(() => {
+      if (!filterCategoryType) {
+        return [...(localCategories || [])]
+          .sort((a: any, b: any) => {
+            const typeCompare =
+              String(a.type || '')
+                .localeCompare(
+                  String(b.type || '')
+                )
+
+            if (typeCompare !== 0) {
+              return typeCompare
+            }
+
+            const orderA =
+              a.order_index ?? 9999
+
+            const orderB =
+              b.order_index ?? 9999
+
+            if (orderA !== orderB) {
+              return orderA - orderB
+            }
+
+            return String(a.name || '')
+              .localeCompare(
+                String(b.name || ''),
+                'pt-BR'
+              )
+          })
+      }
+
+      return filterTransactionCategories(
+        localCategories || [],
+        filterCategoryType,
+        effectiveContext
+      )
+    }, [
+      localCategories,
+      filterCategoryType,
+      effectiveContext,
+    ])
+
+  const selectedAdvancedCategory =
+    advFilters.categoryId
+      ? (localCategories || []).find(
+          (category: any) =>
+            category.id ===
+            advFilters.categoryId
+        )
+      : null
+
+  const advancedCategoryCompatible =
+    !advFilters.categoryId ||
+    !filterCategoryType ||
+    Boolean(
+      selectedAdvancedCategory &&
+      selectedAdvancedCategory.type ===
+        filterCategoryType
+    )
+
+  const effectiveCategoryFilter =
+    advancedCategoryCompatible
+      ? advFilters.categoryId
+      : ''
+
+
   const transactionsWithJoin = useMemo(() => {
     return (transactions || []).map((tx: any) => {
       const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
@@ -663,7 +747,7 @@ export default function TransactionsPage() {
 
     if (advFilters.status !== 'all' && t.status !== advFilters.status) return false
     if (advFilters.accountId && t.account_id !== advFilters.accountId) return false
-    if (advFilters.categoryId && t.category_id !== advFilters.categoryId) return false
+    if (effectiveCategoryFilter && t.category_id !== effectiveCategoryFilter) return false
     if (advFilters.minAmount && safeNum(t.amount) < safeNum(advFilters.minAmount)) return false
     if (advFilters.maxAmount && safeNum(t.amount) > safeNum(advFilters.maxAmount)) return false
 
@@ -729,8 +813,8 @@ export default function TransactionsPage() {
       }
 
       if (
-        advFilters.categoryId &&
-        tx.category_id !== advFilters.categoryId
+        effectiveCategoryFilter &&
+        tx.category_id !== effectiveCategoryFilter
       ) {
         return false
       }
@@ -798,7 +882,7 @@ export default function TransactionsPage() {
 
     if (
       advFilters.accountId ||
-      advFilters.categoryId ||
+      effectiveCategoryFilter ||
       advFilters.status === 'done'
     ) {
       return []
@@ -852,7 +936,7 @@ export default function TransactionsPage() {
     quickFilter,
     pendingKind,
     advFilters.accountId,
-    advFilters.categoryId,
+    effectiveCategoryFilter,
     advFilters.status,
     advFilters.minAmount,
     advFilters.maxAmount,
@@ -964,7 +1048,17 @@ export default function TransactionsPage() {
     setShowFilterDrawer(false)
   }
 
-  const hasAdvancedFilters = advFilters.accountId || advFilters.categoryId || advFilters.minAmount || advFilters.maxAmount || advFilters.sortBy !== 'date' || advFilters.sortOrder !== 'desc' || advFilters.searchNotes || advFilters.status !== 'all';
+  const hasAdvancedFilters =
+    Boolean(
+      advFilters.accountId ||
+      effectiveCategoryFilter ||
+      advFilters.minAmount ||
+      advFilters.maxAmount ||
+      advFilters.sortBy !== 'date' ||
+      advFilters.sortOrder !== 'desc' ||
+      advFilters.searchNotes ||
+      advFilters.status !== 'all'
+    );
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans relative transition-colors duration-300">
@@ -1409,7 +1503,7 @@ export default function TransactionsPage() {
                     className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as categorias</option>
-                    {(localCategories || []).map((cat: any) => (
+                    {drawerCategories.map((cat: any) => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
