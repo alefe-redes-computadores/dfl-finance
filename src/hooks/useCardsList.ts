@@ -11,14 +11,15 @@ export function useCardsList(context?: 'dfl' | 'personal', includeArchived = fal
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let items = await db.credit_cards
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
-
-    if (context) {
-      items = items.filter((item) => item.context === context)
-    }
+    let items = context
+      ? await db.credit_cards
+          .where('[user_id+context]')
+          .equals([user.id, context])
+          .toArray()
+      : await db.credit_cards
+          .where('user_id')
+          .equals(user.id)
+          .toArray()
 
     if (!includeArchived) {
       items = items.filter((item) => !item.is_archived)

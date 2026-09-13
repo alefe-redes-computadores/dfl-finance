@@ -6,7 +6,13 @@ import {
   useEffect,
   useState,
 } from 'react'
-import { differenceInCalendarDays } from 'date-fns'
+import {
+  differenceInCalendarDays,
+  format,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+} from 'date-fns'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { db } from '@/lib/db'
 import {
@@ -86,14 +92,49 @@ export function useDashboardMetrics(
     setLoading(true)
 
     try {
+      /*
+       * O dashboard trabalha com o mês de referência,
+       * o mês anterior e seis meses históricos.
+       *
+       * Mantemos PF + PJ disponíveis simultaneamente:
+       * contas e categorias continuam carregadas para os
+       * dois contextos, preservando os contratos de
+       * consolidated/comparisonChart/categoryPie.
+       *
+       * Apenas o histórico de transações recebe uma janela
+       * temporal indexada.
+       */
+      const historyStart = format(
+        startOfMonth(
+          subMonths(currentDate, 6)
+        ),
+        'yyyy-MM-dd'
+      )
+
+      const historyEnd = format(
+        endOfMonth(currentDate),
+        'yyyy-MM-dd'
+      )
+
       const [
         allTransactions,
         allAccounts,
         allCategories,
       ] = await Promise.all([
         db.transactions
-          .where('user_id')
-          .equals(user.id)
+          .where('[user_id+date]')
+          .between(
+            [
+              user.id,
+              historyStart,
+            ],
+            [
+              user.id,
+              historyEnd,
+            ],
+            true,
+            true
+          )
           .toArray(),
         db.accounts
           .where('user_id')

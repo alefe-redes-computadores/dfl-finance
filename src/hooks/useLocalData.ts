@@ -164,7 +164,25 @@ export function useLocalData<T = any>({
       )
     }
 
-    if (orderBy) {
+    /*
+     * Muitas tabelas usam este hook sem informar orderBy.
+     * O contrato legado assume `date`, porém contas, categorias,
+     * cartões etc. não possuem esse campo.
+     *
+     * Antes copiávamos e ordenávamos arrays inteiros mesmo quando
+     * TODOS os valores da chave eram ausentes. A ordenação era
+     * semanticamente neutra (comparador sempre retornava 0), mas
+     * custava CPU e alocação a cada emissão do liveQuery.
+     */
+    const shouldSort =
+      Boolean(orderBy) &&
+      results.some(
+        (item: any) =>
+          item?.[orderBy] !== undefined &&
+          item?.[orderBy] !== null
+      )
+
+    if (shouldSort) {
       results = [...results].sort((a: any, b: any) => {
         const valA = a?.[orderBy]
         const valB = b?.[orderBy]

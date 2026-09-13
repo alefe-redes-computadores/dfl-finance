@@ -638,17 +638,76 @@ export default function TransactionsPage() {
       : ''
 
 
+  /*
+   * Índices de apresentação em memória.
+   *
+   * Antes cada transação executava `.find()` em categorias e contas.
+   * Com centenas/milhares de lançamentos isso transformava o join
+   * visual em O(transações × categorias/contas).
+   *
+   * Os Maps são reconstruídos somente quando suas respectivas
+   * coleções mudam e cada lookup passa a ser O(1).
+   */
+  const categoryById = useMemo(
+    () =>
+      new Map(
+        (localCategories || []).map(
+          (category: any) => [
+            category.id,
+            category,
+          ]
+        )
+      ),
+    [localCategories]
+  )
+
+  const accountById = useMemo(
+    () =>
+      new Map(
+        (localAccounts || []).map(
+          (account: any) => [
+            account.id,
+            account,
+          ]
+        )
+      ),
+    [localAccounts]
+  )
+
   const transactionsWithJoin = useMemo(() => {
     return (transactions || []).map((tx: any) => {
-      const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-      const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
+      const category =
+        categoryById.get(
+          tx.category_id
+        ) as any
+
+      const account =
+        accountById.get(
+          tx.account_id
+        ) as any
+
       return {
         ...tx,
-        categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-        accounts: account ? { name: account.name, color: account.color } : null,
+        categories: category
+          ? {
+              name: category.name,
+              icon: category.icon,
+              color: category.color,
+            }
+          : null,
+        accounts: account
+          ? {
+              name: account.name,
+              color: account.color,
+            }
+          : null,
       }
     })
-  }, [transactions, localCategories, localAccounts])
+  }, [
+    transactions,
+    categoryById,
+    accountById,
+  ])
 
   const debtPaymentsById = useMemo(
     () =>
@@ -714,7 +773,9 @@ export default function TransactionsPage() {
   ])
 
   // ✅ FILTROS
-  const filtered = transactionsWithJoin.filter((t: any) => {
+  const filtered = useMemo(
+    () =>
+      transactionsWithJoin.filter((t: any) => {
     if (t.date < startMonth || t.date > endMonth) return false
 
     if (quickFilter === 'income' && t.type !== 'income') return false
@@ -786,7 +847,18 @@ export default function TransactionsPage() {
       return catA.localeCompare(catB) * orderMult;
     }
     return 0;
-  });
+      }),
+    [
+      transactionsWithJoin,
+      startMonth,
+      endMonth,
+      quickFilter,
+      pendingKind,
+      search,
+      effectiveCategoryFilter,
+      advFilters,
+    ]
+  );
 
   const pendingSummaryTxs = transactionsWithJoin.filter(
     (tx: any) => {

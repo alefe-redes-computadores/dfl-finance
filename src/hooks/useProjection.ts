@@ -104,9 +104,20 @@ export function useProjection(
         .equals([userId, context])
         .toArray(),
 
+      /*
+       * O Dexie já possui [user_id+context+date].
+       * A projeção usa somente a janela histórica de 3 meses,
+       * então não há motivo para materializar todo o ledger do
+       * contexto e descartar o restante em JavaScript.
+       */
       db.transactions
-        .where('[user_id+context]')
-        .equals([userId, context])
+        .where('[user_id+context+date]')
+        .between(
+          [userId, context, historyStart],
+          [userId, context, today],
+          true,
+          true
+        )
         .toArray(),
 
       db.debts
@@ -121,8 +132,6 @@ export function useProjection(
     const historicalExpenses = transactions
       .filter(
         (transaction) =>
-          transaction.date >= historyStart &&
-          transaction.date <= today &&
           isRealizedFinancialTransaction(
             transaction
           ) &&

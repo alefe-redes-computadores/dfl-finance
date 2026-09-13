@@ -11,8 +11,14 @@ const cents = (value: unknown) => Math.max(0, Math.round(Number(value || 0) * 10
 const signedCents = (value: unknown) => Math.round(Number(value || 0) * 100)
 const amount = (value: number) => value / 100
 
-async function userTransactions(userId: string) {
-  return db.transactions.where('user_id').equals(userId).toArray()
+async function contactTransactions(
+  userId: string,
+  contactId: string
+) {
+  return db.transactions
+    .where('[user_id+contact_id]')
+    .equals([userId, contactId])
+    .toArray()
 }
 
 async function debtPayments(userId: string, debtId: string) {
@@ -46,8 +52,19 @@ export async function applyContactCreditToDebt({
   if (!debt.contact_id) throw new Error('Esta cobrança não está vinculada a um contato.')
   if (debt.status === 'cancelled') throw new Error('Cobrança cancelada não pode receber crédito.')
 
-  const [allTx, payments] = await Promise.all([userTransactions(userId), debtPayments(userId, debtId)])
-  const creditCents = Math.max(0, signedCents(getContactCreditLedgerBalance(debt.contact_id, allTx)))
+  const [allTx, payments] = await Promise.all([
+    contactTransactions(userId, debt.contact_id),
+    debtPayments(userId, debtId),
+  ])
+  const creditCents = Math.max(
+    0,
+    signedCents(
+      getContactCreditLedgerBalance(
+        debt.contact_id,
+        allTx
+      )
+    )
+  )
   const totalCents = cents(debt.total_amount)
   const alreadyPaid = paidCents(payments)
   const remainingCents = Math.max(0, totalCents - alreadyPaid)
@@ -102,8 +119,16 @@ export async function assertCreditSourceCanBeRemoved(userId: string, tx: LocalTr
   const generatedCents = Math.max(0, signedCents(tx.contact_credit_delta))
   if (generatedCents <= 0 || !tx.contact_id) return
 
-  const allTx = await userTransactions(userId)
-  const currentCreditCents = signedCents(getContactCreditLedgerBalance(tx.contact_id, allTx))
+  const allTx = await contactTransactions(
+    userId,
+    tx.contact_id
+  )
+  const currentCreditCents = signedCents(
+    getContactCreditLedgerBalance(
+      tx.contact_id,
+      allTx
+    )
+  )
   if (currentCreditCents < generatedCents) {
     const used = amount(generatedCents - Math.max(currentCreditCents, 0))
     throw new Error(

@@ -294,15 +294,62 @@ function AnalysisContent() {
     setLoadingPulse(true)
 
     try {
-      const transactionsWithJoin = (localTransactions || []).map((tx: any) => {
-        const category = (localCategories || []).find((c: any) => c.id === tx.category_id) as any
-        const account = (localAccounts || []).find((a: any) => a.id === tx.account_id) as any
-        return {
-          ...tx,
-          categories: category ? { name: category.name, icon: category.icon, color: category.color } : null,
-          accounts: account ? { name: account.name, color: account.color } : null,
-        }
-      })
+      /*
+       * Join visual indexado.
+       *
+       * A análise pode trabalhar com até 12 meses de dados;
+       * evitar `.find()` para cada transação reduz bastante o
+       * custo quando o histórico cresce.
+       */
+      const categoryById = new Map(
+        (localCategories || []).map(
+          (category: any) => [
+            category.id,
+            category,
+          ]
+        )
+      )
+
+      const accountById = new Map(
+        (localAccounts || []).map(
+          (account: any) => [
+            account.id,
+            account,
+          ]
+        )
+      )
+
+      const transactionsWithJoin =
+        (localTransactions || []).map(
+          (tx: any) => {
+            const category =
+              categoryById.get(
+                tx.category_id
+              ) as any
+
+            const account =
+              accountById.get(
+                tx.account_id
+              ) as any
+
+            return {
+              ...tx,
+              categories: category
+                ? {
+                    name: category.name,
+                    icon: category.icon,
+                    color: category.color,
+                  }
+                : null,
+              accounts: account
+                ? {
+                    name: account.name,
+                    color: account.color,
+                  }
+                : null,
+            }
+          }
+        )
 
       const start12 = format(startOfMonth(subMonths(currentDate, 11)), 'yyyy-MM-dd')
       const endNow = format(endOfMonth(currentDate), 'yyyy-MM-dd')

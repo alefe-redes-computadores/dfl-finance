@@ -412,6 +412,45 @@ async function pullRemoteChanges(
     const syncTime = new Date().toISOString()
     const failedTables: SyncTableName[] = []
 
+    /*
+     * Snapshot único das mutações locais protegidas.
+     *
+     * Antes getPendingSyncItems(userId) era executado novamente
+     * dentro de CADA iteração de SYNC_TABLES, relendo e ordenando
+     * a fila inteira várias vezes durante um único pull.
+     *
+     * O push acontece antes do pull no mesmo ciclo, então este
+     * snapshot representa exatamente a fila que deve ser protegida
+     * contra sobrescrita remota nesta etapa.
+     */
+    const currentPendingItems =
+      await getPendingSyncItems(userId)
+
+    const pendingIdsByTable =
+      new Map<
+        LocalSyncQueue['table'],
+        Set<string>
+      >()
+
+    for (const pendingItem of currentPendingItems) {
+      let ids =
+        pendingIdsByTable.get(
+          pendingItem.table
+        )
+
+      if (!ids) {
+        ids = new Set<string>()
+        pendingIdsByTable.set(
+          pendingItem.table,
+          ids
+        )
+      }
+
+      ids.add(
+        pendingItem.record_id
+      )
+    }
+
     for (const tableName of SYNC_TABLES) {
       let effectiveLastPull = storedLastPull
 
@@ -445,13 +484,12 @@ async function pullRemoteChanges(
       }
 
       const remoteData = data ?? []
-      const currentPendingItems = await getPendingSyncItems(userId)
 
-      const pendingIds = new Set(
-        currentPendingItems
-          .filter((pendingItem) => pendingItem.table === tableName)
-          .map((pendingItem) => pendingItem.record_id)
-      )
+      const pendingIds =
+        pendingIdsByTable.get(
+          tableName
+        ) ??
+        new Set<string>()
 
       const remoteIdsForLookup = remoteData
         .map((item: any) => item?.id)

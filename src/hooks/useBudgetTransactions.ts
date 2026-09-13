@@ -26,13 +26,15 @@ export function useBudgetTransactions(
     }
 
     let items = await db.transactions
-      .where('user_id')
-      .equals(user.id)
+      .where('[user_id+context]')
+      .equals([
+        user.id,
+        budget.context,
+      ])
       .toArray()
 
     items = items.filter(
       (item) =>
-        item.context === budget.context &&
         (
           item.type === 'expense' ||
           item.type === 'sangria'

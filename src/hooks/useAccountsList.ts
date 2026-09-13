@@ -11,14 +11,15 @@ export function useAccountsList(context?: 'dfl' | 'personal') {
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let items = await db.accounts
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
-
-    if (context) {
-      items = items.filter((item) => item.context === context)
-    }
+    const items = context
+      ? await db.accounts
+          .where('[user_id+context]')
+          .equals([user.id, context])
+          .toArray()
+      : await db.accounts
+          .where('user_id')
+          .equals(user.id)
+          .toArray()
 
     return items.sort((a, b) => {
       const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0

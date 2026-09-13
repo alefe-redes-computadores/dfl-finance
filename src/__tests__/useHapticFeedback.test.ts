@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react'
-import { useHapticFeedback } from '@/hooks/useHapticFeedback'
+import { useHapticFeedback } from '../hooks/useHapticFeedback'
 
 describe('useHapticFeedback', () => {
   const mockVibrate = jest.fn()

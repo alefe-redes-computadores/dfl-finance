@@ -10,14 +10,18 @@ export function useTagsList(context?: string) {
 
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
-    
-    let query = db.tags.where('user_id').equals(user.id)
-    
+
     if (context) {
-      query = query.and((tag: any) => tag.context === context)
+      return db.tags
+        .where('[user_id+context]')
+        .equals([user.id, context])
+        .toArray()
     }
-    
-    return await query.toArray()
+
+    return db.tags
+      .where('user_id')
+      .equals(user.id)
+      .toArray()
   }, [user?.id, context])
 
   return {

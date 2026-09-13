@@ -661,11 +661,28 @@ function HomeContent() {
     )
   }, [debtsList, localTransactions, cards, today, getDaysUntilCardDue])
 
-  const visiblePriorityAlerts = homePriorityAlerts.slice(0, 3)
-  const hiddenPriorityAlertsCount = Math.max(
-    0,
-    homePriorityAlerts.length - visiblePriorityAlerts.length
+  const visiblePriorityAlerts = useMemo(
+    () =>
+      homePriorityAlerts.slice(
+        0,
+        3
+      ),
+    [homePriorityAlerts]
   )
+
+  const hiddenPriorityAlertsCount =
+    useMemo(
+      () =>
+        Math.max(
+          0,
+          homePriorityAlerts.length -
+            visiblePriorityAlerts.length
+        ),
+      [
+        homePriorityAlerts.length,
+        visiblePriorityAlerts.length,
+      ]
+    )
 
   const financings = localFinancings
 
@@ -891,16 +908,48 @@ function HomeContent() {
   const openPersonalize = () => { const enabledOrder = enabledSections.map(id => ALL_SECTIONS.find(s => s.id === id)).filter(Boolean) as typeof ALL_SECTIONS; const missing = ALL_SECTIONS.filter(s => !enabledSections.includes(s.id)); setPersonalizeOrder([...enabledOrder, ...missing]); setPersonalizeEnabled(new Set(enabledSections)); setShowPersonalizeModal(true) }
 
   const formatCurrency = (val: number) => `R$ ${safeNumber(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  const totalAccountsBalance = accounts.reduce((acc, curr) => acc + safeNumber(curr.balance), 0)
-
-  const openCards = cards.filter(
-    (card: any) => safeNumber(card.faturaAtual) > 0
+  const totalAccountsBalance = useMemo(
+    () =>
+      accounts.reduce(
+        (acc, curr) =>
+          acc +
+          safeNumber(
+            curr.balance
+          ),
+        0
+      ),
+    [accounts]
   )
 
-  const sortedByDue = [...openCards].sort(
-    (a: any, b: any) =>
-      getNextCardDueDate(a.due_day, today).getTime() -
-      getNextCardDueDate(b.due_day, today).getTime()
+  const openCards = useMemo(
+    () =>
+      cards.filter(
+        (card: any) =>
+          safeNumber(
+            card.faturaAtual
+          ) > 0
+      ),
+    [cards]
+  )
+
+  const sortedByDue = useMemo(
+    () =>
+      [...openCards].sort(
+        (a: any, b: any) =>
+          getNextCardDueDate(
+            a.due_day,
+            today
+          ).getTime() -
+          getNextCardDueDate(
+            b.due_day,
+            today
+          ).getTime()
+      ),
+    [
+      openCards,
+      getNextCardDueDate,
+      today,
+    ]
   )
 
   const nextCard =

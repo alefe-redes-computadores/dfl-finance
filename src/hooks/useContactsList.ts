@@ -12,14 +12,15 @@ export function useContactsList(context?: 'dfl' | 'personal') {
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let items = await db.contacts
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
-
-    if (context) {
-      items = items.filter((item) => item.context === context)
-    }
+    const items = context
+      ? await db.contacts
+          .where('[user_id+context]')
+          .equals([user.id, context])
+          .toArray()
+      : await db.contacts
+          .where('user_id')
+          .equals(user.id)
+          .toArray()
 
     return items.sort((a, b) => {
       const updatedCompare = String(b.updated_at || '').localeCompare(

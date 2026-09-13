@@ -11,14 +11,15 @@ export function useDebtsList(context?: 'dfl' | 'personal') {
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let results = await db.debts
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
-
-    if (context) {
-      results = results.filter((item) => item.context === context)
-    }
+    const results = context
+      ? await db.debts
+          .where('[user_id+context]')
+          .equals([user.id, context])
+          .toArray()
+      : await db.debts
+          .where('user_id')
+          .equals(user.id)
+          .toArray()
 
     return results.sort((a: LocalDebt, b: LocalDebt) => {
       const updatedA = a.updated_at || ''

@@ -11,14 +11,15 @@ export function useFinancingsList(context?: 'dfl' | 'personal', status?: 'active
   const data = useLiveQuery(async () => {
     if (!user?.id) return []
 
-    let items = await db.financings
-      .where('user_id')
-      .equals(user.id)
-      .toArray()
-
-    if (context) {
-      items = items.filter((item) => item.context === context)
-    }
+    let items = context
+      ? await db.financings
+          .where('[user_id+context]')
+          .equals([user.id, context])
+          .toArray()
+      : await db.financings
+          .where('user_id')
+          .equals(user.id)
+          .toArray()
 
     if (status) {
       items = items.filter((item) => item.status === status)
