@@ -182,7 +182,7 @@ export default function SubscriptionsPage() {
       )}
 
       <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+        <div className="rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
@@ -193,7 +193,7 @@ export default function SubscriptionsPage() {
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                <h1 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
                   Assinaturas
                 </h1>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
@@ -212,7 +212,7 @@ export default function SubscriptionsPage() {
 
               <button
                 onClick={() => router.push("/subscriptions/new")}
-                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]"
+                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-sm shadow-teal-600/20 transition-all active:scale-[0.98]"
               >
                 <Plus size={20} />
               </button>
@@ -261,7 +261,7 @@ export default function SubscriptionsPage() {
 
       <div className="flex-1 overflow-y-auto px-4 pt-3 pb-28 custom-scrollbar">
         {!loading && (
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1">
@@ -382,7 +382,7 @@ export default function SubscriptionsPage() {
               <button
                 type="button"
                 onClick={() => router.push('/subscriptions/new')}
-                className="mt-5 h-11 px-5 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-bold shadow-lg shadow-teal-600/20 active:scale-[0.98] transition-all"
+                className="mt-5 h-11 px-5 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-bold shadow-sm shadow-teal-600/20 active:scale-[0.98] transition-all"
               >
                 Criar primeira assinatura
               </button>
@@ -396,7 +396,7 @@ export default function SubscriptionsPage() {
               return (
                 <div
                   key={sub.id}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
+                  className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2"
                 >
                   <button
                     type="button"
@@ -496,14 +496,14 @@ export default function SubscriptionsPage() {
               <button
                 type="button"
                 onClick={() => setDeleteModal(null)}
-                className="flex-1 py-4 rounded-[20px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
+                className="flex-1 py-4 rounded-[18px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold text-[15px] hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-[0.98]"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleDelete}
-                className="flex-1 py-4 rounded-[20px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+                className="flex-1 py-4 rounded-[18px] bg-red-500 hover:bg-red-600 text-white font-bold text-[15px] shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
               >
                 Excluir assinatura
               </button>

@@ -53,7 +53,7 @@ const TransactionSkeleton = () => (
       <div className="h-4 w-16 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       <div className="h-12 w-48 bg-gray-200 dark:bg-slate-700 rounded mx-auto" />
     </div>
-    <div className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden space-y-4 p-5">
+    <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden space-y-4 p-5">
       <div className="h-6 w-24 bg-gray-200 dark:bg-slate-700 rounded" />
       <div className="h-14 bg-gray-100 dark:bg-slate-700/50 rounded-2xl" />
       <div className="h-14 bg-gray-100 dark:bg-slate-700/50 rounded-2xl" />
@@ -727,7 +727,7 @@ function EditTransactionContent() {
   if (id && id !== 'new' && loading) {
     return (
       <div className="min-h-screen flex flex-col bg-[#f6f7f8] dark:bg-slate-950 transition-colors">
-        <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
+        <div className="app-topbar">
           <div className="flex items-center justify-between">
             <div className="h-10 w-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse" />
             <div className="h-6 w-32 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
@@ -763,7 +763,7 @@ function EditTransactionContent() {
   // SKELETON ENQUANTO NÃO INICIALIZADO
   if (!initialized) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-[#f6f7f8] dark:bg-slate-950 transition-colors duration-300">
+      <div className="mx-auto min-h-full w-full max-w-2xl bg-gray-50 pb-28 transition-colors duration-300 dark:bg-slate-950">
         <div className="flex-1 px-4 pt-6">
           <Skeleton count={6} />
         </div>
@@ -1161,7 +1161,7 @@ function EditTransactionContent() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[#f6f7f8] dark:bg-slate-950 font-sans pb-36 relative transition-colors duration-300">
       {/* HEADER */}
-      <div className="sticky top-0 z-30 bg-white/88 dark:bg-slate-950/88 backdrop-blur-xl border-b border-black/5 dark:border-white/10 px-4 pt-6 pb-4">
+      <div className="app-topbar">
         <div className="flex items-center justify-between">
           <button
             onClick={() => {
@@ -1242,7 +1242,7 @@ function EditTransactionContent() {
         </section>
 
         {/* ESSENCIAIS */}
-        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
+        <section className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
           <div className="px-5 pt-4 pb-2">
             <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Essenciais</h2>
           </div>
@@ -1370,7 +1370,7 @@ function EditTransactionContent() {
         </section>
 
         {/* VÍNCULOS */}
-        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
+        <section className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
           <div className="px-5 pt-4 pb-2">
             <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Vínculos</h2>
           </div>
@@ -1600,7 +1600,7 @@ function EditTransactionContent() {
           </button>
 
           <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
-            <div className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 overflow-hidden">
               <div className="px-5 pt-4 pb-2">
                 <h2 className="text-[13px] font-semibold text-gray-400 dark:text-gray-500">Opções avançadas</h2>
               </div>
@@ -1816,7 +1816,7 @@ function EditTransactionContent() {
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
           <div
-            className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:bg-slate-800"
+            className="relative w-full max-w-lg rounded-t-[24px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:bg-slate-800"
             onClick={(event) =>
               event.stopPropagation()
             }
@@ -1909,8 +1909,8 @@ function EditTransactionContent() {
       {showDeleteModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowDeleteModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Excluir transação</h3>
               <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
@@ -1968,8 +1968,8 @@ function EditTransactionContent() {
       {showCatModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Categorias</h3>
               <button onClick={() => setShowCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
@@ -1999,8 +1999,8 @@ function EditTransactionContent() {
       {showSubCatModal && selectedParentCat && (
         <div className="fixed inset-0 z-[610] flex items-end justify-center" onClick={() => setShowSubCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center gap-3 mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <button onClick={() => { vibrate([5]); setShowSubCatModal(false); }} className="p-2 -ml-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95"><ChevronLeft size={20} /></button>
               <div>
@@ -2043,8 +2043,8 @@ function EditTransactionContent() {
       {showAccModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contas</h3>
               <button onClick={() => setShowAccModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
@@ -2069,8 +2069,8 @@ function EditTransactionContent() {
       {showCardModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCardModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Cartão de Crédito</h3>
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
@@ -2095,8 +2095,8 @@ function EditTransactionContent() {
       {showContactModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowContactModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contatos</h3>
               <button onClick={() => setShowContactModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
@@ -2134,8 +2134,8 @@ function EditTransactionContent() {
       {showTagModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowTagModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Tags</h3>
               <button onClick={() => setShowTagModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>

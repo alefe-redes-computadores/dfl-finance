@@ -104,7 +104,7 @@ export default function DatePickerSheet({ isOpen, value, onChange, onClose, titl
         aria-modal="true"
         aria-label={title}
       >
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+        <div className="app-sheet-handle" />
 
         <div className="mb-5 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">

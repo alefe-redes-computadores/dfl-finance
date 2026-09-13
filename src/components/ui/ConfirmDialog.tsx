@@ -53,12 +53,12 @@ export default function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-description"
-        className="app-sheet-panel max-w-md p-5 sm:rounded-[28px] sm:border-b"
+        className="app-sheet-panel max-w-md p-5 sm:rounded-[22px] sm:border-b"
       >
-        <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700 sm:hidden" />
+        <div className="app-sheet-handle sm:hidden" />
         <div className="flex items-start gap-4">
-          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${danger ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400'}`}>
-            {danger ? <AlertTriangle size={24} /> : <CheckCircle2 size={24} />}
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] ${danger ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400'}`}>
+            {danger ? <AlertTriangle size={21} /> : <CheckCircle2 size={21} />}
           </div>
           <div className="min-w-0 flex-1">
             <h2 id="confirm-dialog-title" className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h2>

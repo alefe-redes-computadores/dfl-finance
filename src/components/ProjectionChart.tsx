@@ -125,7 +125,7 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
   // Loading
   if (!projection) {
     return (
-      <div className="h-[120px] w-full flex items-center justify-center bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700">
+      <div className="h-[120px] w-full flex items-center justify-center bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700">
         <Loader2 size={24} className="animate-spin text-teal-500" />
       </div>
     )
@@ -134,7 +134,7 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
   // Se não houver dados suficientes
   if (chartData.length === 0) {
     return (
-      <div className="h-[120px] w-full flex items-center justify-center bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700">
+      <div className="h-[120px] w-full flex items-center justify-center bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700">
         <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500">
           Dados insuficientes para projeção
         </p>
@@ -152,14 +152,17 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
   const maxValue = Math.max(...chartData.map((p) => p.balance), 100)
 
   return (
-    <div className="w-full bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 relative">
+    <div className="w-full bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 relative">
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
-            Projeção 30 dias
+            Projeção de 30 dias
           </p>
           <p className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">
             {hideBalance ? '••••' : formatCurrency(lastValue)}
+          </p>
+          <p className="mt-0.5 text-[9px] font-medium text-gray-400 dark:text-gray-500">
+            baseada no ritmo médio de gastos realizados
           </p>
         </div>
 

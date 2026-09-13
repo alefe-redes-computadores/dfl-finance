@@ -30,6 +30,24 @@ function safeNum(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function localIsoDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function currentMonthEndIso(reference = new Date()) {
+  return localIsoDate(
+    new Date(
+      reference.getFullYear(),
+      reference.getMonth() + 1,
+      0,
+      12
+    )
+  )
+}
+
 export default function ConciliationPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -66,11 +84,31 @@ export default function ConciliationPage() {
       db.accounts.where('user_id').equals(user.id).toArray(),
     ])
 
+    const monthEnd = currentMonthEndIso()
+
     return {
-      transactions: transactions.filter((item: any) =>
-        item.context === effectiveContext && item.status === 'pending'
+      transactions: transactions
+        .filter((item: any) => {
+          if (
+            item.context !== effectiveContext ||
+            item.status !== 'pending'
+          ) {
+            return false
+          }
+
+          const date = String(item.date || '').slice(0, 10)
+
+          return Boolean(date) && date <= monthEnd
+        })
+        .sort((a: any, b: any) =>
+          String(a.date || '').localeCompare(
+            String(b.date || '')
+          )
+        ),
+      accounts: accounts.filter(
+        (item: any) =>
+          item.context === effectiveContext
       ),
-      accounts: accounts.filter((item: any) => item.context === effectiveContext),
     }
   }, [user?.id, effectiveContext])
 
@@ -85,7 +123,35 @@ export default function ConciliationPage() {
 
   useEffect(() => {
     if (!hydrated || !user?.id || data === undefined) return
-    if (queue.length > 0 || pendingTransactions.length === 0) return
+
+    const eligibleIds = new Set(
+      pendingTransactions.map(
+        (tx: any) => String(tx.id)
+      )
+    )
+
+    const queueIds = queue
+      .map((item: any) =>
+        String(item?.originalData?.id || '')
+      )
+      .filter(Boolean)
+
+    const queueMatchesScope =
+      queueIds.length === eligibleIds.size &&
+      queueIds.every((id) => eligibleIds.has(id))
+
+    if (pendingTransactions.length === 0) {
+      if (queue.length > 0) clear()
+      return
+    }
+
+    if (queue.length > 0 && queueMatchesScope) {
+      return
+    }
+
+    if (queue.length > 0) {
+      clear()
+    }
 
     reset(
       pendingTransactions.map((tx: any) => ({
@@ -104,7 +170,16 @@ export default function ConciliationPage() {
         },
       }))
     )
-  }, [hydrated, user?.id, data, queue.length, pendingTransactions, accountMap, reset])
+  }, [
+    hydrated,
+    user?.id,
+    data,
+    queue,
+    pendingTransactions,
+    accountMap,
+    reset,
+    clear,
+  ])
 
   const sourceTransactionId = current?.originalData?.id as string | undefined
 
@@ -231,12 +306,12 @@ export default function ConciliationPage() {
       </header>
 
       <main className="px-4 pt-5 space-y-4">
-        <section className="rounded-[28px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-5 shadow-sm">
+        <section className="rounded-[20px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] uppercase tracking-[0.13em] font-bold text-gray-400">Pendências reais</p>
               <p className="mt-2 text-[28px] leading-none font-black text-gray-900 dark:text-white">{pendingTransactions.length}</p>
-              <p className="mt-2 text-[12px] text-gray-500 dark:text-gray-400">Transações pendentes no contexto atual.</p>
+              <p className="mt-2 text-[12px] text-gray-500 dark:text-gray-400">Vencidas e previstas até o fim do mês atual.</p>
             </div>
             <div className="w-12 h-12 rounded-[18px] bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
               <ListChecks size={21} className="text-sky-600 dark:text-sky-400" />
@@ -290,7 +365,7 @@ export default function ConciliationPage() {
             </div>
 
             {!current.accountId && (
-              <div className="rounded-[22px] bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 p-4 flex gap-3">
+              <div className="rounded-[18px] bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 p-4 flex gap-3">
                 <WalletCards size={19} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[13px] font-bold text-amber-800 dark:text-amber-300">Conta necessária para concluir</p>
@@ -300,12 +375,12 @@ export default function ConciliationPage() {
             )}
           </>
         ) : (
-          <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-7 text-center">
-            <div className="w-16 h-16 rounded-[22px] bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+          <section className="rounded-[20px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-5 text-center">
+            <div className="w-16 h-16 rounded-[18px] bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 size={29} className="text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-[19px] font-black text-gray-900 dark:text-white">Nada para conciliar</h2>
-            <p className="mt-2 text-[13px] leading-5 text-gray-500 dark:text-gray-400">Não há valores pendentes neste contexto. Novas contas a pagar ou receber aparecerão aqui automaticamente.</p>
+            <p className="mt-2 text-[13px] leading-5 text-gray-500 dark:text-gray-400">Não há pendências vencidas ou previstas para este mês. Itens de meses futuros ficam fora desta revisão.</p>
             <button onClick={() => router.push('/transactions/new')} className="mt-5 h-12 px-5 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] active:scale-[0.98] transition-transform">
               Nova transação
             </button>

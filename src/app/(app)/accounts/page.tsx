@@ -1,10 +1,24 @@
 // src/app/(app)/accounts/page.tsx
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Plus, RefreshCw, Search, Trash2, Wallet, X } from 'lucide-react'
+import {
+  ArrowDownAZ,
+  ArrowUpDown,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Wallet,
+  X,
+} from 'lucide-react'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
 import BankLogo from '@/components/BankLogo'
 import Skeleton from '@/components/Skeleton'
@@ -35,10 +49,48 @@ function AccountsContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
   const [accountFilter, setAccountFilter] = useState('all')
+  const [showViewOptions, setShowViewOptions] = useState(false)
+  const [accountSort, setAccountSort] = useState<
+    'balance' | 'institution' | 'name'
+  >('institution')
 
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { data: accounts, loading } = useAccountsList(effectiveContext)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(
+        'dfl_accounts_sort'
+      )
+
+      if (
+        saved === 'balance' ||
+        saved === 'institution' ||
+        saved === 'name'
+      ) {
+        setAccountSort(saved)
+      }
+    } catch {
+      // localStorage pode estar indisponível em ambientes restritos.
+    }
+  }, [])
+
+  const changeAccountSort = (
+    next: 'balance' | 'institution' | 'name'
+  ) => {
+    vibrate([5])
+    setAccountSort(next)
+
+    try {
+      localStorage.setItem(
+        'dfl_accounts_sort',
+        next
+      )
+    } catch {
+      // Preferência local é opcional.
+    }
+  }
 
   const activeAccounts = useMemo(
     () => (accounts || []).filter((account: any) => !isAccountArchived(account)),
@@ -46,17 +98,68 @@ function AccountsContent() {
   )
 
   const filteredAccounts = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase('pt-BR')
-    return activeAccounts.filter((account: any) => {
-      if (accountFilter !== 'all' && account.type !== accountFilter) return false
-      if (!term) return true
-      return [
-        account.name,
-        getAccountInstitutionLabel(account),
-        getAccountTypeLabel(account.type),
-      ].some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(term))
+    const term =
+      search.trim().toLocaleLowerCase('pt-BR')
+
+    const filtered = activeAccounts.filter(
+      (account: any) => {
+        if (
+          accountFilter !== 'all' &&
+          account.type !== accountFilter
+        ) {
+          return false
+        }
+
+        if (!term) return true
+
+        return [
+          account.name,
+          getAccountInstitutionLabel(account),
+          getAccountTypeLabel(account.type),
+        ].some((value) =>
+          String(value || '')
+            .toLocaleLowerCase('pt-BR')
+            .includes(term)
+        )
+      }
+    )
+
+    return [...filtered].sort((a: any, b: any) => {
+      if (accountSort === 'balance') {
+        return (
+          Number(b.balance || 0) -
+          Number(a.balance || 0)
+        )
+      }
+
+      if (accountSort === 'name') {
+        return String(a.name || '').localeCompare(
+          String(b.name || ''),
+          'pt-BR'
+        )
+      }
+
+      const institutionCompare =
+        getAccountInstitutionLabel(a).localeCompare(
+          getAccountInstitutionLabel(b),
+          'pt-BR'
+        )
+
+      if (institutionCompare !== 0) {
+        return institutionCompare
+      }
+
+      return String(a.name || '').localeCompare(
+        String(b.name || ''),
+        'pt-BR'
+      )
     })
-  }, [activeAccounts, accountFilter, search])
+  }, [
+    activeAccounts,
+    accountFilter,
+    accountSort,
+    search,
+  ])
 
   const accountGroups = useMemo(
     () => groupAccountsByInstitution(filteredAccounts),
@@ -105,7 +208,7 @@ function AccountsContent() {
   }, [refreshing, vibrate])
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-[#f6f7f8] font-sans transition-colors duration-300 dark:bg-slate-950">
+    <div className="min-h-full bg-gray-50 font-sans transition-colors duration-300 dark:bg-slate-950">
       {(loading || pendingCount > 0) && (
         <div className="fixed right-6 top-6 z-50">
           <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
@@ -121,7 +224,7 @@ function AccountsContent() {
         </div>
       )}
 
-      <div className="sticky top-0 z-40 border-b border-black/5 bg-[#f6f7f8]/92 px-4 pb-3 pt-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/92">
+      <div className="app-topbar">
         <div className="mx-auto w-full max-w-2xl">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -165,13 +268,13 @@ function AccountsContent() {
         </div>
       </div>
 
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-[max(2rem,var(--safe-area-bottom))] pt-3">
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} className="px-4 pb-8 pt-3">
         {!loading && (
-          <div className="mx-auto mb-3 w-full max-w-2xl overflow-hidden rounded-[22px] bg-slate-950 px-5 py-4 text-white shadow-sm dark:bg-slate-900">
+          <div className="mx-auto mb-3 w-full max-w-2xl overflow-hidden rounded-[20px] bg-slate-950 px-4 py-4 text-white shadow-sm dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="mb-1 text-[11px] font-medium text-slate-400">Saldo consolidado</p>
-                <p className={`text-[29px] font-semibold leading-none tracking-tight ${totalBalance > 0 ? 'text-emerald-400' : totalBalance < 0 ? 'text-red-400' : 'text-slate-400'}`}>{formatCurrency(totalBalance)}</p>
+                <p className={`text-[26px] font-semibold leading-none tracking-tight ${totalBalance > 0 ? 'text-emerald-400' : totalBalance < 0 ? 'text-red-400' : 'text-slate-400'}`}>{formatCurrency(totalBalance)}</p>
                 <p className="mt-2 text-[11px] font-medium text-slate-400">{activeAccounts.length} {activeAccounts.length === 1 ? 'conta ativa' : 'contas ativas'}</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/10"><Wallet size={22} className="text-teal-300" /></div>
@@ -180,10 +283,44 @@ function AccountsContent() {
         )}
 
         {!loading && activeAccounts.length > 0 && (
-          <div className="scrollbar-hide mx-auto mb-1 flex w-full max-w-2xl gap-2 overflow-x-auto pb-3">
-            {[{ key: 'all', label: 'Todas' }, { key: 'checking', label: 'Corrente' }, { key: 'savings', label: 'Poupança' }, { key: 'investment', label: 'Investimentos' }, { key: 'wallet', label: 'Carteira' }].map((filter) => (
-              <button type="button" key={filter.key} onClick={() => { vibrate([5]); setAccountFilter(filter.key) }} className={`h-8 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition-all active:scale-[0.97] ${accountFilter === filter.key ? 'border-transparent bg-gray-950 text-white dark:bg-white dark:text-gray-950' : 'border-black/5 bg-white text-gray-500 dark:border-white/10 dark:bg-slate-900 dark:text-gray-400'}`}>{filter.label}</button>
-            ))}
+          <div className="mx-auto mb-3 flex w-full max-w-2xl items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                vibrate([5])
+                setShowViewOptions(true)
+              }}
+              className="flex h-9 items-center gap-2 rounded-[14px] border border-black/5 bg-white px-3 text-[11px] font-semibold text-gray-600 shadow-sm transition-all active:scale-[0.97] dark:border-white/10 dark:bg-slate-900 dark:text-gray-300"
+            >
+              <SlidersHorizontal size={14} />
+              Filtros e ordem
+            </button>
+
+            {accountFilter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => {
+                  vibrate([5])
+                  setAccountFilter('all')
+                }}
+                className="flex h-9 min-w-0 items-center gap-1.5 rounded-full bg-gray-950 px-3 text-[10px] font-semibold text-white dark:bg-white dark:text-gray-950"
+              >
+                <Filter size={12} />
+
+                <span className="truncate">
+                  {getAccountTypeLabel(accountFilter)}
+                </span>
+
+                <X size={12} />
+              </button>
+            )}
+
+            <span className="ml-auto text-[10px] font-medium text-gray-400">
+              {filteredAccounts.length}{' '}
+              {filteredAccounts.length === 1
+                ? 'conta'
+                : 'contas'}
+            </span>
           </div>
         )}
 
@@ -232,9 +369,143 @@ function AccountsContent() {
         )}
       </div>
 
+      {showViewOptions && createPortal(
+        <div
+          className="fixed inset-0 z-[99998] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={() => setShowViewOptions(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-[24px] bg-white p-5 shadow-2xl dark:bg-slate-900 sm:rounded-[24px]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-sheet-handle" />
+
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[17px] font-semibold text-gray-900 dark:text-white">
+                  Exibição das contas
+                </p>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Filtre sem ocupar espaço permanente na tela.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowViewOptions(false)}
+                className="app-icon-button"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div>
+              <p className="app-form-label">
+                Tipo de conta
+              </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['all', 'Todas'],
+                  ['checking', 'Corrente'],
+                  ['savings', 'Poupança'],
+                  ['investment', 'Investimentos'],
+                  ['wallet', 'Carteira'],
+                ].map(([key, label]) => {
+                  const active = accountFilter === key
+
+                  return (
+                    <button
+                      type="button"
+                      key={key}
+                      onClick={() => {
+                        vibrate([5])
+                        setAccountFilter(key)
+                      }}
+                      className={`flex min-h-11 items-center justify-between rounded-[14px] border px-3 text-left text-[11px] font-semibold transition ${
+                        active
+                          ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400'
+                          : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300'
+                      }`}
+                    >
+                      {label}
+                      {active && <Check size={14} />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="app-form-label">
+                Ordenar por
+              </p>
+
+              <div className="space-y-2">
+                {[
+                  ['institution', 'Banco e conta', ArrowDownAZ],
+                  ['balance', 'Maior saldo', ArrowUpDown],
+                  ['name', 'Nome da conta', ArrowDownAZ],
+                ].map(([key, label, Icon]: any[]) => {
+                  const active = accountSort === key
+
+                  return (
+                    <button
+                      type="button"
+                      key={key}
+                      onClick={() =>
+                        changeAccountSort(key)
+                      }
+                      className={`flex min-h-11 w-full items-center gap-3 rounded-[14px] border px-3 text-left transition ${
+                        active
+                          ? 'border-teal-500 bg-teal-50 dark:bg-teal-500/10'
+                          : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800'
+                      }`}
+                    >
+                      <Icon
+                        size={16}
+                        className={
+                          active
+                            ? 'text-teal-600 dark:text-teal-400'
+                            : 'text-gray-400'
+                        }
+                      />
+
+                      <span className={`flex-1 text-[12px] font-semibold ${
+                        active
+                          ? 'text-teal-700 dark:text-teal-400'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {label}
+                      </span>
+
+                      {active && (
+                        <Check
+                          size={15}
+                          className="text-teal-600"
+                        />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowViewOptions(false)}
+              className="mt-5 h-11 w-full rounded-[15px] bg-gray-950 text-[12px] font-semibold text-white active:scale-[0.99] dark:bg-white dark:text-gray-950"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {deleteModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setDeleteModal(null)}>
-          <div className="w-full max-w-sm rounded-t-[32px] bg-white p-6 shadow-2xl dark:bg-slate-800 sm:rounded-[32px]" onClick={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-t-[24px] bg-white p-5 shadow-2xl dark:bg-slate-800 sm:rounded-[24px]" onClick={(event) => event.stopPropagation()}>
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500 dark:bg-red-900/30"><Trash2 size={28} /></div>
             <h3 className="mb-2 text-center text-[20px] font-semibold text-gray-800 dark:text-gray-100">Excluir conta</h3>
             <p className="mb-8 text-center text-[14px] text-gray-500 dark:text-gray-400">A exclusão só será concluída se as regras de dependência permitirem.</p>

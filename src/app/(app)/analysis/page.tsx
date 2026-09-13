@@ -25,7 +25,8 @@ import {
   Flame,
   Clock,
   Percent,
-  CheckCircle 
+  CheckCircle,
+  AlertTriangle,
 } from 'lucide-react'
 import { getDynamicIcon } from '@/lib/iconUtils'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -62,6 +63,11 @@ import {
   getFinancialFlowSummary,
   isExpenseTransaction,
 } from '@/lib/financialMetrics'
+import {
+  buildFinancialIntelligence,
+  selectFinancialInsights,
+  type FinancialInsight,
+} from '@/lib/financial-intelligence'
 import { createPortal } from 'react-dom' // IMPORT ADICIONADO
 
 // SKELETON ATUALIZADO
@@ -71,7 +77,7 @@ const AnalysisSkeleton = () => (
       {[1, 2, 3, 4].map((i) => (
         <div
           key={i}
-          className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700"
+          className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700"
         >
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700" />
@@ -82,7 +88,7 @@ const AnalysisSkeleton = () => (
       ))}
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[18px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
       <div className="h-5 w-40 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
       <div className="flex justify-center">
         <div className="w-44 h-44 rounded-full bg-gray-100 dark:bg-slate-700" />
@@ -97,9 +103,9 @@ const AnalysisSkeleton = () => (
       </div>
     </div>
 
-    <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-[18px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
       <div className="h-5 w-36 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-      <div className="h-48 bg-gray-100 dark:bg-slate-700/50 rounded-[18px]" />
+      <div className="h-48 bg-gray-100 dark:bg-slate-700/50 rounded-[16px]" />
     </div>
   </div>
 )
@@ -155,6 +161,7 @@ function AnalysisContent() {
   const [activeTab, setActiveTab] = useState<'month' | 'new' | 'dashboard'>('dashboard')
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [expandedInsightId, setExpandedInsightId] = useState<string | null>(null)
   
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle')
 
@@ -185,7 +192,101 @@ function AnalysisContent() {
     filters: { context: effectiveContext }
   })
 
+  const { data: localDebts } = useLocalData({
+    table: 'debts' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localSubscriptions } = useLocalData({
+    table: 'subscriptions' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localBudgets } = useLocalData({
+    table: 'budgets' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localGoals } = useLocalData({
+    table: 'goals' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localLoans } = useLocalData({
+    table: 'loans' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localFinancings } = useLocalData({
+    table: 'financings' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localCreditCards } = useLocalData({
+    table: 'credit_cards' as any,
+    filters: { context: effectiveContext },
+  })
+
+  const { data: localCreditInvoices } = useLocalData({
+    table: 'credit_invoices' as any,
+    filters: { context: effectiveContext },
+  })
+
   const { metrics, loading: metricsLoading, reload: reloadMetrics } = useDashboardMetrics(currentDate, effectiveContext)
+
+  const financialIntelligence = useMemo(
+    () =>
+      buildFinancialIntelligence({
+        context: effectiveContext,
+        transactions: (localTransactions || []) as any[],
+        accounts: (localAccounts || []) as any[],
+        categories: (localCategories || []) as any[],
+        debts: (localDebts || []) as any[],
+        subscriptions: (localSubscriptions || []) as any[],
+        budgets: (localBudgets || []) as any[],
+        goals: (localGoals || []) as any[],
+        loans: (localLoans || []) as any[],
+        financings: (localFinancings || []) as any[],
+        creditCards: (localCreditCards || []) as any[],
+        creditInvoices: (localCreditInvoices || []) as any[],
+      }),
+    [
+      effectiveContext,
+      localTransactions,
+      localAccounts,
+      localCategories,
+      localDebts,
+      localSubscriptions,
+      localBudgets,
+      localGoals,
+      localLoans,
+      localFinancings,
+      localCreditCards,
+      localCreditInvoices,
+    ]
+  )
+
+  const intelligenceInsights = useMemo(
+    () =>
+      selectFinancialInsights(
+        financialIntelligence,
+        { limit: 8 }
+      ),
+    [financialIntelligence]
+  )
+
+  const formatInsightValue = useCallback(
+    (value?: number | null) => {
+      if (value === null || value === undefined || !Number.isFinite(value)) {
+        return null
+      }
+
+      return value.toLocaleString('pt-BR', {
+        maximumFractionDigits: 2,
+      })
+    },
+    []
+  )
 
   const loadData = useCallback(async () => {
     if (!user?.id) return
@@ -476,7 +577,7 @@ function AnalysisContent() {
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse"
+                className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse"
               >
                 <div className="h-4 w-20 bg-gray-200 dark:bg-slate-700 rounded mx-auto mb-2" />
                 <div className="h-6 w-16 bg-gray-200 dark:bg-slate-700 rounded mx-auto" />
@@ -484,9 +585,9 @@ function AnalysisContent() {
             ))}
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700 animate-pulse">
             <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded mb-4" />
-            <div className="h-[200px] bg-gray-100 dark:bg-slate-700 rounded-[18px]" />
+            <div className="h-[200px] bg-gray-100 dark:bg-slate-700 rounded-[16px]" />
           </div>
         </div>
       )
@@ -502,14 +603,14 @@ function AnalysisContent() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
             <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Saldo total</p>
             <p className="text-[22px] font-semibold text-gray-900 dark:text-gray-100">
               {formatCurrency(metrics.consolidated.totalBalance)}
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
             <p className="text-[12px] text-gray-400 dark:text-gray-500 mb-1">Evolução</p>
             <p
               className={`text-[22px] font-semibold ${
@@ -524,15 +625,15 @@ function AnalysisContent() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
           <ComparisonChart data={metrics.comparisonChart} />
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
           <ProjectionChart data={metrics.projections} />
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm overflow-hidden">
           <CategoryPie pfData={metrics.categoryPie.pf} pjData={metrics.categoryPie.pj} />
         </div>
       </div>
@@ -544,7 +645,7 @@ function AnalysisContent() {
   return (
     <div
       ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-900 pb-28 font-sans px-4 pt-4 transition-colors duration-300"
+      className="mx-auto min-h-full max-w-2xl bg-gray-50 px-4 pb-8 pt-3 font-sans transition-colors duration-300 dark:bg-slate-950"
     >
       {loadingPulse && (
         <div className="fixed top-6 right-5 z-50">
@@ -558,11 +659,11 @@ function AnalysisContent() {
       />
 
       {/* HEADER UNIFICADO COM STICKY */}
-      <div className="sticky top-0 z-40 pb-3 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl">
-        <div className="bg-white/95 dark:bg-slate-800/95 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm px-4 py-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="-mx-4 mb-3 border-b border-black/5 bg-gray-50 px-4 pb-3 pt-1 dark:border-white/10 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="flex items-start justify-between gap-3 mb-2">
             <div className="min-w-0">
-              <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+              <h1 className="app-page-title">
                 Análises
               </h1>
               <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
@@ -575,13 +676,13 @@ function AnalysisContent() {
                 <button
                   type="button"
                   onClick={() => setShowExportMenu(!showExportMenu)}
-                  className="h-10 w-10 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
+                  className="h-10 w-10 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
                 >
                   <Download size={17} />
                 </button>
 
                 {showExportMenu && (
-                  <div className="absolute right-0 top-[46px] w-44 bg-white dark:bg-slate-800 rounded-[24px] shadow-sm border border-gray-200/70 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="absolute right-0 top-[46px] w-44 bg-white dark:bg-slate-800 rounded-[18px] shadow-sm border border-gray-200/70 dark:border-slate-700 p-2 z-30 animate-in fade-in zoom-in-95 duration-200">
                     <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 px-3 py-2">
                       Exportar análise
                     </p>
@@ -627,7 +728,7 @@ function AnalysisContent() {
               <button
                 type="button"
                 onClick={() => setShowFilterDrawer(true)}
-                className={`h-10 w-10 rounded-[18px] border shadow-sm flex items-center justify-center relative transition-colors hover:bg-gray-100 dark:hover:bg-slate-700/50 ${
+                className={`h-10 w-10 rounded-[16px] border shadow-sm flex items-center justify-center relative transition-colors hover:bg-gray-100 dark:hover:bg-slate-700/50 ${
                   hasActiveFilters
                     ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-300 dark:border-teal-700 text-teal-600 dark:text-teal-400'
                     : 'bg-gray-50 dark:bg-slate-900/40 border-gray-200/70 dark:border-slate-700 text-gray-700 dark:text-gray-300'
@@ -641,12 +742,12 @@ function AnalysisContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2.5 mb-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
-            <div className="min-w-0 w-full rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2 overflow-hidden">
+          <div className="grid grid-cols-1 gap-2 mb-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+            <div className="min-w-0 w-full rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/30 px-2 py-2 overflow-hidden">
               <ContextToggle />
             </div>
 
-            <div className="flex w-full items-center justify-between gap-1.5 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 px-1.5 py-1 sm:w-auto sm:justify-start">
+            <div className="flex w-full items-center justify-between gap-1.5 rounded-[16px] border border-gray-200/70 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 px-1.5 py-1 sm:w-auto sm:justify-start">
               <button
                 type="button"
                 onClick={() => setCurrentDate(subMonths(currentDate, 1))}
@@ -670,11 +771,11 @@ function AnalysisContent() {
           </div>
 
           {/* TABS DENTRO DO HEADER */}
-          <div className="flex bg-gray-50 dark:bg-slate-900/40 border border-gray-200/70 dark:border-slate-700 p-1 rounded-[20px]">
+          <div className="flex bg-gray-50 dark:bg-slate-900/40 border border-gray-200/70 dark:border-slate-700 p-1 rounded-[16px]">
             <button
               type="button"
               onClick={() => setActiveTab('dashboard')}
-              className={`flex-1 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-[14px] text-[13px] font-semibold transition-all ${
                 activeTab === 'dashboard'
                   ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -685,7 +786,7 @@ function AnalysisContent() {
             <button
               type="button"
               onClick={() => setActiveTab('month')}
-              className={`flex-1 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-[14px] text-[13px] font-semibold transition-all ${
                 activeTab === 'month'
                   ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -696,7 +797,7 @@ function AnalysisContent() {
             <button
               type="button"
               onClick={() => setActiveTab('new')}
-              className={`flex-1 py-2.5 rounded-[16px] text-[13px] font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-[14px] text-[13px] font-semibold transition-all ${
                 activeTab === 'new'
                   ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -707,6 +808,216 @@ function AnalysisContent() {
           </div>
         </div>
       </div>
+
+      <section
+        id="intelligence"
+        className="mb-4 scroll-mt-4 overflow-hidden rounded-[18px] border border-teal-200/70 bg-white shadow-sm dark:border-teal-900/50 dark:bg-slate-800"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3.5 dark:border-slate-700/60">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400">
+                <Sparkles size={17} />
+              </div>
+
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-600 dark:text-teal-400">
+                  Inteligência financeira
+                </p>
+                <h2 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+                  Sinais do contexto atual
+                </h2>
+              </div>
+            </div>
+          </div>
+
+          {intelligenceInsights.length > 0 && (
+            <span className="shrink-0 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-semibold text-teal-700 dark:bg-teal-500/10 dark:text-teal-400">
+              {intelligenceInsights.length}
+            </span>
+          )}
+        </div>
+
+        {intelligenceInsights.length === 0 ? (
+          <div className="px-4 py-4">
+            <div className="rounded-[15px] bg-emerald-50/70 px-3.5 py-3 dark:bg-emerald-500/5">
+              <p className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-400">
+                Nenhum sinal relevante agora
+              </p>
+              <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                A inteligência não encontrou desvios ou alertas que precisem de destaque neste contexto.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
+            {intelligenceInsights.map((insight: FinancialInsight) => {
+              const expanded = expandedInsightId === insight.id
+
+              const severityLabel =
+                insight.severity === 'critical'
+                  ? 'Crítico'
+                  : insight.severity === 'warning'
+                    ? 'Atenção'
+                    : insight.severity === 'opportunity'
+                      ? 'Oportunidade'
+                      : 'Informativo'
+
+              const severityClass =
+                insight.severity === 'critical'
+                  ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+                  : insight.severity === 'warning'
+                    ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'
+                    : insight.severity === 'opportunity'
+                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                      : 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400'
+
+              return (
+                <div key={insight.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedInsightId(
+                        expanded ? null : insight.id
+                      )
+                    }
+                    className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-slate-700/40"
+                  >
+                    <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] ${severityClass}`}>
+                      {insight.severity === 'critical' || insight.severity === 'warning'
+                        ? <AlertTriangle size={16} />
+                        : <Sparkles size={16} />
+                      }
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                          {insight.title}
+                        </p>
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${severityClass}`}>
+                          {severityLabel}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                        {insight.message}
+                      </p>
+                    </div>
+
+                    <ChevronDown
+                      size={16}
+                      className={`mt-1 shrink-0 text-gray-400 transition-transform ${
+                        expanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {expanded && (
+                    <div className="bg-gray-50/70 px-4 pb-4 pt-3 dark:bg-slate-900/30">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-[13px] bg-white px-3 py-2.5 dark:bg-slate-800">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                            Confiança
+                          </p>
+                          <p className="mt-1 text-[12px] font-semibold text-gray-800 dark:text-gray-200">
+                            {insight.confidence}
+                          </p>
+                        </div>
+
+                        <div className="rounded-[13px] bg-white px-3 py-2.5 dark:bg-slate-800">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                            Amostra
+                          </p>
+                          <p className="mt-1 text-[12px] font-semibold text-gray-800 dark:text-gray-200">
+                            {insight.sampleSize}
+                          </p>
+                        </div>
+
+                        {insight.currentValue !== undefined && (
+                          <div className="rounded-[13px] bg-white px-3 py-2.5 dark:bg-slate-800">
+                            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                              Valor atual
+                            </p>
+                            <p className="mt-1 text-[12px] font-semibold text-gray-800 dark:text-gray-200">
+                              {formatInsightValue(insight.currentValue)}
+                            </p>
+                          </div>
+                        )}
+
+                        {insight.baselineValue !== undefined && (
+                          <div className="rounded-[13px] bg-white px-3 py-2.5 dark:bg-slate-800">
+                            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                              Referência
+                            </p>
+                            <p className="mt-1 text-[12px] font-semibold text-gray-800 dark:text-gray-200">
+                              {formatInsightValue(insight.baselineValue)}
+                            </p>
+                          </div>
+                        )}
+
+                        {insight.deltaPercent !== undefined && (
+                          <div className="col-span-2 rounded-[13px] bg-white px-3 py-2.5 dark:bg-slate-800">
+                            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                              Variação
+                            </p>
+                            <p className={`mt-1 text-[12px] font-semibold ${
+                              insight.deltaPercent > 0
+                                ? 'text-red-500'
+                                : insight.deltaPercent < 0
+                                  ? 'text-emerald-600'
+                                  : 'text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {insight.deltaPercent > 0 ? '+' : ''}
+                              {formatInsightValue(insight.deltaPercent)}%
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {insight.evidence && Object.keys(insight.evidence).length > 0 && (
+                        <details className="mt-2.5 rounded-[13px] border border-gray-200/70 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+                          <summary className="cursor-pointer text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                            Evidências técnicas
+                          </summary>
+                          <div className="mt-2 space-y-1">
+                            {Object.entries(insight.evidence)
+                              .slice(0, 8)
+                              .map(([key, value]) => (
+                                <div
+                                  key={key}
+                                  className="flex items-start justify-between gap-3 text-[10px]"
+                                >
+                                  <span className="text-gray-400">
+                                    {key}
+                                  </span>
+                                  <span className="max-w-[60%] text-right font-semibold text-gray-700 dark:text-gray-300">
+                                    {String(value)}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </details>
+                      )}
+
+                      {insight.suggestedQuestion && (
+                        <div className="mt-2.5 rounded-[13px] border border-teal-100 bg-teal-50/70 px-3 py-2.5 dark:border-teal-900/50 dark:bg-teal-500/5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-600 dark:text-teal-400">
+                            Pergunta sugerida
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-gray-600 dark:text-gray-300">
+                            {insight.suggestedQuestion}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* FAIXA DE FILTROS ATIVOS */}
       {hasActiveFilters && (
@@ -733,7 +1044,7 @@ function AnalysisContent() {
         <div className="space-y-4 animate-in fade-in duration-300">
           {/* KPIs */}
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
+            <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
               <div className="w-9 h-9 rounded-[14px] bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
                 <ArrowUp size={16} className="text-emerald-600" />
               </div>
@@ -752,7 +1063,7 @@ function AnalysisContent() {
               )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
+            <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
               <div className="w-9 h-9 rounded-[14px] bg-red-50 dark:bg-red-900/30 flex items-center justify-center mb-3">
                 <ArrowDown size={16} className="text-red-500" />
               </div>
@@ -771,7 +1082,7 @@ function AnalysisContent() {
               )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
+            <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-3">
               <div className="w-9 h-9 rounded-[14px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mb-3">
                 <Wallet size={16} className="text-teal-700 dark:text-teal-400" />
               </div>
@@ -794,7 +1105,7 @@ function AnalysisContent() {
           </div>
 
           {/* Distribuição de Gastos (Pizza) */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
             <div className="mb-3">
               <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
                 Distribuição de Gastos
@@ -842,7 +1153,7 @@ function AnalysisContent() {
           </div>
 
           {/* Gastos por Categoria */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
             <div className="mb-3">
               <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
                 Gastos por Categoria
@@ -863,7 +1174,7 @@ function AnalysisContent() {
                   return (
                     <div
                       key={c.name}
-                      className="rounded-[18px] p-3 bg-gray-50/70 dark:bg-slate-900/40"
+                      className="rounded-[16px] p-3 bg-gray-50/70 dark:bg-slate-900/40"
                     >
                       <div className="flex justify-between items-start gap-3 mb-2">
                         <div className="flex items-center gap-3 min-w-0">
@@ -904,7 +1215,7 @@ function AnalysisContent() {
           </div>
 
           {/* Fluxo Mensal */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700">
             <div className="mb-3">
               <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
                 Fluxo Mensal
@@ -933,7 +1244,7 @@ function AnalysisContent() {
           </div>
 
           {/* Patrimônio */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-700 mb-6">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
@@ -984,7 +1295,7 @@ function AnalysisContent() {
       {/* ABA "NOVOS GASTOS" ATUALIZADA */}
       {activeTab === 'new' && (
         <div className="space-y-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-5 pb-5 border-b border-gray-100 dark:border-slate-700">
               <div className="w-10 h-10 rounded-[16px] bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
                 <Sparkles size={18} className="text-teal-700 dark:text-teal-400" />
@@ -1024,7 +1335,7 @@ function AnalysisContent() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] p-5 shadow-sm border border-gray-200/70 dark:border-slate-700">
             {newGastos.length === 0 ? (
               <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-10">
                 Nenhum novo gasto neste mês.
@@ -1064,7 +1375,7 @@ function AnalysisContent() {
                   {newGastos.map((c) => {
                     const IconComp = getDynamicIcon(c.icon)
                     return (
-                      <div key={c.name} className="rounded-[18px] p-3 bg-gray-50/70 dark:bg-slate-900/40">
+                      <div key={c.name} className="rounded-[16px] p-3 bg-gray-50/70 dark:bg-slate-900/40">
                         <div className="flex justify-between items-center mb-2">
                           <div className="flex items-center gap-3 min-w-0">
                             <div
@@ -1111,10 +1422,10 @@ function AnalysisContent() {
           <div className="absolute inset-0" onClick={() => setShowFilterDrawer(false)} />
 
           {/* Container do Modal */}
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[85dvh]">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[24px] flex flex-col animate-in slide-in-from-bottom-full duration-300 shadow-2xl max-h-[82dvh]">
             
             {/* Handle & Header Fixos no Topo */}
-            <div className="shrink-0 px-6 pt-4 pb-4 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[32px]">
+            <div className="shrink-0 px-5 pt-4 pb-3 border-b border-gray-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 rounded-t-[24px]">
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
               <div className="flex items-start justify-between">
                 <div>
@@ -1128,14 +1439,14 @@ function AnalysisContent() {
             </div>
 
             {/* Conteúdo com Scroll Independente */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-6 custom-scrollbar">
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Conta</label>
                 <div className="relative">
                   <select
                     value={filterAccount}
                     onChange={(e) => setFilterAccount(e.target.value)}
-                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as contas</option>
                     {(localAccounts || []).map((acc: any) => (
@@ -1152,7 +1463,7 @@ function AnalysisContent() {
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as categorias</option>
                     {(localCategories || []).map((cat: any) => (
@@ -1165,19 +1476,19 @@ function AnalysisContent() {
             </div>
 
             {/* Footer Fixo com Botões */}
-            <div className="shrink-0 px-6 pt-4 pb-8 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60">
+            <div className="shrink-0 px-5 pt-3 pb-6 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800/60">
               <div className="flex gap-3">
                 <button 
                   type="button" 
                   onClick={handleClearFilters} 
-                  className="w-1/3 py-4 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-[20px] font-bold active:scale-[0.98] transition-all text-[15px]"
+                  className="w-1/3 py-4 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-[18px] font-bold active:scale-[0.98] transition-all text-[15px]"
                 >
                   Limpar
                 </button>
                 <button 
                   type="button" 
                   onClick={handleApplyFilters} 
-                  className="w-2/3 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 active:scale-[0.98] transition-all text-[15px]"
+                  className="w-2/3 py-4 bg-teal-700 text-white rounded-[18px] font-bold shadow-lg shadow-teal-700/20 active:scale-[0.98] transition-all text-[15px]"
                 >
                   Aplicar filtros
                 </button>

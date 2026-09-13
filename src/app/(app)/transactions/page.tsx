@@ -98,7 +98,7 @@ const TransactionsSkeleton = () => (
     {[1, 2].map((group) => (
       <div key={group}>
         <div className="h-3 bg-gray-200 dark:bg-slate-700/50 rounded-full w-24 mb-4 ml-2"></div>
-        <div className="bg-white dark:bg-slate-800 rounded-[28px] border border-gray-100 dark:border-slate-700/50 overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.02)]">
+        <div className="bg-white dark:bg-slate-800 rounded-[22px] border border-gray-100 dark:border-slate-700/50 overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.02)]">
           {[1, 2, 3].map((item, idx) => (
             <div key={item} className={`px-5 py-4 flex items-center gap-4 ${idx !== 2 ? 'border-b border-gray-50 dark:border-slate-700/50' : ''}`}>
               <div className="w-[42px] h-[42px] rounded-[16px] bg-gray-100 dark:bg-slate-700/50 shrink-0"></div>
@@ -139,7 +139,7 @@ function ExportFeedbackOverlay({ status, onClose }: { status: 'idle' | 'exportin
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-[250px] mb-8 font-medium">
               Acesse a <strong className="text-emerald-600 dark:text-emerald-400">pasta de downloads</strong> do seu celular para abrir o arquivo.
             </p>
-            <button type="button" onClick={onClose} className="w-full bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-4 rounded-[20px] font-bold hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-95">
+            <button type="button" onClick={onClose} className="w-full bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 py-4 rounded-[18px] font-bold hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors active:scale-95">
               Concluir
             </button>
           </div>
@@ -205,7 +205,7 @@ function PendingCard({
       <button
         type="button"
         onClick={() => setCollapsed((current) => !current)}
-        className="w-full rounded-[24px] border border-gray-200/70 bg-white px-4 py-3.5 shadow-sm transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
+        className="w-full rounded-[18px] border border-gray-200/70 bg-white px-4 py-3.5 shadow-sm transition-all active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -261,7 +261,7 @@ function PendingCard({
       </button>
 
       {!collapsed && (
-        <div className="mt-2 overflow-hidden rounded-[24px] border border-gray-200/70 bg-white shadow-sm animate-in fade-in slide-in-from-top-2 duration-300 dark:border-slate-700 dark:bg-slate-800">
+        <div className="mt-2 overflow-hidden rounded-[18px] border border-gray-200/70 bg-white shadow-sm animate-in fade-in slide-in-from-top-2 duration-300 dark:border-slate-700 dark:bg-slate-800">
           {debts.map((debt, index) => (
             <button
               key={`debt-${debt.id}`}
@@ -1099,7 +1099,7 @@ export default function TransactionsPage() {
               </button>
 
               {showExportMenu && (
-                <div className="absolute right-0 top-[46px] z-50 w-48 rounded-[20px] border border-gray-200/80 bg-white p-2 shadow-xl shadow-black/10 animate-in fade-in zoom-in-95 duration-150 dark:border-slate-700 dark:bg-slate-800">
+                <div className="absolute right-0 top-[46px] z-50 w-48 rounded-[18px] border border-gray-200/80 bg-white p-2 shadow-xl shadow-black/10 animate-in fade-in zoom-in-95 duration-150 dark:border-slate-700 dark:bg-slate-800">
                   <div className="px-3 pb-1.5 pt-1">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
                       Exportar extrato
@@ -1483,7 +1483,7 @@ export default function TransactionsPage() {
                   <select
                     value={tempFilters.accountId}
                     onChange={(e) => setTempFilters({ ...tempFilters, accountId: e.target.value })}
-                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as contas</option>
                     {(localAccounts || []).map((acc: any) => (
@@ -1500,7 +1500,7 @@ export default function TransactionsPage() {
                   <select
                     value={tempFilters.categoryId}
                     onChange={(e) => setTempFilters({ ...tempFilters, categoryId: e.target.value })}
-                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
+                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
                   >
                     <option value="">Todas as categorias</option>
                     {drawerCategories.map((cat: any) => (
@@ -1514,14 +1514,14 @@ export default function TransactionsPage() {
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Faixa de Valor</label>
                 <div className="flex gap-3">
-                  <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
+                  <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
                     <span className="text-[11px] text-gray-400 font-semibold mb-1 block">Mínimo</span>
                     <div className="flex items-center">
                       <span className="text-[14px] text-gray-400 font-semibold mr-1.5">R$</span>
                       <input type="number" placeholder="0,00" value={tempFilters.minAmount} onChange={(e) => setTempFilters({ ...tempFilters, minAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
                     </div>
                   </div>
-                  <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[20px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
+                  <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
                     <span className="text-[11px] text-gray-400 font-semibold mb-1 block">Máximo</span>
                     <div className="flex items-center">
                       <span className="text-[14px] text-gray-400 font-semibold mr-1.5">R$</span>
@@ -1586,14 +1586,14 @@ export default function TransactionsPage() {
                 <button 
                   type="button" 
                   onClick={resetAdvancedFilters} 
-                  className="w-1/3 py-4 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-[20px] font-bold active:scale-[0.98] transition-all text-[15px]"
+                  className="w-1/3 py-4 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-[18px] font-bold active:scale-[0.98] transition-all text-[15px]"
                 >
                   Limpar
                 </button>
                 <button 
                   type="button" 
                   onClick={applyAdvancedFilters} 
-                  className="w-2/3 py-4 bg-teal-700 text-white rounded-[20px] font-bold shadow-lg shadow-teal-700/20 active:scale-[0.98] transition-all text-[15px]"
+                  className="w-2/3 py-4 bg-teal-700 text-white rounded-[18px] font-bold shadow-sm shadow-teal-700/20 active:scale-[0.98] transition-all text-[15px]"
                 >
                   Aplicar filtros
                 </button>

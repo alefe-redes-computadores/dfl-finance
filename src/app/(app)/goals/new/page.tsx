@@ -61,7 +61,7 @@ function SectionCard({
 }) {
   return (
     <section
-      className={`rounded-[28px] border border-black/5 dark:border-white/10 bg-white/95 dark:bg-slate-800/95 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:shadow-none ${className}`}
+      className={`app-form-section ${className}`}
     >
       {children}
     </section>
@@ -70,7 +70,7 @@ function SectionCard({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="mb-3 block text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400 dark:text-gray-500">
+    <label className="app-form-label">
       {children}
     </label>
   )
@@ -228,7 +228,7 @@ function CategoryModal({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
       <div
-        className="relative h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+        className="app-sheet-panel relative h-[70dvh] max-w-lg overflow-y-auto p-5 animate-in slide-in-from-bottom-8 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />

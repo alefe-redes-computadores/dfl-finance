@@ -117,10 +117,10 @@ function AppBottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-lg rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800 pb-8"
+        className="relative w-full max-w-lg rounded-t-[24px] bg-white p-5 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800 pb-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+        <div className="app-sheet-handle" />
 
         <div className="mb-6 flex items-center justify-between">
           <h3 className="text-[20px] font-bold text-gray-800 dark:text-gray-100">{title}</h3>
@@ -484,6 +484,23 @@ function DebtDetailContent() {
     setPayDate(format(new Date(), 'yyyy-MM-dd'))
   }
 
+  const openPaymentForm = () => {
+    const defaultAccountId =
+      debt?.account_id &&
+      accounts.some(
+        (account) =>
+          account.id === debt.account_id
+      )
+        ? debt.account_id
+        : ''
+
+    setPayAmountNum(0)
+    setPayNote('')
+    setPayDate(format(new Date(), 'yyyy-MM-dd'))
+    setPayAccountId(defaultAccountId)
+    setShowPaymentModal(true)
+  }
+
   const openDeletePaymentConfirm = (paymentId: string) => {
     const payment = payments.find((p) => p.id === paymentId) || null
     setPaymentToDelete(payment)
@@ -702,6 +719,20 @@ function DebtDetailContent() {
       return
     }
 
+    const targetAccountId =
+      payAccountId ||
+      debt.account_id ||
+      null
+
+    if (!targetAccountId) {
+      showToast(
+        'Selecione a conta que receberá este pagamento.',
+        'warning'
+      )
+      errorHaptic()
+      return
+    }
+
     if (!payDate) {
       showToast('Informe a data do recebimento.', 'warning')
       errorHaptic()
@@ -711,7 +742,6 @@ function DebtDetailContent() {
     setIsSubmitting(true)
 
     try {
-      const targetAccountId = payAccountId || debt.account_id || null
       const txId = crypto.randomUUID()
       const appliedPaymentCents = Math.min(
         payAmountCents,
@@ -738,7 +768,7 @@ function DebtDetailContent() {
             : null,
         date: payDate,
         status: 'done',
-        affects_balance: Boolean(targetAccountId),
+        affects_balance: true,
         context: debt.context,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -991,7 +1021,7 @@ function DebtDetailContent() {
             <button
               onClick={() => {
                 vibrate([5])
-                setShowPaymentModal(true)
+                openPaymentForm()
               }}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/25 transition-transform active:scale-[0.98]"
             >

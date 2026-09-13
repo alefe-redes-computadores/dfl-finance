@@ -308,8 +308,8 @@ function NewDebtContent() {
         </header>
 
         <main className="space-y-4">
-          <section className="rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-            <label className="mb-3 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+          <section className="app-form-section">
+            <label className="app-form-label">
               Contexto
             </label>
             <div className="grid grid-cols-2 gap-2 rounded-full bg-gray-100 p-1 dark:bg-slate-700/50">
@@ -338,8 +338,8 @@ function NewDebtContent() {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+          <section className="app-form-section">
+            <label className="app-form-label">
               Nome
             </label>
             <div className="flex items-center gap-3">
@@ -349,13 +349,13 @@ function NewDebtContent() {
                 value={personName}
                 onChange={(e) => setPersonName(e.target.value)}
                 placeholder="Ex: João Silva"
-                className="w-full bg-transparent text-[16px] font-semibold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
+                className="app-input text-[15px] font-semibold"
               />
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+          <section className="app-form-section">
+            <label className="app-form-label">
               Valor
             </label>
             <div className="flex items-center gap-2">
@@ -372,8 +372,8 @@ function NewDebtContent() {
           </section>
 
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+            <div className="app-form-section">
+              <label className="app-form-label">
                 Vencimento
               </label>
               <div className="flex items-center gap-2">
@@ -382,13 +382,13 @@ function NewDebtContent() {
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 outline-none dark:text-gray-200"
+                  className="app-input text-[13px] font-semibold"
                 />
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+            <div className="app-form-section">
+              <label className="app-form-label">
                 Descrição
               </label>
               <div className="flex items-center gap-2">
@@ -398,7 +398,7 @@ function NewDebtContent() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Detalhes..."
-                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
+                  className="app-input font-semibold"
                 />
               </div>
             </div>
@@ -454,8 +454,8 @@ function NewDebtContent() {
             </button>
           </div>
 
-          <section className="rounded-[28px] border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-800">
-            <label className="mb-3 block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+          <section className="app-form-section">
+            <label className="app-form-label">
               Cor
             </label>
             <div className="flex flex-wrap gap-3">
@@ -515,7 +515,7 @@ function NewDebtContent() {
               handleSave()
             }}
             disabled={saving}
-            className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/25 transition-transform active:scale-[0.98] disabled:opacity-50"
+            className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-[18px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/25 transition-transform active:scale-[0.98] disabled:opacity-50"
           >
             {saving ? <Loader2 size={22} className="animate-spin" /> : <Check size={22} />}
             {editId ? 'Atualizar Empréstimo' : 'Criar Empréstimo'}
@@ -527,7 +527,7 @@ function NewDebtContent() {
         <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
-            className="relative h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+            className="app-sheet-panel relative h-[70dvh] max-w-lg overflow-y-auto p-5 animate-in slide-in-from-bottom-8 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
@@ -600,7 +600,7 @@ function NewDebtContent() {
         <div className="fixed inset-0 z-[99999] flex items-end justify-center" onClick={() => setShowAccModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
           <div
-            className="relative h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800"
+            className="app-sheet-panel relative h-[70dvh] max-w-lg overflow-y-auto p-5 animate-in slide-in-from-bottom-8 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />

@@ -32,17 +32,17 @@ function SectionTitle({ title, description }: { title: string; description?: str
 function FormField({ label, children, error, helper }: { label: string; children: React.ReactNode; error?: string; helper?: string }) {
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+      <label className="app-field-label">{label}</label>
       {children}
-      {helper && <p className="text-xs text-gray-500 dark:text-gray-400">{helper}</p>}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {helper && <p className="app-field-helper">{helper}</p>}
+      {error && <p className="app-field-error">{error}</p>}
     </div>
   )
 }
 
 function FieldCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-black/5 dark:border-white/10 bg-white dark:bg-slate-900 p-4 shadow-sm ${className}`}>
+    <div className={`app-form-section ${className}`}>
       {children}
     </div>
   )
@@ -286,13 +286,13 @@ function NewLoanContent() {
                 placeholder="Ex: Empréstimo para capital de giro"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:focus:border-teal-400"
+                className="app-field"
                 autoFocus
               />
             </FormField>
 
             <FormField label="Valor total">
-              <div className="flex items-center gap-2 h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/10 transition">
+              <div className="app-field-shell">
                 <span className="text-sm font-medium text-gray-400 dark:text-gray-500">R$</span>
                 <MoneyInput
                   value={amountNum}
@@ -309,7 +309,7 @@ function NewLoanContent() {
                 placeholder="Nome da pessoa ou empresa"
                 value={lender}
                 onChange={(e) => setLender(e.target.value)}
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:focus:border-teal-400"
+                className="app-field"
               />
             </FormField>
           </div>
@@ -327,7 +327,7 @@ function NewLoanContent() {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                className="app-field text-[13px]"
               />
             </FormField>
 
@@ -336,7 +336,7 @@ function NewLoanContent() {
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                className="app-field text-[13px]"
               />
             </FormField>
 
@@ -347,7 +347,7 @@ function NewLoanContent() {
                 placeholder="Ex: 1,5"
                 value={interestRate}
                 onChange={(e) => setInterestRate(e.target.value)}
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                className="app-field text-[13px]"
               />
             </FormField>
 
@@ -355,7 +355,7 @@ function NewLoanContent() {
               <select
                 value={status}
                 onChange={(e) => { vibrate([5]); setStatus(e.target.value); }}
-                className="w-full h-11 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                className="app-field text-[13px]"
               >
                 <option value="active">Ativo</option>
                 <option value="paid">Pago</option>
@@ -406,7 +406,7 @@ function NewLoanContent() {
               placeholder="Detalhes extras..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 outline-none resize-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:focus:border-teal-400"
+              className="app-textarea"
             />
           </FormField>
         </FieldCard>

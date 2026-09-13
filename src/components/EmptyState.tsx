@@ -19,12 +19,12 @@ export default function EmptyState({
   onAction
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] border border-gray-200/70 bg-white text-gray-400 shadow-sm dark:border-slate-700/70 dark:bg-slate-800 dark:text-gray-500">
-        <Icon size={28} strokeWidth={1.5} />
+    <div className="app-empty-region">
+      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] border border-gray-200/70 bg-white text-gray-400 shadow-sm dark:border-slate-700/70 dark:bg-slate-800 dark:text-gray-500">
+        <Icon size={24} strokeWidth={1.6} />
       </div>
       
-      <h4 className="mb-1.5 text-[15px] font-bold text-gray-900 dark:text-gray-100">
+      <h4 className="mb-1 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
         {title}
       </h4>
       

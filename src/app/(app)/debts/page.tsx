@@ -190,7 +190,7 @@ function DebtsContent() {
       )}
 
       <div className="sticky top-0 z-30 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+        <div className="rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <button
@@ -205,7 +205,7 @@ function DebtsContent() {
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                <h1 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
                   Quem me deve
                 </h1>
                 <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-0.5">
@@ -220,7 +220,7 @@ function DebtsContent() {
                 vibrate(10)
                 router.push('/debts/new')
               }}
-              className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
+              className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-sm shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
             >
               <Plus size={20} />
             </button>
@@ -236,7 +236,7 @@ function DebtsContent() {
 
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
             <div className="w-10 h-10 rounded-[16px] bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mb-3">
               <Wallet size={18} className="text-orange-600 dark:text-orange-400" />
             </div>
@@ -248,7 +248,7 @@ function DebtsContent() {
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
+          <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5">
             <div className="w-10 h-10 rounded-[16px] bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center mb-3">
               <Users size={18} className="text-teal-600 dark:text-teal-400" />
             </div>
@@ -261,7 +261,7 @@ function DebtsContent() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-1.5 mb-4">
+        <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-1.5 mb-4">
           <div className="flex gap-1.5">
             <button
               type="button"
@@ -318,7 +318,7 @@ function DebtsContent() {
                 vibrate(10)
                 router.push('/debts/new')
               }}
-              className="bg-teal-600 text-white px-8 py-3.5 rounded-[20px] font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20 active:scale-[0.98]"
+              className="bg-teal-600 text-white px-8 py-3.5 rounded-[18px] font-bold text-[14px] hover:bg-teal-700 transition-colors shadow-sm shadow-teal-600/20 active:scale-[0.98]"
             >
               Novo valor a receber
             </button>
@@ -345,7 +345,7 @@ function DebtsContent() {
                     vibrate(5)
                     router.push(`/debts/details?id=${encodeURIComponent(debt.id)}`)
                   }}
-                  className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer"
+                  className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 cursor-pointer"
                 >
                   <div className="rounded-[18px] p-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all">
                     <div className="flex items-start justify-between gap-3 mb-3">

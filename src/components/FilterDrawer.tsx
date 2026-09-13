@@ -83,10 +83,10 @@ export default function FilterDrawer({
     <div className="fixed inset-0 z-[150] flex items-end justify-center" onClick={onClose}>
       <div className="app-overlay absolute transition-opacity" />
       <div
-        className="app-sheet-panel max-w-md max-h-[85dvh] overflow-y-auto p-6 animate-in slide-in-from-bottom-8 duration-300"
+        className="app-sheet-panel max-h-[82dvh] max-w-md overflow-y-auto p-5 animate-in slide-in-from-bottom-8 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+        <div className="app-sheet-handle" />
 
         <div className="flex justify-between items-center mb-6">
           <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100 flex items-center gap-2">

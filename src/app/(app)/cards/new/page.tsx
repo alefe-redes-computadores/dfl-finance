@@ -293,7 +293,7 @@ function NewCardContent() {
       </div>
 
       <div className="px-4 -mt-3 relative z-10 space-y-4">
-        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
+        <section className="app-form-section">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Dados principais
@@ -330,32 +330,32 @@ function NewCardContent() {
             </div>
 
             <div className="grid grid-cols-[1fr_96px] gap-3">
-              <div className="rounded-[22px] bg-[#f7f8fa] dark:bg-slate-800/80 px-4 py-3">
-                <label className="text-[12px] font-medium text-gray-500 block mb-1">
+              <div className="app-field-shell flex-col items-stretch gap-1 py-2.5">
+                <label className="app-field-label mb-0">
                   Instituição
                 </label>
                 <input
                   value={institution}
                   onChange={(e) => setInstitution(e.target.value)}
                   placeholder="Opcional"
-                  className="w-full bg-transparent outline-none text-[14px] font-semibold text-gray-900 dark:text-gray-100"
+                  className="app-input font-semibold"
                 />
               </div>
 
-              <div className="rounded-[22px] bg-[#f7f8fa] dark:bg-slate-800/80 px-4 py-3">
-                <label className="text-[12px] font-medium text-gray-500 block mb-1">Final</label>
+              <div className="app-field-shell flex-col items-stretch gap-1 py-2.5">
+                <label className="app-field-label mb-0">Final</label>
                 <input
                   value={lastFour}
                   onChange={(e) => setLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="0000"
-                  className="w-full bg-transparent outline-none text-[14px] font-bold text-gray-900 dark:text-gray-100"
+                  className="app-input font-semibold"
                 />
               </div>
             </div>
           </div>
         </section>
 
-        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
+        <section className="app-form-section">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Ciclo da fatura
@@ -363,7 +363,7 @@ function NewCardContent() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[22px] bg-[#f7f8fa] dark:bg-slate-800/80 px-4 py-3">
+            <div className="app-field-shell flex-col items-stretch gap-1 py-2.5">
               <div className="flex items-center gap-2 mb-2 text-gray-500">
                 <Calendar size={16} />
                 <span className="text-[12px] font-medium">Fechamento</span>
@@ -377,7 +377,7 @@ function NewCardContent() {
               />
             </div>
 
-            <div className="rounded-[22px] bg-[#f7f8fa] dark:bg-slate-800/80 px-4 py-3">
+            <div className="app-field-shell flex-col items-stretch gap-1 py-2.5">
               <div className="flex items-center gap-2 mb-2 text-gray-500">
                 <Calendar size={16} />
                 <span className="text-[12px] font-medium">Vencimento</span>
@@ -393,7 +393,7 @@ function NewCardContent() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
+        <section className="app-form-section">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Financeiro
@@ -426,7 +426,7 @@ function NewCardContent() {
               </div>
             </button>
 
-            <div className="rounded-[24px] bg-[#f7f8fa] dark:bg-slate-800/80 px-4 py-4">
+            <div className="app-field-shell flex-col items-stretch gap-1 py-3">
               <div className="flex items-center gap-2 mb-3 text-gray-500">
                 <DollarSign size={16} />
                 <span className="text-[12px] font-medium">Limite total</span>
@@ -444,7 +444,7 @@ function NewCardContent() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-slate-900 rounded-[22px] p-4 shadow-sm border border-gray-200/70 dark:border-slate-800">
+        <section className="app-form-section">
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
               Aparência
@@ -491,7 +491,7 @@ function NewCardContent() {
           onClick={() => setShowAccountModal(false)}
         >
           <div
-            className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-[32px] p-5 h-[60vh] overflow-y-auto"
+            className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-[24px] p-5 h-[60vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-4" />

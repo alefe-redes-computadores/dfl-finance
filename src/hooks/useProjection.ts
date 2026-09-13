@@ -146,18 +146,27 @@ export function useProjection(
         historicalExpenses[0].date
       )
 
-      const lastDate = parseCivilDate(
-        historicalExpenses[
-          historicalExpenses.length - 1
-        ].date
-      )
+      /*
+       * O denominador precisa chegar até HOJE.
+       *
+       * Antes ele terminava no último lançamento de despesa:
+       * se o usuário passasse vários dias sem gastar/registrar nada,
+       * esses dias desapareciam da amostra e a média diária subia
+       * artificialmente.
+       *
+       * Mantemos a janela máxima de 3 meses e começamos no primeiro
+       * gasto válido encontrado dentro dela.
+       */
+      if (firstDate) {
+        const todayDate = parseCivilDate(today)
 
-      if (firstDate && lastDate) {
-        sampleDays =
-          differenceInCalendarDays(
-            lastDate,
-            firstDate
-          ) + 1
+        if (todayDate) {
+          sampleDays =
+            differenceInCalendarDays(
+              todayDate,
+              firstDate
+            ) + 1
+        }
       }
     }
 
@@ -278,16 +287,16 @@ export function useProjection(
           : `A projeção ainda tem pouca amostra (${sampleSize} movimentações). Use o valor como referência inicial.`
     } else if (riskLevel === 'critical') {
       recommendation =
-        `Mantido o ritmo recente de gastos, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.`
+        `Mantido o ritmo médio observado, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.`
     } else if (riskLevel === 'high') {
       recommendation =
-        `O ritmo recente projeta saldo negativo em 30 dias (${formatCurrency(projectedEndBalance)}).`
+        `O ritmo médio observado projeta saldo negativo em 30 dias (${formatCurrency(projectedEndBalance)}).`
     } else if (riskLevel === 'medium') {
       recommendation =
         `A projeção deixa uma margem reduzida de ${formatCurrency(projectedEndBalance)} em 30 dias.`
     } else {
       recommendation =
-        `Mantido o ritmo recente, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.`
+        `Mantido o ritmo médio observado, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.`
     }
 
     return {

@@ -309,13 +309,13 @@ function NewFinancingContent() {
 
 
   const sectionClass =
-    "rounded-[28px] border border-gray-100/80 bg-white/92 dark:border-slate-700/70 dark:bg-slate-800/92"
+    "app-form-section"
   const fieldClass =
-    "rounded-[20px] border border-gray-100 bg-gray-50/90 px-4 py-3.5 dark:border-slate-700/60 dark:bg-slate-700/35"
+    "app-field-shell flex-col items-stretch justify-center gap-1.5 py-2.5"
   const labelClass =
-    "mb-1.5 block text-[11px] font-semibold text-gray-500 dark:text-gray-400"
+    "app-field-label mb-0"
   const inputClass =
-    "w-full bg-transparent text-[15px] font-semibold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
+    "app-input"
 
   return (
     <div
@@ -448,7 +448,7 @@ function NewFinancingContent() {
                 placeholder="Ex: Financiamento Itaú"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-transparent text-[17px] font-bold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
+                className="app-input text-[16px] font-semibold"
                 autoFocus
               />
             </div>
@@ -585,7 +585,7 @@ function NewFinancingContent() {
                     vibrate([5])
                     setStatus(e.target.value as FinancingStatus)
                   }}
-                  className="w-full cursor-pointer appearance-none bg-transparent text-[15px] font-semibold text-gray-800 outline-none dark:text-gray-100"
+                  className="app-input cursor-pointer appearance-none font-semibold"
                 >
                   <option value="active">Ativo</option>
                   <option value="paid">Quitado</option>
@@ -604,7 +604,7 @@ function NewFinancingContent() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 outline-none dark:text-gray-100"
+                  className="app-input text-[13px] font-semibold"
                 />
               </div>
             </div>
@@ -617,7 +617,7 @@ function NewFinancingContent() {
                   type="date"
                   value={firstDueDate}
                   onChange={(e) => setFirstDueDate(e.target.value)}
-                  className="w-full bg-transparent text-[14px] font-semibold text-gray-800 outline-none dark:text-gray-100"
+                  className="app-input text-[13px] font-semibold"
                 />
               </div>
             </div>
@@ -640,7 +640,7 @@ function NewFinancingContent() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
-              className="w-full resize-none bg-transparent text-[15px] font-medium text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
+              className="app-input min-h-[88px] resize-none py-2"
             />
           </div>
         </section>
@@ -653,7 +653,7 @@ function NewFinancingContent() {
             handleSave()
           }}
           disabled={saving}
-          className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-[24px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-transform hover:bg-teal-700 active:scale-[0.98] disabled:opacity-50"
+          className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-[18px] bg-teal-600 py-4 text-[16px] font-bold text-white shadow-lg shadow-teal-600/30 transition-transform hover:bg-teal-700 active:scale-[0.98] disabled:opacity-50"
         >
           {saving ? <RefreshCw size={22} className="animate-spin" /> : <Save size={22} />}
           {editId ? "Atualizar Financiamento" : "Criar Financiamento"}

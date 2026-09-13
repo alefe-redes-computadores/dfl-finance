@@ -227,7 +227,7 @@ function NewSubscriptionContent() {
         <section className="rounded-[30px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 shadow-[0_6px_24px_rgba(15,23,42,0.05)] dark:shadow-none p-5">
           <div className="space-y-5">
             <div>
-              <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+              <label className="app-field-label">
                 Nome da assinatura
               </label>
               <input
@@ -241,7 +241,7 @@ function NewSubscriptionContent() {
             </div>
 
             <div className="pt-1">
-              <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+              <label className="app-field-label">
                 Valor
               </label>
               <div className="flex items-end gap-2">
@@ -259,13 +259,13 @@ function NewSubscriptionContent() {
 
         <section className="grid grid-cols-2 gap-3">
           <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
-            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+            <label className="app-field-label">
               Ciclo
             </label>
             <select
               value={billingCycle}
               onChange={(e) => { vibrate([5]); setBillingCycle(e.target.value) }}
-              className="w-full bg-transparent text-[15px] font-semibold text-gray-900 dark:text-gray-100 outline-none appearance-none cursor-pointer"
+              className="app-select border-0 bg-transparent px-0 shadow-none cursor-pointer"
             >
               {SUBSCRIPTION_CYCLES.map((cycle) => (
                 <option key={cycle.value} value={cycle.value}>
@@ -276,20 +276,20 @@ function NewSubscriptionContent() {
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
-            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+            <label className="app-field-label">
               Próximo vencimento
             </label>
             <input
               type="date"
               value={nextDueDate}
               onChange={(e) => setNextDueDate(e.target.value)}
-              className="w-full bg-transparent text-[15px] font-semibold text-gray-900 dark:text-gray-100 outline-none"
+              className="app-input font-semibold"
             />
           </div>
         </section>
 
         <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">
-          <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-3 block">
+          <label className="app-field-label">
             Categoria
           </label>
           <div className="flex flex-wrap gap-2">
@@ -311,7 +311,7 @@ function NewSubscriptionContent() {
 
         <section className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none space-y-4">
           <div>
-            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+            <label className="app-field-label">
               Forma de pagamento
             </label>
             <input
@@ -319,14 +319,14 @@ function NewSubscriptionContent() {
               placeholder="Ex: Cartão final 1234, PIX..."
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full bg-transparent text-[15px] font-medium text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+              className="app-input"
             />
           </div>
 
           <div className="h-px bg-gray-100 dark:bg-slate-800" />
 
           <div>
-            <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-3 block">
+            <label className="app-field-label">
               Status da assinatura
             </label>
             <div className="grid grid-cols-3 gap-2 rounded-[20px] bg-gray-50 dark:bg-slate-800 p-1">
@@ -364,7 +364,7 @@ function NewSubscriptionContent() {
               {nextDueDate ? ` com próxima cobrança em ${nextDueDate.split('-').reverse().join('/')}` : ''}.
             </p>
           </div>
-          <label className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+          <label className="app-field-label">
             Observações
           </label>
           <textarea
@@ -372,7 +372,7 @@ function NewSubscriptionContent() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full bg-transparent text-[15px] font-medium text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 resize-none"
+            className="app-input min-h-[84px] resize-none py-2"
           />
         </section>
       </div>

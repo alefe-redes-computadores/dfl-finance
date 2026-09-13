@@ -184,17 +184,76 @@ export default function CategoriesPage() {
   async function confirmDeleteCategory() {
     if (!deleteTarget || !user) return
 
+    const wasDefault = Boolean(deleteTarget.is_default)
+    let defaultFlagChanged = false
+
     try {
-      const result = await safeDelete('categories', deleteTarget.id)
-      if (!result.success) throw new Error(result.error)
+      /*
+       * Categorias padrão não são especiais para o histórico.
+       * Para removê-las, retiramos somente a flag de fábrica e
+       * delegamos toda a proteção relacional ao safeDelete.
+       *
+       * Se houver transação, orçamento ou outra proteção, o delete
+       * continua bloqueado e restauramos is_default imediatamente.
+       */
+      if (wasDefault) {
+        const unlockResult = await safeUpdate(
+          'categories',
+          deleteTarget.id,
+          { is_default: false }
+        )
+
+        if (!unlockResult.success) {
+          throw new Error(
+            unlockResult.error ||
+            'Não foi possível liberar esta categoria padrão.'
+          )
+        }
+
+        defaultFlagChanged = true
+      }
+
+      const result = await safeDelete(
+        'categories',
+        deleteTarget.id
+      )
+
+      if (!result.success) {
+        if (wasDefault && defaultFlagChanged) {
+          await safeUpdate(
+            'categories',
+            deleteTarget.id,
+            { is_default: true }
+          )
+        }
+
+        throw new Error(result.error)
+      }
 
       setDeleteTarget(null)
       showToast('Categoria excluída.', 'success')
       hapticSuccess()
       await reloadCategories()
     } catch (err: any) {
-      showToast(err?.message || 'Não foi possível excluir a categoria.', 'error')
+      if (wasDefault && defaultFlagChanged) {
+        try {
+          await safeUpdate(
+            'categories',
+            deleteTarget.id,
+            { is_default: true }
+          )
+        } catch {
+          // safeUpdate já reporta falha pelo retorno.
+        }
+      }
+
+      showToast(
+        err?.message ||
+        'Não foi possível excluir a categoria.',
+        'error'
+      )
       hapticError()
+      await reloadCategories()
     }
   }
 
@@ -269,7 +328,7 @@ export default function CategoriesPage() {
     <div className="max-w-md mx-auto min-h-screen bg-[#f8f9fa] dark:bg-slate-950 pb-28 font-sans px-4 pt-4 transition-colors duration-300">
       
       {/* HEADER */}
-      <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm px-4 py-4 mb-4">
+      <div className="rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm px-4 py-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -315,7 +374,7 @@ export default function CategoriesPage() {
             <button
               onClick={() => openNew()}
               aria-label="Nova categoria"
-              className="h-10 w-10 bg-teal-600 rounded-[16px] flex items-center justify-center transition-transform active:scale-[0.98] shadow-lg shadow-teal-600/20 hover:bg-teal-700"
+              className="h-10 w-10 bg-teal-600 rounded-[16px] flex items-center justify-center transition-transform active:scale-[0.98] shadow-sm shadow-teal-600/15 hover:bg-teal-700"
             >
               <Plus size={20} className="text-white" />
             </button>
@@ -326,7 +385,7 @@ export default function CategoriesPage() {
           <ContextToggle />
         </div>
 
-        <div className="bg-gray-50 dark:bg-slate-900 rounded-[20px] p-1 border border-gray-200/70 dark:border-slate-700">
+        <div className="bg-gray-50 dark:bg-slate-900 rounded-[18px] p-1 border border-gray-200/70 dark:border-slate-700">
           <div className="flex gap-1">
             {([['expense','Despesas'],['income','Receitas']] as const).map(([k,l]) => (
               <button
@@ -353,11 +412,11 @@ export default function CategoriesPage() {
 
       {/* LISTA DE CATEGORIAS */}
       {catLoading && categories.length === 0 ? (
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm py-10 text-center text-gray-500 text-sm font-medium animate-pulse">
+        <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm py-10 text-center text-gray-500 text-sm font-medium animate-pulse">
           Carregando categorias...
         </div>
       ) : categories.length === 0 ? (
-        <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center py-16 animate-in fade-in">
+        <div className="bg-white dark:bg-slate-800 rounded-[18px] border border-gray-200/70 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center py-16 animate-in fade-in">
           <div className="w-16 h-16 bg-gray-50 dark:bg-slate-900 rounded-full flex items-center justify-center mb-4">
             <Tag size={28} className="text-gray-400 dark:text-gray-500" />
           </div>
@@ -377,7 +436,7 @@ export default function CategoriesPage() {
             return (
               <div
                 key={cat.id}
-                className="bg-white dark:bg-slate-900 rounded-[20px] border border-gray-200/70 dark:border-slate-800 shadow-sm p-1.5 transition-all"
+                className="bg-white dark:bg-slate-900 rounded-[18px] border border-gray-200/70 dark:border-slate-800 shadow-sm p-1.5 transition-all"
               >
                 <div className="rounded-[18px] p-3 flex items-center gap-3">
                   <div
@@ -431,15 +490,13 @@ export default function CategoriesPage() {
                           <Edit3 size={16} />
                         </button>
 
-                        {!cat.is_default && (
-                          <button
-                            onClick={(e) => requestDelete(cat, e)}
-                            aria-label={`Excluir ${cat.name}`}
-                            className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors active:scale-[0.98]"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => requestDelete(cat, e)}
+                          aria-label={`Excluir ${cat.name}`}
+                          className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors active:scale-[0.98]"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </>
                     )}
                   </div>
@@ -507,7 +564,7 @@ export default function CategoriesPage() {
 
               <div>
                 <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Cor</label>
-                <div className="flex flex-wrap gap-3 rounded-[20px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex flex-wrap gap-3 rounded-[18px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800">
                   {COLORS.map((itemColor) => (
                     <button
                       type="button"
@@ -534,7 +591,7 @@ export default function CategoriesPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !name.trim()}
-                className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-lg shadow-teal-600/20 active:scale-[0.98] disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-teal-600 py-4 text-[15px] font-bold text-white shadow-sm shadow-teal-600/15 active:scale-[0.98] disabled:opacity-50"
               >
                 {saving ? 'Salvando...' : editingCategory ? 'Salvar alterações' : 'Criar categoria'}
               </button>
@@ -563,7 +620,7 @@ export default function CategoriesPage() {
               <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-[18px] bg-gray-100 py-3.5 text-[14px] font-bold text-gray-600 active:scale-[0.98] dark:bg-slate-800 dark:text-gray-300">
                 Cancelar
               </button>
-              <button type="button" onClick={confirmDeleteCategory} className="rounded-[18px] bg-red-500 py-3.5 text-[14px] font-bold text-white shadow-lg shadow-red-500/20 active:scale-[0.98]">
+              <button type="button" onClick={confirmDeleteCategory} className="rounded-[18px] bg-red-500 py-3.5 text-[14px] font-bold text-white shadow-sm shadow-red-500/15 active:scale-[0.98]">
                 Excluir
               </button>
             </div>

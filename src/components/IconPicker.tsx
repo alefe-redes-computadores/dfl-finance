@@ -115,14 +115,14 @@ export default function IconPicker({ isOpen, onClose, selectedIcon, onSelect }: 
       role="presentation"
     >
       <div
-        className="app-sheet-panel flex max-h-[88dvh] flex-col animate-in slide-in-from-bottom-6 duration-200"
+        className="app-sheet-panel flex max-h-[82dvh] flex-col animate-in slide-in-from-bottom-6 duration-200"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Escolher ícone"
       >
         <div className="shrink-0 border-b border-gray-100 px-5 pb-4 pt-3 dark:border-slate-800">
-          <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+          <div className="app-sheet-handle" />
 
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>

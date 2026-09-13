@@ -436,7 +436,7 @@ export default function CardsPage() {
   return (
     <div
       ref={containerRef}
-      className="max-w-md mx-auto min-h-screen bg-[#f7f8fa] dark:bg-slate-950 font-sans pb-28 relative transition-colors duration-300"
+      className="mx-auto min-h-full max-w-2xl bg-gray-50 font-sans pb-8 transition-colors duration-300 dark:bg-slate-950"
     >
       {refreshing && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 pointer-events-none">
@@ -447,8 +447,8 @@ export default function CardsPage() {
         </div>
       )}
 
-      <div className="sticky top-0 z-40 bg-[#f7f8fa]/94 dark:bg-slate-950/94 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-sm px-4 py-3.5">
+      <div className="app-topbar">
+        <div className="mx-auto w-full max-w-2xl">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -458,7 +458,7 @@ export default function CardsPage() {
                 >
                   <ChevronLeft size={20} />
                 </button>
-                <h1 className="text-[24px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                <h1 className="app-page-title">
                   Cartões
                 </h1>
               </div>
@@ -470,7 +470,7 @@ export default function CardsPage() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => router.push('/cards/new')}
-                className="h-11 w-11 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98] shrink-0"
+                className="app-icon-button-primary"
               >
                 <Plus size={20} />
               </button>
@@ -478,7 +478,7 @@ export default function CardsPage() {
               {/* ✅ BOTÃO PERSONALIZAR - REORDENAR CARTÕES (ITENS) */}
               <button
                 onClick={openPersonalize}
-                className="h-11 w-11 rounded-[18px] border border-gray-200/70 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/40 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-[0.98]"
+                className="app-icon-button"
               >
                 <Settings2 size={20} />
               </button>
@@ -511,7 +511,7 @@ export default function CardsPage() {
         </div>
       </div>
 
-      <div className="px-4 pt-3 space-y-3">
+      <div className="mx-auto w-full max-w-2xl space-y-3 px-4 pt-3">
         {!loading && cardsWithInvoice.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-[20px] border border-gray-200/70 dark:border-slate-800 shadow-sm p-4 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-start justify-between gap-3">
@@ -573,7 +573,7 @@ export default function CardsPage() {
                   key={card.id}
                   type="button"
                   onClick={() => router.push(`/cards/details?id=${card.id}`)}
-                  className="w-full overflow-hidden rounded-[22px] border border-gray-200/70 bg-white text-left shadow-sm transition-all active:scale-[0.985] dark:border-slate-800 dark:bg-slate-900"
+                  className="w-full overflow-hidden rounded-[20px] border border-gray-200/70 bg-white text-left shadow-sm transition-all active:scale-[0.985] dark:border-slate-800 dark:bg-slate-900"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <div className="flex items-center gap-3 px-4 pt-4">

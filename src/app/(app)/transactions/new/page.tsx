@@ -862,11 +862,11 @@ function NewTransactionContent() {
   }, [uploading, receiptUrl, receiptType])
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-[#f8f9fa] dark:bg-slate-900">
+    <div className="mx-auto min-h-full w-full max-w-2xl bg-gray-50 pb-28 dark:bg-slate-950">
       
       {/* HEADER */}
-      <div className="sticky top-0 z-40 bg-[#f8f9fa]/92 dark:bg-slate-900/92 backdrop-blur-xl px-4 pt-4 pb-3 border-b border-gray-200/60 dark:border-slate-800">
-        <div className="rounded-[24px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
+      <div className="app-topbar">
+        <div className="rounded-[20px] border border-gray-200/70 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 shadow-sm px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <button
               onClick={() => { vibrate([5]); router.replace('/transactions'); }}
@@ -941,7 +941,7 @@ function NewTransactionContent() {
           </div>
 
           {/* VALOR */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center">
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 text-center">
             <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-2">
               Valor {isIncome ? 'da receita' : 'da despesa'}
             </p>
@@ -972,14 +972,14 @@ function NewTransactionContent() {
 
           {/* COMPROVANTE */}
           {uploading ? (
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
               <Loader2 size={20} className="animate-spin text-teal-700" />
               <span className="text-[13px] font-semibold text-gray-600 dark:text-gray-300">
                 Enviando comprovante...
               </span>
             </div>
           ) : receiptUrl ? (
-            <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center justify-between gap-3">
+            <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 {receiptPreview ? (
                   <div className="w-12 h-12 rounded-[16px] overflow-hidden bg-gray-200 dark:bg-slate-600 shrink-0 border border-gray-200 dark:border-slate-600">
@@ -1011,7 +1011,7 @@ function NewTransactionContent() {
           ) : null}
 
           {/* FORMULÁRIO PRINCIPAL */}
-          <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
+          <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
             {/* Descrição */}
             <div>
               <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
@@ -1282,7 +1282,7 @@ function NewTransactionContent() {
 
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-[1400px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
               <div className="space-y-4">
-                <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
+                <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 space-y-4">
                   {/* Data */}
                   <div>
                     <label className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 ml-1 mb-1 block">
@@ -1392,7 +1392,7 @@ function NewTransactionContent() {
                 {/* Tags */}
                 <button
                   onClick={() => { vibrate([5]); setShowTagModal(true) }}
-                  className="w-full bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 flex items-center justify-between active:scale-[0.98] transition-transform"
+                  className="w-full bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-5 flex items-center justify-between active:scale-[0.98] transition-transform"
                 >
                   <div className="flex items-center gap-4">
                     <Tag size={18} className="text-gray-400" />
@@ -1405,7 +1405,7 @@ function NewTransactionContent() {
 
                 {/* Opções de despesa */}
                 {!isIncome && (
-                  <div className="bg-white dark:bg-slate-800 rounded-[24px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-2">
+                  <div className="bg-white dark:bg-slate-800 rounded-[20px] border border-gray-200/70 dark:border-slate-700 shadow-sm p-2 space-y-2">
                     <div className="rounded-[18px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
@@ -1511,8 +1511,8 @@ function NewTransactionContent() {
       {/* MODAL CATEGORIA */}
       {showCatModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCatModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Selecionar categoria</h3>
               <div className="flex gap-2">
@@ -1544,8 +1544,8 @@ function NewTransactionContent() {
       {/* MODAL SUBCATEGORIA */}
       {showSubCatModal && selectedParentCat && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSubCatModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-right-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center gap-3 mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <button onClick={() => { vibrate([5]); setShowSubCatModal(false) }} className="p-2.5 -ml-2 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-95 transition-transform"><ChevronLeft size={20} /></button>
               <div>
@@ -1578,8 +1578,8 @@ function NewTransactionContent() {
       {/* MODAL CONTA */}
       {showAccModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAccModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contas</h3>
               <div className="flex gap-2">
@@ -1607,8 +1607,8 @@ function NewTransactionContent() {
       {/* MODAL CARTÃO */}
       {showCardModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCardModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Cartão de crédito</h3>
               <button onClick={() => setShowCardModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
@@ -1633,8 +1633,8 @@ function NewTransactionContent() {
       {/* MODAL CONTATO */}
       {showContactModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowContactModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Contatos</h3>
               <button onClick={() => setShowContactModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
@@ -1663,8 +1663,8 @@ function NewTransactionContent() {
       {/* MODAL TAGS */}
       {showTagModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowTagModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Tags</h3>
               <div className="flex gap-2">
@@ -1727,8 +1727,8 @@ function NewTransactionContent() {
       {/* MODAIS DE CRIAÇÃO */}
       {showCreateCatModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateCatModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova Categoria</h3>
               <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
@@ -1755,8 +1755,8 @@ function NewTransactionContent() {
 
       {showCreateAccModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateAccModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 max-h-[82dvh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova Conta</h3>
               <button onClick={() => setShowCreateAccModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
@@ -1778,8 +1778,8 @@ function NewTransactionContent() {
 
       {showCreateTagModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateTagModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 max-h-[82dvh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova Tag</h3>
               <button onClick={() => setShowCreateTagModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
@@ -1801,8 +1801,8 @@ function NewTransactionContent() {
 
       {showCustomRecurrenceModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCustomRecurrenceModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[32px] p-6 animate-in slide-in-from-bottom-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)]" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-6" />
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 animate-in slide-in-from-bottom-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)]" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Recorrência</h3>
               <button onClick={() => setShowCustomRecurrenceModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>

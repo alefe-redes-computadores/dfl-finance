@@ -31,7 +31,7 @@ import {
 } from '@/lib/contactOperations'
 
 const inputBase =
-  'w-full rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3.5 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-teal-500 dark:focus:bg-slate-900'
+  'app-field'
 
 function FieldLabel({
   children,
@@ -41,7 +41,7 @@ function FieldLabel({
   optional?: boolean
 }) {
   return (
-    <label className="mb-1.5 ml-1 flex items-center gap-1 text-[12px] font-semibold text-slate-600 dark:text-slate-400">
+    <label className="app-field-label ml-0.5 flex items-center gap-1">
       {children}
       {optional && <span className="font-normal text-slate-400">· opcional</span>}
     </label>
@@ -58,13 +58,13 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[26px] border border-slate-200/70 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="app-form-section">
       <div className="mb-4">
-        <h2 className="text-[14px] font-bold text-slate-900 dark:text-slate-100">
+        <h2 className="app-form-section-title">
           {title}
         </h2>
         {subtitle && (
-          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+          <p className="app-form-section-subtitle">
             {subtitle}
           </p>
         )}
@@ -627,7 +627,7 @@ function ContactForm() {
           onClick={() => !deleting && setShowDeleteSheet(false)}
         >
           <div
-            className="w-full max-w-lg rounded-t-[32px] bg-white p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl dark:bg-slate-900"
+            className="app-sheet-panel max-w-lg p-5 pb-[calc(env(safe-area-inset-bottom)+24px)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto mb-6 h-1.5 w-11 rounded-full bg-slate-200 dark:bg-slate-700" />
