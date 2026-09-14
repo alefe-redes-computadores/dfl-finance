@@ -138,43 +138,41 @@ const withPWA = require('next-pwa')({
     },
 
     /*
-     * Páginas HTML/navegação do próprio domínio.
+     * Não existe um catch-all de rede aqui de propósito.
      *
-     * NetworkFirst mantém a aplicação atual quando há rede
-     * e reutiliza a última versão funcional quando não há.
+     * cacheOnFrontEndNav + cacheStartUrl cuidam do shell
+     * visitado pelo usuário e `fallbacks.document` atende
+     * uma navegação ainda indisponível offline.
      *
-     * Não incluímos /api: operações realmente servidor-side
-     * devem falhar explicitamente offline, não retornar dados
-     * de API potencialmente velhos.
+     * Requisições de API, Supabase, IA e outros serviços
+     * não devem cair acidentalmente em um cache genérico.
      */
-    {
-      urlPattern:
-        /^(?!.*\/api\/).*$/i,
-      handler: 'NetworkFirst',
-      method: 'GET',
-      options: {
-        cacheName:
-          'app-navigation',
-        networkTimeoutSeconds: 4,
-        expiration: {
-          maxEntries: 80,
-          maxAgeSeconds:
-            60 * 60 * 24 * 7,
-        },
-        cacheableResponse: {
-          statuses: [
-            0,
-            200,
-          ],
-        },
-      },
-    },
   ],
 })
 
 /** @type {import('next').NextConfig} */
+const isMobileBuild =
+  process.env.DFL_BUILD_TARGET === 'mobile'
+
 const nextConfig = {
   reactStrictMode: true,
+
+  /*
+   * Dois targets, um único produto:
+   *
+   * - web: runtime Next normal na Vercel;
+   * - mobile: export estático para o WebView Capacitor.
+   *
+   * As APIs NÃO fazem parte do runtime mobile.
+   * Elas continuam hospedadas na Vercel e são acessadas
+   * pela fronteira criada em src/lib/runtime/apiUrl.ts.
+   */
+  ...(isMobileBuild
+    ? {
+        output: 'export',
+        trailingSlash: true,
+      }
+    : {}),
 
   /*
    * O build web/Vercel usa o runtime normal do Next.

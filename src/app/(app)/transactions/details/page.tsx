@@ -1,6 +1,7 @@
 // src/app/(app)/transactions/details/page.tsx
 'use client'
 
+import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { useEffect, useState, useCallback, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -843,7 +844,7 @@ function EditTransactionContent() {
             throw new Error('Sessão expirada. Entre novamente.')
           }
 
-          const ocrResponse = await fetch('/api/ocr-receipt', {
+          const ocrResponse = await fetch(resolveApiUrl('/api/ocr-receipt'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

@@ -57,7 +57,7 @@ export default function OfflinePage() {
   }, [])
 
   return (
-    <main className="min-h-[100dvh] bg-gray-50 px-5 py-8 text-gray-900 dark:bg-slate-900 dark:text-gray-100">
+    <main className="min-h-[100dvh] bg-gray-50 px-5 pb-[max(2rem,var(--safe-area-bottom))] pt-[max(2rem,var(--safe-area-top))] text-gray-900 dark:bg-slate-900 dark:text-gray-100">
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md items-center justify-center">
         <section className="w-full rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
@@ -81,7 +81,7 @@ export default function OfflinePage() {
           <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-300">
             {isOnline
               ? 'A internet voltou. Você pode retornar ao DFL Finance normalmente.'
-              : 'Seus dados locais continuam preservados. As telas que já foram carregadas podem funcionar sem internet, e alterações locais ficam aguardando sincronização.'}
+              : 'Seus dados locais continuam preservados no dispositivo. Telas já carregadas podem funcionar sem internet, e novas alterações ficam na fila local até a conexão voltar.'}
           </p>
 
           {!isOnline && (
@@ -100,17 +100,20 @@ export default function OfflinePage() {
           <div className="mt-6 grid gap-3">
             <button
               type="button"
-              onClick={() =>
-                router.replace(
-                  '/home'
-                )
-              }
+              onClick={() => {
+                if (!isOnline && window.history.length > 1) {
+                  router.back()
+                  return
+                }
+
+                router.replace('/home')
+              }}
               className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-teal-600 px-4 text-sm font-bold text-white transition active:scale-[0.98] dark:bg-teal-500 dark:text-slate-950"
             >
               <ArrowLeft
                 size={18}
               />
-              Voltar para o app
+              {isOnline ? 'Voltar para o app' : 'Voltar à última tela'}
             </button>
 
             {isOnline && (

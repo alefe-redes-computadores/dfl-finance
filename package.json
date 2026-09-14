@@ -10,7 +10,10 @@
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
     "check": "npm run typecheck && npm run lint",
     "test": "jest",
-    "build:mobile": "node -e \"console.error('Build mobile temporariamente separado do build web. Finalizar arquitetura Capacitor antes de gerar out/.'); process.exit(1)\""
+    "build:mobile": "NEXT_PUBLIC_DFL_SERVER_ORIGIN=https://dfl-finance.vercel.app node scripts/build-mobile.mjs",
+    "mobile:check": "node scripts/check-mobile-readiness.mjs",
+    "mobile:verify": "node scripts/verify-mobile-export.mjs",
+    "mobile:prepare": "npm run mobile:check && npm run build:mobile && npm run mobile:verify"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.0",

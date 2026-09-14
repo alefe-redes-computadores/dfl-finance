@@ -1,6 +1,7 @@
 // src/app/(app)/import/page.tsx
 'use client'
 
+import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -152,7 +153,7 @@ function ImportContent() {
           throw new Error('Sessão expirada. Entre novamente.')
         }
 
-        const response = await fetch('/api/ocr-receipt', {
+        const response = await fetch(resolveApiUrl('/api/ocr-receipt'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

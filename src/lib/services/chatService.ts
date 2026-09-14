@@ -1,4 +1,5 @@
 // src/lib/services/chatService.ts
+import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { supabase } from '@/lib/supabase'
 import type {
   FinancialInsight,
@@ -100,7 +101,7 @@ async function getAuthenticatedResponse(
 
   const response =
     await fetch(
-      '/api/assistant/chat',
+      resolveApiUrl('/api/assistant/chat'),
       {
         method: 'POST',
         headers: {

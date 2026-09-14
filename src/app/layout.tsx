@@ -6,6 +6,7 @@ import { ToastProvider } from '@/contexts/ToastContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { BottomNavOverlayProvider } from '@/contexts/BottomNavOverlayContext'
 import CapacitorStatusBar from '@/components/CapacitorStatusBar'
+import { NativeAuthProvider } from '@/contexts/NativeAuthContext'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -16,12 +17,31 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: 'DFL Finance',
+  applicationName: 'DFL Finance',
   description: 'Controle financeiro pessoal e empresarial',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      {
+        url: '/icon-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        url: '/icon-512x512.png',
+        sizes: '512x512',
+        type: 'image/png',
+      },
+    ],
+    apple: '/icon-192x192.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'DFL Finance',
+  },
+  formatDetection: {
+    telephone: false,
   },
 }
 
@@ -31,6 +51,16 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   maximumScale: 1,
   userScalable: false,
+  themeColor: [
+    {
+      media: '(prefers-color-scheme: light)',
+      color: '#f8f9fa',
+    },
+    {
+      media: '(prefers-color-scheme: dark)',
+      color: '#0f172a',
+    },
+  ],
 }
 
 export default function RootLayout({
@@ -72,14 +102,16 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-[100dvh] bg-gray-50 text-gray-900 selection:bg-teal-500/30 transition-colors duration-300 dark:bg-slate-900 dark:text-gray-100">
-        <ThemeProvider>
-          <CapacitorStatusBar />
-          <ToastProvider>
-            <BottomNavOverlayProvider>
-              {children}
-            </BottomNavOverlayProvider>
-          </ToastProvider>
-        </ThemeProvider>
+        <NativeAuthProvider>
+          <ThemeProvider>
+            <CapacitorStatusBar />
+            <ToastProvider>
+              <BottomNavOverlayProvider>
+                {children}
+              </BottomNavOverlayProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </NativeAuthProvider>
       </body>
     </html>
   )

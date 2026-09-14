@@ -7,11 +7,11 @@ import { supabase } from '@/lib/supabase'
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
-import { useAuthDeepLink } from '@/lib/hooks/useAuthDeepLink'
+import { useNativeAuth } from '@/contexts/NativeAuthContext'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { isProcessing } = useAuthDeepLink() // Ativando o ouvido do aplicativo aqui!
+  const { isProcessing } = useNativeAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -48,9 +48,14 @@ export default function LoginPage() {
     try {
       const isNative = Capacitor.isNativePlatform()
       
-      const redirectUrl = isNative 
-        ? 'dfl://callback' 
-        : `${window.location.origin}`
+      /*
+       * O fluxo nativo usa o navegador do sistema + PKCE.
+       * O retorno é capturado por useAuthDeepLink através
+       * do contrato exato dfl://callback.
+       */
+      const redirectUrl = isNative
+        ? 'dfl://callback'
+        : window.location.origin
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

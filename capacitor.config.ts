@@ -2,24 +2,25 @@
 import { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.dafamilialanches.app',
+  /*
+   * Identidade nativa definitiva do DFL Finance.
+   *
+   * Deve permanecer estável depois da primeira publicação
+   * Android porque passa a identificar o aplicativo nativo.
+   */
+  appId: 'com.dflfinance.app',
   appName: 'DFL Finance',
   webDir: 'out',
   bundledWebRuntime: false,
   server: {
     androidScheme: 'https',
-    cleartext: true,
+    cleartext: false,
   },
   plugins: {
     StatusBar: {
       overlaysWebView: false,
       style: 'LIGHT',
       backgroundColor: '#0f172a',
-    },
-    GoogleAuth: {
-      scopes: ['profile', 'email'],
-      serverClientId: '726269935852-l4lu5tqigkvarjb47juqta6ksr9g94eq.apps.googleusercontent.com',
-      forceCodeForRefreshToken: true,
     },
   },
 }

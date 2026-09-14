@@ -1,59 +1,58 @@
-Name: Compilar APK DFL
+name: DFL Finance Mobile Readiness
 
 on:
-  push:
-    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  mobile-export:
+    name: Validate mobile export
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
-      - name: Clonar Repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js
+      - name: Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Configurar Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+      - name: Install
+        run: npm ci
 
-      - name: Instalar Dependências
-        run: npm install
+      - name: TypeScript
+        run: npm run typecheck
 
-      - name: Build do Next.js
-        run: npm run build
+      - name: ESLint
+        run: npm run lint
 
-      - name: Sincronizar e Preparar Android
+      - name: Mobile contracts
+        run: npm run mobile:check
+
+      - name: Build mobile export
+        env:
+          NEXT_PUBLIC_DFL_SERVER_ORIGIN: https://dfl-finance.vercel.app
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run build:mobile
+
+      - name: Verify mobile export
+        run: npm run mobile:verify
+
+      - name: Ensure Android is still gated
         run: |
-          rm -rf android
-          npx cap add android
-          
-          # 🔥 INJEÇÃO 100% SEGURA NO ANDROID MANIFEST (Via SED)
-          sed -i 's/<\/activity>/<intent-filter android:label="dfl_finance_auth"><action android:name="android.intent.action.VIEW" \/><category android:name="android.intent.category.DEFAULT" \/><category android:name="android.intent.category.BROWSABLE" \/><data android:scheme="dfl" android:host="callback" \/><\/intent-filter><\/activity>/g' android/app/src/main/AndroidManifest.xml
+          test ! -d android
+          echo "OK: android/ ainda não gerado."
 
-          npx cap sync android
-          
-          # Copia assets
-          mkdir -p assets
-          cp public/icon-512*.png assets/icon.png || echo "Logo não encontrada"
-          cp public/icon-512*.png assets/splash.png || echo "Splash não encontrada"
-          
-          npx @capacitor/assets generate --android
-
-      - name: Compilar APK (Gradle)
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew clean assembleDebug
-
-      - name: Disponibilizar APK
+      - name: Upload mobile web bundle
         uses: actions/upload-artifact@v4
         with:
-          name: DFL-Finance-App
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 1
+          name: dfl-finance-mobile-web
+          path: out/
+          if-no-files-found: error
+          retention-days: 3

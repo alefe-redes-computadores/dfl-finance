@@ -1,6 +1,7 @@
 // src/app/(app)/import-invoice/page.tsx
 'use client'
 
+import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -255,7 +256,7 @@ export default function ImportInvoicePage() {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const response = await fetch('/api/extract-invoice', {
+      const response = await fetch(resolveApiUrl('/api/extract-invoice'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
