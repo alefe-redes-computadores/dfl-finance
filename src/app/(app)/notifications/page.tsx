@@ -227,8 +227,7 @@ export default function NotificationsPage() {
   ])
 
 
-  // Adicione isto dentro do deleteNotification
-    const deleteNotification = useCallback(async (id: string) => {
+  const deleteNotification = useCallback(async (id: string) => {
       if (!user) return
       try {
       // 1. Atualização Otimista

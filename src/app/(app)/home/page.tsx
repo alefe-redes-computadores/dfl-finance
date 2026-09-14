@@ -20,6 +20,7 @@ import { ptBR } from 'date-fns/locale'
 import ContextToggle, { ContextProvider, useContext_ } from '@/components/ContextToggle'
 import { useLocalSync } from '@/hooks/useLocalSync'
 import NotificationBell from '@/components/NotificationBell'
+import { isNotificationRead } from '@/lib/notificationUtils'
 import SyncButton from '@/components/SyncButton'
 import BankLogo from '@/components/BankLogo'
 import { useToast } from '@/contexts/ToastContext'
@@ -741,8 +742,8 @@ function HomeContent() {
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [localNotifications])
 
-  const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !n.isRead).length, [notificationsMap])
-  const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !n.isRead).length, [notificationsMap])
+  const unreadNotifications = useMemo(() => notificationsMap.filter((n: any) => !isNotificationRead(n)).length, [notificationsMap])
+  const criticalCount = useMemo(() => notificationsMap.filter((n: any) => n.severity === 'critical' && !isNotificationRead(n)).length, [notificationsMap])
 
   useEffect(() => {
     if (!user?.id || localCards.length === 0) return

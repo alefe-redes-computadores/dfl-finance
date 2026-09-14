@@ -68,7 +68,7 @@ export default function CardExpensePage() {
   const loading = cardsLoading || catsLoading || tagsLoading
 
   const categories = useMemo(() => {
-    return (localCategories || []).sort((a: any, b: any) => {
+    return [...(localCategories || [])].sort((a: any, b: any) => {
       const orderA = a.order_index ?? 9999
       const orderB = b.order_index ?? 9999
       if (orderA !== orderB) return orderA - orderB

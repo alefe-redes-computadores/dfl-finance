@@ -170,7 +170,7 @@ export default function TagsPage() {
           tag.name && tag.name.toLowerCase().includes(query)
         )
 
-    return source.sort((a: any, b: any) =>
+    return [...source].sort((a: any, b: any) =>
       String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')
     )
   }, [tags, search])
