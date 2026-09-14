@@ -5,9 +5,6 @@ import { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
-const LIGHT_BACKGROUND = '#f8f9fa'
-const DARK_BACKGROUND = '#0f172a'
-
 export default function CapacitorStatusBar() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
@@ -18,11 +15,7 @@ export default function CapacitorStatusBar() {
       const isDark = document.documentElement.classList.contains('dark')
 
       try {
-        await StatusBar.setOverlaysWebView({ overlay: false })
-
-        await StatusBar.setBackgroundColor({
-          color: isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND,
-        })
+        await StatusBar.setOverlaysWebView({ overlay: true })
 
         await StatusBar.setStyle({
           style: isDark ? Style.Light : Style.Dark,

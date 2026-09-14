@@ -325,3 +325,43 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 /* DFL_NATIVE_CONTROLS_V11A_END */
+
+
+/* DFL_IMMERSIVE_SHELL_V12C_START */
+
+/*
+ * Mantém a superfície do aplicativo contínua até os recortes do sistema.
+ * Em PWA, a cor inicial vem do manifest/meta e o ThemeProvider assume
+ * depois da restauração do tema persistido.
+ */
+html,
+body {
+  border: 0;
+  background-color: var(--app-background);
+}
+
+/*
+ * Preenche explicitamente o safe-area superior quando o navegador/WebView
+ * entrega esse espaço à página. Evita a "costura" horizontal entre a barra
+ * do sistema e o primeiro conteúdo.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 2147483000;
+  height: var(--safe-area-top);
+  pointer-events: none;
+  background: var(--app-background);
+}
+
+/*
+ * Evita que elementos decorativos introduzam hairline no limite superior.
+ */
+.app-status-surface {
+  background: var(--app-background);
+  border-top: 0;
+  box-shadow: none;
+}
+
+/* DFL_IMMERSIVE_SHELL_V12C_END */

@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'DFL Finance',
   },
   formatDetection: {
@@ -51,16 +51,7 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   maximumScale: 1,
   userScalable: false,
-  themeColor: [
-    {
-      media: '(prefers-color-scheme: light)',
-      color: '#f8f9fa',
-    },
-    {
-      media: '(prefers-color-scheme: dark)',
-      color: '#0f172a',
-    },
-  ],
+  themeColor: '#0f172a',
 }
 
 export default function RootLayout({
