@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { Capacitor } from '@capacitor/core'
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -79,6 +80,12 @@ export default function PushNotificationManager({ userId }: { userId: string }) 
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    // Web Push é responsabilidade do PWA.
+    // No app nativo o contrato é tratado pela ponte Capacitor.
+    if (Capacitor.isNativePlatform()) {
+      return
+    }
+
     const isSupported =
       typeof window !== 'undefined' &&
       'serviceWorker' in navigator &&

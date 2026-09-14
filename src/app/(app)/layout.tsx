@@ -7,6 +7,7 @@ import BottomNav from '@/components/BottomNav'
 import { ContextProvider } from '@/components/ContextToggle'
 import { Loader2 } from 'lucide-react'
 import { useBottomNavVisible } from '@/hooks/useBottomNavVisible'
+import NativeNotificationManager from '@/components/NativeNotificationManager'
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -60,6 +61,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           : {}),
       }}
     >
+      <NativeNotificationManager userId={user.id} />
       <div className="page-transition min-h-full">
         {children}
       </div>

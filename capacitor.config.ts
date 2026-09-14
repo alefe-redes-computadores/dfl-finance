@@ -21,6 +21,13 @@ const config: CapacitorConfig = {
       overlaysWebView: true,
       style: 'LIGHT',
     },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_dfl_finance',
+      iconColor: '#0f766e',
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
   },
 }
 

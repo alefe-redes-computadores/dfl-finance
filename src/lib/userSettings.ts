@@ -10,6 +10,16 @@ export interface UserPreferences {
   weekly_report: boolean
   monthly_report: boolean
   push_notifications: boolean
+  notification_hour: number
+  notification_categories: {
+    invoices: boolean
+    transactions: boolean
+    debts: boolean
+    financings: boolean
+    loans: boolean
+    subscriptions: boolean
+    goals: boolean
+  }
   email_summary: boolean
   language: 'pt-BR'
   share_usage_data: boolean
@@ -42,6 +52,16 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   weekly_report: true,
   monthly_report: true,
   push_notifications: true,
+  notification_hour: 9,
+  notification_categories: {
+    invoices: true,
+    transactions: true,
+    debts: true,
+    financings: true,
+    loans: true,
+    subscriptions: true,
+    goals: true,
+  },
   email_summary: false,
   language: 'pt-BR',
   share_usage_data: false,
@@ -118,6 +138,19 @@ function normalizePreferences(value: unknown): UserPreferences {
       typeof raw.push_notifications === 'boolean'
         ? raw.push_notifications
         : DEFAULT_USER_PREFERENCES.push_notifications,
+    notification_hour:
+      typeof raw.notification_hour === 'number' &&
+      Number.isFinite(raw.notification_hour)
+        ? Math.min(21, Math.max(6, raw.notification_hour))
+        : DEFAULT_USER_PREFERENCES.notification_hour,
+    notification_categories: {
+      ...DEFAULT_USER_PREFERENCES.notification_categories,
+      ...(raw.notification_categories &&
+      typeof raw.notification_categories === 'object' &&
+      !Array.isArray(raw.notification_categories)
+        ? raw.notification_categories
+        : {}),
+    },
     email_summary:
       typeof raw.email_summary === 'boolean'
         ? raw.email_summary

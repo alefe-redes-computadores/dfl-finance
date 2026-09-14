@@ -15,6 +15,7 @@ import { useLocalData } from '@/hooks/useLocalData'
 import { useSafeDb } from '@/hooks/useSafeDb'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
+  archiveNotificationIds,
   clearAllNotifications,
   isNotificationRead,
   normalizeNotificationReadState,
@@ -235,7 +236,11 @@ export default function NotificationsPage() {
       setNotifications(filteredList)
       setUnreadCount(filteredList.filter((n: any) => !isNotificationRead(n)).length)
 
-      // 2. Remoção Real do DB
+      // 2. Tombstone remoto: impede geradores determinísticos
+      // de ressuscitarem este alerta após o usuário dispensá-lo.
+      await archiveNotificationIds(user.id, [id])
+
+      // 3. Remoção Real do DB
       const result = await safeDelete('notifications', id)
       
       if (!result.success) throw new Error(result.error)

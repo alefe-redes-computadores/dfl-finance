@@ -59,6 +59,131 @@ export async function hasDuplicateNotification(
   }
 }
 
+
+const ARCHIVE_PENDING_PREFIX =
+  'dfl_notification_archive_pending_'
+
+function pendingArchiveKey(userId: string) {
+  return `${ARCHIVE_PENDING_PREFIX}${userId}`
+}
+
+function readPendingArchiveIds(userId: string): string[] {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = localStorage.getItem(
+      pendingArchiveKey(userId)
+    )
+
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw)
+
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (id): id is string =>
+            typeof id === 'string' && Boolean(id)
+        )
+      : []
+  } catch {
+    return []
+  }
+}
+
+function writePendingArchiveIds(
+  userId: string,
+  ids: string[]
+) {
+  if (typeof window === 'undefined') return
+
+  const unique = Array.from(
+    new Set(ids.filter(Boolean))
+  )
+
+  if (unique.length === 0) {
+    localStorage.removeItem(
+      pendingArchiveKey(userId)
+    )
+    return
+  }
+
+  localStorage.setItem(
+    pendingArchiveKey(userId),
+    JSON.stringify(unique)
+  )
+}
+
+export async function archiveNotificationIds(
+  userId: string,
+  notificationIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const requested = Array.from(
+    new Set(
+      notificationIds.filter(
+        (id): id is string =>
+          typeof id === 'string' && Boolean(id)
+      )
+    )
+  )
+
+  if (!userId || requested.length === 0) {
+    return { success: true }
+  }
+
+  const allIds = Array.from(
+    new Set([
+      ...readPendingArchiveIds(userId),
+      ...requested,
+    ])
+  )
+
+  writePendingArchiveIds(userId, allIds)
+
+  try {
+    const { error } = await supabase
+      .from('notification_archives')
+      .insert({
+        id: crypto.randomUUID(),
+        user_id: userId,
+        notification_ids: allIds,
+        archived_at: new Date().toISOString(),
+      })
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+      }
+    }
+
+    writePendingArchiveIds(userId, [])
+
+    return { success: true }
+  } catch (error: any) {
+    return {
+      success: false,
+      error:
+        error?.message ||
+        'Falha ao arquivar notificações.',
+    }
+  }
+}
+
+export async function flushPendingNotificationArchives(
+  userId: string
+) {
+  const pending = readPendingArchiveIds(userId)
+
+  if (pending.length === 0) {
+    return { success: true }
+  }
+
+  return archiveNotificationIds(
+    userId,
+    pending
+  )
+}
+
 export async function clearAllNotifications(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
@@ -69,6 +194,11 @@ export async function clearAllNotifications(
       .toArray()
 
     if (localNotifications.length > 0) {
+      await archiveNotificationIds(
+        userId,
+        localNotifications.map((notification) => notification.id)
+      )
+
       const now = new Date().toISOString()
 
       await db.transaction(

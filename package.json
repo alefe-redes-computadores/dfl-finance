@@ -14,7 +14,8 @@
     "mobile:check": "node scripts/check-mobile-readiness.mjs",
     "mobile:verify": "node scripts/verify-mobile-export.mjs",
     "mobile:prepare": "npm run mobile:check && npm run build:mobile && npm run mobile:verify",
-    "icons:generate": "python scripts/generate-app-icons.py"
+    "icons:generate": "python scripts/generate-app-icons.py",
+    "native:notifications:assets": "node scripts/prepare-android-notification-icon.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.0",
