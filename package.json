@@ -13,7 +13,8 @@
     "build:mobile": "NEXT_PUBLIC_DFL_SERVER_ORIGIN=https://dfl-finance.vercel.app node scripts/build-mobile.mjs",
     "mobile:check": "node scripts/check-mobile-readiness.mjs",
     "mobile:verify": "node scripts/verify-mobile-export.mjs",
-    "mobile:prepare": "npm run mobile:check && npm run build:mobile && npm run mobile:verify"
+    "mobile:prepare": "npm run mobile:check && npm run build:mobile && npm run mobile:verify",
+    "icons:generate": "python scripts/generate-app-icons.py"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.0",

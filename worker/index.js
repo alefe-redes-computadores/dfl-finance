@@ -10,8 +10,8 @@ self.addEventListener('push', (event) => {
     const payload = event.data.json()
     const options = {
       body: payload.body || '',
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
+      icon: '/notification-icon.png',
+      badge: '/notification-badge.png',
       data: {
         url: payload.url || '/',
       },
@@ -30,7 +30,7 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
       self.registration.showNotification('DFL Finance', {
         body: event.data.text(),
-        icon: '/icon-192x192.png',
+        icon: '/notification-icon.png',
         data: { url: '/' },
       })
     )
