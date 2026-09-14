@@ -323,6 +323,21 @@ function sanitizeRemotePayload(
           contactid: 'contact_id',
           linkedtransactionid: 'linked_transaction_id',
           recurringgroupid: 'recurring_group_id',
+
+          /*
+           * Compatibilidade com transferências criadas por
+           * versões antigas do app.
+           *
+           * O backend atual expõe to_account_id. As chaves
+           * transfer_to/transfer_from nunca existiram como
+           * colunas remotas e poderiam deixar itens antigos
+           * presos na fila.
+           */
+          transferto: 'to_account_id',
+          transferfrom: 'to_account_id',
+          transfergroupid: 'transfer_group_id',
+          idempotencykey: 'idempotency_key',
+
           affectsbalance: 'affects_balance',
           createdat: 'created_at',
           updatedat: 'updated_at',

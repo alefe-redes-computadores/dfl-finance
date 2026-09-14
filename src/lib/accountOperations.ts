@@ -99,10 +99,21 @@ export async function transferBetweenAccounts({
         amount,
         type: 'transfer',
         account_id: fromAccount.id,
-        transfer_to: toAccount.id,
+        to_account_id: toAccount.id,
         transfer_group_id: transferGroupId,
         date,
         status: 'done',
+
+        /*
+         * O saldo das duas contas é atualizado diretamente
+         * dentro desta mesma transação Dexie.
+         *
+         * A linha type=transfer é trilha/auditoria e não deve
+         * ser interpretada como uma nova receita/despesa.
+         */
+        affects_balance: false,
+        source: 'manual',
+
         context: fromContext,
         created_at: now,
         updated_at: now,
@@ -119,10 +130,12 @@ export async function transferBetweenAccounts({
         amount,
         type: 'transfer',
         account_id: toAccount.id,
-        transfer_from: fromAccount.id,
+        to_account_id: fromAccount.id,
         transfer_group_id: transferGroupId,
         date,
         status: 'done',
+        affects_balance: false,
+        source: 'manual',
         context: toContext,
         created_at: now,
         updated_at: now,

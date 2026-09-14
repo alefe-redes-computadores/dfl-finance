@@ -22,6 +22,16 @@ export interface LocalTransaction {
   contact_id?: string | null
   notes?: string | null
   recurring_group_id?: string | null
+  transfer_group_id?: string | null
+  to_account_id?: string | null
+  idempotency_key?: string | null
+  source?:
+    | 'manual'
+    | 'ofx_import'
+    | 'ai_ocr'
+    | 'recurring'
+    | 'ofx_merged'
+    | 'whatsapp'
   installment_index?: number
   total_installments?: number
   financing_id?: string | null
