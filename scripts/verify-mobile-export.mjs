@@ -8,11 +8,21 @@ import {
   join,
 } from 'node:path'
 
+/*
+ * O target mobile usa:
+ *
+ *   output: 'export'
+ *   trailingSlash: true
+ *
+ * Portanto rotas como /home e /login são exportadas como
+ * diretórios contendo index.html, e não como home.html/login.html.
+ */
 const required = [
   'out',
   'out/index.html',
-  'out/home.html',
-  'out/login.html',
+  'out/home/index.html',
+  'out/login/index.html',
+  'out/offline/index.html',
 ]
 
 for (const path of required) {
