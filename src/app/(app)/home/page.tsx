@@ -2128,7 +2128,7 @@ function HomeContent() {
   }
 
   return (
-    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] max-w-md bg-gray-50 px-4 pb-28 pt-[max(0.75rem,env(safe-area-inset-top))] font-sans transition-colors duration-300 dark:bg-slate-900">
+    <div ref={containerRef} className="relative mx-auto min-h-[100dvh] w-full max-w-2xl bg-gray-50 px-4 pb-28 pt-[max(0.75rem,env(safe-area-inset-top))] font-sans transition-colors duration-300 dark:bg-slate-900">
       {(isDataLoading || isSyncing) && (
         <div className="fixed top-20 right-4 z-50">
           <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse shadow-md shadow-teal-500/40" />
