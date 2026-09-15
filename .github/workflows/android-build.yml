@@ -201,31 +201,356 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          # Preserve assets/branding: ele contém a fonte canônica.
-          # Limpe somente os arquivos transitórios consumidos pelo
+          # O master canônico permanece preservado em assets/branding.
+          # Os arquivos abaixo são apenas entradas transitórias para
           # @capacitor/assets.
           mkdir -p assets
+
           rm -f \
             assets/icon.png \
             assets/icon-foreground.png \
+            assets/icon-background.png \
             assets/splash.png
 
-          test -f assets/branding/dfl-finance-icon-master.png
+          MASTER="assets/branding/dfl-finance-icon-master.png"
 
-          cp \
-            assets/branding/dfl-finance-icon-master.png \
-            assets/icon.png
+          test -f "$MASTER"
 
-          cp \
-            assets/branding/dfl-finance-icon-master.png \
-            assets/icon-foreground.png
+          # icon.png continua disponível como fallback legado.
+          cp "$MASTER" assets/icon.png
+          cp "$MASTER" assets/splash.png
 
-          cp \
-            assets/branding/dfl-finance-icon-master.png \
-            assets/splash.png
+          #
+          # ADAPTIVE ICON ANDROID
+          #
+          # O master já contém a placa/identidade completa e transparência
+          # nos cantos. Passá-lo diretamente como foreground fazia o Android
+          # mascarar um ícone completo dentro de outra máscara, produzindo
+          # a moldura externa observada no launcher.
+          #
+          # Criamos:
+          #   - background 100% opaco #0f172a;
+          #   - foreground transparente contendo o artwork em safe-zone.
+          #
+          python - <<'PYICON'
+          from pathlib import Path
+          import struct
+          import zlib
+          import binascii
 
-          # O gerador do Capacitor precisa receber explicitamente os assets.
-          # Isso evita o fallback para o ícone Android genérico.
+          SOURCE = Path(
+              "assets/branding/dfl-finance-icon-master.png"
+          )
+          FOREGROUND = Path("assets/icon-foreground.png")
+          BACKGROUND = Path("assets/icon-background.png")
+
+          BG = (15, 23, 42, 255)
+          OUT_SIZE = 1024
+
+          def paeth(a, b, c):
+              p = a + b - c
+              pa = abs(p - a)
+              pb = abs(p - b)
+              pc = abs(p - c)
+
+              if pa <= pb and pa <= pc:
+                  return a
+              if pb <= pc:
+                  return b
+              return c
+
+          def read_rgba_png(path):
+              data = path.read_bytes()
+
+              if data[:8] != b"\x89PNG\r\n\x1a\n":
+                  raise RuntimeError("master não é PNG")
+
+              pos = 8
+              width = height = None
+              bit = ctype = interlace = None
+              idat = bytearray()
+
+              while pos < len(data):
+                  length = struct.unpack(
+                      ">I",
+                      data[pos:pos + 4],
+                  )[0]
+                  typ = data[pos + 4:pos + 8]
+                  chunk = data[pos + 8:pos + 8 + length]
+                  pos += 12 + length
+
+                  if typ == b"IHDR":
+                      (
+                          width,
+                          height,
+                          bit,
+                          ctype,
+                          _compression,
+                          _filter,
+                          interlace,
+                      ) = struct.unpack(
+                          ">IIBBBBB",
+                          chunk,
+                      )
+                  elif typ == b"IDAT":
+                      idat.extend(chunk)
+
+              if (
+                  bit != 8
+                  or ctype != 6
+                  or interlace != 0
+              ):
+                  raise RuntimeError(
+                      "master precisa ser RGBA 8-bit não entrelaçado"
+                  )
+
+              channels = 4
+              stride = width * channels
+              raw = zlib.decompress(idat)
+
+              rows = []
+              prev = bytearray(stride)
+              offset = 0
+
+              for _ in range(height):
+                  ft = raw[offset]
+                  offset += 1
+
+                  scan = bytearray(
+                      raw[offset:offset + stride]
+                  )
+                  offset += stride
+
+                  recon = bytearray(stride)
+
+                  for x in range(stride):
+                      left = (
+                          recon[x - channels]
+                          if x >= channels
+                          else 0
+                      )
+                      up = prev[x]
+                      ul = (
+                          prev[x - channels]
+                          if x >= channels
+                          else 0
+                      )
+                      value = scan[x]
+
+                      if ft == 0:
+                          out = value
+                      elif ft == 1:
+                          out = (value + left) & 255
+                      elif ft == 2:
+                          out = (value + up) & 255
+                      elif ft == 3:
+                          out = (
+                              value
+                              + ((left + up) // 2)
+                          ) & 255
+                      elif ft == 4:
+                          out = (
+                              value
+                              + paeth(left, up, ul)
+                          ) & 255
+                      else:
+                          raise RuntimeError(
+                              "filtro PNG inválido"
+                          )
+
+                      recon[x] = out
+
+                  rows.append(recon)
+                  prev = recon
+
+              return (
+                  width,
+                  height,
+                  b"".join(rows),
+              )
+
+          def resize_rgba(
+              pixels,
+              sw,
+              sh,
+              dw,
+              dh,
+          ):
+              out = bytearray(dw * dh * 4)
+
+              for y in range(dh):
+                  sy = min(
+                      sh - 1,
+                      int(
+                          (y + 0.5)
+                          * sh
+                          / dh
+                      ),
+                  )
+
+                  for x in range(dw):
+                      sx = min(
+                          sw - 1,
+                          int(
+                              (x + 0.5)
+                              * sw
+                              / dw
+                          ),
+                      )
+
+                      src = (sy * sw + sx) * 4
+                      dst = (y * dw + x) * 4
+
+                      out[dst:dst + 4] = \
+                          pixels[src:src + 4]
+
+              return out
+
+          def chunk(kind, payload):
+              return (
+                  struct.pack(">I", len(payload))
+                  + kind
+                  + payload
+                  + struct.pack(
+                      ">I",
+                      binascii.crc32(
+                          kind + payload
+                      ) & 0xffffffff,
+                  )
+              )
+
+          def write_rgba_png(
+              path,
+              width,
+              height,
+              pixels,
+          ):
+              raw = bytearray()
+
+              stride = width * 4
+
+              for y in range(height):
+                  raw.append(0)
+                  start = y * stride
+                  raw.extend(
+                      pixels[
+                          start:start + stride
+                      ]
+                  )
+
+              png = (
+                  b"\x89PNG\r\n\x1a\n"
+                  + chunk(
+                      b"IHDR",
+                      struct.pack(
+                          ">IIBBBBB",
+                          width,
+                          height,
+                          8,
+                          6,
+                          0,
+                          0,
+                          0,
+                      ),
+                  )
+                  + chunk(
+                      b"IDAT",
+                      zlib.compress(
+                          bytes(raw),
+                          9,
+                      ),
+                  )
+                  + chunk(b"IEND", b"")
+              )
+
+              path.write_bytes(png)
+
+          sw, sh, source = read_rgba_png(SOURCE)
+
+          #
+          # O foreground adaptive possui canvas maior que a arte.
+          # 72% mantém o conteúdo principal confortável dentro
+          # da safe-zone das máscaras circulares/squircle do Android.
+          #
+          glyph_size = round(OUT_SIZE * 0.72)
+
+          resized = resize_rgba(
+              source,
+              sw,
+              sh,
+              glyph_size,
+              glyph_size,
+          )
+
+          foreground = bytearray(
+              (0, 0, 0, 0)
+              * (OUT_SIZE * OUT_SIZE)
+          )
+
+          left = (OUT_SIZE - glyph_size) // 2
+          top = (OUT_SIZE - glyph_size) // 2
+
+          for y in range(glyph_size):
+              src_start = y * glyph_size * 4
+              dst_start = (
+                  (
+                      (top + y)
+                      * OUT_SIZE
+                      + left
+                  )
+                  * 4
+              )
+
+              foreground[
+                  dst_start:
+                  dst_start + glyph_size * 4
+              ] = resized[
+                  src_start:
+                  src_start + glyph_size * 4
+              ]
+
+          background = bytearray(
+              BG * (OUT_SIZE * OUT_SIZE)
+          )
+
+          write_rgba_png(
+              FOREGROUND,
+              OUT_SIZE,
+              OUT_SIZE,
+              foreground,
+          )
+
+          write_rgba_png(
+              BACKGROUND,
+              OUT_SIZE,
+              OUT_SIZE,
+              background,
+          )
+
+          # Contratos rápidos.
+          bg_alpha = background[3::4]
+          fg_alpha = foreground[3::4]
+
+          if any(a != 255 for a in bg_alpha):
+              raise RuntimeError(
+                  "background Android contém transparência"
+              )
+
+          if not any(a == 0 for a in fg_alpha):
+              raise RuntimeError(
+                  "foreground Android deveria possuir transparência"
+              )
+
+          print(
+              "ANDROID ADAPTIVE SOURCE: OK "
+              f"background={BG[:3]} "
+              f"foreground_safe_zone=72%"
+          )
+          PYICON
+
+          test -f assets/icon-background.png
+          test -f assets/icon-foreground.png
+
           npx @capacitor/assets generate --android
 
           test -d android/app/src/main/res/mipmap-hdpi
@@ -236,13 +561,21 @@ jobs:
 
           find android/app/src/main/res \
             -type f \
-            \( -name 'ic_launcher*.png' -o -name 'ic_launcher*.xml' \) \
+            \( \
+              -name 'ic_launcher*.png' \
+              -o \
+              -name 'ic_launcher*.xml' \
+            \) \
             -print
 
           COUNT="$(
             find android/app/src/main/res \
               -type f \
-              \( -name 'ic_launcher*.png' -o -name 'ic_launcher*.xml' \) \
+              \( \
+                -name 'ic_launcher*.png' \
+                -o \
+                -name 'ic_launcher*.xml' \
+              \) \
               | wc -l
           )"
 
@@ -250,6 +583,8 @@ jobs:
             echo "ERRO: assets Android do launcher não foram gerados."
             exit 1
           fi
+
+          echo "ANDROID ADAPTIVE IDENTITY: OK"
 
       - name: Sync Capacitor
         run: |
