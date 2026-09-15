@@ -1,16 +1,26 @@
-name: DFL Finance Mobile Readiness
+name: DFL Finance Android
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
+concurrency:
+  group: dfl-finance-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  mobile-export:
-    name: Validate mobile export
+  android:
+    name: Build Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+
+    env:
+      NEXT_PUBLIC_DFL_SERVER_ORIGIN: https://dfl-finance.vercel.app
 
     steps:
       - name: Checkout
@@ -21,6 +31,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
 
       - name: Install
         run: npm ci
@@ -34,9 +50,11 @@ jobs:
       - name: Mobile contracts
         run: npm run mobile:check
 
+      - name: Generate canonical web icons
+        run: npm run icons:generate
+
       - name: Build mobile export
         env:
-          NEXT_PUBLIC_DFL_SERVER_ORIGIN: https://dfl-finance.vercel.app
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build:mobile
@@ -44,10 +62,242 @@ jobs:
       - name: Verify mobile export
         run: npm run mobile:verify
 
-      - name: Ensure Android is still gated
+      - name: Create Android project
         run: |
-          test ! -d android
-          echo "OK: android/ ainda não gerado."
+          set -Eeuo pipefail
+
+          rm -rf android
+          npx cap add android
+
+          test -d android
+          test -f android/app/src/main/AndroidManifest.xml
+
+      - name: Configure OAuth deep link
+        run: |
+          set -Eeuo pipefail
+
+          python3 <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          path = Path("android/app/src/main/AndroidManifest.xml")
+
+          ET.register_namespace(
+              "android",
+              "http://schemas.android.com/apk/res/android",
+          )
+
+          tree = ET.parse(path)
+          root = tree.getroot()
+
+          android_ns = "{http://schemas.android.com/apk/res/android}"
+
+          application = root.find("application")
+          if application is None:
+              raise SystemExit("AndroidManifest sem <application>")
+
+          activity = None
+
+          for candidate in application.findall("activity"):
+              name = candidate.get(android_ns + "name", "")
+              if name.endswith("MainActivity"):
+                  activity = candidate
+                  break
+
+          if activity is None:
+              raise SystemExit("MainActivity não encontrada")
+
+          exists = False
+
+          for intent_filter in activity.findall("intent-filter"):
+              for data in intent_filter.findall("data"):
+                  scheme = data.get(android_ns + "scheme")
+                  host = data.get(android_ns + "host")
+
+                  if scheme == "dfl" and host == "callback":
+                      exists = True
+
+          if not exists:
+              intent_filter = ET.SubElement(activity, "intent-filter")
+              intent_filter.set(
+                  android_ns + "label",
+                  "dfl_finance_auth",
+              )
+
+              action = ET.SubElement(intent_filter, "action")
+              action.set(
+                  android_ns + "name",
+                  "android.intent.action.VIEW",
+              )
+
+              category_default = ET.SubElement(
+                  intent_filter,
+                  "category",
+              )
+              category_default.set(
+                  android_ns + "name",
+                  "android.intent.category.DEFAULT",
+              )
+
+              category_browsable = ET.SubElement(
+                  intent_filter,
+                  "category",
+              )
+              category_browsable.set(
+                  android_ns + "name",
+                  "android.intent.category.BROWSABLE",
+              )
+
+              data = ET.SubElement(intent_filter, "data")
+              data.set(android_ns + "scheme", "dfl")
+              data.set(android_ns + "host", "callback")
+
+          tree.write(
+              path,
+              encoding="utf-8",
+              xml_declaration=True,
+          )
+          PY
+
+          grep -q 'android:scheme="dfl"' \
+            android/app/src/main/AndroidManifest.xml
+
+          grep -q 'android:host="callback"' \
+            android/app/src/main/AndroidManifest.xml
+
+      - name: Prepare canonical Android identity
+        run: |
+          set -Eeuo pipefail
+
+          rm -rf assets
+          mkdir -p assets
+
+          test -f assets/branding/dfl-finance-icon-master.png
+
+          cp \
+            assets/branding/dfl-finance-icon-master.png \
+            assets/icon.png
+
+          cp \
+            assets/branding/dfl-finance-icon-master.png \
+            assets/icon-foreground.png
+
+          cp \
+            assets/branding/dfl-finance-icon-master.png \
+            assets/splash.png
+
+          # O gerador do Capacitor precisa receber explicitamente os assets.
+          # Isso evita o fallback para o ícone Android genérico.
+          npx @capacitor/assets generate --android
+
+          test -d android/app/src/main/res/mipmap-hdpi
+          test -d android/app/src/main/res/mipmap-mdpi
+          test -d android/app/src/main/res/mipmap-xhdpi
+          test -d android/app/src/main/res/mipmap-xxhdpi
+          test -d android/app/src/main/res/mipmap-xxxhdpi
+
+          find android/app/src/main/res \
+            -type f \
+            \( -name 'ic_launcher*.png' -o -name 'ic_launcher*.xml' \) \
+            -print
+
+          COUNT="$(
+            find android/app/src/main/res \
+              -type f \
+              \( -name 'ic_launcher*.png' -o -name 'ic_launcher*.xml' \) \
+              | wc -l
+          )"
+
+          if [ "$COUNT" -lt 5 ]; then
+            echo "ERRO: assets Android do launcher não foram gerados."
+            exit 1
+          fi
+
+      - name: Sync Capacitor
+        run: |
+          set -Eeuo pipefail
+
+          npx cap sync android
+
+          test -f android/app/src/main/AndroidManifest.xml
+          test -d android/app/src/main/assets/public
+
+      - name: Prepare notification icon
+        run: |
+          set -Eeuo pipefail
+
+          npm run native:notifications:assets
+
+          FOUND="$(
+            find android/app/src/main/res \
+              -type f \
+              -name 'ic_stat_dfl_finance*' \
+              | head -n 1
+          )"
+
+          if [ -z "$FOUND" ]; then
+            echo "ERRO: ícone nativo de notificação não foi preparado."
+            exit 1
+          fi
+
+          echo "Notification icon: $FOUND"
+
+      - name: Verify Android identity
+        run: |
+          set -Eeuo pipefail
+
+          echo "=== MANIFEST ==="
+          grep -nE \
+            'package=|MainActivity|android:icon|android:roundIcon|dfl_finance_auth|scheme="dfl"|host="callback"' \
+            android/app/src/main/AndroidManifest.xml || true
+
+          echo "=== LAUNCHER ASSETS ==="
+          find android/app/src/main/res \
+            -type f \
+            \( \
+              -name 'ic_launcher*' \
+              -o \
+              -name 'ic_stat_dfl_finance*' \
+            \) \
+            -print \
+            | sort
+
+          if find android/app/src/main/res \
+            -type f \
+            -name 'ic_launcher*.png' \
+            | grep -q .; then
+            echo "OK: launcher raster assets presentes."
+          else
+            echo "ERRO: launcher raster assets ausentes."
+            exit 1
+          fi
+
+      - name: Build debug APK
+        run: |
+          set -Eeuo pipefail
+
+          cd android
+          chmod +x gradlew
+          ./gradlew clean assembleDebug
+
+      - name: Verify APK
+        run: |
+          set -Eeuo pipefail
+
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          test -s "$APK"
+
+          echo "APK gerado:"
+          ls -lh "$APK"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DFL-Finance-App
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload mobile web bundle
         uses: actions/upload-artifact@v4
@@ -55,4 +305,4 @@ jobs:
           name: dfl-finance-mobile-web
           path: out/
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 1

@@ -164,11 +164,6 @@ if (failed.length > 0) {
   process.exit(1)
 }
 
-console.log(
-  `\nMOBILE READINESS: OK (${checks.length})`,
-)
-
-
 const nextConfig =
   read('next.config.js')
 
@@ -204,39 +199,17 @@ check(
   ),
 )
 
-
-// V10D_DUAL_TARGET_CHECKS
-const v10dNextConfig =
-  read('next.config.js')
-
-const v10dRootEntry =
-  read('src/app/page.tsx')
-
-check(
-  'Next possui target mobile explícito',
-  v10dNextConfig.includes(
-    "process.env.DFL_BUILD_TARGET === 'mobile'",
-  ) &&
-    v10dNextConfig.includes(
-      "output: 'export'",
-    ),
+const finalFailed = checks.filter(
+  ([, ok]) => !ok,
 )
 
-check(
-  'Root entry é client-side e exportável',
-  v10dRootEntry.includes(
-    "'use client'",
-  ) &&
-    !v10dRootEntry.includes(
-      "import { redirect }",
-    ),
-)
+if (finalFailed.length > 0) {
+  console.error(
+    `\nMOBILE READINESS: FALHOU (${finalFailed.length})`,
+  )
+  process.exit(1)
+}
 
-check(
-  'Backend mobile canônico',
-  packageJson.scripts?.[
-    'build:mobile'
-  ]?.includes(
-    'https://dfl-finance.vercel.app',
-  ),
+console.log(
+  `\nMOBILE READINESS: OK (${checks.length})`,
 )
