@@ -201,8 +201,14 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          rm -rf assets
+          # Preserve assets/branding: ele contém a fonte canônica.
+          # Limpe somente os arquivos transitórios consumidos pelo
+          # @capacitor/assets.
           mkdir -p assets
+          rm -f \
+            assets/icon.png \
+            assets/icon-foreground.png \
+            assets/splash.png
 
           test -f assets/branding/dfl-finance-icon-master.png
 
