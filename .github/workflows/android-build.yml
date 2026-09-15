@@ -21,6 +21,8 @@ jobs:
 
     env:
       NEXT_PUBLIC_DFL_SERVER_ORIGIN: https://dfl-finance.vercel.app
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout
@@ -53,10 +55,40 @@ jobs:
       - name: Generate canonical web icons
         run: npm run icons:generate
 
+      - name: Verify mobile environment
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" ]; then
+            echo "SUPABASE_URL_PRESENT=true"
+          else
+            echo "SUPABASE_URL_PRESENT=false"
+            echo "ERRO: NEXT_PUBLIC_SUPABASE_URL não chegou ao workflow."
+            exit 1
+          fi
+
+          if [ -n "${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}" ]; then
+            echo "SUPABASE_ANON_KEY_PRESENT=true"
+          else
+            echo "SUPABASE_ANON_KEY_PRESENT=false"
+            echo "ERRO: NEXT_PUBLIC_SUPABASE_ANON_KEY não chegou ao workflow."
+            exit 1
+          fi
+
+          case "$NEXT_PUBLIC_SUPABASE_URL" in
+            https://*)
+              echo "SUPABASE_URL_FORMAT=https"
+              ;;
+            *)
+              echo "ERRO: NEXT_PUBLIC_SUPABASE_URL não possui formato HTTPS."
+              exit 1
+              ;;
+          esac
+
+          echo "Mobile environment: OK"
+
       - name: Build mobile export
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build:mobile
 
       - name: Verify mobile export
