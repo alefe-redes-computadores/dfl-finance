@@ -272,15 +272,17 @@ def make_standard(name: str, size: int):
 
 
 def make_maskable(name: str, size: int):
-    # Identidade canônica: símbolo do master, sem moldura/fundo artificial.
-    # O conteúdo permanece reduzido para respeitar a zona segura maskable.
+    # Maskable precisa fornecer uma superfície completamente opaca.
+    # O launcher pode recortar essa superfície em círculo, squircle etc.
+    # O símbolo permanece dentro da zona segura, mas o exterior recebe
+    # o mesmo fundo dark usado pelo manifest/PWA em vez de transparência.
     pixels = place_centered(
         MASTER_PIXELS,
         MASTER_W,
         MASTER_H,
         size,
         0.80,
-        background=(0, 0, 0, 0),
+        background=(15, 23, 42, 255),
     )
     write_rgba_png(PUBLIC / name, size, size, pixels)
 
