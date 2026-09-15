@@ -240,14 +240,28 @@ def place_centered(
             di = ((y + offset) * size + (x + offset)) * 4
 
             sa = resized[si + 3] / 255.0
+            da = canvas[di + 3] / 255.0
+            out_a = sa + da * (1 - sa)
+
+            if out_a <= 0:
+                canvas[di] = 0
+                canvas[di + 1] = 0
+                canvas[di + 2] = 0
+                canvas[di + 3] = 0
+                continue
 
             for c in range(3):
-                canvas[di + c] = round(
-                    resized[si + c] * sa
-                    + canvas[di + c] * (1 - sa)
-                )
+                src_c = resized[si + c] / 255.0
+                dst_c = canvas[di + c] / 255.0
 
-            canvas[di + 3] = 255
+                out_c = (
+                    src_c * sa
+                    + dst_c * da * (1 - sa)
+                ) / out_a
+
+                canvas[di + c] = round(out_c * 255)
+
+            canvas[di + 3] = round(out_a * 255)
 
     return canvas
 
@@ -258,13 +272,15 @@ def make_standard(name: str, size: int):
 
 
 def make_maskable(name: str, size: int):
-    # Mantém o conteúdo principal dentro da zona segura do ícone maskable.
+    # Identidade canônica: símbolo do master, sem moldura/fundo artificial.
+    # O conteúdo permanece reduzido para respeitar a zona segura maskable.
     pixels = place_centered(
         MASTER_PIXELS,
         MASTER_W,
         MASTER_H,
         size,
         0.80,
+        background=(0, 0, 0, 0),
     )
     write_rgba_png(PUBLIC / name, size, size, pixels)
 

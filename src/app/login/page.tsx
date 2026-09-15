@@ -89,17 +89,14 @@ export default function LoginPage() {
       <div className="w-full max-w-sm relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 drop-shadow-xl">
-              <rect width="40" height="40" rx="12" className="fill-teal-600 dark:fill-teal-500" />
-              <path d="M12 28V12H20C23.3137 12 26 14.6863 26 18C26 21.3137 23.3137 24 20 24H16V28H12Z" fill="white"/>
-              <path d="M28 28V12H24V28H28Z" fill="white" fillOpacity="0.7"/>
-              <defs>
-                <linearGradient id="paint0_linear" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#14b8a6" />
-                  <stop offset="1" stopColor="#0f766e" />
-                </linearGradient>
-              </defs>
-            </svg>
+            <img
+              src="/icon-192x192.png"
+              alt=""
+              aria-hidden="true"
+              width={72}
+              height={72}
+              className="h-[72px] w-[72px] object-contain drop-shadow-xl"
+            />
           </div>
           <h1 className="text-[26px] font-black text-gray-900 dark:text-white tracking-tight">DFL Finance</h1>
           <p className="text-gray-500 dark:text-gray-400 text-[13px] font-medium mt-1 uppercase tracking-widest">Gestão Inteligente</p>
