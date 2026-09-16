@@ -267,7 +267,7 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          node scripts/patch-android-edge-to-edge-v14-7.mjs
+          node scripts/patch-android-edge-to-edge-v14-8.mjs
 
           grep -R -q 'DFL_FINANCE_EDGE_TO_EDGE_V14_7' \
             android/app/src/main/java
@@ -279,7 +279,7 @@ jobs:
             android/app/src/main/java
 
       - name: Verify native edge-to-edge contract
-        run: node scripts/test-android-edge-to-edge-v14-7.mjs
+        run: node scripts/test-android-system-bars-v14-8.mjs
 
       - name: Prepare notification icon
         run: |
