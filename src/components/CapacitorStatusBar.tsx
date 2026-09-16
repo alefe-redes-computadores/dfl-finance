@@ -19,16 +19,11 @@ export default function CapacitorStatusBar() {
 
       try {
         /*
-         * Edge-to-edge real:
-         * a WebView continua atrás da status bar. A cor nativa é mantida
-         * sincronizada com a superfície raiz para evitar flash/faixa do
-         * Window enquanto o Android compõe os system bars.
+         * A MainActivity define o edge-to-edge e mantém as barras do
+         * sistema transparentes. O plugin controla apenas overlay e
+         * contraste dos ícones conforme o tema do aplicativo.
          */
         await StatusBar.setOverlaysWebView({ overlay: true })
-
-        await StatusBar.setBackgroundColor({
-          color: isDark ? '#0f172a' : '#f8f9fa',
-        })
 
         await StatusBar.setStyle({
           style: isDark ? Style.Light : Style.Dark,

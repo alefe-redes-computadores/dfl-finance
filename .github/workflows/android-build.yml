@@ -263,6 +263,24 @@ jobs:
           test -f android/app/src/main/AndroidManifest.xml
           test -d android/app/src/main/assets/public
 
+      - name: Apply native edge-to-edge
+        run: |
+          set -Eeuo pipefail
+
+          node scripts/patch-android-edge-to-edge-v14-7.mjs
+
+          grep -R -q 'DFL_FINANCE_EDGE_TO_EDGE_V14_7' \
+            android/app/src/main/java
+
+          grep -R -q 'setDecorFitsSystemWindows' \
+            android/app/src/main/java
+
+          grep -R -q 'Color.TRANSPARENT' \
+            android/app/src/main/java
+
+      - name: Verify native edge-to-edge contract
+        run: node scripts/test-android-edge-to-edge-v14-7.mjs
+
       - name: Prepare notification icon
         run: |
           set -Eeuo pipefail
