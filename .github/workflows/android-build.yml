@@ -269,7 +269,7 @@ jobs:
 
           node scripts/patch-android-edge-to-edge-v14-8.mjs
 
-          grep -R -q 'DFL_FINANCE_EDGE_TO_EDGE_V14_7' \
+          grep -R -q 'DFL_FINANCE_SYSTEM_BARS_V14_8' \
             android/app/src/main/java
 
           grep -R -q 'setDecorFitsSystemWindows' \
