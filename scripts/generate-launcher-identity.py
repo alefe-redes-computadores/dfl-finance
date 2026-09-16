@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import argparse
+import math
 import binascii
 import struct
 import zlib
@@ -164,38 +165,106 @@ def write_rgba_png(path, width, height, pixels):
     path.write_bytes(data)
 
 
-def resize_bilinear(src, sw, sh, dw, dh):
+def _cubic_weight(value):
+    # Catmull-Rom (a = -0.5).
+    # Preserva contornos melhor que o upscale bilinear,
+    # sem alterar escala ou geometria do artwork.
+    a = -0.5
+    x = abs(value)
+
+    if x <= 1:
+        return (
+            (a + 2) * x * x * x
+            - (a + 3) * x * x
+            + 1
+        )
+
+    if x < 2:
+        return (
+            a * x * x * x
+            - 5 * a * x * x
+            + 8 * a * x
+            - 4 * a
+        )
+
+    return 0.0
+
+
+def resize_bicubic(src, sw, sh, dw, dh):
     out = bytearray(dw * dh * 4)
 
     for y in range(dh):
-        fy = ((y + 0.5) * sh / dh) - 0.5
-        y0 = max(0, min(sh - 1, int(fy)))
-        y1 = max(0, min(sh - 1, y0 + 1))
-        wy = max(0.0, min(1.0, fy - y0))
+        sy = ((y + 0.5) * sh / dh) - 0.5
+        iy = math.floor(sy)
 
         for x in range(dw):
-            fx = ((x + 0.5) * sw / dw) - 0.5
-            x0 = max(0, min(sw - 1, int(fx)))
-            x1 = max(0, min(sw - 1, x0 + 1))
-            wx = max(0.0, min(1.0, fx - x0))
+            sx = ((x + 0.5) * sw / dw) - 0.5
+            ix = math.floor(sx)
 
             dst = (y * dw + x) * 4
 
-            for c in range(4):
-                p00 = src[(y0 * sw + x0) * 4 + c]
-                p10 = src[(y0 * sw + x1) * 4 + c]
-                p01 = src[(y1 * sw + x0) * 4 + c]
-                p11 = src[(y1 * sw + x1) * 4 + c]
+            for channel in range(4):
+                total = 0.0
+                weight_total = 0.0
 
-                top = p00 * (1 - wx) + p10 * wx
-                bottom = p01 * (1 - wx) + p11 * wx
+                for oy in range(-1, 3):
+                    py = min(
+                        sh - 1,
+                        max(0, iy + oy),
+                    )
 
-                out[dst + c] = round(
-                    top * (1 - wy) + bottom * wy
+                    wy = _cubic_weight(
+                        sy - (iy + oy)
+                    )
+
+                    for ox in range(-1, 3):
+                        px = min(
+                            sw - 1,
+                            max(0, ix + ox),
+                        )
+
+                        wx = _cubic_weight(
+                            sx - (ix + ox)
+                        )
+
+                        weight = wx * wy
+
+                        src_index = (
+                            (py * sw + px) * 4
+                            + channel
+                        )
+
+                        total += (
+                            src[src_index] * weight
+                        )
+
+                        weight_total += weight
+
+                if abs(weight_total) < 1e-12:
+                    value = 0
+                else:
+                    value = round(
+                        total / weight_total
+                    )
+
+                out[dst + channel] = max(
+                    0,
+                    min(255, value),
                 )
 
     return out
 
+
+def resize_bilinear(src, sw, sh, dw, dh):
+    # Nome mantido por compatibilidade interna.
+    # Desde V14.5 o launcher usa bicúbica Catmull-Rom.
+    return resize_bicubic(
+        src,
+        sw,
+        sh,
+        dw,
+        dh,
+    )
 
 def alpha_bbox(pixels, width, height, threshold=8):
     left = width
