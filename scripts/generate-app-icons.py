@@ -272,19 +272,34 @@ def make_standard(name: str, size: int):
 
 
 def make_maskable(name: str, size: int):
-    # Maskable precisa fornecer uma superfície completamente opaca.
-    # O launcher pode recortar essa superfície em círculo, squircle etc.
-    # O símbolo permanece dentro da zona segura, mas o exterior recebe
-    # o mesmo fundo dark usado pelo manifest/PWA em vez de transparência.
-    pixels = place_centered(
+    # O master já contém a composição visual completa do ícone.
+    #
+    # Não o reduza dentro de uma segunda superfície: isso cria o efeito
+    # "ícone dentro de ícone" / moldura externa observado no launcher.
+    #
+    # Para maskable/adaptive usamos o master em full-bleed e apenas
+    # achatamos a transparência dos cantos sobre o fundo canônico.
+    pixels = resize_bilinear(
         MASTER_PIXELS,
         MASTER_W,
         MASTER_H,
         size,
-        0.80,
-        background=(15, 23, 42, 255),
+        size,
     )
-    write_rgba_png(PUBLIC / name, size, size, pixels)
+
+    pixels = alpha_composite_on_background(
+        pixels,
+        size,
+        size,
+        rgb=(15, 23, 42),
+    )
+
+    write_rgba_png(
+        PUBLIC / name,
+        size,
+        size,
+        pixels,
+    )
 
 
 def make_notification_badge():
