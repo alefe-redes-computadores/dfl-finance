@@ -365,3 +365,49 @@ body::before {
 }
 
 /* DFL_IMMERSIVE_SHELL_V12C_END */
+
+/* DFL_NATIVE_IMMERSIVE_V14_6_START */
+
+/*
+ * No Capacitor, a própria WebView é responsável pela superfície atrás da
+ * status bar. O pseudo-elemento V12C continua útil para PWA/browser, mas
+ * não deve criar uma camada independente no shell nativo.
+ */
+html[data-native-shell='true'] body::before {
+  display: none;
+}
+
+/*
+ * Garante que a raiz nativa permaneça contínua durante composição,
+ * navegação e restauração de tema.
+ */
+html[data-native-shell='true'],
+html[data-native-shell='true'] body {
+  background: var(--app-background);
+  background-color: var(--app-background);
+}
+
+/* DFL_NATIVE_IMMERSIVE_V14_6_END */
+
+/* DFL_NATIVE_SAFE_AREA_V14_6_1_START */
+
+/*
+ * O shell nativo é o único dono do inset superior.
+ *
+ * A WebView permanece edge-to-edge atrás da status bar, enquanto o
+ * conteúdo começa abaixo dos ícones do sistema. Páginas não precisam
+ * somar env(safe-area-inset-top) individualmente.
+ */
+html[data-native-shell='true'] .app-page {
+  padding-top: var(--safe-area-top);
+}
+
+/*
+ * Headers sticky já vivem dentro de .app-page. Portanto, no runtime
+ * nativo eles não devem adicionar o mesmo inset novamente.
+ */
+html[data-native-shell='true'] .app-header {
+  padding-top: 0;
+}
+
+/* DFL_NATIVE_SAFE_AREA_V14_6_1_END */
