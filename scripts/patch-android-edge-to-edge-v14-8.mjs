@@ -79,7 +79,7 @@ if (file.endsWith('.java')) {
   }
 
   @Override
-  protected void onResume() {
+  public void onResume() {
     super.onResume();
     applySystemBars();
   }
