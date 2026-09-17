@@ -267,9 +267,9 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          node scripts/patch-android-edge-to-edge-v14-8.mjs
+          node scripts/patch-android-system-bars-v15.mjs
 
-          grep -R -q 'DFL_FINANCE_SYSTEM_BARS_V14_8' \
+          grep -R -q 'DFL_FINANCE_SYSTEM_BARS_V15' \
             android/app/src/main/java
 
           grep -R -q 'setDecorFitsSystemWindows' \
@@ -279,7 +279,7 @@ jobs:
             android/app/src/main/java
 
       - name: Verify native edge-to-edge contract
-        run: node scripts/test-android-system-bars-v14-8.mjs
+        run: node scripts/test-android-system-bars-v15.mjs
 
       - name: Prepare notification icon
         run: |

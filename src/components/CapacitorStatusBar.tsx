@@ -5,18 +5,20 @@ import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
 /**
- * Contrato Android V14.8
+ * DFL Finance — System Bars V15
  *
- * No shell nativo o WebView é edge-to-edge e a superfície do topo
- * pertence ao próprio aplicativo.
+ * Contrato transplantado do Vault validado em Android/Samsung:
  *
- * O Finance usa uma superfície escura na região das system bars no
- * shell Android. Portanto os ícones da status bar permanecem claros.
+ * Android:
+ * - MainActivity é a autoridade única da StatusBar;
+ * - React NÃO chama StatusBar.setStyle();
+ * - React NÃO chama StatusBar.setOverlaysWebView();
  *
- * Não derivamos mais a aparência dos ícones da classe `dark` do HTML:
- * essa classe representa o tema do conteúdo e pode mudar durante o
- * bootstrap/hidratação, enquanto a system bar é responsabilidade do
- * shell nativo.
+ * iOS:
+ * - preserva o controle pelo plugin @capacitor/status-bar.
+ *
+ * O atributo data-native-shell não controla a StatusBar.
+ * Ele identifica apenas o shell nativo para o contrato CSS/safe-area.
  */
 export default function CapacitorStatusBar() {
   useEffect(() => {
@@ -25,44 +27,39 @@ export default function CapacitorStatusBar() {
     const root = document.documentElement
     root.dataset.nativeShell = 'true'
 
+    const platform = Capacitor.getPlatform()
+
+    if (platform === 'android') {
+      return () => {
+        delete root.dataset.nativeShell
+      }
+    }
+
     let disposed = false
 
-    const applyNativeSystemBars = async () => {
+    const applyIOSSystemBars = async () => {
       try {
-        await StatusBar.setOverlaysWebView({ overlay: true })
+        await StatusBar.setOverlaysWebView({
+          overlay: true,
+        })
 
-        // Style.Light = ícones/textos claros.
         await StatusBar.setStyle({
           style: Style.Light,
         })
       } catch (error) {
         if (!disposed) {
           console.warn(
-            'Não foi possível aplicar as barras de sistema nativas.',
+            'Não foi possível aplicar as barras de sistema no iOS.',
             error
           )
         }
       }
     }
 
-    void applyNativeSystemBars()
-
-    /*
-     * Android pode reconstruir/reaplicar atributos da Window quando
-     * o app volta do background, abre permissões, auth externa etc.
-     * Reafirmamos o contrato quando o documento volta a ficar visível.
-     */
-    const visibilityHandler = () => {
-      if (document.visibilityState === 'visible') {
-        void applyNativeSystemBars()
-      }
-    }
-
-    document.addEventListener('visibilitychange', visibilityHandler)
+    void applyIOSSystemBars()
 
     return () => {
       disposed = true
-      document.removeEventListener('visibilitychange', visibilityHandler)
       delete root.dataset.nativeShell
     }
   }, [])
