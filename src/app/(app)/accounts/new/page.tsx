@@ -24,6 +24,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { useSafeDb } from "@/hooks/useSafeDb"
 import BankLogo from '@/components/BankLogo'
+import SelectField from '@/components/SelectField'
 import { getBankColor } from '@/lib/BankIcons'
 import { COMMON_BANKS, canonicalizeBankName } from '@/lib/accountPresentation'
 
@@ -309,24 +310,18 @@ function AccountFormContent() {
               Tipo de conta
             </label>
 
-            <div className="relative">
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                className="w-full appearance-none rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-[14px] font-medium text-gray-800 outline-none transition-all focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
-              >
-                {ACCOUNT_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-
-              <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-                <ChevronDown size={18} />
-              </div>
-            </div>
+            <SelectField
+              value={formData.type}
+              onChange={(value) =>
+                setFormData((current) => ({ ...current, type: value }))
+              }
+              title="Tipo de conta"
+              options={ACCOUNT_TYPES.map((type) => ({
+                value: type.value,
+                label: type.label,
+              }))}
+              className="rounded-[16px] border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-900"
+            />
 
             <div className="mt-4 rounded-[18px] border border-gray-200/70 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center gap-3">

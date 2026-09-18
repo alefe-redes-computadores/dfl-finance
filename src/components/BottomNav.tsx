@@ -195,7 +195,7 @@ export default function BottomNav() {
       </div>
 
       <div
-        className="fixed bottom-0 left-0 right-0 z-[40] h-[calc(68px+var(--safe-area-bottom))] border-t border-gray-200/70 bg-white/95 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 dark:border-slate-700/80 dark:bg-slate-800/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.18)]"
+        className="fixed bottom-0 left-0 right-0 z-[40] h-[calc(68px+var(--safe-area-bottom))] border-t border-gray-200/60 bg-white/90 shadow-[0_-6px_24px_rgba(15,23,42,0.06)] backdrop-blur-2xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-900/90 dark:shadow-[0_-8px_28px_rgba(0,0,0,0.22)]"
         style={{
           paddingBottom:
             'var(--safe-area-bottom)',

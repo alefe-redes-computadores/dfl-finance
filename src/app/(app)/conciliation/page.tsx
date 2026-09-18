@@ -116,6 +116,24 @@ export default function ConciliationPage() {
   const accounts = useMemo(() => data?.accounts ?? [], [data?.accounts])
   const loading = !hydrated || data === undefined
 
+  const pendingBreakdown = useMemo(() => {
+    const today = localIsoDate(new Date())
+    const monthStart = `${today.slice(0, 7)}-01`
+
+    return pendingTransactions.reduce(
+      (acc: { overdue: number; currentMonth: number; whatsapp: number }, tx: any) => {
+        const date = String(tx.date || '').slice(0, 10)
+
+        if (date && date < monthStart) acc.overdue += 1
+        else acc.currentMonth += 1
+
+        if (tx.source === 'whatsapp') acc.whatsapp += 1
+        return acc
+      },
+      { overdue: 0, currentMonth: 0, whatsapp: 0 }
+    )
+  }, [pendingTransactions])
+
   const accountMap = useMemo(
     () => new Map(accounts.map((account: any) => [account.id, account])),
     [accounts]
@@ -162,11 +180,18 @@ export default function ConciliationPage() {
         accountName: tx.account_id ? accountMap.get(tx.account_id)?.name : undefined,
         accountId: tx.account_id || undefined,
         context: tx.context,
-        source: 'manual' as const,
+        source:
+          tx.source === 'whatsapp'
+            ? ('whatsapp' as const)
+            : ('manual' as const),
+        categorySuggestion: tx.category_id
+          ? undefined
+          : undefined,
         originalData: {
           id: tx.id,
           account_id: tx.account_id || null,
           credit_card_id: tx.credit_card_id || null,
+          source: tx.source || null,
         },
       }))
     )
@@ -237,6 +262,7 @@ export default function ConciliationPage() {
 
         const txResult = await safeUpdate('transactions', tx.id, {
           status: 'done',
+          affects_balance: true,
           updated_at: new Date().toISOString(),
         })
 
@@ -274,8 +300,15 @@ export default function ConciliationPage() {
         accountName: tx.account_id ? accountMap.get(tx.account_id)?.name : undefined,
         accountId: tx.account_id || undefined,
         context: tx.context,
-        source: 'manual' as const,
-        originalData: { id: tx.id, account_id: tx.account_id || null },
+        source:
+          tx.source === 'whatsapp'
+            ? ('whatsapp' as const)
+            : ('manual' as const),
+        originalData: {
+          id: tx.id,
+          account_id: tx.account_id || null,
+          source: tx.source || null,
+        },
       }))
     )
   }
@@ -306,17 +339,38 @@ export default function ConciliationPage() {
       </header>
 
       <main className="px-4 pt-5 space-y-4">
-        <section className="rounded-[20px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-5 shadow-sm">
+        <section className="rounded-[22px] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.13em] font-bold text-gray-400">Pendências reais</p>
-              <p className="mt-2 text-[28px] leading-none font-black text-gray-900 dark:text-white">{pendingTransactions.length}</p>
-              <p className="mt-2 text-[12px] text-gray-500 dark:text-gray-400">Vencidas e previstas até o fim do mês atual.</p>
+              <p className="text-[11px] uppercase tracking-[0.13em] font-bold text-gray-400">Fila de revisão</p>
+              <p className="mt-1.5 text-[26px] leading-none font-black text-gray-900 dark:text-white">{pendingTransactions.length}</p>
+              <p className="mt-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">Somente vencidas e previstas até o fim deste mês.</p>
             </div>
-            <div className="w-12 h-12 rounded-[18px] bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
-              <ListChecks size={21} className="text-sky-600 dark:text-sky-400" />
+            <div className="w-11 h-11 rounded-[16px] bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
+              <ListChecks size={20} className="text-sky-600 dark:text-sky-400" />
             </div>
           </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-[15px] bg-red-50/80 px-3 py-2.5 dark:bg-red-500/10">
+              <p className="text-[18px] font-black text-red-600 dark:text-red-400">{pendingBreakdown.overdue}</p>
+              <p className="text-[9.5px] font-bold uppercase tracking-wide text-red-500/70 dark:text-red-400/70">Atrasadas</p>
+            </div>
+            <div className="rounded-[15px] bg-amber-50/80 px-3 py-2.5 dark:bg-amber-500/10">
+              <p className="text-[18px] font-black text-amber-700 dark:text-amber-400">{pendingBreakdown.currentMonth}</p>
+              <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-600/70 dark:text-amber-400/70">Este mês</p>
+            </div>
+            <div className="rounded-[15px] bg-emerald-50/80 px-3 py-2.5 dark:bg-emerald-500/10">
+              <p className="text-[18px] font-black text-emerald-700 dark:text-emerald-400">{pendingBreakdown.whatsapp}</p>
+              <p className="text-[9.5px] font-bold uppercase tracking-wide text-emerald-600/70 dark:text-emerald-400/70">WhatsApp</p>
+            </div>
+          </div>
+
+          {pendingBreakdown.whatsapp > 0 && (
+            <p className="mt-3 text-[10.5px] leading-4 text-gray-400 dark:text-gray-500">
+              Itens do WhatsApp permanecem fora do saldo até você revisar e conciliar.
+            </p>
+          )}
         </section>
 
         {queue.length > 0 && !isComplete && (

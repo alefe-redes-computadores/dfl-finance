@@ -413,6 +413,12 @@ function TransactionItem({ transaction, index, totalItems }: { transaction: any;
                 {attachmentIcon}
               </span>
             )}
+
+            {transaction.source === 'whatsapp' && (
+              <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                WhatsApp
+              </span>
+            )}
           </div>
 
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-gray-400 dark:text-gray-500">

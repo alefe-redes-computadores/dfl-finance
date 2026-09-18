@@ -181,7 +181,7 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
             </div>
             <label className="block">
               <span className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 dark:text-gray-400"><Percent size={13} />Juros (%)</span>
-              <input inputMode="decimal" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="0" className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 text-[14px] font-semibold text-gray-900 dark:text-white outline-none focus:border-teal-500" />
+              <input inputMode="decimal" enterKeyHint="done" value={interestRate} onChange={(e) => setInterestRate(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="0,00" className="h-12 w-full rounded-[16px] border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 px-4 text-[14px] font-semibold text-gray-900 dark:text-white outline-none focus:border-teal-500" />
             </label>
           </section>
 

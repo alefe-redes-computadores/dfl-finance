@@ -300,6 +300,10 @@ export default function ProjectionsPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-4">
+        <div className="rounded-[16px] border border-slate-200/70 bg-white/80 px-3.5 py-3 text-[10.5px] leading-4 text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
+          Projeção estimativa: parte do saldo atual e usa a média dos 6 meses completos anteriores. Pendências futuras e itens que não afetam saldo não são somados novamente.
+        </div>
+
         <div className="flex flex-wrap gap-2 items-center justify-between">
           <div className="flex gap-1 bg-white dark:bg-slate-800 p-1 rounded-full shadow-sm border border-gray-50 dark:border-slate-700">
             {periods.map(p => (

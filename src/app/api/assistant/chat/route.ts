@@ -15,7 +15,10 @@ type ChatMessage = {
   content: string
 }
 
-const GEMINI_START_TIMEOUT_MS = 30000
+const GEMINI_START_TIMEOUT_MS = 22000
+const ASSISTANT_HISTORY_MESSAGES = 14
+const ASSISTANT_MESSAGE_CHARS = 2400
+const ASSISTANT_MAX_OUTPUT_TOKENS = 900
 
 function assistantTimeoutError() {
   return new Error(
@@ -69,7 +72,7 @@ function sanitizeMessages(
   }
 
   return input
-    .slice(-30)
+    .slice(-ASSISTANT_HISTORY_MESSAGES)
     .flatMap(
       (item: any) => {
         const role =
@@ -86,7 +89,7 @@ function sanitizeMessages(
           'string'
             ? item.content
                 .trim()
-                .slice(0, 4000)
+                .slice(0, ASSISTANT_MESSAGE_CHARS)
             : ''
 
         if (
@@ -711,7 +714,9 @@ REGRAS:
 - valores monetários estão em BRL;
 - não diga que acessou banco, internet ou dados fora do contexto fornecido;
 - quando não houver dados suficientes, diga isso claramente;
-- prefira respostas curtas e úteis, normalmente em até 5 parágrafos curtos ou 6 itens;
+- prefira respostas curtas e úteis, normalmente em até 4 parágrafos curtos ou 5 itens;
+- responda primeiro à pergunta atual; use o histórico recente apenas quando ele for necessário para continuidade;
+- não repita o contexto financeiro nem recapitule fatos que não ajudam diretamente a resposta;
 - conclua a resposta dentro do limite disponível; não termine uma frase, item ou percentual pela metade;
 - use Markdown simples quando ajudar: **negrito**, listas e pequenos títulos.
 
@@ -758,7 +763,7 @@ ${snapshot}`
           generationConfig: {
             temperature: 0.3,
             maxOutputTokens:
-              1400,
+              ASSISTANT_MAX_OUTPUT_TOKENS,
           },
         }),
         new Promise<never>(

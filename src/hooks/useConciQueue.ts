@@ -14,7 +14,7 @@ export interface ConciTransaction {
   accountName?: string
   accountId?: string
   context?: 'dfl' | 'personal'
-  source?: 'csv' | 'ocr' | 'manual'
+  source?: 'csv' | 'ocr' | 'manual' | 'whatsapp'
   status: 'pending' | 'approved' | 'rejected'
   originalData?: any
 }

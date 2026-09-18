@@ -24,7 +24,7 @@ export interface TransactionSuggestion {
   accountName?: string
   accountId?: string
   context?: 'dfl' | 'personal'
-  source?: 'csv' | 'ocr' | 'manual'
+  source?: 'csv' | 'ocr' | 'manual' | 'whatsapp'
 }
 
 interface ConciCardProps {
@@ -319,7 +319,9 @@ export function ConciCard({
           <div className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500 pt-2 uppercase tracking-wider">
             {transaction.source === 'csv' && 'Origem: Extrato (CSV)'}
             {transaction.source === 'ocr' && 'Origem: Escaneamento'}
-            {!transaction.source && 'Origem: Cadastro Manual'}
+            {transaction.source === 'whatsapp' && 'Origem: WhatsApp · revisar antes do saldo'}
+            {transaction.source === 'manual' && 'Origem: Cadastro Manual'}
+            {!transaction.source && 'Origem não informada'}
           </div>
         </div>
       </div>
