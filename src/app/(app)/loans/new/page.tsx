@@ -1,6 +1,8 @@
 // src/app/(app)/loans/new/page.tsx
 'use client'
 
+import SelectField from '@/components/SelectField'
+
 import { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -342,8 +344,9 @@ function NewLoanContent() {
 
             <FormField label="Juros % a.m." helper="Deixe em branco se for sem juros.">
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                enterKeyHint="done"
                 placeholder="Ex: 1,5"
                 value={interestRate}
                 onChange={(e) => setInterestRate(e.target.value)}
@@ -352,15 +355,7 @@ function NewLoanContent() {
             </FormField>
 
             <FormField label="Status">
-              <select
-                value={status}
-                onChange={(e) => { vibrate([5]); setStatus(e.target.value); }}
-                className="app-field text-[13px]"
-              >
-                <option value="active">Ativo</option>
-                <option value="paid">Pago</option>
-                <option value="overdue">Atrasado</option>
-              </select>
+              <SelectField value={status} onChange={(value) => { vibrate([5]); setStatus(value) }} title="Status do empréstimo" options={[{value:'active',label:'Ativo'},{value:'paid',label:'Pago'},{value:'overdue',label:'Atrasado'}]} className="text-[13px]" />
             </FormField>
           </div>
 

@@ -1,6 +1,7 @@
 // src/app/(app)/import-invoice/page.tsx
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -886,19 +887,11 @@ export default function ImportInvoicePage() {
                           : 'Despesa'}
                       </span>
 
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={transaction.amount}
-                        onChange={(event) =>
-                          updateTransaction(
-                            index,
-                            'amount',
-                            Number(event.target.value) || 0
-                          )
-                        }
+                      <MoneyInput
+                        value={Number(transaction.amount) || 0}
+                        onChange={(value) => updateTransaction(index, 'amount', value)}
                         className="w-28 bg-transparent text-[14px] font-semibold text-gray-900 outline-none dark:text-gray-100"
+                        placeholder="0,00"
                       />
 
                       {transaction.suggested_category && (

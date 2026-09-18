@@ -1,6 +1,8 @@
 // src/app/(app)/financings/new/page.tsx
 "use client"
 
+import SelectField from '@/components/SelectField'
+
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -564,9 +566,9 @@ function NewFinancingContent() {
               <div className="flex items-center gap-2">
                 <BadgePercent size={16} className="shrink-0 text-gray-400" />
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
                   inputMode="decimal"
+                  enterKeyHint="done"
                   placeholder="Ex: 1,5"
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
@@ -579,18 +581,7 @@ function NewFinancingContent() {
               <label className={labelClass}>Status</label>
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={16} className="shrink-0 text-gray-400" />
-                <select
-                  value={status}
-                  onChange={(e) => {
-                    vibrate([5])
-                    setStatus(e.target.value as FinancingStatus)
-                  }}
-                  className="app-input cursor-pointer appearance-none font-semibold"
-                >
-                  <option value="active">Ativo</option>
-                  <option value="paid">Quitado</option>
-                  <option value="overdue">Atrasado</option>
-                </select>
+                <SelectField value={status} onChange={(value) => { vibrate([5]); setStatus(value as FinancingStatus) }} title="Status do financiamento" options={[{value:'active',label:'Ativo'},{value:'paid',label:'Quitado'},{value:'overdue',label:'Atrasado'}]} className="border-0 bg-transparent px-0 shadow-none font-semibold" />
               </div>
             </div>
           </div>

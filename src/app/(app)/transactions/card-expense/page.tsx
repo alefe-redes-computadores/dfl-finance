@@ -1,6 +1,8 @@
 // src/app/(app)/transactions/card-expense/page.tsx
 'use client'
 
+import SelectField from '@/components/SelectField'
+
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -387,16 +389,7 @@ export default function CardExpensePage() {
                   <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
                     Parcelamento
                   </p>
-                  <select
-                    value={installments}
-                    onChange={(e) => setInstallments(Number(e.target.value))}
-                    className="w-full bg-transparent outline-none text-[15px] font-semibold text-gray-900 dark:text-gray-100 appearance-none"
-                  >
-                    <option value={1}>1x (À vista)</option>
-                    {[2,3,4,5,6,7,8,9,10,11,12].map(n => (
-                      <option key={n} value={n}>{n}x</option>
-                    ))}
-                  </select>
+                  <SelectField value={String(installments)} onChange={(value) => setInstallments(Number(value))} title="Parcelamento" options={[{value:'1',label:'1x (À vista)'}, ...[2,3,4,5,6,7,8,9,10,11,12].map((n) => ({ value:String(n), label:`${n}x` }))]} className="border-0 bg-transparent px-0 shadow-none text-[15px] font-semibold" />
                 </div>
                 <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 pointer-events-none" />
               </div>

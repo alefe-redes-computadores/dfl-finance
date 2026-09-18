@@ -183,10 +183,11 @@ export default function ConciliationPage() {
         source:
           tx.source === 'whatsapp'
             ? ('whatsapp' as const)
-            : ('manual' as const),
-        categorySuggestion: tx.category_id
-          ? undefined
-          : undefined,
+            : tx.source === 'ofx_import' || tx.source === 'ofx_merged'
+              ? ('csv' as const)
+              : tx.source === 'ai_ocr'
+                ? ('ocr' as const)
+                : ('manual' as const),
         originalData: {
           id: tx.id,
           account_id: tx.account_id || null,
@@ -246,18 +247,25 @@ export default function ConciliationPage() {
 
       const currentBalance = safeNum(account.balance)
       const amount = safeNum(tx.amount)
+
+      // affects_balance=true significa que o valor já está refletido no saldo.
+      // Uma pendência importada/legada nesse estado deve apenas ser concluída;
+      // somá-la novamente causaria dupla contabilização.
+      const shouldApplyBalance = tx.affects_balance !== true
       const nextBalance = tx.type === 'income'
         ? currentBalance + amount
         : currentBalance - amount
 
       await db.transaction('rw', db.accounts, db.transactions, db.syncQueue, async () => {
-        const accountResult = await safeUpdate('accounts', account.id, {
-          balance: nextBalance,
-          updated_at: new Date().toISOString(),
-        })
+        if (shouldApplyBalance) {
+          const accountResult = await safeUpdate('accounts', account.id, {
+            balance: nextBalance,
+            updated_at: new Date().toISOString(),
+          })
 
-        if (!accountResult.success) {
-          throw new Error(accountResult.error || 'Não foi possível atualizar o saldo da conta.')
+          if (!accountResult.success) {
+            throw new Error(accountResult.error || 'Não foi possível atualizar o saldo da conta.')
+          }
         }
 
         const txResult = await safeUpdate('transactions', tx.id, {

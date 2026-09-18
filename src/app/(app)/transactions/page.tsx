@@ -1,5 +1,7 @@
 // src/app/(app)/transactions/page.tsx
 'use client'
+
+import SelectField from '@/components/SelectField'
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
@@ -1558,16 +1560,7 @@ export default function TransactionsPage() {
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Conta</label>
                 <div className="relative">
-                  <select
-                    value={tempFilters.accountId}
-                    onChange={(e) => setTempFilters({ ...tempFilters, accountId: e.target.value })}
-                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
-                  >
-                    <option value="">Todas as contas</option>
-                    {(localAccounts || []).map((acc: any) => (
-                      <option key={acc.id} value={acc.id}>{acc.name}</option>
-                    ))}
-                  </select>
+                  <SelectField value={tempFilters.accountId} onChange={(value) => setTempFilters({ ...tempFilters, accountId: value })} title="Filtrar por conta" placeholder="Todas as contas" options={[{value:'',label:'Todas as contas'}, ...(localAccounts || []).map((acc:any)=>({value:acc.id,label:acc.name}))]} className="h-[54px] rounded-[18px] border-gray-100 bg-gray-50 dark:border-slate-700 dark:bg-slate-800" />
                   <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
               </div>
@@ -1575,16 +1568,7 @@ export default function TransactionsPage() {
               <div>
                 <label className="text-[14px] font-bold text-gray-800 dark:text-gray-200 mb-3 block">Categoria</label>
                 <div className="relative">
-                  <select
-                    value={tempFilters.categoryId}
-                    onChange={(e) => setTempFilters({ ...tempFilters, categoryId: e.target.value })}
-                    className="w-full h-[54px] bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] px-4 text-[15px] font-semibold text-gray-800 dark:text-gray-200 appearance-none focus:ring-2 focus:ring-teal-500/20 outline-none transition-all"
-                  >
-                    <option value="">Todas as categorias</option>
-                    {drawerCategories.map((cat: any) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
+                  <SelectField value={tempFilters.categoryId} onChange={(value) => setTempFilters({ ...tempFilters, categoryId: value })} title="Filtrar por categoria" placeholder="Todas as categorias" options={[{value:'',label:'Todas as categorias'}, ...drawerCategories.map((cat:any)=>({value:cat.id,label:cat.name}))]} className="h-[54px] rounded-[18px] border-gray-100 bg-gray-50 dark:border-slate-700 dark:bg-slate-800" />
                   <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
               </div>
@@ -1596,14 +1580,14 @@ export default function TransactionsPage() {
                     <span className="text-[11px] text-gray-400 font-semibold mb-1 block">Mínimo</span>
                     <div className="flex items-center">
                       <span className="text-[14px] text-gray-400 font-semibold mr-1.5">R$</span>
-                      <input type="number" placeholder="0,00" value={tempFilters.minAmount} onChange={(e) => setTempFilters({ ...tempFilters, minAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
+                      <input type="text" inputMode="decimal" enterKeyHint="done" placeholder="0,00" value={tempFilters.minAmount} onChange={(e) => setTempFilters({ ...tempFilters, minAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
                     </div>
                   </div>
                   <div className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[18px] p-3 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all">
                     <span className="text-[11px] text-gray-400 font-semibold mb-1 block">Máximo</span>
                     <div className="flex items-center">
                       <span className="text-[14px] text-gray-400 font-semibold mr-1.5">R$</span>
-                      <input type="number" placeholder="0,00" value={tempFilters.maxAmount} onChange={(e) => setTempFilters({ ...tempFilters, maxAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
+                      <input type="text" inputMode="decimal" enterKeyHint="done" placeholder="0,00" value={tempFilters.maxAmount} onChange={(e) => setTempFilters({ ...tempFilters, maxAmount: e.target.value })} className="bg-transparent w-full text-[15px] font-bold outline-none text-gray-800 dark:text-gray-200" />
                     </div>
                   </div>
                 </div>

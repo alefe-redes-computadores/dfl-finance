@@ -1,6 +1,8 @@
 // src/app/(app)/subscriptions/new/page.tsx
 'use client'
 
+import SelectField from '@/components/SelectField'
+
 import { useState, useEffect, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Save, RefreshCw, Loader2 } from "lucide-react"
@@ -262,17 +264,7 @@ function NewSubscriptionContent() {
             <label className="app-field-label">
               Ciclo
             </label>
-            <select
-              value={billingCycle}
-              onChange={(e) => { vibrate([5]); setBillingCycle(e.target.value) }}
-              className="app-select border-0 bg-transparent px-0 shadow-none cursor-pointer"
-            >
-              {SUBSCRIPTION_CYCLES.map((cycle) => (
-                <option key={cycle.value} value={cycle.value}>
-                  {cycle.label}
-                </option>
-              ))}
-            </select>
+            <SelectField value={billingCycle} onChange={(value) => { vibrate([5]); setBillingCycle(value) }} title="Ciclo da assinatura" options={SUBSCRIPTION_CYCLES.map((cycle) => ({ value: cycle.value, label: cycle.label }))} className="border-0 bg-transparent px-0 shadow-none" />
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-black/5 dark:border-white/5 shadow-sm dark:shadow-none">

@@ -38,7 +38,10 @@ const ACCOUNT_ICONS: Record<string, any> = {
 const safeNum = (value: unknown): number => {
   if (value === null || value === undefined || value === '') return 0
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
-  const parsed = Number.parseFloat(String(value).replace(',', '.').replace(/[^0-9.-]+/g, ''))
+  const raw = String(value).trim().replace(/\s/g, '').replace(/^R\$/i, '')
+  if (!raw) return 0
+  const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw
+  const parsed = Number(normalized.replace(/[^0-9.-]+/g, ''))
   return Number.isFinite(parsed) ? parsed : 0
 }
 
@@ -177,7 +180,7 @@ function AccountDetailContent() {
   const handleAdjustBalance = async () => {
     if (!user) return
 
-    const amount = parseFloat(adjustAmount.replace(',', '.'))
+    const amount = safeNum(adjustAmount)
 
     if (!adjustAmount || isNaN(amount) || amount === 0) {
       errorHaptic()
@@ -214,7 +217,7 @@ function AccountDetailContent() {
   const handleTransfer = async () => {
     if (!user) return
 
-    const amount = parseFloat(transferAmount.replace(',', '.'))
+    const amount = safeNum(transferAmount)
 
     if (!transferAmount || isNaN(amount) || amount <= 0) {
       errorHaptic()

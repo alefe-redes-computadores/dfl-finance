@@ -1,6 +1,8 @@
 // src/app/(app)/import-csv/page.tsx
 'use client'
 
+import SelectField from '@/components/SelectField'
+
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -588,21 +590,7 @@ export default function ImportCSVPage() {
               <label className="mb-1 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
                 Conta afetada
               </label>
-              <select
-                value={accountId}
-                onChange={(event) => setAccountId(event.target.value)}
-                disabled={importing}
-                className="mb-3 w-full rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
-              >
-                <option value="">Selecione a conta</option>
-                {(accounts as any[])
-                  .filter((account) => !account.is_archived)
-                  .map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-              </select>
+              <SelectField value={accountId} onChange={setAccountId} disabled={importing} title="Conta afetada" placeholder="Selecione a conta" options={(accounts as any[]).filter((account) => !account.is_archived).map((account) => ({ value: account.id, label: account.name }))} className="mb-3 rounded-[16px] border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-900" />
             </div>
 
             <div className="flex gap-3">

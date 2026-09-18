@@ -1,6 +1,8 @@
 // src/app/(app)/accounts/new/page.tsx
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
+
 import { useState, useEffect, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -50,11 +52,14 @@ const COLOR_OPTIONS = [
   "#4f46e5",
 ]
 
-const safeNum = (val: any): number => {
-  if (val === null || val === undefined || val === "") return 0
-  if (typeof val === "number") return isNaN(val) ? 0 : val
-  const parsed = parseFloat(String(val).replace(",", ".").replace(/[^0-9.-]+/g, ""))
-  return isNaN(parsed) ? 0 : parsed
+const safeNum = (value: unknown): number => {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const raw = String(value).trim().replace(/\s/g, '').replace(/^R\$/i, '')
+  if (!raw) return 0
+  const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw
+  const parsed = Number(normalized.replace(/[^0-9.-]+/g, ''))
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function formatCurrencyPreview(value: string) {
@@ -388,15 +393,7 @@ function AccountFormContent() {
                 <div className="rounded-[16px] border border-black/5 bg-gray-50 px-4 py-3 dark:border-white/10 dark:bg-slate-800">
                   <div className="flex items-center gap-2">
                     <span className="text-[15px] font-semibold text-gray-400">R$</span>
-                    <input
-                      type="number"
-                      name="balance"
-                      step="0.01"
-                      placeholder="0,00"
-                      value={formData.balance}
-                      onChange={handleChange}
-                      className="w-full bg-transparent text-[21px] font-semibold tracking-tight text-gray-950 outline-none placeholder:text-gray-300 dark:text-white dark:placeholder:text-gray-600"
-                    />
+                    <MoneyInput value={safeNum(formData.balance)} onChange={(value) => setFormData((current) => ({ ...current, balance: String(value) }))} placeholder="0,00" className="w-full bg-transparent text-[21px] font-semibold tracking-tight text-gray-950 outline-none placeholder:text-gray-300 dark:text-white dark:placeholder:text-gray-600" />
                   </div>
                 </div>
 

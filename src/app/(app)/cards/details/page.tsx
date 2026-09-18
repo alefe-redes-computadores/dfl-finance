@@ -35,11 +35,14 @@ import {
 } from '@/lib/cardOperations'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 
-const safeNum = (val: any): number => {
-  if (val === null || val === undefined || val === '') return 0
-  if (typeof val === 'number') return isNaN(val) ? 0 : val
-  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ''))
-  return isNaN(parsed) ? 0 : parsed
+const safeNum = (value: unknown): number => {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const raw = String(value).trim().replace(/\s/g, '').replace(/^R\$/i, '')
+  if (!raw) return 0
+  const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw
+  const parsed = Number(normalized.replace(/[^0-9.-]+/g, ''))
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 const formatCurrency = (val: number) =>

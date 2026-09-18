@@ -1,6 +1,8 @@
 // src/app/(app)/import/page.tsx
 'use client'
 
+import SelectField from '@/components/SelectField'
+
 import { resolveApiUrl } from '@/lib/runtime/apiUrl'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -443,24 +445,7 @@ function ImportContent() {
                 <label className="mb-1 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
                   Conta
                 </label>
-                <select
-                  value={accountId}
-                  onChange={(event) => setAccountId(event.target.value)}
-                  className={`w-full rounded-[16px] border bg-gray-50 px-4 py-3 text-gray-800 outline-none dark:bg-slate-900 dark:text-gray-200 ${
-                    errors.account
-                      ? 'border-red-400 dark:border-red-500'
-                      : 'border-gray-200 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700'
-                  }`}
-                >
-                  <option value="">Selecione a conta afetada</option>
-                  {(accounts as any[])
-                    .filter((account) => !account.is_archived)
-                    .map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                </select>
+                <SelectField value={accountId} onChange={setAccountId} title="Conta afetada" placeholder="Selecione a conta afetada" options={(accounts as any[]).filter((account) => !account.is_archived).map((account) => ({ value: account.id, label: account.name }))} className={`rounded-[16px] bg-gray-50 dark:bg-slate-900 ${errors.account ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-slate-700'}`} />
                 {errors.account && (
                   <p className="mt-1 flex items-center gap-1 text-[10px] text-red-500">
                     <AlertCircle size={12} />
