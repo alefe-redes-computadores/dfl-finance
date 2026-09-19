@@ -24,19 +24,34 @@ export default function NativeNotificationManager({
       | { remove: () => Promise<void> }
       | null = null
 
+    let syncing = false
+    let rerun = false
+
     const sync = async () => {
       if (!active) return
 
+      if (syncing) {
+        rerun = true
+        return
+      }
+
+      syncing = true
+
       try {
-        await syncNativeFinancialReminders(
-          userId,
-          settings.preferences
-        )
+        do {
+          rerun = false
+          await syncNativeFinancialReminders(
+            userId,
+            settings.preferences
+          )
+        } while (active && rerun)
       } catch (error) {
         console.warn(
           '[NativeNotifications] Não foi possível sincronizar lembretes:',
           error
         )
+      } finally {
+        syncing = false
       }
     }
 

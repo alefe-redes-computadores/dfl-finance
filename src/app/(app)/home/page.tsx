@@ -449,9 +449,14 @@ function HomeContent() {
   )
 
   const pendings = useMemo(() => {
-    const allPending = localTransactions.filter(
-      (tx: any) => tx.status === 'pending'
-    )
+    // Home resume apenas pendências vencidas + previstas até o fim do mês atual.
+    // Séries recorrentes/parceladas futuras continuam persistidas sem inflar o painel.
+    const pendingMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    const allPending = localTransactions.filter((tx: any) => {
+      if (tx.status !== 'pending') return false
+      const date = String(tx.date || '').slice(0, 10)
+      return Boolean(date) && date <= pendingMonthEnd
+    })
 
     const toPay = allPending
       .filter(

@@ -11,6 +11,8 @@ export interface UserPreferences {
   monthly_report: boolean
   push_notifications: boolean
   notification_hour: number
+  notification_lead_days: number[]
+  notification_overdue: boolean
   notification_categories: {
     invoices: boolean
     transactions: boolean
@@ -53,6 +55,8 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   monthly_report: true,
   push_notifications: true,
   notification_hour: 9,
+  notification_lead_days: [3, 1, 0],
+  notification_overdue: true,
   notification_categories: {
     invoices: true,
     transactions: true,
@@ -143,6 +147,16 @@ function normalizePreferences(value: unknown): UserPreferences {
       Number.isFinite(raw.notification_hour)
         ? Math.min(21, Math.max(6, raw.notification_hour))
         : DEFAULT_USER_PREFERENCES.notification_hour,
+    notification_lead_days:
+      Array.isArray(raw.notification_lead_days)
+        ? Array.from(new Set(raw.notification_lead_days.map(Number).filter(
+            (value) => Number.isInteger(value) && value >= 0 && value <= 30
+          ))).sort((a, b) => b - a)
+        : DEFAULT_USER_PREFERENCES.notification_lead_days,
+    notification_overdue:
+      typeof raw.notification_overdue === 'boolean'
+        ? raw.notification_overdue
+        : DEFAULT_USER_PREFERENCES.notification_overdue,
     notification_categories: {
       ...DEFAULT_USER_PREFERENCES.notification_categories,
       ...(raw.notification_categories &&

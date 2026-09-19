@@ -84,6 +84,8 @@ export interface NotificationCategoryPreferences {
 export interface NativeNotificationPreferences {
   push_notifications: boolean
   notification_hour?: number
+  notification_lead_days?: number[]
+  notification_overdue?: boolean
   notification_categories?: Partial<NotificationCategoryPreferences>
 }
 
@@ -331,11 +333,18 @@ async function collectReminderCandidates(
         continue
       }
 
+      const explicitDue =
+        typeof subscription.next_due_date === 'string'
+          ? subscription.next_due_date.slice(0, 10)
+          : ''
+
       reminders.push({
         key: `subscription:${subscription.id}`,
-        title: subscription.name || 'Recorrência',
+        title: subscription.name || 'Assinatura',
         body: `${formatMoney(subscription.amount)} previsto`,
-        dueDate: nextMonthlyDueDate(subscription.due_day),
+        dueDate:
+          explicitDue ||
+          nextMonthlyDueDate(subscription.due_day),
         route: '/subscriptions',
         category: 'subscriptions',
       })
@@ -388,6 +397,56 @@ async function ensurePermission() {
   return permission.display === 'granted'
 }
 
+async function cancelManagedNotifications() {
+  if (!isNative()) return 0
+
+  const pending = await LocalNotifications.getPending()
+  const managed = pending.notifications.filter(
+    (notification) =>
+      notification.extra?.managedBy === 'dfl-finance'
+  )
+
+  if (managed.length > 0) {
+    await LocalNotifications.cancel({
+      notifications: managed.map(({ id }) => ({ id })),
+    })
+  }
+
+  return managed.length
+}
+
+function normalizedLeadDays(
+  preferences: NativeNotificationPreferences
+) {
+  const raw = Array.isArray(preferences.notification_lead_days)
+    ? preferences.notification_lead_days
+    : [3, 1, 0]
+
+  return Array.from(
+    new Set(
+      raw
+        .map(Number)
+        .filter(
+          (value) =>
+            Number.isInteger(value) &&
+            value >= 0 &&
+            value <= 30
+        )
+    )
+  ).sort((a, b) => b - a)
+}
+
+function occurrenceTitle(
+  title: string,
+  leadDays: number,
+  overdue = false
+) {
+  if (overdue) return `${title} está vencido`
+  if (leadDays === 0) return `${title} vence hoje`
+  if (leadDays === 1) return `${title} vence amanhã`
+  return `${title} vence em ${leadDays} dias`
+}
+
 async function ensureChannel() {
   if (!isNative()) return
 
@@ -408,10 +467,25 @@ export async function syncNativeFinancialReminders(
   userId: string,
   preferences: NativeNotificationPreferences
 ) {
-  if (!userId || !preferences.push_notifications || !isNative()) {
+  const supported = isNative()
+
+  if (!userId || !supported) {
     return {
-      supported: isNative(),
+      supported,
       scheduled: 0,
+    }
+  }
+
+  // Sempre remove a agenda anterior antes de recalcular.
+  // Isso também faz o OFF realmente cancelar lembretes já agendados.
+  const cancelled = await cancelManagedNotifications()
+
+  if (!preferences.push_notifications) {
+    return {
+      supported: true,
+      scheduled: 0,
+      cancelled,
+      disabled: true,
     }
   }
 
@@ -421,24 +495,12 @@ export async function syncNativeFinancialReminders(
     return {
       supported: true,
       scheduled: 0,
+      cancelled,
       permissionDenied: true,
     }
   }
 
   await ensureChannel()
-
-  const pending = await LocalNotifications.getPending()
-
-  const managed = pending.notifications.filter(
-    (notification) =>
-      notification.extra?.managedBy === 'dfl-finance'
-  )
-
-  if (managed.length > 0) {
-    await LocalNotifications.cancel({
-      notifications: managed.map(({ id }) => ({ id })),
-    })
-  }
 
   const candidates = await collectReminderCandidates(
     userId,
@@ -456,65 +518,112 @@ export async function syncNativeFinancialReminders(
   )
 
   const now = Date.now()
-  const maxSchedule = now + 40 * 24 * 60 * 60 * 1000
+  const maxSchedule =
+    now + 60 * 24 * 60 * 60 * 1000
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
   const notifications: NativeNotificationSchema[] = []
+  const usedIds = new Set<number>()
+  const leadDays = normalizedLeadDays(preferences)
+
+  const append = (
+    candidate: ReminderCandidate,
+    suffix: string,
+    title: string,
+    at: Date
+  ) => {
+    const timestamp = at.getTime()
+
+    if (
+      timestamp <= now + 60_000 ||
+      timestamp > maxSchedule ||
+      notifications.length >= 60
+    ) {
+      return
+    }
+
+    const key =
+      `${candidate.key}:${candidate.dueDate}:${suffix}`
+
+    let id = stableNotificationId(key)
+
+    while (usedIds.has(id)) {
+      id = id >= 1_999_999_999 ? 1 : id + 1
+    }
+
+    usedIds.add(id)
+
+    notifications.push({
+      id,
+      title,
+      body: candidate.body,
+      schedule: {
+        at,
+        allowWhileIdle: true,
+      },
+      channelId: DFL_NOTIFICATION_CHANNEL_ID,
+      smallIcon: DFL_NOTIFICATION_SMALL_ICON,
+      iconColor: '#0f766e',
+      extra: {
+        managedBy: 'dfl-finance',
+        key,
+        route: candidate.route,
+        category: candidate.category,
+        dueDate: candidate.dueDate,
+      },
+    })
+  }
 
   for (const candidate of candidates) {
     const due = parseDate(candidate.dueDate)
     if (!due) continue
 
-    const occurrences = [
-      {
-        suffix: 'soon',
-        title: `${candidate.title} vence em 3 dias`,
-        at: reminderAt(
-          toISODate(addDays(due, -3)),
-          hour
-        ),
-      },
-      {
-        suffix: 'today',
-        title: `${candidate.title} vence hoje`,
-        at: reminderAt(candidate.dueDate, hour),
-      },
-    ]
+    const dueDay = new Date(due)
+    dueDay.setHours(0, 0, 0, 0)
 
-    for (const occurrence of occurrences) {
-      if (!occurrence.at) continue
+    if (dueDay < today) {
+      if (preferences.notification_overdue !== false) {
+        const at = new Date()
+        at.setHours(hour, 0, 0, 0)
 
-      const timestamp = occurrence.at.getTime()
+        if (at.getTime() <= now + 60_000) {
+          at.setDate(at.getDate() + 1)
+        }
 
-      if (
-        timestamp <= now + 60_000 ||
-        timestamp > maxSchedule
-      ) {
-        continue
+        append(
+          candidate,
+          `overdue:${toISODate(at)}`,
+          occurrenceTitle(candidate.title, 0, true),
+          at
+        )
       }
 
-      const key = `${candidate.key}:${candidate.dueDate}:${occurrence.suffix}`
+      continue
+    }
 
-      notifications.push({
-        id: stableNotificationId(key),
-        title: occurrence.title,
-        body: candidate.body,
-        schedule: {
-          at: occurrence.at,
-          allowWhileIdle: true,
-        },
-        channelId: DFL_NOTIFICATION_CHANNEL_ID,
-        smallIcon: DFL_NOTIFICATION_SMALL_ICON,
-        iconColor: '#0f766e',
-        extra: {
-          managedBy: 'dfl-finance',
-          key,
-          route: candidate.route,
-          category: candidate.category,
-          dueDate: candidate.dueDate,
-        },
-      })
+    for (const days of leadDays) {
+      const at = reminderAt(
+        toISODate(addDays(due, -days)),
+        hour
+      )
+
+      if (!at) continue
+
+      append(
+        candidate,
+        `lead:${days}`,
+        occurrenceTitle(candidate.title, days),
+        at
+      )
     }
   }
+
+  notifications.sort(
+    (a, b) =>
+      (a.schedule?.at?.getTime() || 0) -
+      (b.schedule?.at?.getTime() || 0)
+  )
 
   if (notifications.length > 0) {
     await LocalNotifications.schedule({
@@ -525,7 +634,13 @@ export async function syncNativeFinancialReminders(
   return {
     supported: true,
     scheduled: notifications.length,
+    cancelled,
+    candidates: candidates.length,
   }
+}
+
+export async function clearNativeFinancialReminders() {
+  return cancelManagedNotifications()
 }
 
 export async function addNativeNotificationActionListener(
