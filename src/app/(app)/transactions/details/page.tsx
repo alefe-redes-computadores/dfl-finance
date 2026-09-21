@@ -44,7 +44,16 @@ import {
 const safeNum = (val: any): number => {
   if (val === null || val === undefined || val === '') return 0
   if (typeof val === 'number') return isNaN(val) ? 0 : val
-  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ''))
+  const parsed = typeof val === 'number'
+    ? val
+    : (() => {
+        const raw = String(val ?? '').trim().replace(/[^0-9,.-]+/g, '')
+        if (!raw) return Number.NaN
+        const normalized = raw.includes(',')
+          ? raw.replace(/\./g, '').replace(',', '.')
+          : raw
+        return Number(normalized)
+      })()
   return isNaN(parsed) ? 0 : parsed
 }
 

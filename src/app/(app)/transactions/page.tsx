@@ -62,7 +62,16 @@ const defaultAdvFilters: AdvFilters = {
 const safeNum = (val: any) => {
   if (!val) return 0;
   if (typeof val === 'number') return val;
-  const parsed = parseFloat(String(val).replace(',', '.').replace(/[^0-9.-]+/g, ""));
+  const parsed = typeof val === 'number'
+    ? val
+    : (() => {
+        const raw = String(val ?? '').trim().replace(/[^0-9,.-]+/g, '')
+        if (!raw) return Number.NaN
+        const normalized = raw.includes(',')
+          ? raw.replace(/\./g, '').replace(',', '.')
+          : raw
+        return Number(normalized)
+      })()
   return isNaN(parsed) ? 0 : parsed;
 }
 
