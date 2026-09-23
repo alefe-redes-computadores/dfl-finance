@@ -407,8 +407,8 @@ export async function requestNativeNotificationPermission():
   return permission.display
 }
 
-async function ensurePermission() {
-  return (await requestNativeNotificationPermission()) === 'granted'
+async function hasNotificationPermission() {
+  return (await getNativeNotificationPermission()) === 'granted'
 }
 
 export async function sendNativeNotificationTest() {
@@ -533,7 +533,7 @@ export async function syncNativeFinancialReminders(
     }
   }
 
-  const permitted = await ensurePermission()
+  const permitted = await hasNotificationPermission()
 
   if (!permitted) {
     return {
