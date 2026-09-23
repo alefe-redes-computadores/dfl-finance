@@ -65,8 +65,8 @@ ok(
 )
 
 ok(
-  patch.includes('DFL_FINANCE_SYSTEM_BARS_V15'),
-  'marker V15 ausente'
+  patch.includes('DFL_FINANCE_SYSTEM_BARS_V29_VAULT_DONOR'),
+  'marker V29 ausente'
 )
 
 ok(
