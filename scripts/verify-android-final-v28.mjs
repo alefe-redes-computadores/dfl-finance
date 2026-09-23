@@ -132,9 +132,9 @@ assertContract(
 
 assertContract(
   notifications.includes(
-    "permission.display === 'granted'"
+    "getNativeNotificationPermission()) === 'granted'"
   ),
-  'Validação de granted ausente.'
+  'Validação check-only de granted ausente.'
 )
 
 console.log(
