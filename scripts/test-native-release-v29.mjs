@@ -1,0 +1,36 @@
+import fs from 'node:fs'
+const r=(f)=>fs.readFileSync(f,'utf8')
+const ok=(v,m)=>{if(!v)throw new Error(`V29: ${m}`)}
+const patch=r('scripts/patch-android-system-bars-v15.mjs')
+const runtime=r('src/components/CapacitorStatusBar.tsx')
+const css=r('src/app/globals.css')
+const native=r('src/lib/nativeNotifications.ts')
+const more=r('src/app/(app)/more/page.tsx')
+const workflow=r('.github/workflows/android-build.yml')
+
+ok(patch.includes('DFL_FINANCE_SYSTEM_BARS_V29_VAULT_DONOR'),'donor marker ausente')
+ok(patch.includes("walk('android/app/src/main/java')"),'MainActivity não dinâmico')
+ok(patch.includes('setDecorFitsSystemWindows'),'edge-to-edge ausente')
+ok(patch.includes('Color.TRANSPARENT'),'transparência ausente')
+ok(patch.includes('setAppearanceLightStatusBars(false)')||patch.includes('isAppearanceLightStatusBars = false'),'ícones claros ausentes')
+
+const guard=runtime.indexOf("if (platform === 'android')")
+ok(guard>=0,'guarda Android React ausente')
+ok(runtime.indexOf('await StatusBar.setStyle')>guard,'React pode sobrescrever Android')
+ok(css.includes("html[data-native-shell='true'] .app-page"),'owner global safe-area ausente')
+
+ok(native.includes('requestNativeNotificationPermission'),'request explícito ausente')
+ok(native.includes('sendNativeNotificationTest'),'teste nativo ausente')
+ok(native.includes('LocalNotifications.requestPermissions()'),'requestPermissions ausente')
+ok(more.includes('notificationPermissionLabel'),'estado Android ausente na UI')
+ok(more.includes('Enviar notificação de teste'),'botão teste ausente')
+ok(more.includes('requestNativeNotificationPermission()'),'toggle não pede permissão')
+
+const sync=workflow.lastIndexOf('npx cap sync android')
+const edge=workflow.indexOf('node scripts/patch-android-system-bars-v15.mjs')
+const perm=workflow.indexOf('node scripts/patch-android-notification-permission-v28.mjs')
+const verify=workflow.indexOf('node scripts/verify-android-final-v28.mjs')
+ok(sync>=0&&edge>sync,'edge-to-edge fora da ordem')
+ok(perm>edge,'permissão fora da ordem')
+ok(verify>perm,'verify fora da ordem')
+console.log('V29 FINAL NATIVE RELEASE CONTRACT: OK')

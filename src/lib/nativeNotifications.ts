@@ -382,19 +382,63 @@ async function collectReminderCandidates(
   return reminders
 }
 
-async function ensurePermission() {
-  if (!isNative()) return false
+export type NativeNotificationPermissionState =
+  | PermissionState
+  | 'unsupported'
+
+export async function getNativeNotificationPermission():
+  Promise<NativeNotificationPermissionState> {
+  if (!isNative()) return 'unsupported'
+  const permission = await LocalNotifications.checkPermissions()
+  return permission.display
+}
+
+export async function requestNativeNotificationPermission():
+  Promise<NativeNotificationPermissionState> {
+  if (!isNative()) return 'unsupported'
 
   let permission = await LocalNotifications.checkPermissions()
-
   if (
     permission.display === 'prompt' ||
     permission.display === 'prompt-with-rationale'
   ) {
     permission = await LocalNotifications.requestPermissions()
   }
+  return permission.display
+}
 
-  return permission.display === 'granted'
+async function ensurePermission() {
+  return (await requestNativeNotificationPermission()) === 'granted'
+}
+
+export async function sendNativeNotificationTest() {
+  if (!isNative()) {
+    return { supported: false, permission: 'unsupported' as const }
+  }
+
+  const permission = await requestNativeNotificationPermission()
+  if (permission !== 'granted') {
+    return { supported: true, permission, sent: false }
+  }
+
+  await ensureChannel()
+  await LocalNotifications.schedule({
+    notifications: [{
+      id: stableNotificationId(`test:${Date.now()}`),
+      title: 'DFL Finance',
+      body: 'Notificações funcionando corretamente.',
+      schedule: {
+        at: new Date(Date.now() + 3000),
+        allowWhileIdle: true,
+      },
+      channelId: DFL_NOTIFICATION_CHANNEL_ID,
+      smallIcon: DFL_NOTIFICATION_SMALL_ICON,
+      iconColor: '#0f766e',
+      extra: { managedBy: 'dfl-finance-test' },
+    }],
+  })
+
+  return { supported: true, permission, sent: true }
 }
 
 async function cancelManagedNotifications() {

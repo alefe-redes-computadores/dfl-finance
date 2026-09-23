@@ -2,6 +2,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import {
+  getNativeNotificationPermission,
+  requestNativeNotificationPermission,
+  sendNativeNotificationTest,
+  type NativeNotificationPermissionState,
+} from '@/lib/nativeNotifications'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -112,7 +118,16 @@ function ProfileEditModal({ isOpen, onClose, name, setName, isGoogleLogin, onSav
 }
 
 // 🔥 MODAL DE CONFIGURAÇÕES RÁPIDAS (COM PORTAL) - ✅ CORRIGIDO
-function QuickSettingsModal({ isOpen, onClose, notificationsEnabled, toggleNotifications }: any) {
+function QuickSettingsModal({
+  isOpen,
+  onClose,
+  notificationsEnabled,
+  toggleNotifications,
+  notificationPermissionLabel,
+  nativeNotificationPermission,
+  testNativeNotification,
+  testingNotification,
+}: any) {
   // ✅ CONSUME O TEMA DIRETAMENTE DO CONTEXTO
   const { theme, toggleTheme } = useTheme()
   
@@ -161,12 +176,24 @@ function QuickSettingsModal({ isOpen, onClose, notificationsEnabled, toggleNotif
               </div>
               <div>
                 <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Notificações</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{notificationsEnabled ? 'Ativadas' : 'Desativadas'}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                  {notificationsEnabled
+                    ? notificationPermissionLabel
+                    : 'Desativadas no DFL Finance'}
+                </p>
               </div>
             </div>
             <button onClick={toggleNotifications} className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${notificationsEnabled ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
               <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
             </button>
+          <button
+            type="button"
+            onClick={testNativeNotification}
+            disabled={testingNotification || nativeNotificationPermission === 'denied'}
+            className="w-full rounded-[18px] border border-gray-200 bg-white px-4 py-3 text-[13px] font-bold text-gray-700 transition-all active:scale-[0.98] disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200"
+          >
+            {testingNotification ? 'Testando…' : 'Enviar notificação de teste'}
+          </button>
           </div>
 
         </div>
@@ -268,6 +295,36 @@ export default function MorePage() {
   const notificationsEnabled =
     userSettings?.preferences.push_notifications ?? true
 
+  const [nativeNotificationPermission, setNativeNotificationPermission] =
+    useState<NativeNotificationPermissionState>('unsupported')
+  const [testingNotification, setTestingNotification] = useState(false)
+
+  const refreshNativeNotificationPermission = async () => {
+    try {
+      const permission = await getNativeNotificationPermission()
+      setNativeNotificationPermission(permission)
+      return permission
+    } catch {
+      setNativeNotificationPermission('unsupported')
+      return 'unsupported' as const
+    }
+  }
+
+  useEffect(() => {
+    if (!isClient) return
+    void refreshNativeNotificationPermission()
+  }, [isClient])
+
+  const notificationPermissionLabel =
+    nativeNotificationPermission === 'granted'
+      ? 'Permitidas pelo Android'
+      : nativeNotificationPermission === 'denied'
+        ? 'Bloqueadas pelo Android'
+        : nativeNotificationPermission === 'prompt' ||
+            nativeNotificationPermission === 'prompt-with-rationale'
+          ? 'Aguardando permissão do Android'
+          : 'Disponíveis apenas no aplicativo'
+
   useEffect(() => {
     if (user?.id) {
       setName(user.user_metadata?.full_name || '')
@@ -284,14 +341,35 @@ export default function MorePage() {
 
   const toggleNotifications = async () => {
     if (!user?.id) return
-
     const newValue = !notificationsEnabled
 
     try {
+      if (newValue) {
+        const permission = await requestNativeNotificationPermission()
+        setNativeNotificationPermission(permission)
+
+        if (permission === 'denied') {
+          showToast(
+            'O Android bloqueou as notificações. Libere a permissão nas configurações do aplicativo.',
+            'info'
+          )
+          return
+        }
+
+        if (
+          permission !== 'granted' &&
+          permission !== 'unsupported'
+        ) {
+          showToast(
+            'A permissão de notificações ainda não foi concedida.',
+            'info'
+          )
+          return
+        }
+      }
+
       const result = await updateSettings({
-        preferences: {
-          push_notifications: newValue,
-        },
+        preferences: { push_notifications: newValue },
       })
 
       showToast(
@@ -307,6 +385,53 @@ export default function MorePage() {
         error?.message || 'Não foi possível atualizar as notificações.',
         'error'
       )
+    }
+  }
+
+  const testNativeNotification = async () => {
+    if (testingNotification) return
+    setTestingNotification(true)
+
+    try {
+      const result = await sendNativeNotificationTest()
+      setNativeNotificationPermission(result.permission)
+
+      if (!result.supported) {
+        showToast(
+          'O teste nativo está disponível somente no aplicativo Android.',
+          'info'
+        )
+        return
+      }
+
+      if (result.permission === 'denied') {
+        showToast(
+          'Notificações bloqueadas pelo Android. Libere a permissão nas configurações do aplicativo.',
+          'info'
+        )
+        return
+      }
+
+      if (!result.sent) {
+        showToast(
+          'Conceda a permissão do Android para enviar a notificação de teste.',
+          'info'
+        )
+        return
+      }
+
+      showToast(
+        'Notificação de teste agendada para alguns segundos.',
+        'success'
+      )
+    } catch (error: any) {
+      showToast(
+        error?.message || 'Não foi possível testar a notificação.',
+        'error'
+      )
+    } finally {
+      setTestingNotification(false)
+      void refreshNativeNotificationPermission()
     }
   }
 
@@ -444,6 +569,10 @@ export default function MorePage() {
             onClose={() => setShowSettingsModal(false)} 
             notificationsEnabled={notificationsEnabled}
             toggleNotifications={toggleNotifications}
+            notificationPermissionLabel={notificationPermissionLabel}
+            nativeNotificationPermission={nativeNotificationPermission}
+            testNativeNotification={testNativeNotification}
+            testingNotification={testingNotification}
           />
           <ProfileEditModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} name={name} setName={setName} isGoogleLogin={isGoogleLogin} onSave={saveName} saving={savingProfile} />
         </>

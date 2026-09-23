@@ -281,6 +281,13 @@ jobs:
       - name: Verify native edge-to-edge contract
         run: node scripts/test-android-system-bars-v15.mjs
 
+      - name: Enforce Android notification permission
+        run: node scripts/patch-android-notification-permission-v28.mjs
+
+      - name: Verify final Android contracts
+        run: node scripts/verify-android-final-v28.mjs
+
+
       - name: Prepare notification icon
         run: |
           set -Eeuo pipefail

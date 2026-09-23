@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const MARKER = 'DFL_FINANCE_SYSTEM_BARS_V15'
+const MARKER = 'DFL_FINANCE_SYSTEM_BARS_V29_VAULT_DONOR'
 
 const walk = (dir) =>
   fs.existsSync(dir)

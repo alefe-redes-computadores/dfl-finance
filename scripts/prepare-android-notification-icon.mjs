@@ -1,49 +1,36 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const root = process.cwd()
-
-const source = path.join(
-  root,
-  'assets',
-  'branding',
-  'ic_stat_dfl_finance.png'
-)
-
-const androidRoot = path.join(root, 'android')
+const source = 'assets/android/ic_stat_dfl_finance.xml'
+const targetDir = 'android/app/src/main/res/drawable'
+const target = path.join(targetDir, 'ic_stat_dfl_finance.xml')
 
 if (!fs.existsSync(source)) {
-  console.error(
-    'ERRO: assets/branding/ic_stat_dfl_finance.png não encontrado.'
-  )
-  process.exit(1)
+  throw new Error(`Small icon VectorDrawable ausente: ${source}`)
 }
 
-if (!fs.existsSync(androidRoot)) {
-  console.log(
-    'android/ ainda não existe. Fonte do ícone nativo está pronta; nenhuma escrita necessária.'
-  )
-  process.exit(0)
+const xml = fs.readFileSync(source, 'utf8')
+for (const [ok, message] of [
+  [xml.includes('<vector'), 'não é VectorDrawable'],
+  [xml.includes('android:fillColor="#FFFFFFFF"'), 'máscara não é branca/monocromática'],
+  [xml.includes('android:viewportWidth="24"'), 'viewportWidth inesperado'],
+  [xml.includes('android:viewportHeight="24"'), 'viewportHeight inesperado'],
+]) {
+  if (!ok) throw new Error(`Small icon inválido: ${message}`)
 }
 
-const drawable = path.join(
-  androidRoot,
-  'app',
-  'src',
-  'main',
-  'res',
-  'drawable'
-)
+fs.mkdirSync(targetDir, { recursive: true })
 
-fs.mkdirSync(drawable, { recursive: true })
+// Remove legado PNG para impedir resolução ambígua do mesmo resource name.
+for (const ext of ['png', 'webp', 'jpg', 'jpeg']) {
+  const legacy = path.join(targetDir, `ic_stat_dfl_finance.${ext}`)
+  if (fs.existsSync(legacy)) fs.rmSync(legacy)
+}
 
-const destination = path.join(
-  drawable,
-  'ic_stat_dfl_finance.png'
-)
+fs.copyFileSync(source, target)
 
-fs.copyFileSync(source, destination)
+if (!fs.existsSync(target) || fs.statSync(target).size === 0) {
+  throw new Error('Falha ao restaurar VectorDrawable no Android')
+}
 
-console.log(
-  `Ícone nativo de notificação preparado: ${destination}`
-)
+console.log(`Notification small icon restaurado: ${target}`)
