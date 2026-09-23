@@ -284,7 +284,7 @@ export default function MorePage() {
   }, [effectiveContext])
 
   const notificationsEnabled =
-    userSettings?.preferences.push_notifications ?? true
+    userSettings?.preferences.push_notifications ?? false
 
   const [nativeNotificationPermission, setNativeNotificationPermission] =
     useState<NativeNotificationPermissionState>('unsupported')
@@ -348,8 +348,7 @@ export default function MorePage() {
         }
 
         if (
-          permission !== 'granted' &&
-          permission !== 'unsupported'
+          permission !== 'granted'
         ) {
           showToast(
             'A permissão de notificações ainda não foi concedida.',

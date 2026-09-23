@@ -75,7 +75,7 @@ assertContract(
 
 const runtime = fs.readFileSync('src/components/CapacitorStatusBar.tsx', 'utf8')
 assertContract(runtime.includes("platform === 'android'"), 'Guarda Android ausente.')
-assertContract(runtime.includes("theme === 'dark' ? Style.Light : Style.Dark"), 'Contraste light/dark ausente.')
+assertContract(runtime.includes("theme === 'dark' ? Style.Dark : Style.Light"), 'Contraste light/dark ausente.')
 const androidStart = runtime.indexOf("if (platform === 'android')")
 const androidReturn = runtime.indexOf('return', androidStart)
 assertContract(runtime.indexOf('StatusBar.setStyle', androidStart) >= 0 && runtime.indexOf('StatusBar.setStyle', androidStart) < androidReturn, 'Android não atualiza contraste.')

@@ -15,11 +15,11 @@ export default function CapacitorStatusBar() {
     const apply = async () => {
       try {
         if (platform === 'android') {
-          await StatusBar.setStyle({ style: theme === 'dark' ? Style.Light : Style.Dark })
+          await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
           return
         }
         await StatusBar.setOverlaysWebView({ overlay: true })
-        await StatusBar.setStyle({ style: theme === 'dark' ? Style.Light : Style.Dark })
+        await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
       } catch (error) {
         if (!disposed) console.warn('Não foi possível atualizar as barras do sistema.', error)
       }

@@ -53,7 +53,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   auto_categorize: true,
   weekly_report: true,
   monthly_report: true,
-  push_notifications: true,
+  push_notifications: false,
   notification_hour: 9,
   notification_lead_days: [3, 1, 0],
   notification_overdue: true,
