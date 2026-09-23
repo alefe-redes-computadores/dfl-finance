@@ -269,7 +269,7 @@ jobs:
 
           node scripts/patch-android-system-bars-v15.mjs
 
-          grep -R -q 'DFL_FINANCE_SYSTEM_BARS_V15' \
+          grep -R -q 'DFL_FINANCE_SYSTEM_BARS_V29_VAULT_DONOR' \
             android/app/src/main/java
 
           grep -R -q 'setDecorFitsSystemWindows' \
