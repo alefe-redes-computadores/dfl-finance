@@ -169,31 +169,22 @@ function QuickSettingsModal({
           </div>
 
           {/* Notificações */}
-          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700 active:scale-[0.98] transition-transform">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
+          <div className="bg-gray-50 dark:bg-slate-700/50 rounded-[20px] p-4 border border-gray-100 dark:border-slate-700">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 shrink-0 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
                 {notificationsEnabled ? <Bell size={20} className="text-rose-500" /> : <BellOff size={20} className="text-gray-400" />}
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="font-bold text-[14px] text-gray-800 dark:text-gray-200">Notificações</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                  {notificationsEnabled
-                    ? notificationPermissionLabel
-                    : 'Desativadas no DFL Finance'}
-                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-4">{notificationsEnabled ? notificationPermissionLabel : 'Desativadas no DFL Finance'}</p>
               </div>
+              <button type="button" aria-label={notificationsEnabled ? 'Desativar notificações' : 'Ativar notificações'} onClick={toggleNotifications} className={`w-12 h-7 shrink-0 rounded-full relative transition-colors shadow-inner ${notificationsEnabled ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
+              </button>
             </div>
-            <button onClick={toggleNotifications} className={`w-12 h-7 rounded-full relative transition-colors shadow-inner ${notificationsEnabled ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'right-1' : 'left-1'}`} />
+            <button type="button" onClick={testNativeNotification} disabled={testingNotification || nativeNotificationPermission === 'denied'} className="mt-3 w-full rounded-[14px] border border-gray-200 bg-white px-4 py-2.5 text-[12px] font-bold text-gray-700 transition-all active:scale-[0.98] disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200">
+              {testingNotification ? 'Testando…' : 'Enviar notificação de teste'}
             </button>
-          <button
-            type="button"
-            onClick={testNativeNotification}
-            disabled={testingNotification || nativeNotificationPermission === 'denied'}
-            className="w-full rounded-[18px] border border-gray-200 bg-white px-4 py-3 text-[13px] font-bold text-gray-700 transition-all active:scale-[0.98] disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200"
-          >
-            {testingNotification ? 'Testando…' : 'Enviar notificação de teste'}
-          </button>
           </div>
 
         </div>

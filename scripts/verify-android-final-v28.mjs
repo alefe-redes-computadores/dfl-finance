@@ -73,35 +73,15 @@ assertContract(
   'Status bar sem ícones claros.'
 )
 
-const runtime =
-  fs.readFileSync(
-    'src/components/CapacitorStatusBar.tsx',
-    'utf8'
-  )
-
-const androidGuard =
-  runtime.indexOf(
-    "if (platform === 'android')"
-  )
-
-assertContract(
-  androidGuard >= 0,
-  'Guarda Android do React ausente.'
-)
-
-assertContract(
-  runtime.indexOf(
-    'await StatusBar.setOverlaysWebView'
-  ) > androidGuard,
-  'React pode sobrescrever overlay Android.'
-)
-
-assertContract(
-  runtime.indexOf(
-    'await StatusBar.setStyle'
-  ) > androidGuard,
-  'React pode sobrescrever estilo Android.'
-)
+const runtime = fs.readFileSync('src/components/CapacitorStatusBar.tsx', 'utf8')
+assertContract(runtime.includes("platform === 'android'"), 'Guarda Android ausente.')
+assertContract(runtime.includes("theme === 'dark' ? Style.Light : Style.Dark"), 'Contraste light/dark ausente.')
+const androidStart = runtime.indexOf("if (platform === 'android')")
+const androidReturn = runtime.indexOf('return', androidStart)
+assertContract(runtime.indexOf('StatusBar.setStyle', androidStart) >= 0 && runtime.indexOf('StatusBar.setStyle', androidStart) < androidReturn, 'Android não atualiza contraste.')
+assertContract(runtime.indexOf('StatusBar.setOverlaysWebView', androidStart) > androidReturn, 'Android não pode controlar overlay.')
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+assertContract(Boolean(packageJson.dependencies?.['@capacitor/local-notifications'] || packageJson.devDependencies?.['@capacitor/local-notifications']), '@capacitor/local-notifications ausente.')
 
 const notifications =
   fs.readFileSync(
