@@ -147,10 +147,39 @@ console.log(
 )
 
 // DFL_FINANCE_SYSTEM_BARS_V31_3_THEME_BRIDGE_TEST
+const androidJavaRoot = 'android/app/src/main/java'
+
+const mainActivityFiles = fs
+  .readdirSync(androidJavaRoot, {
+    recursive: true,
+    withFileTypes: true,
+  })
+  .filter(
+    (entry) =>
+      entry.isFile() &&
+      /MainActivity\.(java|kt)$/.test(entry.name)
+  )
+  .map((entry) =>
+    path.join(entry.parentPath || entry.path, entry.name)
+  )
+
+ok(
+  mainActivityFiles.length === 1,
+  'V31.3 exige exatamente uma MainActivity Android'
+)
+
+const mainActivityFile = mainActivityFiles[0]
+
 const pluginFiles = fs
-  .readdirSync(path.dirname(file), { withFileTypes: true })
-  .filter((entry) => entry.isFile() && entry.name === 'SystemBarsPlugin.java')
-  .map((entry) => path.join(path.dirname(file), entry.name))
+  .readdirSync(path.dirname(mainActivityFile), { withFileTypes: true })
+  .filter(
+    (entry) =>
+      entry.isFile() &&
+      entry.name === 'SystemBarsPlugin.java'
+  )
+  .map((entry) =>
+    path.join(path.dirname(mainActivityFile), entry.name)
+  )
 if (pluginFiles.length !== 1) {
   throw new Error('V31.3 exige exatamente um SystemBarsPlugin.java')
 }
@@ -158,6 +187,11 @@ const pluginSource = fs.readFileSync(pluginFiles[0], 'utf8')
 if (!pluginSource.includes('.setAppearanceLightStatusBars(!dark)')) {
   throw new Error('V31.3 sem contraste dinâmico nativo')
 }
-if (!source.includes('registerPlugin(SystemBarsPlugin.class);')) {
+const finalMainActivity = fs.readFileSync(
+  mainActivityFile,
+  'utf8'
+)
+
+if (!finalMainActivity.includes('registerPlugin(SystemBarsPlugin.class);')) {
   throw new Error('V31.3 SystemBarsPlugin não registrado')
 }

@@ -83,8 +83,21 @@ assertContract(runtime.indexOf('StatusBar.setStyle', androidStart) > androidRetu
 assertContract(runtime.indexOf('StatusBar.setOverlaysWebView', androidStart) > androidReturn, 'React Android não pode controlar overlay.')
 
 const javaRoot = 'android/app/src/main/java'
-const javaFiles = walk(javaRoot)
-const systemBarsPlugin = javaFiles.find((candidate) => candidate.endsWith('SystemBarsPlugin.java'))
+
+const javaFiles = fs
+  .readdirSync(javaRoot, {
+    recursive: true,
+    withFileTypes: true,
+  })
+  .filter((entry) => entry.isFile())
+  .map((entry) =>
+    `${entry.parentPath || entry.path}/${entry.name}`
+  )
+
+const systemBarsPlugin = javaFiles.find(
+  (candidate) =>
+    candidate.endsWith('SystemBarsPlugin.java')
+)
 assertContract(Boolean(systemBarsPlugin), 'SystemBarsPlugin.java ausente no Android final.')
 const systemBarsSource = fs.readFileSync(systemBarsPlugin, 'utf8')
 assertContract(systemBarsSource.includes('@CapacitorPlugin(name = "SystemBars")'), 'Plugin SystemBars sem anotação Capacitor.')
