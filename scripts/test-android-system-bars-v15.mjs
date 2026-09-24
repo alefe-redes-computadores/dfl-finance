@@ -144,3 +144,18 @@ ok(
 console.log(
   'DFL FINANCE V15 — VAULT SYSTEM BARS CONTRACT: OK'
 )
+
+// DFL_FINANCE_SYSTEM_BARS_V31_3_THEME_BRIDGE_TEST
+const pluginFiles = walk('android/app/src/main/java').filter((candidate) =>
+  candidate.endsWith('SystemBarsPlugin.java')
+)
+if (pluginFiles.length !== 1) {
+  throw new Error('V31.3 exige exatamente um SystemBarsPlugin.java')
+}
+const pluginSource = fs.readFileSync(pluginFiles[0], 'utf8')
+if (!pluginSource.includes('.setAppearanceLightStatusBars(!dark)')) {
+  throw new Error('V31.3 sem contraste dinâmico nativo')
+}
+if (!source.includes('registerPlugin(SystemBarsPlugin.class);')) {
+  throw new Error('V31.3 SystemBarsPlugin não registrado')
+}

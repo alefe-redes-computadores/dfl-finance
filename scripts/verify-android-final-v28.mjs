@@ -74,12 +74,23 @@ assertContract(
 )
 
 const runtime = fs.readFileSync('src/components/CapacitorStatusBar.tsx', 'utf8')
-assertContract(runtime.includes("platform === 'android'"), 'Guarda Android ausente.')
-assertContract(runtime.includes("theme === 'dark' ? Style.Dark : Style.Light"), 'Contraste light/dark ausente.')
+assertContract(runtime.includes("registerPlugin<SystemBarsPlugin>('SystemBars')"), 'Ponte SystemBars ausente no React.')
+assertContract(runtime.includes("SystemBars.setTheme({ dark: theme === 'dark' })"), 'Tema não é comunicado à ponte nativa.')
 const androidStart = runtime.indexOf("if (platform === 'android')")
 const androidReturn = runtime.indexOf('return', androidStart)
-assertContract(runtime.indexOf('StatusBar.setStyle', androidStart) >= 0 && runtime.indexOf('StatusBar.setStyle', androidStart) < androidReturn, 'Android não atualiza contraste.')
-assertContract(runtime.indexOf('StatusBar.setOverlaysWebView', androidStart) > androidReturn, 'Android não pode controlar overlay.')
+assertContract(androidStart >= 0 && androidReturn > androidStart, 'Ramo Android inválido.')
+assertContract(runtime.indexOf('StatusBar.setStyle', androidStart) > androidReturn, 'React Android não pode controlar StatusBar.setStyle.')
+assertContract(runtime.indexOf('StatusBar.setOverlaysWebView', androidStart) > androidReturn, 'React Android não pode controlar overlay.')
+
+const javaRoot = 'android/app/src/main/java'
+const javaFiles = walk(javaRoot)
+const systemBarsPlugin = javaFiles.find((candidate) => candidate.endsWith('SystemBarsPlugin.java'))
+assertContract(Boolean(systemBarsPlugin), 'SystemBarsPlugin.java ausente no Android final.')
+const systemBarsSource = fs.readFileSync(systemBarsPlugin, 'utf8')
+assertContract(systemBarsSource.includes('@CapacitorPlugin(name = "SystemBars")'), 'Plugin SystemBars sem anotação Capacitor.')
+assertContract(systemBarsSource.includes('.setAppearanceLightStatusBars(!dark)'), 'Plugin SystemBars sem contraste dinâmico.')
+assertContract(activity.includes('registerPlugin(SystemBarsPlugin.class);'), 'SystemBarsPlugin não registrado na MainActivity.')
+
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 assertContract(Boolean(packageJson.dependencies?.['@capacitor/local-notifications'] || packageJson.devDependencies?.['@capacitor/local-notifications']), '@capacitor/local-notifications ausente.')
 
