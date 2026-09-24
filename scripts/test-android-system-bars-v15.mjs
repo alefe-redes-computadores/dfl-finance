@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import fs from 'node:fs'\nimport path from 'node:path'
 
 const read = (file) => fs.readFileSync(file, 'utf8')
 
@@ -146,9 +146,10 @@ console.log(
 )
 
 // DFL_FINANCE_SYSTEM_BARS_V31_3_THEME_BRIDGE_TEST
-const pluginFiles = walk('android/app/src/main/java').filter((candidate) =>
-  candidate.endsWith('SystemBarsPlugin.java')
-)
+const pluginFiles = fs
+  .readdirSync(path.dirname(file), { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name === 'SystemBarsPlugin.java')
+  .map((entry) => path.join(path.dirname(file), entry.name))
 if (pluginFiles.length !== 1) {
   throw new Error('V31.3 exige exatamente um SystemBarsPlugin.java')
 }
