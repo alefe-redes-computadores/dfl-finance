@@ -237,7 +237,7 @@ if (!registeredMain.includes('registerPlugin(SystemBarsPlugin.class);')) {
   }
   registeredMain = registeredMain.replace(
     superCall,
-    'registerPlugin(SystemBarsPlugin.class);\\n    ' + superCall
+    'registerPlugin(SystemBarsPlugin.class);\n    ' + superCall
   )
   fs.writeFileSync(file, registeredMain)
 }

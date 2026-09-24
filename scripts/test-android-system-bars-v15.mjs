@@ -195,3 +195,13 @@ const finalMainActivity = fs.readFileSync(
 if (!finalMainActivity.includes('registerPlugin(SystemBarsPlugin.class);')) {
   throw new Error('V31.3 SystemBarsPlugin não registrado')
 }
+
+if (finalMainActivity.includes('\\\\n')) {
+  throw new Error('MainActivity contém \\n literal e produzirá Java inválido')
+}
+
+if (!finalMainActivity.includes(
+  'registerPlugin(SystemBarsPlugin.class);\n    super.onCreate(savedInstanceState);'
+)) {
+  throw new Error('Registro SystemBarsPlugin não precede super.onCreate em linha válida')
+}
