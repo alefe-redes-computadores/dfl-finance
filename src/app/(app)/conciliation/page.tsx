@@ -37,17 +37,6 @@ function localIsoDate(date: Date) {
   return `${year}-${month}-${day}`
 }
 
-function currentMonthEndIso(reference = new Date()) {
-  return localIsoDate(
-    new Date(
-      reference.getFullYear(),
-      reference.getMonth() + 1,
-      0,
-      12
-    )
-  )
-}
-
 export default function ConciliationPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -84,7 +73,7 @@ export default function ConciliationPage() {
       db.accounts.where('user_id').equals(user.id).toArray(),
     ])
 
-    const monthEnd = currentMonthEndIso()
+    const conciliationCutoff = localIsoDate(new Date())
 
     return {
       transactions: transactions
@@ -98,7 +87,7 @@ export default function ConciliationPage() {
 
           const date = String(item.date || '').slice(0, 10)
 
-          return Boolean(date) && date <= monthEnd
+          return Boolean(date) && date <= conciliationCutoff
         })
         .sort((a: any, b: any) =>
           String(a.date || '').localeCompare(
@@ -352,7 +341,7 @@ export default function ConciliationPage() {
             <div>
               <p className="text-[11px] uppercase tracking-[0.13em] font-bold text-gray-400">Fila de revisão</p>
               <p className="mt-1.5 text-[26px] leading-none font-black text-gray-900 dark:text-white">{pendingTransactions.length}</p>
-              <p className="mt-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">Somente vencidas e previstas até o fim deste mês.</p>
+              <p className="mt-2 text-[11px] leading-4 text-gray-500 dark:text-gray-400">Somente vencidas e com vencimento até hoje.</p>
             </div>
             <div className="w-11 h-11 rounded-[16px] bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
               <ListChecks size={20} className="text-sky-600 dark:text-sky-400" />
@@ -442,7 +431,7 @@ export default function ConciliationPage() {
               <CheckCircle2 size={29} className="text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-[19px] font-black text-gray-900 dark:text-white">Nada para conciliar</h2>
-            <p className="mt-2 text-[13px] leading-5 text-gray-500 dark:text-gray-400">Não há pendências vencidas ou previstas para este mês. Itens de meses futuros ficam fora desta revisão.</p>
+            <p className="mt-2 text-[13px] leading-5 text-gray-500 dark:text-gray-400">Não há pendências vencidas ou com vencimento hoje. Lançamentos futuros ficam fora desta revisão.</p>
             <button onClick={() => router.push('/transactions/new')} className="mt-5 h-12 px-5 rounded-[18px] bg-teal-600 hover:bg-teal-700 text-white font-bold text-[14px] active:scale-[0.98] transition-transform">
               Nova transação
             </button>

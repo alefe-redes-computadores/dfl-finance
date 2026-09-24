@@ -225,6 +225,10 @@ function HomeContent() {
   const start = useMemo(() => format(startOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const end = useMemo(() => format(endOfMonth(currentDate), 'yyyy-MM-dd'), [currentDate])
   const today = useMemo(() => new Date(), [])
+  const todayIso = useMemo(
+    () => format(today, 'yyyy-MM-dd'),
+    [today]
+  )
 
   const getCardDueDate = useCallback((
     dueDay: number | null | undefined,
@@ -353,6 +357,9 @@ function HomeContent() {
     for (const tx of monthTransactions) {
       if (!tx.account_id || tx.status !== 'pending') continue
 
+      const pendingDate = String(tx.date || '').slice(0, 10)
+      if (!pendingDate || pendingDate > todayIso) continue
+
       const current = result.get(tx.account_id) || { income: 0, expense: 0 }
       const amount = safeNumber(tx.amount)
 
@@ -363,7 +370,7 @@ function HomeContent() {
     }
 
     return result
-  }, [monthTransactions])
+  }, [monthTransactions, todayIso])
 
   const accounts = useMemo(() => {
     return localAccountsData
@@ -449,13 +456,13 @@ function HomeContent() {
   )
 
   const pendings = useMemo(() => {
-    // Home resume apenas pendências vencidas + previstas até o fim do mês atual.
-    // Séries recorrentes/parceladas futuras continuam persistidas sem inflar o painel.
-    const pendingMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    // Home é operacional: resume somente o que já venceu ou vence hoje.
+    // Lançamentos futuros continuam no ledger e nas telas de planejamento,
+    // mas não inflam a fila de ação imediata.
     const allPending = localTransactions.filter((tx: any) => {
       if (tx.status !== 'pending') return false
       const date = String(tx.date || '').slice(0, 10)
-      return Boolean(date) && date <= pendingMonthEnd
+      return Boolean(date) && date <= todayIso
     })
 
     const toPay = allPending
@@ -506,7 +513,7 @@ function HomeContent() {
       transactionReceivables,
       debtReceivables,
     }
-  }, [localTransactions, cards, debtsList])
+  }, [localTransactions, cards, debtsList, todayIso])
 
   const homePriorityAlerts = useMemo(() => {
     type HomePriorityAlert = {

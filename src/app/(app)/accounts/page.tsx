@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
+  ArrowDown,
   ArrowDownAZ,
+  ArrowUp,
   ArrowUpDown,
   Check,
   ChevronLeft,
@@ -51,8 +53,9 @@ function AccountsContent() {
   const [accountFilter, setAccountFilter] = useState('all')
   const [showViewOptions, setShowViewOptions] = useState(false)
   const [accountSort, setAccountSort] = useState<
-    'balance' | 'institution' | 'name'
+    'manual' | 'balance' | 'institution' | 'name'
   >('institution')
+  const [manualOrder, setManualOrder] = useState<string[]>([])
 
   const touchStartY = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -65,6 +68,7 @@ function AccountsContent() {
       )
 
       if (
+        saved === 'manual' ||
         saved === 'balance' ||
         saved === 'institution' ||
         saved === 'name'
@@ -76,8 +80,36 @@ function AccountsContent() {
     }
   }, [])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(
+        `dfl_accounts_manual_order_${effectiveContext}`
+      )
+      const parsed = raw ? JSON.parse(raw) : []
+      setManualOrder(
+        Array.isArray(parsed)
+          ? parsed.filter((id): id is string => typeof id === 'string')
+          : []
+      )
+    } catch {
+      setManualOrder([])
+    }
+  }, [effectiveContext])
+
+  const persistManualOrder = (ids: string[]) => {
+    setManualOrder(ids)
+    try {
+      localStorage.setItem(
+        `dfl_accounts_manual_order_${effectiveContext}`,
+        JSON.stringify(ids)
+      )
+    } catch {
+      // Preferência visual local é opcional.
+    }
+  }
+
   const changeAccountSort = (
-    next: 'balance' | 'institution' | 'name'
+    next: 'manual' | 'balance' | 'institution' | 'name'
   ) => {
     vibrate([5])
     setAccountSort(next)
@@ -125,6 +157,18 @@ function AccountsContent() {
     )
 
     return [...filtered].sort((a: any, b: any) => {
+      if (accountSort === 'manual') {
+        const order = new Map(
+          manualOrder.map((id, index) => [id, index])
+        )
+        const fallback = manualOrder.length
+
+        return (
+          (order.get(a.id) ?? fallback) -
+          (order.get(b.id) ?? fallback)
+        )
+      }
+
       if (accountSort === 'balance') {
         return (
           Number(b.balance || 0) -
@@ -158,13 +202,46 @@ function AccountsContent() {
     activeAccounts,
     accountFilter,
     accountSort,
+    manualOrder,
     search,
   ])
 
   const accountGroups = useMemo(
-    () => groupAccountsByInstitution(filteredAccounts),
-    [filteredAccounts]
+    () =>
+      groupAccountsByInstitution(
+        filteredAccounts,
+        accountSort === 'manual'
+      ),
+    [filteredAccounts, accountSort]
   )
+
+  const moveAccount = (
+    accountId: string,
+    direction: 'up' | 'down'
+  ) => {
+    const ids = filteredAccounts.map(
+      (account: any) => String(account.id)
+    )
+    const index = ids.indexOf(accountId)
+    if (index < 0) return
+
+    const target =
+      direction === 'up'
+        ? index - 1
+        : index + 1
+
+    if (target < 0 || target >= ids.length) return
+
+    const next = [...ids]
+    ;[next[index], next[target]] = [
+      next[target],
+      next[index],
+    ]
+
+    persistManualOrder(next)
+    changeAccountSort('manual')
+    vibrate([5])
+  }
 
   const totalBalance = useMemo(
     () => activeAccounts.reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0),
@@ -358,6 +435,33 @@ function AccountsContent() {
 
                     <p className={`shrink-0 text-[14px] font-semibold ${Number(account.balance || 0) > 0 ? 'text-emerald-500 dark:text-emerald-400' : Number(account.balance || 0) < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400'}`}>{formatCurrency(Number(account.balance || 0))}</p>
 
+                    {accountSort === 'manual' && (
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            moveAccount(String(account.id), 'up')
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-400 active:bg-gray-100 dark:active:bg-slate-800"
+                          aria-label={`Mover ${account.name} para cima`}
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            moveAccount(String(account.id), 'down')
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-400 active:bg-gray-100 dark:active:bg-slate-800"
+                          aria-label={`Mover ${account.name} para baixo`}
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                    )}
+
                     <button onClick={(event) => { event.stopPropagation(); vibrate([10]); setDeleteModal(account.id) }} className="shrink-0 rounded-full p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20" aria-label="Excluir conta"><Trash2 size={16} /></button>
 
                     <ChevronRight size={16} className="shrink-0 text-gray-300 dark:text-gray-600" />
@@ -443,6 +547,7 @@ function AccountsContent() {
 
               <div className="space-y-2">
                 {[
+                  ['manual', 'Minha ordem', ArrowUpDown],
                   ['institution', 'Banco e conta', ArrowDownAZ],
                   ['balance', 'Maior saldo', ArrowUpDown],
                   ['name', 'Nome da conta', ArrowDownAZ],

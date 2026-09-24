@@ -552,6 +552,7 @@ export default function TransactionsPage() {
     endOfMonth(currentDate),
     'yyyy-MM-dd'
   )
+  const todayIso = format(new Date(), 'yyyy-MM-dd')
 
   // ✅ HOOK ESPECÍFICO DE LISTAGEM
   const { data: transactions, loading } =
@@ -805,6 +806,13 @@ export default function TransactionsPage() {
       return false
     }
 
+    if (
+      quickFilter === 'pending' &&
+      String(t.date || '').slice(0, 10) > todayIso
+    ) {
+      return false
+    }
+
     if (quickFilter === 'pending') {
       const direction = getPendingDirection(t)
 
@@ -872,6 +880,7 @@ export default function TransactionsPage() {
       quickFilter,
       pendingKind,
       search,
+      todayIso,
       effectiveCategoryFilter,
       advFilters,
     ]
@@ -882,6 +891,7 @@ export default function TransactionsPage() {
       if (
         tx.date < startMonth ||
         tx.date > endMonth ||
+        tx.date > todayIso ||
         tx.status !== 'pending'
       ) {
         return false

@@ -164,7 +164,10 @@ export function sortAccountsAlphabetically<T extends { name?: string | null }>(a
   )
 }
 
-export function groupAccountsByInstitution<T extends { bank?: string | null; type?: string | null; balance?: number | null; name?: string | null }>(accounts: T[]) {
+export function groupAccountsByInstitution<T extends { bank?: string | null; type?: string | null; balance?: number | null; name?: string | null }>(
+  accounts: T[],
+  preserveInputOrder = false
+) {
   const groups = new Map<string, T[]>()
 
   for (const account of accounts) {
@@ -174,17 +177,25 @@ export function groupAccountsByInstitution<T extends { bank?: string | null; typ
     groups.set(label, current)
   }
 
-  return Array.from(groups.entries())
+  const result = Array.from(groups.entries())
     .map(([institution, items]) => ({
       institution,
-      accounts: sortAccountsAlphabetically(items),
-      balance: items.reduce((sum, item) => sum + Number(item.balance || 0), 0),
+      accounts: preserveInputOrder
+        ? [...items]
+        : sortAccountsAlphabetically(items),
+      balance: items.reduce(
+        (sum, item) => sum + Number(item.balance || 0),
+        0
+      ),
     }))
-    .sort((a, b) =>
-      a.institution.localeCompare(
-        b.institution,
-        'pt-BR',
-        { sensitivity: 'base' }
-      )
+
+  if (preserveInputOrder) return result
+
+  return result.sort((a, b) =>
+    a.institution.localeCompare(
+      b.institution,
+      'pt-BR',
+      { sensitivity: 'base' }
     )
+  )
 }
