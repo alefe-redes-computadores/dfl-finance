@@ -5,7 +5,7 @@ import { useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { ChevronLeft, Plus, Trash2, X, ChevronDown, Tag, Edit3, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react'
+import { ChevronLeft, Plus, EyeOff, RotateCcw, X, ChevronDown, Tag, Edit3, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react'
 import IconPicker from '@/components/IconPicker'
 import { getDynamicIcon, normalizeIconName } from '@/lib/iconUtils'
 import ContextToggle, { useContext_ } from '@/components/ContextToggle'
@@ -22,7 +22,7 @@ export default function CategoriesPage() {
   const { context, appMode } = useContext_() 
   const { showToast } = useToast()
   
-  const { safeDelete, safeUpdate, safeAdd, safeReorderCategories } = useSafeDb()
+  const { safeUpdate, safeAdd, safeReorderCategories } = useSafeDb()
   const { success: hapticSuccess, error: hapticError, vibrate } = useHapticFeedback()
 
   const effectiveContext = appMode === 'personal_only' ? 'personal' : context
@@ -39,6 +39,7 @@ export default function CategoriesPage() {
   const [color, setColor] = useState('#16a34a')
   const [saving, setSaving] = useState(false)
   const [reorderingId, setReorderingId] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const { data: allLocalCategories, loading: catLoading, reload: reloadCategories } = useLocalData({
     table: 'categories' as any,
@@ -47,12 +48,25 @@ export default function CategoriesPage() {
 
   const categories = useMemo(() => {
     const cats = (allLocalCategories || [])
+      .filter((cat: any) => !cat.is_archived)
+
     return [...cats].sort((a: any, b: any) => {
       const orderA = a.order_index ?? 9999
       const orderB = b.order_index ?? 9999
       if (orderA !== orderB) return orderA - orderB
       return (a.name || '').localeCompare(b.name || '')
     })
+  }, [allLocalCategories])
+
+  const archivedCategories = useMemo(() => {
+    return (allLocalCategories || [])
+      .filter((cat: any) => cat.is_archived)
+      .sort((a: any, b: any) =>
+        String(a.name || '').localeCompare(
+          String(b.name || ''),
+          'pt-BR'
+        )
+      )
   }, [allLocalCategories])
 
   const { data: transactions } = useLocalData({
@@ -184,76 +198,79 @@ export default function CategoriesPage() {
   async function confirmDeleteCategory() {
     if (!deleteTarget || !user) return
 
-    const wasDefault = Boolean(deleteTarget.is_default)
-    let defaultFlagChanged = false
-
     try {
       /*
-       * Categorias padrão não são especiais para o histórico.
-       * Para removê-las, retiramos somente a flag de fábrica e
-       * delegamos toda a proteção relacional ao safeDelete.
-       *
-       * Se houver transação, orçamento ou outra proteção, o delete
-       * continua bloqueado e restauramos is_default imediatamente.
+       * V44 — a ação da tela é arquivamento seguro.
+       * Nenhum lançamento, orçamento, meta ou relacionamento histórico
+       * é reescrito. A categoria sai dos novos lançamentos e pode ser
+       * restaurada a qualquer momento.
        */
-      if (wasDefault) {
-        const unlockResult = await safeUpdate(
-          'categories',
-          deleteTarget.id,
-          { is_default: false }
-        )
-
-        if (!unlockResult.success) {
-          throw new Error(
-            unlockResult.error ||
-            'Não foi possível liberar esta categoria padrão.'
-          )
-        }
-
-        defaultFlagChanged = true
-      }
-
-      const result = await safeDelete(
+      const result = await safeUpdate(
         'categories',
-        deleteTarget.id
+        deleteTarget.id,
+        {
+          is_archived: true,
+          updated_at: new Date().toISOString(),
+        }
       )
 
       if (!result.success) {
-        if (wasDefault && defaultFlagChanged) {
-          await safeUpdate(
-            'categories',
-            deleteTarget.id,
-            { is_default: true }
-          )
-        }
-
-        throw new Error(result.error)
+        throw new Error(
+          result.error ||
+          'Não foi possível ocultar a categoria.'
+        )
       }
 
       setDeleteTarget(null)
-      showToast('Categoria excluída.', 'success')
+      showToast(
+        'Categoria ocultada. O histórico foi preservado.',
+        'success'
+      )
       hapticSuccess()
       await reloadCategories()
     } catch (err: any) {
-      if (wasDefault && defaultFlagChanged) {
-        try {
-          await safeUpdate(
-            'categories',
-            deleteTarget.id,
-            { is_default: true }
-          )
-        } catch {
-          // safeUpdate já reporta falha pelo retorno.
-        }
-      }
-
       showToast(
         err?.message ||
-        'Não foi possível excluir a categoria.',
+        'Não foi possível ocultar a categoria.',
         'error'
       )
       hapticError()
       await reloadCategories()
+    }
+  }
+
+  async function restoreCategory(category: any) {
+    if (!category?.id || !user) return
+
+    vibrate([8])
+
+    try {
+      const result = await safeUpdate(
+        'categories',
+        category.id,
+        {
+          is_archived: false,
+          updated_at: new Date().toISOString(),
+        }
+      )
+
+      if (!result.success) {
+        throw new Error(
+          result.error ||
+          'Não foi possível restaurar a categoria.'
+        )
+      }
+
+      showToast('Categoria restaurada.', 'success')
+      hapticSuccess()
+      await reloadCategories()
+    } catch (err: any) {
+      showToast(
+        err?.message ||
+        'Não foi possível restaurar a categoria.',
+        'error'
+      )
+      hapticError()
     }
   }
 
@@ -492,10 +509,10 @@ export default function CategoriesPage() {
 
                         <button
                           onClick={(e) => requestDelete(cat, e)}
-                          aria-label={`Excluir ${cat.name}`}
-                          className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors active:scale-[0.98]"
+                          aria-label={`Ocultar ${cat.name}`}
+                          className="h-9 w-9 rounded-[14px] flex items-center justify-center text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors active:scale-[0.98]"
                         >
-                          <Trash2 size={16} />
+                          <EyeOff size={16} />
                         </button>
                       </>
                     )}
@@ -506,6 +523,81 @@ export default function CategoriesPage() {
           })}
         </div>
       )}
+
+      {archivedCategories.length > 0 && (
+        <div className="mt-4 overflow-hidden rounded-[18px] border border-gray-200/70 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <button
+            type="button"
+            onClick={() => {
+              vibrate([5])
+              setShowArchived((current) => !current)
+            }}
+            className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-gray-50 dark:active:bg-slate-800"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-gray-400">
+              <EyeOff size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-bold text-gray-800 dark:text-gray-200">
+                Categorias ocultas
+              </p>
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                {archivedCategories.length} {archivedCategories.length === 1 ? 'categoria' : 'categorias'}
+              </p>
+            </div>
+            <ChevronDown
+              size={17}
+              className={`text-gray-400 transition-transform ${
+                showArchived ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {showArchived && (
+            <div className="border-t border-gray-100 px-2 py-2 dark:border-slate-800">
+              {archivedCategories.map((cat: any) => {
+                const ArchivedIcon = getDynamicIcon(cat.icon || 'Tag')
+
+                return (
+                  <div
+                    key={cat.id}
+                    className="flex items-center gap-3 rounded-[15px] px-3 py-2.5"
+                  >
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px]"
+                      style={{
+                        backgroundColor: `${cat.color}16`,
+                        color: cat.color,
+                      }}
+                    >
+                      <ArchivedIcon size={16} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold text-gray-700 dark:text-gray-300">
+                        {cat.name}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-medium text-gray-400">
+                        Histórico preservado
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => restoreCategory(cat)}
+                      className="flex h-9 items-center gap-1.5 rounded-[13px] bg-teal-50 px-3 text-[11px] font-bold text-teal-700 active:scale-[0.97] dark:bg-teal-500/10 dark:text-teal-300"
+                    >
+                      <RotateCcw size={14} />
+                      Restaurar
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
 
       {showForm && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[120000] flex items-end justify-center" onClick={() => { setShowForm(false); setEditingCategory(null) }}>
@@ -609,19 +701,17 @@ export default function CategoriesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
-            <h3 className="text-center text-[20px] font-bold text-gray-900 dark:text-gray-100">Excluir categoria?</h3>
+            <h3 className="text-center text-[20px] font-bold text-gray-900 dark:text-gray-100">Ocultar categoria?</h3>
             <p className="mx-auto mt-2 max-w-sm text-center text-[13px] leading-5 text-gray-500 dark:text-gray-400">
-              {transactionCountByCategory[deleteTarget.id]
-                ? `“${deleteTarget.name}” está em ${transactionCountByCategory[deleteTarget.id]} transação(ões). O histórico financeiro é protegido e a exclusão será bloqueada.`
-                : `“${deleteTarget.name}” será removida. Esta ação não pode ser desfeita.`}
+              {`“${deleteTarget.name}” deixará de aparecer nos novos lançamentos. O histórico financeiro continua intacto e você poderá restaurar a categoria depois.`}
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
               <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-[18px] bg-gray-100 py-3.5 text-[14px] font-bold text-gray-600 active:scale-[0.98] dark:bg-slate-800 dark:text-gray-300">
                 Cancelar
               </button>
-              <button type="button" onClick={confirmDeleteCategory} className="rounded-[18px] bg-red-500 py-3.5 text-[14px] font-bold text-white shadow-sm shadow-red-500/15 active:scale-[0.98]">
-                Excluir
+              <button type="button" onClick={confirmDeleteCategory} className="rounded-[18px] bg-amber-500 py-3.5 text-[14px] font-bold text-white shadow-sm shadow-amber-500/15 active:scale-[0.98]">
+                Ocultar
               </button>
             </div>
           </div>

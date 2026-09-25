@@ -1,6 +1,8 @@
 // src/components/ModalEmprestimo.tsx
 'use client'
 
+import { localISODate } from '@/lib/civilDate'
+
 import { useEffect, useState } from 'react'
 import { CalendarDays, HandCoins, Loader2, Percent, User, X } from 'lucide-react'
 import MoneyInput from '@/components/MoneyInput'
@@ -29,7 +31,7 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
   const [amount, setAmount] = useState(0)
   const [direction, setDirection] = useState<'lent' | 'borrowed'>('lent')
   const [lender, setLender] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(localISODate())
   const [dueDate, setDueDate] = useState('')
   const [interestRate, setInterestRate] = useState('')
   const [loanContext, setLoanContext] = useState<'dfl' | 'personal'>('dfl')
@@ -40,7 +42,7 @@ export default function ModalEmprestimo({ isOpen, onClose, onSave }: ModalEmpres
     setAmount(0)
     setDirection('lent')
     setLender('')
-    setDate(new Date().toISOString().split('T')[0])
+    setDate(localISODate())
     setDueDate('')
     setInterestRate('')
     setLoanContext(effectiveContext)

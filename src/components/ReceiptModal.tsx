@@ -43,7 +43,7 @@ export default function ReceiptModal({ isOpen, onClose, onCamera, onFileSelect }
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-[20px] font-bold text-gray-900 dark:text-gray-100">Adicionar comprovante</h3>
-            <p className="mt-1 text-[12px] leading-5 text-gray-400 dark:text-gray-500">Foto, imagem da galeria ou arquivo PDF.</p>
+            <p className="mt-1 text-[12px] leading-5 text-gray-400 dark:text-gray-500">Foto, imagem da galeria ou PDF. O Finance mantém o formato do arquivo automaticamente.</p>
           </div>
           <button
             type="button"

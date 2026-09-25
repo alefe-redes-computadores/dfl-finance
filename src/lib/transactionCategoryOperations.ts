@@ -17,6 +17,7 @@ export interface TransactionCategoryLike {
   id?: string | null
   type?: string | null
   context?: string | null
+  is_archived?: boolean | null
   parent_id?: string | null
   order_index?: number | null
   name?: string | null
@@ -92,6 +93,10 @@ export function filterTransactionCategories<
         return false
       }
 
+      if (category.is_archived === true) {
+        return false
+      }
+
       return true
     })
     .sort((a, b) => {
@@ -123,14 +128,34 @@ export function findCompatibleCategory<
 ): T | null {
   if (!categoryId) return null
 
-  return (
-    filterTransactionCategories(
-      categories,
-      transactionType,
-      context
-    ).find(
-      (category) =>
-        category.id === categoryId
+  const category =
+    (categories || []).find(
+      (candidate) =>
+        candidate.id === categoryId
     ) || null
-  )
+
+  if (!category) return null
+
+  if (
+    !isCategoryCompatibleWithTransactionType(
+      category,
+      transactionType
+    )
+  ) {
+    return null
+  }
+
+  if (
+    context &&
+    category.context &&
+    category.context !== context
+  ) {
+    return null
+  }
+
+  /*
+   * Categoria arquivada some dos NOVOS seletores, mas continua
+   * reconhecida quando já pertence a uma movimentação histórica.
+   */
+  return category
 }

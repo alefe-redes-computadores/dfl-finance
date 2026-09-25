@@ -62,7 +62,7 @@ export interface LocalAccount {
   user_id: string
   context: 'dfl' | 'personal'
   name: string
-  type?: 'checking' | 'savings' | 'investment' | 'credit_card' | 'wallet' | 'other' | null
+  type?: 'checking' | 'savings' | 'digital' | 'investment' | 'credit_card' | 'wallet' | 'other' | null
   bank?: string | null
   icon?: string | null
   color: string
@@ -81,6 +81,9 @@ export interface LocalCategory {
   icon: string
   color: string
   type: 'income' | 'expense'
+  is_default?: boolean
+  order_index?: number | null
+  parent_id?: string | null
   is_archived: boolean
   created_at: string
   updated_at: string

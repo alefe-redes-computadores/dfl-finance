@@ -9,6 +9,8 @@ interface MoneyInputProps {
   placeholder?: string
   disabled?: boolean
   autoFocus?: boolean
+  allowNegative?: boolean
+  ariaLabel?: string
 }
 
 function formatMoney(value: number) {
@@ -25,6 +27,8 @@ export default function MoneyInput({
   placeholder = '0,00',
   disabled = false,
   autoFocus = false,
+  allowNegative = false,
+  ariaLabel = 'Valor em reais',
 }: MoneyInputProps) {
   const [displayValue, setDisplayValue] = useState(formatMoney(value))
 
@@ -35,12 +39,18 @@ export default function MoneyInput({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      // CORREÇÃO: \D em vez de D para remover tudo que não for dígito
-      let raw = e.target.value.replace(/\D/g, '')
+      const input = e.target.value
+      const negative =
+        allowNegative &&
+        input.trim().startsWith('-')
+
+      // O valor visual é sempre derivado dos centavos digitados.
+      let raw = input.replace(/\D/g, '')
 
       if (!raw) {
-        setDisplayValue('0,00')
-        onChange(0, '0,00')
+        const formatted = negative ? '-0,00' : '0,00'
+        setDisplayValue(formatted)
+        onChange(0, formatted)
         return
       }
 
@@ -55,19 +65,23 @@ export default function MoneyInput({
       if (raw.length === 1) raw = `00${raw}`
       if (raw.length === 2) raw = `0${raw}`
 
-      const numValue = Number(raw) / 100
-      const formatted = formatMoney(numValue)
+      const absoluteValue = Number(raw) / 100
+      const numValue =
+        negative ? -absoluteValue : absoluteValue
+      const formatted = `${
+        negative ? '-' : ''
+      }${formatMoney(absoluteValue)}`
 
       setDisplayValue(formatted)
       onChange(numValue, formatted)
     },
-    [onChange]
+    [allowNegative, onChange]
   )
 
   return (
     <input
       type="text"
-      inputMode="numeric"
+      inputMode={allowNegative ? 'text' : 'numeric'}
       enterKeyHint="done"
       autoComplete="off"
       spellCheck={false}
@@ -77,6 +91,7 @@ export default function MoneyInput({
       placeholder={placeholder}
       disabled={disabled}
       autoFocus={autoFocus}
+      aria-label={ariaLabel}
     />
   )
 }

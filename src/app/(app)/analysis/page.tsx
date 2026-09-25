@@ -20,7 +20,6 @@ import {
   SlidersHorizontal,
   X,
   Download,
-  FileText,
   RefreshCw,
   Filter,
   Gauge,
@@ -590,14 +589,9 @@ function AnalysisContent() {
   const expenseVariation = calcVariation(summary.expense, previousSummary.expense)
   const balanceVariation = calcVariation(summary.balance, previousSummary.balance)
 
-  const handleExport = async (range: string, format: 'csv' | 'pdf') => {
+  const handleExport = async (range: string, format: 'csv') => {
     setShowExportMenu(false)
     if (!user?.id) return
-
-    if (format === 'pdf') {
-      showToast('A exportação em PDF estará disponível em breve.', 'info')
-      return
-    }
 
     setExportStatus('exporting')
     
@@ -752,24 +746,6 @@ function AnalysisContent() {
                       </button>
                     ))}
 
-                    <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
-
-                    {[
-                      { key: '7', label: '7 dias' },
-                      { key: '14', label: '14 dias' },
-                      { key: '30', label: '30 dias' },
-                      { key: 'total', label: 'Todo período' },
-                    ].map((opt) => (
-                      <button
-                        key={`pdf-${opt.key}`}
-                        type="button"
-                        onClick={() => handleExport(opt.key, 'pdf')}
-                        className="w-full text-left px-3 py-2.5 rounded-[16px] text-[13px] font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-2"
-                      >
-                        <FileText size={14} className="text-teal-600" />
-                        PDF {opt.label}
-                      </button>
-                    ))}
                   </div>
                 )}
               </div>

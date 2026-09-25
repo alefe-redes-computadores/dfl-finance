@@ -1,6 +1,8 @@
 // src/app/(app)/financings/details/page.tsx
 'use client'
 
+import { localISODate } from '@/lib/civilDate'
+
 import { useState, Suspense, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
@@ -403,7 +405,7 @@ function FinancingDetailContent() {
     try {
       const updateData = {
         paid: true,
-        paid_date: new Date().toISOString().split("T")[0],
+        paid_date: localISODate(),
         updated_at: new Date().toISOString(),
       }
 

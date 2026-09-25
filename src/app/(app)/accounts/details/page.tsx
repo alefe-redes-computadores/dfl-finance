@@ -1,6 +1,8 @@
 // src/app/(app)/accounts/details/page.tsx
 'use client'
 
+import { formatCivilDateBR } from '@/lib/civilDate'
+
 import { Suspense, useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createPortal } from "react-dom"
@@ -19,6 +21,7 @@ import { useContext_ } from '@/components/ContextToggle'
 import { useAuth } from '@/lib/hooks/useAuth'
 import Skeleton from '@/components/Skeleton'
 import BankLogo from '@/components/BankLogo'
+import MoneyInput from '@/components/MoneyInput'
 import { getAccountInstitutionLabel, getAccountTypeLabel, isAccountArchived, sortAccountsByBalance } from '@/lib/accountPresentation'
 import {
   adjustAccountBalance,
@@ -29,6 +32,7 @@ import { repairFutureScheduledTransactions } from '@/lib/futureTransactionOperat
 const ACCOUNT_ICONS: Record<string, any> = {
   checking: Wallet,
   savings: PiggyBank,
+  digital: Wallet,
   investment: Building2,
   credit_card: CreditCard,
   wallet: Wallet,
@@ -74,9 +78,9 @@ function AccountDetailContent() {
   const [expandedTransactions, setExpandedTransactions] = useState(false)
   const [showAdjustModal, setShowAdjustModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
-  const [adjustAmount, setAdjustAmount] = useState("")
+  const [adjustAmount, setAdjustAmount] = useState(0)
   const [adjustNotes, setAdjustNotes] = useState("")
-  const [transferAmount, setTransferAmount] = useState("")
+  const [transferAmount, setTransferAmount] = useState(0)
   const [transferToAccount, setTransferToAccount] = useState("")
   const [transferNotes, setTransferNotes] = useState("")
   const [saving, setSaving] = useState(false)
@@ -172,17 +176,15 @@ function AccountDetailContent() {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val)
 
-  const formatDate = (date: string | null) => {
-    if (!date) return ""
-    return new Date(date).toLocaleDateString("pt-BR")
-  }
+  const formatDate = (date: string | null) =>
+    formatCivilDateBR(date)
 
   const handleAdjustBalance = async () => {
     if (!user) return
 
-    const amount = safeNum(adjustAmount)
+    const amount = adjustAmount
 
-    if (!adjustAmount || isNaN(amount) || amount === 0) {
+    if (!Number.isFinite(amount) || amount === 0) {
       errorHaptic()
       showToast("Informe um valor para ajuste", "warning")
       return
@@ -201,7 +203,7 @@ function AccountDetailContent() {
       success()
       showToast("Saldo ajustado com sucesso!", "success")
       setShowAdjustModal(false)
-      setAdjustAmount("")
+      setAdjustAmount(0)
       setAdjustNotes("")
     } catch (err: any) {
       errorHaptic()
@@ -217,9 +219,9 @@ function AccountDetailContent() {
   const handleTransfer = async () => {
     if (!user) return
 
-    const amount = safeNum(transferAmount)
+    const amount = transferAmount
 
-    if (!transferAmount || isNaN(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       errorHaptic()
       showToast("Informe um valor válido", "warning")
       return
@@ -245,7 +247,7 @@ function AccountDetailContent() {
       success()
       showToast("Transferência realizada com sucesso!", "success")
       setShowTransferModal(false)
-      setTransferAmount("")
+      setTransferAmount(0)
       setTransferToAccount("")
       setTransferNotes("")
     } catch (err: any) {
@@ -545,7 +547,7 @@ function AccountDetailContent() {
                   Ajustar saldo
                 </h3>
                 <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">
-                  Informe um valor positivo ou negativo
+                  Use valor positivo para acrescentar e negativo para reduzir
                 </p>
               </div>
 
@@ -567,12 +569,11 @@ function AccountDetailContent() {
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-[18px] font-medium text-gray-400">R$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                  <MoneyInput
                     value={adjustAmount}
-                    onChange={(e) => setAdjustAmount(e.target.value)}
+                    onChange={(value) => setAdjustAmount(value)}
+                    allowNegative
+                    ariaLabel="Valor do ajuste de saldo"
                     className="w-full bg-transparent text-[28px] font-semibold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
                     autoFocus
                   />
@@ -598,7 +599,7 @@ function AccountDetailContent() {
                 vibrate([10, 50])
                 handleAdjustBalance()
               }}
-              disabled={saving}
+              disabled={saving || adjustAmount === 0}
               className="mt-6 flex w-full items-center justify-center rounded-[22px] bg-teal-600 py-4 text-[16px] font-semibold text-white shadow-lg shadow-teal-600/20 transition-transform active:scale-[0.98] disabled:opacity-50"
             >
               {saving ? <Loader2 className="animate-spin" size={22} /> : "Confirmar ajuste"}
@@ -648,12 +649,10 @@ function AccountDetailContent() {
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-[18px] font-medium text-gray-400">R$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                  <MoneyInput
                     value={transferAmount}
-                    onChange={(e) => setTransferAmount(e.target.value)}
+                    onChange={(value) => setTransferAmount(value)}
+                    ariaLabel="Valor da transferência"
                     className="w-full bg-transparent text-[28px] font-semibold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
                     autoFocus
                   />

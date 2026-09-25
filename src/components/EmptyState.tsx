@@ -19,7 +19,7 @@ export default function EmptyState({
   onAction
 }: EmptyStateProps) {
   return (
-    <div className="app-empty-region">
+    <div className="app-empty-region" role="status" aria-live="polite">
       <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] border border-gray-200/70 bg-white text-gray-400 shadow-sm dark:border-slate-700/70 dark:bg-slate-800 dark:text-gray-500">
         <Icon size={24} strokeWidth={1.6} />
       </div>
@@ -34,6 +34,7 @@ export default function EmptyState({
 
       {actionLabel && onAction && (
         <button
+          type="button"
           onClick={onAction}
           className="app-primary-action mt-5 min-h-10 rounded-[16px] px-5 text-[13px]"
         >

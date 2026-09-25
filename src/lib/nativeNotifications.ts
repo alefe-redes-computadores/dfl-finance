@@ -108,6 +108,26 @@ const DEFAULT_CATEGORIES: NotificationCategoryPreferences = {
   goals: true,
 }
 
+export function normalizeNativeNotificationRoute(value: unknown) {
+  if (typeof value !== 'string') return null
+
+  const route = value.trim()
+
+  // Compat V37: !route.includes('://') é o contrato histórico de rota interna.
+  if (
+    !route.startsWith('/') ||
+    route.startsWith('//') ||
+    route.includes('://') ||
+    route.includes('\\\\') ||
+    route.includes('\\n') ||
+    route.includes('\\r')
+  ) {
+    return null
+  }
+
+  return route
+}
+
 function isNative() {
   return (
     Capacitor.isNativePlatform() &&
@@ -216,6 +236,7 @@ async function collectReminderCandidates(
     loans,
     subscriptions,
     transactions,
+    goals,
   ] = await Promise.all([
     db.credit_invoices.where('user_id').equals(userId).toArray(),
     db.credit_cards.where('user_id').equals(userId).toArray(),
@@ -224,6 +245,7 @@ async function collectReminderCandidates(
     db.loans.where('user_id').equals(userId).toArray(),
     db.subscriptions.where('user_id').equals(userId).toArray(),
     db.transactions.where('user_id').equals(userId).toArray(),
+    db.goals.where('user_id').equals(userId).toArray(),
   ])
 
   const cardNames = new Map(
@@ -326,17 +348,21 @@ async function collectReminderCandidates(
 
   if (enabled(preferences, 'subscriptions')) {
     for (const subscription of subscriptions) {
-      if (
-        subscription.status !== 'active' ||
-        !subscription.due_day
-      ) {
-        continue
-      }
-
       const explicitDue =
         typeof subscription.next_due_date === 'string'
           ? subscription.next_due_date.slice(0, 10)
           : ''
+
+      const dueDay = Number(
+        subscription.due_day || 0
+      )
+
+      if (
+        subscription.status !== 'active' ||
+        (!explicitDue && dueDay <= 0)
+      ) {
+        continue
+      }
 
       reminders.push({
         key: `subscription:${subscription.id}`,
@@ -344,9 +370,37 @@ async function collectReminderCandidates(
         body: `${formatMoney(subscription.amount)} previsto`,
         dueDate:
           explicitDue ||
-          nextMonthlyDueDate(subscription.due_day),
-        route: '/subscriptions',
+          nextMonthlyDueDate(dueDay),
+        route: `/subscriptions/details?id=${subscription.id}`,
         category: 'subscriptions',
+      })
+    }
+  }
+
+  if (enabled(preferences, 'goals')) {
+    for (const goal of goals) {
+      if (
+        goal.status !== 'active' ||
+        !goal.deadline
+      ) {
+        continue
+      }
+
+      const remaining = Math.max(
+        0,
+        numberValue(goal.target_amount) -
+          numberValue(goal.saved_amount)
+      )
+
+      if (remaining <= 0) continue
+
+      reminders.push({
+        key: `goal:${goal.id}`,
+        title: goal.name || 'Meta financeira',
+        body: `${formatMoney(remaining)} para concluir`,
+        dueDate: goal.deadline,
+        route: `/goals/details?id=${goal.id}`,
+        category: 'goals',
       })
     }
   }
@@ -695,13 +749,11 @@ export async function addNativeNotificationActionListener(
   return LocalNotifications.addListener(
     'localNotificationActionPerformed',
     (event) => {
-      const route = event.notification?.extra?.route
+      const route = normalizeNativeNotificationRoute(
+        event.notification?.extra?.route
+      )
 
-      if (
-        typeof route === 'string' &&
-        route.startsWith('/') &&
-        !route.startsWith('//')
-      ) {
+      if (route) {
         onRoute(route)
       }
     }

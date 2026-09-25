@@ -28,6 +28,8 @@ export interface ProjectionData {
   sampleSize: number
   sampleDays: number
   confidence: 'low' | 'medium' | 'high'
+  outlierCap: number
+  cappedDays: number
 }
 
 const safeNumber = (value: unknown) => {
@@ -141,47 +143,113 @@ export function useProjection(
         a.date.localeCompare(b.date)
       )
 
-    const totalHistoricalExpense =
-      historicalExpenses.reduce(
-        (sum, transaction) =>
-          sum + safeNumber(transaction.amount),
-        0
+    /*
+     * V36 — média diária robusta.
+     *
+     * Uma compra extraordinária, financiamento quitado ou outro gasto
+     * isolado não pode transformar sozinho a projeção de 30 dias em um
+     * número astronômico.
+     *
+     * Primeiro agregamos o histórico realizado por dia civil. Depois
+     * preenchemos os dias sem gasto com zero e limitamos SOMENTE para a
+     * estimativa estatística os dias acima do P90 da própria amostra.
+     *
+     * O ledger continua intacto: nenhum lançamento é alterado e todos os
+     * valores realizados continuam aparecendo normalmente nos relatórios.
+     */
+    const expenseByDay = new Map<string, number>()
+
+    for (const transaction of historicalExpenses) {
+      const key = String(transaction.date || '').slice(0, 10)
+      if (!key) continue
+
+      expenseByDay.set(
+        key,
+        (expenseByDay.get(key) || 0) +
+          Math.abs(safeNumber(transaction.amount))
       )
+    }
 
     let sampleDays = 0
+    let firstSampleDate: Date | null = null
+    const todayDate = parseCivilDate(today)
 
     if (historicalExpenses.length > 0) {
-      const firstDate = parseCivilDate(
+      firstSampleDate = parseCivilDate(
         historicalExpenses[0].date
       )
 
-      /*
-       * O denominador precisa chegar até HOJE.
-       *
-       * Antes ele terminava no último lançamento de despesa:
-       * se o usuário passasse vários dias sem gastar/registrar nada,
-       * esses dias desapareciam da amostra e a média diária subia
-       * artificialmente.
-       *
-       * Mantemos a janela máxima de 3 meses e começamos no primeiro
-       * gasto válido encontrado dentro dela.
-       */
-      if (firstDate) {
-        const todayDate = parseCivilDate(today)
-
-        if (todayDate) {
-          sampleDays =
-            differenceInCalendarDays(
-              todayDate,
-              firstDate
-            ) + 1
-        }
+      if (firstSampleDate && todayDate) {
+        sampleDays =
+          differenceInCalendarDays(
+            todayDate,
+            firstSampleDate
+          ) + 1
       }
     }
 
+    const dailySamples: number[] = []
+
+    if (
+      sampleDays > 0 &&
+      firstSampleDate
+    ) {
+      for (
+        let index = 0;
+        index < sampleDays;
+        index++
+      ) {
+        const date = new Date(
+          firstSampleDate.getFullYear(),
+          firstSampleDate.getMonth(),
+          firstSampleDate.getDate() + index,
+          12
+        )
+
+        dailySamples.push(
+          expenseByDay.get(
+            format(date, 'yyyy-MM-dd')
+          ) || 0
+        )
+      }
+    }
+
+    const positiveDailySamples =
+      dailySamples
+        .filter((value) => value > 0)
+        .sort((a, b) => a - b)
+
+    const p90Index =
+      positiveDailySamples.length > 0
+        ? Math.min(
+            positiveDailySamples.length - 1,
+            Math.floor(
+              (positiveDailySamples.length - 1) *
+                0.9
+            )
+          )
+        : -1
+
+    const dailyCap =
+      p90Index >= 0
+        ? positiveDailySamples[p90Index]
+        : 0
+
+    const robustHistoricalExpense =
+      dailySamples.reduce(
+        (sum, value) =>
+          sum +
+          (
+            dailyCap > 0
+              ? Math.min(value, dailyCap)
+              : value
+          ),
+        0
+      )
+
     const dailyAverage =
       sampleDays > 0
-        ? totalHistoricalExpense / sampleDays
+        ? robustHistoricalExpense / sampleDays
         : 0
 
     const sampleSize =
@@ -289,20 +357,28 @@ export function useProjection(
 
     let recommendation: string | null
 
+    const outlierNote =
+      dailyCap > 0 &&
+      dailySamples.some(
+        (value) => value > dailyCap
+      )
+        ? ' Gastos excepcionalmente altos foram suavizados apenas no cálculo da tendência.'
+        : ''
+
     if (confidence === 'low') {
       recommendation =
         sampleSize === 0
           ? 'Ainda não há histórico suficiente para projetar seus gastos com segurança.'
-          : `A projeção ainda tem pouca amostra (${sampleSize} movimentações). Use o valor como referência inicial.`
+          : `A projeção ainda tem pouca amostra (${sampleSize} movimentações). Use o valor como referência inicial.${outlierNote}`
     } else if (riskLevel === 'critical') {
       recommendation =
-        `Mantido o ritmo médio observado, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.`
+        `Mantido o ritmo médio observado, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.${outlierNote}`
     } else if (riskLevel === 'high') {
       recommendation =
-        `O ritmo médio observado projeta saldo negativo em 30 dias (${formatCurrency(projectedEndBalance)}).`
+        `O ritmo médio observado projeta saldo negativo em 30 dias (${formatCurrency(projectedEndBalance)}).${outlierNote}`
     } else if (riskLevel === 'medium') {
       recommendation =
-        `A projeção deixa uma margem reduzida de ${formatCurrency(projectedEndBalance)} em 30 dias.`
+        `A projeção deixa uma margem reduzida de ${formatCurrency(projectedEndBalance)} em 30 dias.${outlierNote}`
     } else {
       recommendation =
         `Mantido o ritmo médio observado, o saldo projetado em 30 dias é ${formatCurrency(projectedEndBalance)}.`
@@ -333,6 +409,16 @@ export function useProjection(
       sampleSize,
       sampleDays,
       confidence,
+
+      outlierCap:
+        roundMoney(dailyCap),
+
+      cappedDays:
+        dailyCap > 0
+          ? dailySamples.filter(
+              (value) => value > dailyCap
+            ).length
+          : 0,
     }
   }, [context, user?.id])
 }

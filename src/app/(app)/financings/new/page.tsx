@@ -1,6 +1,7 @@
 // src/app/(app)/financings/new/page.tsx
 "use client"
 
+import { localISODate } from '@/lib/civilDate'
 import SelectField from '@/components/SelectField'
 
 import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react"
@@ -44,7 +45,7 @@ const ASSET_LABEL: Record<AssetType, string> = {
   other: "Outro",
 }
 
-const today = () => new Date().toISOString().split("T")[0]
+const today = () => localISODate()
 
 function NewFinancingContent() {
   const router = useRouter()
@@ -520,7 +521,7 @@ function NewFinancingContent() {
                   min={1}
                   placeholder="Ex: 36"
                   value={installmentsCount}
-                  onChange={(e) => setInstallmentsCount(e.target.value)}
+                  onChange={(e) => setInstallmentsCount(e.target.value.replace(/\D/g, '').slice(0, 3))}
                   className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
                 />
               </div>

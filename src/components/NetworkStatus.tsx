@@ -38,7 +38,7 @@ export default function NetworkStatus({ isOnline, pendingCount, isSyncing = fals
       ) : (
         <>
           <WifiOff size={14} />
-          Modo offline — {pendingCount > 0 ? `${pendingCount} transação(ões) salva(s) localmente` : 'dados serão salvos localmente'}
+          Modo offline — {pendingCount > 0 ? `${pendingCount} alteração(ões) salva(s) localmente` : 'dados serão salvos localmente'}
         </>
       )}
       

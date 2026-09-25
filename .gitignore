@@ -43,3 +43,5 @@ dfl-*-audit*.tar.gz
 *-pos-aborto-20*.txt
 operar-*.sh
 /0
+
+.env.local

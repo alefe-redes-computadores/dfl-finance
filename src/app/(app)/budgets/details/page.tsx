@@ -1,5 +1,7 @@
 'use client'
 
+import { toLocalCivilDate } from '@/lib/civilDate'
+
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -616,7 +618,7 @@ const [showDeleteModal, setShowDeleteModal] = useState(false)
                     </div>
 
                     <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">
-                      {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
+                      {format(toLocalCivilDate(tx.date), "dd 'de' MMM", { locale: ptBR })}
                     </p>
                   </div>
 

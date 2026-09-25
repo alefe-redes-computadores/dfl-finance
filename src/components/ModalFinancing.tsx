@@ -235,7 +235,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
               <input
                 type="number"
                 value={totalInstallments}
-                onChange={e => setTotalInstallments(e.target.value)}
+                onChange={e => setTotalInstallments(e.target.value.replace(/\D/g, '').slice(0, 3))}
                 min={1}
                 max={360}
                 className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/20"

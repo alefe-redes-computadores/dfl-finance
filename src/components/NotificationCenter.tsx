@@ -231,7 +231,7 @@ export default function NotificationCenter({
       else if (notif.budgetId) router.push(`/budgets/details?id=${notif.budgetId}`)
       else if (notif.financingId) router.push(`/financings/details?id=${notif.financingId}`)
       else if (notif.debtId) router.push(`/debts/details?id=${notif.debtId}`)
-      else if (notif.subId) router.push('/subscriptions')
+      else if (notif.subId) router.push(`/subscriptions/details?id=${notif.subId}`)
     }
 
     onClose()

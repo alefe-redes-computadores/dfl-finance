@@ -11,9 +11,9 @@ import {
   ChevronDown,
   Wallet,
   Building2,
-  CreditCard,
   PiggyBank,
   Landmark,
+  Smartphone,
   Check,
   X
 } from "lucide-react"
@@ -31,12 +31,12 @@ import { getBankColor } from '@/lib/BankIcons'
 import { COMMON_BANKS, canonicalizeBankName } from '@/lib/accountPresentation'
 
 const ACCOUNT_TYPES = [
-  { value: "checking", label: "Conta Corrente", icon: Wallet },
+  { value: "checking", label: "Conta Corrente", icon: Landmark },
   { value: "savings", label: "Poupança", icon: PiggyBank },
-  { value: "investment", label: "Investimento", icon: Building2 },
-  { value: "credit_card", label: "Cartão de Crédito", icon: CreditCard },
+  { value: "digital", label: "Conta Digital", icon: Smartphone },
   { value: "wallet", label: "Carteira", icon: Wallet },
-  { value: "other", label: "Outro", icon: Landmark },
+  { value: "investment", label: "Investimento", icon: Building2 },
+  { value: "other", label: "Outro", icon: Wallet },
 ]
 
 const COLOR_OPTIONS = [
@@ -321,10 +321,14 @@ function AccountFormContent() {
                 setFormData((current) => ({ ...current, type: value }))
               }
               title="Tipo de conta"
-              options={ACCOUNT_TYPES.map((type) => ({
-                value: type.value,
-                label: type.label,
-              }))}
+              options={ACCOUNT_TYPES.map((type) => {
+                const TypeIcon = type.icon
+                return {
+                  value: type.value,
+                  label: type.label,
+                  icon: <TypeIcon size={18} strokeWidth={2} />,
+                }
+              })}
               className="rounded-[16px] border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-900"
             />
 

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { addMonths, addWeeks, format, startOfMonth, endOfMonth } from 'date-fns'
 import ReceiptModal from '@/components/ReceiptModal'
+import { buildReceiptStorageName, getReceiptStoragePath, normalizeReceiptDisplayName } from '@/lib/receiptPresentation'
 import CameraCapture from '@/components/CameraCapture'
 import QRCodeScanner from '@/components/QRCodeScanner'
 import { useLocalSync } from '@/hooks/useLocalSync'
@@ -395,7 +396,7 @@ function NewTransactionContent() {
     }
 
     setUploading(true)
-    setReceiptName(file.name)
+    setReceiptName(normalizeReceiptDisplayName(file.name))
 
     const isImage = file.type.startsWith('image/')
     setReceiptType(isImage ? 'image' : 'pdf')
@@ -409,17 +410,17 @@ function NewTransactionContent() {
     }
 
     try {
-      const ext = file.name.split('.').pop() || 'jpg'
-      const uniqueName = `${crypto.randomUUID()}.${ext}`
-      const path = `${user.id}/${uniqueName}`
+      const path = `${user.id}/${buildReceiptStorageName(file)}`
 
       const { error: uploadError } = await supabase.storage.from('receipts').upload(path, file, { upsert: false })
       if (uploadError) throw uploadError
 
       const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path)
       if (receiptUrl) {
-        const oldPath = receiptUrl.split('/').slice(-2).join('/')
-        await supabase.storage.from('receipts').remove([oldPath])
+        const oldPath = getReceiptStoragePath(receiptUrl)
+        if (oldPath) {
+          await supabase.storage.from('receipts').remove([oldPath])
+        }
       }
 
       setReceiptUrl(urlData.publicUrl)
@@ -472,8 +473,10 @@ function NewTransactionContent() {
   const handleRemoveReceipt = async () => {
     vibrate([10])
     if (receiptUrl) {
-      const path = receiptUrl.split('/').slice(-2).join('/')
-      await supabase.storage.from('receipts').remove([path])
+      const path = getReceiptStoragePath(receiptUrl)
+      if (path) {
+        await supabase.storage.from('receipts').remove([path])
+      }
     }
     setReceiptUrl(null)
     setReceiptPreview(null)

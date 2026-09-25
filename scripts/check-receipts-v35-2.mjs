@@ -1,0 +1,42 @@
+import fs from 'node:fs'
+
+const read = (file) => fs.readFileSync(file, 'utf8')
+const ok = (value, message) => {
+  if (!value) throw new Error(`V35.2: ${message}`)
+}
+
+const helper = read('src/lib/receiptPresentation.ts')
+const gallery = read('src/app/(app)/receipts/page.tsx')
+const txNew = read('src/app/(app)/transactions/new/page.tsx')
+const txDetails = read('src/app/(app)/transactions/details/page.tsx')
+const modal = read('src/components/ReceiptModal.tsx')
+const exportService = read('src/lib/services/exportService.ts')
+const exportData = read('src/components/reports/ExportData.tsx')
+const pkg = JSON.parse(read('package.json'))
+
+ok(helper.includes('getReceiptStoragePath'), 'normalização central de path ausente')
+ok(helper.includes('buildReceiptStorageName'), 'nome físico seguro central ausente')
+ok(helper.includes('normalizeReceiptDisplayName'), 'nome visual central ausente')
+ok(gallery.includes('ReceiptViewer'), 'viewer premium ausente')
+ok(gallery.includes('onTouchMove'), 'pinch zoom ausente')
+ok(gallery.includes('object-cover'), 'miniaturas reais ausentes')
+ok(gallery.includes('10 * 1024 * 1024'), 'limite da Central não foi normalizado em 10 MB')
+ok(gallery.includes('buildReceiptStorageName(file)'), 'Central não usa storage name central')
+ok(gallery.includes('getReceiptStoragePath(transaction.receipt_url)'), 'Central não usa path central')
+ok(txNew.includes('normalizeReceiptDisplayName(file.name)'), 'Nova transação ainda mostra extensão/nome bruto')
+ok(txDetails.includes('normalizeReceiptDisplayName(file.name)'), 'Detalhes ainda mostram extensão/nome bruto')
+ok(txNew.includes('buildReceiptStorageName(file)'), 'Nova transação não usa storage name central')
+ok(txDetails.includes('buildReceiptStorageName(file)'), 'Detalhes não usa storage name central')
+ok(txNew.includes('getReceiptStoragePath(receiptUrl)'), 'remoção nova transação não usa path seguro')
+ok(txDetails.includes('getReceiptStoragePath(receiptUrl)'), 'remoção detalhes não usa path seguro')
+ok(txDetails.includes("setReceiptName('Comprovante')"), 'hidratação de comprovante antigo ainda expõe extensão fake')
+ok(modal.includes('mantém o formato do arquivo automaticamente'), 'modal não comunica contrato de extensão')
+ok(exportService.includes('NATIVE_EXPORT_AUDIT_V35_2'), 'auditoria exportService ausente')
+ok(exportData.includes('NATIVE_EXPORT_AUDIT_V35_2'), 'auditoria ExportData ausente')
+ok(Boolean(pkg.dependencies?.['@capacitor/browser']), 'Browser nativo existente ausente')
+ok(!pkg.dependencies?.['@capacitor/filesystem'], 'Native Freeze furada por Filesystem')
+ok(!pkg.dependencies?.['@capacitor/share'], 'Native Freeze furada por Share')
+ok(!txNew.includes("receiptUrl.split('/').slice(-2)"), 'path frágil persiste em nova transação')
+ok(!txDetails.includes("receiptUrl.split('/').slice(-2)"), 'path frágil persiste em detalhes')
+
+console.log('DFL FINANCE V35.2 RECEIPTS FINAL: OK')

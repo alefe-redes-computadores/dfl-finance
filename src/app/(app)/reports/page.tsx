@@ -46,7 +46,7 @@ const ReportsSkeleton = () => (
 function ExportModal({ isOpen, onClose, onExport, exportStatus }: {
   isOpen: boolean;
   onClose: () => void;
-  onExport: (format: 'pdf' | 'csv') => void;
+  onExport: (format: 'csv') => void;
   exportStatus: 'idle' | 'exporting' | 'success'
 }) {
   if (!isOpen) return null
@@ -261,13 +261,8 @@ export default function ReportsPage() {
 
   const COLORS = ['#14b8a6', '#2563eb', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-  const handleExport = async (format: 'pdf' | 'csv') => {
+  const handleExport = async (format: 'csv') => {
     if (!user?.id) return
-
-    if (format === 'pdf') {
-      showToast('A exportação em PDF estará disponível em breve.', 'info')
-      return
-    }
 
     vibrate([8])
     setExportStatus('exporting')

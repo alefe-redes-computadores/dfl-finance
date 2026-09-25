@@ -411,3 +411,16 @@ html[data-native-shell='true'] .app-header {
 }
 
 /* DFL_NATIVE_SAFE_AREA_V14_6_1_END */
+
+
+/* DFL_FINANCE_V38_REDUCED_MOTION */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

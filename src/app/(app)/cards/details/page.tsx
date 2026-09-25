@@ -1,6 +1,8 @@
 // src/app/(app)/cards/details/page.tsx
 'use client'
 
+import { toLocalCivilDate } from '@/lib/civilDate'
+
 import { useEffect, useState, useCallback, useRef, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
@@ -686,7 +688,7 @@ function CardDetailContent() {
                           {tx.description || tx.categories?.name || 'Compra'}
                         </p>
                         <p className="mt-0.5 text-[12px] font-medium text-gray-400 dark:text-gray-500">
-                          {format(new Date(tx.date), "dd 'de' MMM", { locale: ptBR })}
+                          {format(toLocalCivilDate(tx.date), "dd 'de' MMM", { locale: ptBR })}
                         </p>
                       </div>
                     </div>

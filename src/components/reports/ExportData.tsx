@@ -105,6 +105,9 @@ export default function ExportData({ filters }: ExportDataProps) {
     [realizedTransactions]
   )
 
+  // NATIVE_EXPORT_AUDIT_V35_2
+  // Blob/objectURL permanece web/PWA nesta Native Freeze. Não adicionar
+  // dependência nativa apenas por hipótese; validar no APK no teste final.
   const downloadBlob = (
     content: BlobPart,
     type: string,

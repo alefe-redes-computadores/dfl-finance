@@ -1,5 +1,7 @@
 'use client'
 
+import { toLocalCivilDate } from '@/lib/civilDate'
+
 import { Suspense, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
@@ -726,7 +728,7 @@ const formatCurrency = (val: number) =>
                         </div>
 
                         <p className="mt-0.5 text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                          {format(new Date(tx.date), "dd 'de' MMM yyyy", {
+                          {format(toLocalCivilDate(tx.date), "dd 'de' MMM yyyy", {
                             locale: ptBR,
                           })}
                         </p>

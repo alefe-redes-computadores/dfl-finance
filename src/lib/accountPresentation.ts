@@ -2,6 +2,7 @@
 export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   checking: 'Conta Corrente',
   savings: 'Poupança',
+  digital: 'Conta Digital',
   investment: 'Investimento',
   credit_card: 'Cartão de Crédito',
   wallet: 'Carteira',
@@ -139,6 +140,7 @@ export function getAccountInstitutionLabel(account: { bank?: string | null; type
   const bank = canonicalizeBankName(account.bank)
   if (bank) return bank
   if (account.type === 'wallet') return 'Carteira'
+  if (account.type === 'digital') return 'Conta Digital'
   return 'Sem instituição'
 }
 

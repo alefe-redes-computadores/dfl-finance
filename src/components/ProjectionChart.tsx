@@ -162,8 +162,21 @@ export default function ProjectionChart({ hideBalance = false, formatCurrency = 
             {hideBalance ? '••••' : formatCurrency(lastValue)}
           </p>
           <p className="mt-0.5 text-[9px] font-medium text-gray-400 dark:text-gray-500">
-            baseada no ritmo médio de gastos realizados
+            {projection.sampleSize > 0
+              ? `${projection.sampleSize} gastos em ${projection.sampleDays} dias · confiança ${
+                  projection.confidence === 'high'
+                    ? 'alta'
+                    : projection.confidence === 'medium'
+                      ? 'média'
+                      : 'baixa'
+                }`
+              : 'aguardando histórico realizado'}
           </p>
+          {projection.cappedDays > 0 && (
+            <p className="mt-0.5 text-[9px] font-medium text-amber-600/80 dark:text-amber-400/80">
+              {projection.cappedDays} dia(s) atípico(s) suavizado(s) na tendência
+            </p>
+          )}
         </div>
 
         {projection.dayZero && projection.dayZero <= 30 && (

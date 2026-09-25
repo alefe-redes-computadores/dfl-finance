@@ -1,6 +1,8 @@
 // src/app/(app)/loans/new/page.tsx
 'use client'
 
+import { localISODate } from '@/lib/civilDate'
+
 import SelectField from '@/components/SelectField'
 
 import { useEffect, useState, Suspense, useMemo } from 'react'
@@ -79,7 +81,7 @@ function NewLoanContent() {
   const [amountNum, setAmountNum] = useState(0)
   const [direction, setDirection] = useState("lent")
   const [lender, setLender] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(localISODate())
   const [dueDate, setDueDate] = useState("")
   const [interestRate, setInterestRate] = useState("")
   const [notes, setNotes] = useState("")
@@ -171,7 +173,7 @@ function NewLoanContent() {
         amount: amountNum,
         direction,
         lender: lender.trim() || null,
-        date: date || new Date().toISOString().split("T")[0],
+        date: date || localISODate(),
         due_date: dueDate || null,
         interest_rate: interestRate ? parseFloat(interestRate) : null,
         notes: notes.trim() || null,

@@ -219,6 +219,11 @@ export async function exportAnalysisToCSV(
   }
 }
 
+// NATIVE_EXPORT_AUDIT_V35_2
+// Este download usa Blob/objectURL e é contrato web/PWA.
+// Não instalar Filesystem/Share nesta release: a camada nativa está congelada.
+// Quando houver uma release nativa dedicada, mover exportação para um adapter
+// único web/native e validar salvamento/compartilhamento no Android.
 export function downloadCSV(csv: string, filename: string) {
   if (typeof window === 'undefined') return
 

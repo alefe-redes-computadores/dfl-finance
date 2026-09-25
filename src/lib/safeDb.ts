@@ -331,6 +331,38 @@ export async function safeDelete(
           id,
         })
       }
+
+      const goalsCount = await db.goals
+        .where('user_id')
+        .equals(userId)
+        .filter((goal: any) => goal.category_id === id)
+        .count()
+
+      if (goalsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta categoria está vinculada a uma meta e não pode ser excluída.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+
+      const childCategoriesCount = await db.categories
+        .where('user_id')
+        .equals(userId)
+        .filter((category: any) => category.parent_id === id)
+        .count()
+
+      if (childCategoriesCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta categoria possui subcategorias e não pode ser excluída.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
     }
 
     if (table === 'tags') {
@@ -557,10 +589,51 @@ export async function safeDelete(
         .and((tx: any) => tx.user_id === userId)
         .count()
 
-      if (transactionsCount > 0) {
+      const destinationTransfersCount = await db.transactions
+        .where('user_id')
+        .equals(userId)
+        .filter((tx: any) => tx.to_account_id === id)
+        .count()
+
+      if (
+        transactionsCount > 0 ||
+        destinationTransfersCount > 0
+      ) {
         return logOperation('delete', table, id, {
           success: false,
           error: 'Esta conta possui movimentações e não pode ser excluída. Preserve o histórico financeiro.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+
+      const debtsCount = await db.debts
+        .where('user_id')
+        .equals(userId)
+        .filter((debt: any) => debt.account_id === id)
+        .count()
+
+      if (debtsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta conta está vinculada a valores a receber. Remova ou altere o vínculo antes de excluir.',
+          operation: 'delete' as const,
+          table,
+          id,
+        })
+      }
+
+      const paymentCardsCount = await db.credit_cards
+        .where('user_id')
+        .equals(userId)
+        .filter((card: any) => card.payment_account_id === id)
+        .count()
+
+      if (paymentCardsCount > 0) {
+        return logOperation('delete', table, id, {
+          success: false,
+          error: 'Esta conta é usada como conta de pagamento de cartão. Altere o cartão antes de excluir.',
           operation: 'delete' as const,
           table,
           id,
