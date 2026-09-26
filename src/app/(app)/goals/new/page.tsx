@@ -528,7 +528,7 @@ function NewGoalContent() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Viagem para Orlando"
-              className="w-full bg-transparent text-[18px] font-bold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
+              className="w-full bg-transparent text-[18px] font-bold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
             />
           </SectionCard>
 
@@ -545,7 +545,7 @@ function NewGoalContent() {
                   setTargetAmountFormatted(formatted)
                 }}
                 placeholder="0,00"
-                className="w-full bg-transparent text-[30px] font-bold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
+                className="w-full bg-transparent text-[30px] font-bold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
               />
             </div>
           </SectionCard>
@@ -560,7 +560,7 @@ function NewGoalContent() {
                 type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full bg-transparent text-[15px] font-bold text-gray-800 outline-none dark:text-gray-200"
+                className="w-full bg-transparent text-[15px] font-bold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
               />
             </div>
           </SectionCard>
@@ -662,7 +662,7 @@ function NewGoalContent() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Detalhes sobre a meta..."
               rows={3}
-              className="w-full resize-none bg-transparent text-[15px] font-medium text-gray-700 outline-none placeholder:text-gray-300 dark:text-gray-300 dark:placeholder:text-gray-600"
+              className="w-full resize-none bg-transparent text-[15px] font-medium text-gray-700 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-300 dark:placeholder:text-gray-600"
             />
           </SectionCard>
 
@@ -680,7 +680,7 @@ function NewGoalContent() {
                     setInitialContributionFormatted(formatted)
                   }}
                   placeholder="0,00"
-                  className="w-full bg-transparent text-[28px] font-bold text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
+                  className="w-full bg-transparent text-[28px] font-bold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
                 />
               </div>
               <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 dark:text-gray-500">

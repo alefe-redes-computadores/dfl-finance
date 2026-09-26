@@ -266,7 +266,7 @@ export default function CardExpensePage() {
               onChange={(num) => {
                 setAmountNum(num)
               }}
-              className="text-[40px] leading-none font-bold tracking-[-0.04em] bg-transparent outline-none w-full text-rose-600 dark:text-rose-400"
+              className="text-[40px] leading-none font-bold tracking-[-0.04em] bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full text-rose-600 dark:text-rose-400"
             />
           </div>
         </div>
@@ -309,7 +309,7 @@ export default function CardExpensePage() {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-transparent outline-none text-[15px] font-semibold text-gray-900 dark:text-gray-100"
+                className="w-full bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 text-[15px] font-semibold text-gray-900 dark:text-gray-100"
               />
             </div>
           </div>
@@ -330,7 +330,7 @@ export default function CardExpensePage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descrição da compra"
-                className="w-full bg-transparent outline-none text-[15px] font-semibold text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="w-full bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 text-[15px] font-semibold text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
             </div>
           </div>
@@ -410,7 +410,7 @@ export default function CardExpensePage() {
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Adicione uma observação opcional"
                     rows={2}
-                    className="w-full bg-transparent outline-none resize-none text-[15px] font-medium text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                    className="w-full bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 resize-none text-[15px] font-medium text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                   />
                 </div>
               </div>

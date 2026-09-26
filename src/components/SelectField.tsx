@@ -116,10 +116,10 @@ export default function SelectField({
                           active
                             ? 'border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-900/20'
                             : 'border-transparent bg-gray-50 dark:bg-slate-900'
-                        }`}
+                        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/25`}
                       >
                         {option.icon && (
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${active ? 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300' : 'bg-white text-gray-500 shadow-sm dark:bg-slate-800 dark:text-gray-300'}`} aria-hidden="true">
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${active ? 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300' : 'bg-white text-gray-500 shadow-sm dark:bg-slate-800 dark:text-gray-300'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/25`} aria-hidden="true">
                             {option.icon}
                           </span>
                         )}

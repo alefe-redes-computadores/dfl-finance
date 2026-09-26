@@ -231,7 +231,7 @@ export default function TagsPage() {
                   placeholder="Buscar tag..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 bg-transparent text-[14px] text-gray-800 dark:text-gray-200 placeholder-gray-400 outline-none"
+                  className="flex-1 bg-transparent text-[14px] text-gray-800 dark:text-gray-200 placeholder-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0"
                   autoFocus
                 />
                 {search && (
@@ -347,7 +347,7 @@ export default function TagsPage() {
                   placeholder="Ex: Fixo, Lazer..."
                   value={tagName}
                   onChange={(e) => setTagName(e.target.value)}
-                  className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[14px] font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-teal-500/20"
+                  className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[14px] font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 focus:ring-2 focus:ring-teal-500/20"
                   autoFocus
                 />
               </div>

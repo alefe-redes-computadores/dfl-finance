@@ -11,6 +11,7 @@ interface MoneyInputProps {
   autoFocus?: boolean
   allowNegative?: boolean
   ariaLabel?: string
+  selectOnFocus?: boolean
 }
 
 function formatMoney(value: number) {
@@ -29,6 +30,7 @@ export default function MoneyInput({
   autoFocus = false,
   allowNegative = false,
   ariaLabel = 'Valor em reais',
+  selectOnFocus = false,
 }: MoneyInputProps) {
   const [displayValue, setDisplayValue] = useState(formatMoney(value))
 
@@ -92,6 +94,9 @@ export default function MoneyInput({
       disabled={disabled}
       autoFocus={autoFocus}
       aria-label={ariaLabel}
+      onFocus={(event) => {
+        if (selectOnFocus) event.currentTarget.select()
+      }}
     />
   )
 }

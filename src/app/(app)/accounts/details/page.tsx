@@ -79,6 +79,7 @@ function AccountDetailContent() {
   const [showAdjustModal, setShowAdjustModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [adjustAmount, setAdjustAmount] = useState(0)
+  const [adjustMode, setAdjustMode] = useState<'increase' | 'decrease'>('increase')
   const [adjustNotes, setAdjustNotes] = useState("")
   const [transferAmount, setTransferAmount] = useState(0)
   const [transferToAccount, setTransferToAccount] = useState("")
@@ -182,9 +183,10 @@ function AccountDetailContent() {
   const handleAdjustBalance = async () => {
     if (!user) return
 
-    const amount = adjustAmount
+    const absoluteAmount = Math.abs(adjustAmount)
+    const amount = adjustMode === 'decrease' ? -absoluteAmount : absoluteAmount
 
-    if (!Number.isFinite(amount) || amount === 0) {
+    if (!Number.isFinite(absoluteAmount) || absoluteAmount === 0) {
       errorHaptic()
       showToast("Informe um valor para ajuste", "warning")
       return
@@ -204,6 +206,7 @@ function AccountDetailContent() {
       showToast("Saldo ajustado com sucesso!", "success")
       setShowAdjustModal(false)
       setAdjustAmount(0)
+      setAdjustMode('increase')
       setAdjustNotes("")
     } catch (err: any) {
       errorHaptic()
@@ -291,6 +294,9 @@ function AccountDetailContent() {
         new Date(a.date || 0).getTime()
     )
   const balance = safeNum(account.balance)
+  const adjustSignedAmount =
+    adjustMode === 'decrease' ? -Math.abs(adjustAmount) : Math.abs(adjustAmount)
+  const adjustedBalancePreview = balance + adjustSignedAmount
   const balancePositive = balance >= 0
   const bankName = getAccountInstitutionLabel(account)
 
@@ -401,6 +407,9 @@ function AccountDetailContent() {
               <button
                 onClick={() => {
                   vibrate([5])
+                  setAdjustAmount(0)
+                  setAdjustMode('increase')
+                  setAdjustNotes("")
                   setShowAdjustModal(true)
                 }}
                 className="flex items-center justify-center gap-2 rounded-[15px] bg-teal-500 px-3 py-3 text-[13px] font-semibold text-white transition-transform active:scale-[0.98]"
@@ -531,78 +540,165 @@ function AccountDetailContent() {
 
       {showAdjustModal && createPortal(
         <div
-          className="fixed inset-0 z-[99999] flex items-end justify-center"
+          className="fixed inset-0 z-[99999] flex items-end justify-center sm:items-center sm:p-5"
           onClick={() => setShowAdjustModal(false)}
         >
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-lg rounded-t-[32px] border border-black/5 bg-white p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:border-white/10 dark:bg-slate-900"
-            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[32px] border border-black/5 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-20px_60px_rgba(15,23,42,0.20)] animate-in slide-in-from-bottom-8 duration-300 dark:border-white/10 dark:bg-slate-900 sm:rounded-[32px] sm:p-6"
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-gray-200 dark:bg-slate-700" />
+            <div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-gray-200 dark:bg-slate-700 sm:hidden" />
 
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-[20px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-                  Ajustar saldo
-                </h3>
-                <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">
-                  Use valor positivo para acrescentar e negativo para reduzir
-                </p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <BankLogo color={account.color} name={bankName || account.name} size="md" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                    {account.name}
+                  </p>
+                  <h3 className="mt-0.5 text-[21px] font-semibold tracking-tight text-gray-950 dark:text-white">
+                    Ajustar saldo
+                  </h3>
+                </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => {
                   vibrate([5])
                   setShowAdjustModal(false)
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-gray-100 text-gray-500 transition-transform active:scale-95 dark:bg-slate-800 dark:text-gray-300"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-gray-100 text-gray-500 transition-transform active:scale-95 dark:bg-slate-800 dark:text-gray-300"
+                aria-label="Fechar ajuste de saldo"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="rounded-[22px] border border-black/5 bg-gray-50 p-4 dark:border-white/10 dark:bg-slate-800/70">
-                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                  Valor
-                </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-[18px] font-medium text-gray-400">R$</span>
-                  <MoneyInput
-                    value={adjustAmount}
-                    onChange={(value) => setAdjustAmount(value)}
-                    allowNegative
-                    ariaLabel="Valor do ajuste de saldo"
-                    className="w-full bg-transparent text-[28px] font-semibold tracking-tight text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
-                    autoFocus
-                  />
-                </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  vibrate([5])
+                  setAdjustMode('increase')
+                }}
+                aria-pressed={adjustMode === 'increase'}
+                className={`flex min-h-14 items-center justify-center gap-2 rounded-[18px] border px-3 text-[13px] font-semibold transition-all active:scale-[0.98] ${
+                  adjustMode === 'increase'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300'
+                    : 'border-black/5 bg-gray-50 text-gray-500 dark:border-white/10 dark:bg-slate-800 dark:text-gray-400'
+                }`}
+              >
+                <ArrowUpCircle size={18} />
+                Adicionar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  vibrate([5])
+                  setAdjustMode('decrease')
+                }}
+                aria-pressed={adjustMode === 'decrease'}
+                className={`flex min-h-14 items-center justify-center gap-2 rounded-[18px] border px-3 text-[13px] font-semibold transition-all active:scale-[0.98] ${
+                  adjustMode === 'decrease'
+                    ? 'border-red-200 bg-red-50 text-red-600 shadow-sm dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-300'
+                    : 'border-black/5 bg-gray-50 text-gray-500 dark:border-white/10 dark:bg-slate-800 dark:text-gray-400'
+                }`}
+              >
+                <ArrowDownCircle size={18} />
+                Reduzir
+              </button>
+            </div>
+
+            <div className="mt-3 rounded-[24px] border border-black/5 bg-gray-50 p-4 dark:border-white/10 dark:bg-slate-800/70">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-gray-400">
+                  Valor do ajuste
+                </span>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                  adjustMode === 'increase'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                    : 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300'
+                }`}>
+                  {adjustMode === 'increase' ? '+' : '−'}
+                </span>
               </div>
 
-              <div className="rounded-[22px] border border-black/5 bg-gray-50 p-4 dark:border-white/10 dark:bg-slate-800/70">
-                <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                  Observação
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Ajuste de final de mês"
-                  value={adjustNotes}
-                  onChange={(e) => setAdjustNotes(e.target.value)}
-                  className="w-full bg-transparent text-[15px] font-medium text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-[17px] font-semibold text-gray-400">R$</span>
+                <MoneyInput
+                  value={Math.abs(adjustAmount)}
+                  onChange={(value) => setAdjustAmount(Math.abs(value))}
+                  ariaLabel="Valor do ajuste de saldo"
+                  className="w-full bg-transparent text-[30px] font-semibold tracking-tight text-gray-950 outline-none placeholder:text-gray-300 dark:text-white dark:placeholder:text-gray-600"
+                  autoFocus
                 />
               </div>
             </div>
 
+            <div className="mt-3 rounded-[22px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-medium text-gray-400">Saldo atual</p>
+                  <p className="mt-1 text-[15px] font-semibold text-gray-700 dark:text-gray-200">
+                    {formatCurrency(balance)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-medium text-gray-400">Após o ajuste</p>
+                  <p className={`mt-1 text-[18px] font-bold ${
+                    adjustedBalancePreview < 0
+                      ? 'text-red-500'
+                      : 'text-gray-950 dark:text-white'
+                  }`}>
+                    {formatCurrency(adjustedBalancePreview)}
+                  </p>
+                </div>
+              </div>
+
+              {adjustMode === 'decrease' && adjustedBalancePreview < 0 && (
+                <p className="mt-3 rounded-[14px] bg-red-50 px-3 py-2 text-[11px] font-medium leading-4 text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                  O saldo ficará negativo. O ajuste será permitido normalmente.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-[22px] border border-black/5 bg-gray-50 p-4 dark:border-white/10 dark:bg-slate-800/70">
+              <label className="mb-2 block text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                Observação
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Ajuste de final de mês"
+                value={adjustNotes}
+                onChange={(event) => setAdjustNotes(event.target.value)}
+                className="w-full bg-transparent text-[15px] font-medium text-gray-900 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-600"
+              />
+            </div>
+
             <button
+              type="button"
               onClick={() => {
                 vibrate([10, 50])
                 handleAdjustBalance()
               }}
-              disabled={saving || adjustAmount === 0}
-              className="mt-6 flex w-full items-center justify-center rounded-[22px] bg-teal-600 py-4 text-[16px] font-semibold text-white shadow-lg shadow-teal-600/20 transition-transform active:scale-[0.98] disabled:opacity-50"
+              disabled={saving || Math.abs(adjustAmount) === 0}
+              className={`mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-[20px] px-4 text-[15px] font-bold text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-45 ${
+                adjustMode === 'increase'
+                  ? 'bg-emerald-600 shadow-emerald-600/20'
+                  : 'bg-red-500 shadow-red-500/20'
+              }`}
             >
-              {saving ? <Loader2 className="animate-spin" size={22} /> : "Confirmar ajuste"}
+              {saving ? (
+                <Loader2 className="animate-spin" size={22} />
+              ) : (
+                <>
+                  {adjustMode === 'increase' ? <ArrowUpCircle size={19} /> : <ArrowDownCircle size={19} />}
+                  {adjustMode === 'increase' ? 'Adicionar ao saldo' : 'Reduzir do saldo'}
+                </>
+              )}
             </button>
           </div>
         </div>,

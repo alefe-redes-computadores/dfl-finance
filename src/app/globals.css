@@ -424,3 +424,78 @@ html[data-native-shell='true'] .app-header {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* DFL_FORM_POLISH_V49 */
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea {
+    caret-color: #0d9488;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    opacity: 1;
+  }
+
+  input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: inherit;
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  input:disabled,
+  textarea:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer utilities {
+  .dfl-field-focus {
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease,
+      transform 160ms ease;
+  }
+
+  .dfl-field-focus:focus,
+  .dfl-field-focus:focus-within {
+    border-color: rgb(20 184 166 / 0.48);
+    box-shadow: 0 0 0 4px rgb(20 184 166 / 0.10);
+  }
+
+  .dfl-field-surface {
+    border: 1px solid rgb(15 23 42 / 0.07);
+    background: rgb(248 250 252 / 0.92);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.62);
+  }
+
+  .dark .dfl-field-surface {
+    border-color: rgb(255 255 255 / 0.08);
+    background: rgb(15 23 42 / 0.72);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.025);
+  }
+}

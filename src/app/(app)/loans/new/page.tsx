@@ -302,7 +302,7 @@ function NewLoanContent() {
                   value={amountNum}
                   onChange={(num) => setAmountNum(num)}
                   placeholder="0,00"
-                  className="w-full bg-transparent outline-none text-sm font-semibold text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+                  className="w-full bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 text-sm font-semibold text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
                 />
               </div>
             </FormField>

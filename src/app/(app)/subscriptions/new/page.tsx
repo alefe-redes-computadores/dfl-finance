@@ -237,7 +237,7 @@ function NewSubscriptionContent() {
                 placeholder="Ex: Netflix, Spotify..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-transparent text-[22px] leading-tight font-bold text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                className="w-full bg-transparent text-[22px] leading-tight font-bold text-gray-900 dark:text-gray-100 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:placeholder:text-gray-600"
                 autoFocus
               />
             </div>
@@ -252,7 +252,7 @@ function NewSubscriptionContent() {
                   value={amountNum}
                   onChange={(num) => { setAmountNum(num) }}
                   placeholder="0,00"
-                  className="text-[32px] leading-none font-bold bg-transparent outline-none w-full text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                  className="text-[32px] leading-none font-bold bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-600"
                 />
               </div>
             </div>

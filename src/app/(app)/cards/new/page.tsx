@@ -275,7 +275,7 @@ function NewCardContent() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Nubank, Inter"
-                  className="bg-transparent text-white text-[26px] leading-none font-semibold outline-none w-full placeholder:text-white/45"
+                  className="bg-transparent text-white text-[26px] leading-none font-semibold outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full placeholder:text-white/45"
                   autoFocus
                 />
               </div>
@@ -373,7 +373,7 @@ function NewCardContent() {
                 value={closingDay}
                 onChange={(e) => handleDayChange(e.target.value, setClosingDay)}
                 placeholder="Dia"
-                className="w-full bg-transparent outline-none text-[18px] font-bold text-gray-900 dark:text-gray-100"
+                className="w-full bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 text-[18px] font-bold text-gray-900 dark:text-gray-100"
               />
             </div>
 
@@ -387,7 +387,7 @@ function NewCardContent() {
                 value={dueDay}
                 onChange={(e) => handleDayChange(e.target.value, setDueDay)}
                 placeholder="Dia"
-                className="w-full bg-transparent outline-none text-[18px] font-bold text-gray-900 dark:text-gray-100"
+                className="w-full bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 text-[18px] font-bold text-gray-900 dark:text-gray-100"
               />
             </div>
           </div>
@@ -437,7 +437,7 @@ function NewCardContent() {
                   type="text"
                   value={limitAmount}
                   onChange={handleLimitChange}
-                  className="bg-transparent w-full outline-none font-black text-gray-900 dark:text-gray-100 text-[30px]"
+                  className="bg-transparent w-full outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 font-black text-gray-900 dark:text-gray-100 text-[30px]"
                 />
               </div>
             </div>

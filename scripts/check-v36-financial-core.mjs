@@ -25,8 +25,19 @@ ok(home.includes('pendingDate > todayIso'), 'Home voltou a misturar pendência f
 ok(home.includes('.sort((a: any, b: any) => safeNumber(b.balance) - safeNumber(a.balance))'), 'Home não preserva contas por saldo')
 ok(accounts.includes("'manual' | 'balance' | 'institution' | 'name'"), 'ordenação manual de contas regrediu')
 ok(accounts.includes('dfl_accounts_manual_order_'), 'persistência da ordem manual regrediu')
-ok(categories.includes('Categorias padrão não são especiais para o histórico'), 'contrato seguro de categoria padrão regrediu')
-ok(categories.includes("safeDelete("), 'categoria não delega proteção relacional ao safeDelete')
+ok(
+  categories.includes('archivedCategories') &&
+  categories.includes('restoreCategory') &&
+  categories.includes('is_archived: true') &&
+  categories.includes('is_archived: false'),
+  'contrato seguro de arquivar/restaurar categoria regrediu'
+)
+ok(
+  categories.includes("safeUpdate(") &&
+  categories.includes('is_archived: true') &&
+  categories.includes('is_archived: false'),
+  'categoria não preserva arquivamento/restauração via safeUpdate'
+)
 ok(categoryOps.includes("category.type !== expected"), 'filtro receita/despesa regrediu')
 ok(!projection.includes('minimumDaily'), 'projeção voltou a inventar gasto mínimo')
 ok(!projection.includes('weekend'), 'projeção voltou a inventar comportamento de fim de semana')

@@ -631,7 +631,7 @@ export default function CategoriesPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Mercado, Salário, Transporte..."
-                  className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[14px] font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+                  className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3.5 text-[14px] font-semibold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
                   autoFocus
                 />
               </div>

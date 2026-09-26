@@ -26,9 +26,10 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import Skeleton from "@/components/Skeleton"
 import { useSafeDb } from "@/hooks/useSafeDb"
 import BankLogo from '@/components/BankLogo'
+import BankPickerField from '@/components/BankPickerField'
 import SelectField from '@/components/SelectField'
 import { getBankColor } from '@/lib/BankIcons'
-import { COMMON_BANKS, canonicalizeBankName } from '@/lib/accountPresentation'
+import { canonicalizeBankName } from '@/lib/accountPresentation'
 
 const ACCOUNT_TYPES = [
   { value: "checking", label: "Conta Corrente", icon: Landmark },
@@ -348,28 +349,18 @@ function AccountFormContent() {
           </div>
 
           <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
-            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">Banco / Instituição</label>
-            <div className="flex items-center gap-3 rounded-[16px] border border-black/5 bg-gray-50 px-3 py-3 dark:border-white/10 dark:bg-slate-800">
-              <BankLogo color={formData.color} name={formData.bank || 'Banco'} size="md" />
-              <input
-                type="text"
-                name="bank"
-                list="account-bank-options"
-                value={formData.bank}
-                onChange={handleChange}
-                onBlur={() => formData.bank && handleSelectBank(formData.bank)}
-                placeholder="Ex: Nubank, Itaú, Inter..."
-                className="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100"
-              />
-              <datalist id="account-bank-options">
-                {COMMON_BANKS.map((bank) => <option key={bank} value={bank} />)}
-              </datalist>
-            </div>
-            <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto pb-1">
-              {COMMON_BANKS.slice(0, 8).map((bank) => (
-                <button key={bank} type="button" onClick={() => handleSelectBank(bank)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-95 ${canonicalizeBankName(formData.bank) === bank ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300' : 'border-black/5 bg-gray-50 text-gray-500 dark:border-white/10 dark:bg-slate-800 dark:text-gray-400'}`}>{bank}</button>
-              ))}
-            </div>
+            <label className="mb-2 ml-1 block text-[12px] font-semibold text-gray-500 dark:text-gray-400">
+              Banco / Instituição
+            </label>
+
+            <BankPickerField
+              value={formData.bank}
+              onChange={handleSelectBank}
+            />
+
+            <p className="mt-2 px-1 text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+              Pesquise na lista ou digite qualquer banco, carteira ou instituição que não esteja cadastrada.
+            </p>
           </div>
 
           <div className="rounded-[20px] border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">

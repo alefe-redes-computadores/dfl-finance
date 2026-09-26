@@ -185,7 +185,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Ex: Financiamento Imóvel"
-              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500/20 outline-none"
+              className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500/20 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0"
               autoFocus
             />
           </div>
@@ -202,7 +202,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                 value={institution}
                 onChange={e => setInstitution(e.target.value)}
                 placeholder="Ex: Itaú, Caixa"
-                className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="w-full bg-transparent text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
             </div>
           </div>
@@ -220,7 +220,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                   setInstallmentValueNum(num)
                   setInstallmentValueFormatted(formatted)
                 }}
-                className="text-[24px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="text-[24px] font-bold bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 placeholder="0,00"
               />
             </div>
@@ -233,12 +233,12 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                 Qtd. parcelas
               </label>
               <input
-                type="number"
+                type="text"
                 value={totalInstallments}
                 onChange={e => setTotalInstallments(e.target.value.replace(/\D/g, '').slice(0, 3))}
                 min={1}
                 max={360}
-                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-teal-500/20"
+                className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[15px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 focus:ring-2 focus:ring-teal-500/20"
               />
             </div>
 
@@ -252,7 +252,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                   type="date"
                   value={nextDueDate}
                   onChange={e => setNextDueDate(e.target.value)}
-                  className="bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-200 outline-none w-full"
+                  className="bg-transparent text-[14px] font-semibold text-gray-800 dark:text-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full"
                 />
               </div>
             </div>
@@ -271,7 +271,7 @@ export default function ModalFinancing({ isOpen, onClose, onSave }: ModalFinanci
                   setOutstandingBalanceNum(num)
                   setOutstandingBalanceFormatted(formatted)
                 }}
-                className="text-[24px] font-bold bg-transparent outline-none w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="text-[24px] font-bold bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 w-full text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 placeholder="0,00"
               />
             </div>

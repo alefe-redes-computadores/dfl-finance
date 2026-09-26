@@ -470,7 +470,7 @@ function ImportContent() {
                   <MoneyInput
                     value={amountNum}
                     onChange={(value) => setAmountNum(value)}
-                    className="w-full bg-transparent font-semibold text-gray-800 outline-none dark:text-gray-200"
+                    className="w-full bg-transparent font-semibold text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
                   />
                 </div>
 
@@ -504,7 +504,7 @@ function ImportContent() {
                         date: event.target.value,
                       }))
                     }
-                    className="w-full bg-transparent text-gray-800 outline-none dark:text-gray-200"
+                    className="w-full bg-transparent text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
                   />
                 </div>
 
@@ -532,7 +532,7 @@ function ImportContent() {
                         description: event.target.value,
                       }))
                     }
-                    className="w-full bg-transparent text-gray-800 outline-none dark:text-gray-200"
+                    className="w-full bg-transparent text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
                     placeholder="Descrição da compra"
                   />
                 </div>
@@ -554,7 +554,7 @@ function ImportContent() {
                         notes: event.target.value,
                       }))
                     }
-                    className="w-full bg-transparent text-gray-800 outline-none dark:text-gray-200"
+                    className="w-full bg-transparent text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 dark:text-gray-200"
                     placeholder="Notas adicionais"
                   />
                 </div>

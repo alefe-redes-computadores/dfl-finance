@@ -366,7 +366,7 @@ function NewDebtContent() {
                   setAmountNum(isNaN(num) ? 0 : num)
                 }}
                 placeholder="0,00"
-                className="w-full bg-transparent text-[28px] font-bold tracking-tight text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
+                className="w-full bg-transparent text-[28px] font-bold tracking-tight text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-200 dark:placeholder:text-gray-600"
               />
             </div>
           </section>

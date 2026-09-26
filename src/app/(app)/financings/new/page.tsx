@@ -506,7 +506,7 @@ function NewFinancingContent() {
                   value={totalAmountNum}
                   onChange={(num) => setTotalAmountNum(num)}
                   placeholder="0,00"
-                  className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
+                  className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
                 />
               </div>
             </div>
@@ -516,13 +516,13 @@ function NewFinancingContent() {
               <div className="flex items-center gap-2">
                 <Hash size={16} className="shrink-0 text-gray-400" />
                 <input
-                  type="number"
+                  type="text"
                   inputMode="numeric"
                   min={1}
                   placeholder="Ex: 36"
                   value={installmentsCount}
                   onChange={(e) => setInstallmentsCount(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                  className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
+                  className="w-full bg-transparent text-[22px] font-black text-gray-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 focus-visible:ring-offset-0 placeholder:text-gray-300 dark:text-gray-100 dark:placeholder:text-gray-500"
                 />
               </div>
             </div>
