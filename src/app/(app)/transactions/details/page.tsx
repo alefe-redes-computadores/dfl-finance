@@ -685,7 +685,7 @@ function EditTransactionContent() {
     }
 
     loadAuxData()
-  }, [user, effectiveContext, txType])
+  }, [user, effectiveContext, txType, tx?.context])
 
   // HIDRATAÇÃO DO FORMULÁRIO QUANDO O ITEM CHEGAR (useEffect)
   useEffect(() => {
