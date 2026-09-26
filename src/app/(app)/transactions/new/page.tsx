@@ -516,40 +516,124 @@ function NewTransactionContent() {
   }
 
   const handleSaveCategory = async () => {
-    if (!user?.id || !newCatName.trim()) return
-
-    const cleanName = newCatName.trim()
-    const duplicate = validCategories.some((category: any) =>
-      String(category.name || '').trim().toLowerCase() === cleanName.toLowerCase()
-    )
-
-    if (duplicate) {
+    if (!user?.id) {
       hapticError()
-      showToast('Já existe uma categoria com este nome.', 'warning')
+      showToast('Sessão expirada. Entre novamente.', 'error')
       return
     }
 
+    const cleanName = newCatName.trim().replace(/\\s+/g, ' ')
+    if (!cleanName) {
+      hapticError()
+      showToast('Informe o nome da categoria.', 'warning')
+      return
+    }
+
+    const categoryType = type === 'income' ? 'income' : 'expense'
+    const normalizedName = cleanName.toLocaleLowerCase('pt-BR')
+
     setSavingCategory(true)
+
     try {
+      /*
+       * A checagem de duplicidade não usa validCategories porque essa
+       * lista omite arquivadas. A base inteira do usuário impede criar
+       * uma segunda categoria equivalente escondida no histórico.
+       */
+      const userCategories = await db.categories
+        .where('user_id')
+        .equals(user.id)
+        .toArray()
+
+      const duplicate = userCategories.find((category: any) =>
+        category.context === effectiveContext &&
+        category.type === categoryType &&
+        String(category.name || '')
+          .trim()
+          .replace(/\\s+/g, ' ')
+          .toLocaleLowerCase('pt-BR') === normalizedName
+      )
+
+      if (duplicate) {
+        if (duplicate.is_archived === true) {
+          const restored = await safeUpdate(
+            'categories',
+            duplicate.id,
+            {
+              is_archived: false,
+              updated_at: new Date().toISOString(),
+            }
+          )
+
+          if (!restored.success) {
+            throw new Error(restored.error)
+          }
+
+          setCategoryId(duplicate.id)
+          setShowIconPicker(false)
+          setShowCreateCatModal(false)
+          setNewCatName('')
+          setNewCatIcon('Utensils')
+          setNewCatColor('#22c55e')
+          success()
+          showToast('Categoria restaurada e selecionada.', 'success')
+          return
+        }
+
+        setCategoryId(duplicate.id)
+        setShowIconPicker(false)
+        setShowCreateCatModal(false)
+        setNewCatName('')
+        setNewCatIcon('Utensils')
+        setNewCatColor('#22c55e')
+        hapticError()
+        showToast('Essa categoria já existe. Selecionei a existente.', 'warning')
+        return
+      }
+
       const id = crypto.randomUUID()
-      const newOrderIndex = mainCategories.length > 0 ? Math.max(...mainCategories.map((c: any) => c.order_index || 0)) + 1 : 0
+      const newOrderIndex =
+        mainCategories.length > 0
+          ? Math.max(...mainCategories.map((category: any) => category.order_index || 0)) + 1
+          : 0
+
       const payload = {
-        id, user_id: user.id, name: cleanName, icon: normalizeIconName(newCatIcon) || 'Tag', color: newCatColor,
-        context: effectiveContext, type: type === 'income' ? 'income' : 'expense', order_index: newOrderIndex,
-        created_at: new Date().toISOString(), updated_at: new Date().toISOString(), sync_status: 'pending', sync_attempts: 0,
+        id,
+        user_id: user.id,
+        name: cleanName,
+        icon: normalizeIconName(newCatIcon) || 'Tag',
+        color: newCatColor,
+        context: effectiveContext,
+        type: categoryType,
+        parent_id: null,
+        is_default: false,
+        is_archived: false,
+        order_index: newOrderIndex,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sync_status: 'pending',
+        sync_attempts: 0,
       }
 
       const res = await safeAdd('categories', payload)
       if (!res.success) throw new Error(res.error)
 
       setCategoryId(id)
+      setShowIconPicker(false)
       setShowCreateCatModal(false)
       setNewCatName('')
+      setNewCatIcon('Utensils')
+      setNewCatColor('#22c55e')
       success()
       showToast('Categoria criada e selecionada.', 'success')
     } catch (err: any) {
       hapticError()
-      showToast(`Erro ao criar categoria: ${err.message}`, 'error')
+      showToast(
+        err?.message
+          ? `Erro ao criar categoria: ${err.message}`
+          : 'Não foi possível criar a categoria.',
+        'error'
+      )
     } finally {
       setSavingCategory(false)
     }
@@ -1524,16 +1608,24 @@ function NewTransactionContent() {
       {/* MODAL CATEGORIA */}
       {showCatModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCatModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="app-sheet-handle" />
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Selecionar categoria</h3>
-              <div className="flex gap-2">
-                <button onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
-                <button onClick={() => setShowCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
+          <div className="relative flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 px-6 pt-3">
+              <div className="app-sheet-handle" />
+              <div className="flex items-center justify-between gap-3 pb-4 pt-1">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Selecionar categoria</h3>
+                  <p className="mt-0.5 text-[11px] font-medium text-gray-400">
+                    {type === 'income' ? 'Categorias de receita' : 'Categorias de despesa'}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" aria-label="Criar categoria" onClick={() => { setShowCatModal(false); setShowCreateCatModal(true); vibrate([10]) }} className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 p-2.5 rounded-full active:scale-[0.95] transition-transform"><Plus size={20} /></button>
+                  <button type="button" aria-label="Fechar categorias" onClick={() => setShowCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
+                </div>
               </div>
             </div>
-            <div className="space-y-2 pb-10">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-1 custom-scrollbar">
+              <div className="space-y-2">
               {mainCategories.map((cat: any) => {
                 const IconComp = getDynamicIcon(cat.icon)
                 const subCount = subcategories[cat.id]?.length || 0
@@ -1548,6 +1640,18 @@ function NewTransactionContent() {
                   </button>
                 )
               })}
+              {mainCategories.length === 0 && (
+                <div className="py-10 text-center">
+                  <Tag size={26} className="mx-auto mb-3 text-gray-300 dark:text-slate-600" />
+                  <p className="text-[14px] font-semibold text-gray-600 dark:text-gray-300">
+                    Nenhuma categoria {type === 'income' ? 'de receita' : 'de despesa'}
+                  </p>
+                  <p className="mt-1 text-[12px] text-gray-400">
+                    Toque em + para criar a primeira.
+                  </p>
+                </div>
+              )}
+              </div>
             </div>
           </div>
         </div>,
@@ -1740,26 +1844,33 @@ function NewTransactionContent() {
       {/* MODAIS DE CRIAÇÃO */}
       {showCreateCatModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateCatModal(false)}>
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
-            <div className="app-sheet-handle" />
-            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+          <div className="relative flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white dark:bg-slate-800 animate-in slide-in-from-bottom-4" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 px-6 pt-3">
+              <div className="app-sheet-handle" />
+              <div className="flex items-center justify-between pb-4 pt-1">
               <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Nova Categoria</h3>
-              <button onClick={() => setShowCreateCatModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
+              <button type="button" onClick={() => setShowCreateCatModal(false)} className="text-gray-400 p-2.5 bg-gray-100 dark:bg-slate-700 rounded-full active:scale-[0.95] transition-transform"><X size={20} /></button>
+              </div>
             </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-1 custom-scrollbar">
             <div className="space-y-4">
               <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Nome da categoria" className="w-full rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 text-[14px] font-semibold outline-none text-gray-800 dark:text-gray-200" />
               <button onClick={() => setShowIconPicker(true)} className="flex items-center gap-3 rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-4 py-3 w-full text-left active:scale-[0.98] transition-transform">
                 <div className="w-12 h-12 rounded-[16px] flex items-center justify-center shadow-sm" style={{ backgroundColor: `${newCatColor}20`, color: newCatColor }}>{(() => { const I = getDynamicIcon(newCatIcon); return <I size={24} /> })()}</div>
-                <span className="text-[15px] font-bold text-gray-800 dark:text-white flex-1">{newCatIcon}</span>
+                <span className="flex-1">
+                  <span className="block text-[15px] font-bold text-gray-800 dark:text-white">Ícone selecionado</span>
+                  <span className="mt-0.5 block text-[11px] font-medium text-gray-400">{newCatIcon}</span>
+                </span>
                 <ChevronDown size={20} className="text-gray-400" />
               </button>
               <div className="rounded-[16px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4">
                 <p className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-3">Cor</p>
                 <div className="flex flex-wrap gap-3">{CATEGORY_COLORS.map((c) => (<button key={c} onClick={() => { setNewCatColor(c); vibrate([10]) }} className={`w-10 h-10 rounded-full transition-transform active:scale-90 ${newCatColor === c ? 'scale-125 border-4 border-white dark:border-slate-800 shadow-md' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />))}</div>
               </div>
-              <button onClick={handleSaveCategory} disabled={savingCategory || !newCatName.trim()} className="w-full bg-teal-600 text-white py-4 rounded-[20px] font-bold text-[16px] shadow-lg shadow-teal-600/30 disabled:opacity-50 flex justify-center items-center active:scale-[0.98] transition-transform mt-6">
+              <button type="button" onClick={handleSaveCategory} disabled={savingCategory || !newCatName.trim()} className="w-full bg-teal-600 text-white py-4 rounded-[20px] font-bold text-[16px] shadow-lg shadow-teal-600/30 disabled:opacity-50 flex justify-center items-center active:scale-[0.98] transition-transform mt-6">
                 {savingCategory ? <Loader2 size={24} className="animate-spin" /> : 'Salvar Categoria'}
               </button>
+            </div>
             </div>
           </div>
         </div>,

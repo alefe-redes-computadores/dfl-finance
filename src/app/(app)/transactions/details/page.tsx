@@ -647,16 +647,18 @@ function EditTransactionContent() {
           db.table('contacts').where('user_id').equals(user.id).toArray(),
         ])
 
-        setAccounts(accData.filter((a: any) => a.context === effectiveContext))
-        setCreditCards(cardsData.filter((c: any) => c.context === effectiveContext))
-        setContacts(contactsData.filter((c: any) => c.context === effectiveContext))
-        setTags(tagData.filter((t: any) => t.context === effectiveContext))
+        const transactionContext = tx?.context || effectiveContext
+
+        setAccounts(accData.filter((a: any) => a.context === transactionContext))
+        setCreditCards(cardsData.filter((c: any) => c.context === transactionContext))
+        setContacts(contactsData.filter((c: any) => c.context === transactionContext))
+        setTags(tagData.filter((t: any) => t.context === transactionContext))
 
         const allCats =
           filterTransactionCategories(
             catData,
             txType,
-            effectiveContext
+            transactionContext
           )
 
         const mainCats =
@@ -1981,13 +1983,21 @@ function EditTransactionContent() {
       {showCatModal && (
         <div className="fixed inset-0 z-[600] flex items-end justify-center" onClick={() => setShowCatModal(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-[24px] p-6 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 max-h-[82dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="app-sheet-handle" />
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
-              <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Categorias</h3>
-              <button onClick={() => setShowCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2 rounded-full active:scale-95"><X size={20} /></button>
+          <div className="relative flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom-8 duration-300 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 px-6 pt-3">
+              <div className="app-sheet-handle" />
+              <div className="flex items-center justify-between gap-3 pb-4 pt-1">
+                <div>
+                  <h3 className="font-bold text-[20px] text-gray-800 dark:text-gray-100">Categorias</h3>
+                  <p className="mt-0.5 text-[11px] font-medium text-gray-400">
+                    {txType === 'income' ? 'Categorias de receita' : 'Categorias de despesa'}
+                  </p>
+                </div>
+                <button type="button" aria-label="Fechar categorias" onClick={() => setShowCatModal(false)} className="text-gray-400 bg-gray-100 dark:bg-slate-700 p-2.5 rounded-full active:scale-95"><X size={20} /></button>
+              </div>
             </div>
-            <div className="space-y-2 pb-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-1 custom-scrollbar">
+              <div className="space-y-2">
               {categories.map((cat) => {
                 const IconComp = getDynamicIcon(cat.icon)
                 const subCount = subcategories[cat.id]?.length || 0
@@ -2002,7 +2012,13 @@ function EditTransactionContent() {
                   </button>
                 )
               })}
-              {categories.length === 0 && <p className="text-center text-gray-400 mt-10 font-medium">Nenhuma categoria encontrada.</p>}
+              {categories.length === 0 && (
+                <div className="py-10 text-center">
+                  <Tag size={26} className="mx-auto mb-3 text-gray-300 dark:text-slate-600" />
+                  <p className="text-[14px] font-semibold text-gray-600 dark:text-gray-300">Nenhuma categoria compatível.</p>
+                </div>
+              )}
+              </div>
             </div>
           </div>
         </div>
