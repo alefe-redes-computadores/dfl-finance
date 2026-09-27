@@ -16,6 +16,30 @@ export type InsightConfidence =
   | 'medium'
   | 'high'
 
+export type InsightActionRoute =
+  | '/transactions'
+  | '/conciliation'
+  | '/budgets'
+  | '/goals'
+  | '/cards'
+  | '/debts'
+  | '/loans'
+  | '/financings'
+  | '/subscriptions'
+  | '/analysis'
+
+export interface FinancialInsightExplanation {
+  /** Período efetivamente observado pelo motor. */
+  period: string
+
+  /** Explicação curta do porquê do sinal existir. */
+  why: string
+
+  /** Próxima tela/ação útil, sem executar nada automaticamente. */
+  actionLabel?: string
+  actionRoute?: InsightActionRoute
+}
+
 export interface IntelligenceTransactionLike {
   id?: string
   context?: string | null
@@ -160,6 +184,11 @@ export interface FinancialInsight {
     string | number | boolean | null
   >
   suggestedQuestion?: string
+  /** 0..100: ordenação determinística; não substitui severity/confidence. */
+  priorityScore?: number
+
+  /** Explicabilidade estruturada para Home, Análises e Assistente. */
+  explanation?: FinancialInsightExplanation
 }
 
 export interface FinancialIntelligenceSnapshot {
@@ -184,6 +213,9 @@ export interface FinancialIntelligenceSnapshot {
   confidence: InsightConfidence
   projectedMonthExpense: number
   projectedMonthNet: number
+  projectionSampleDays?: number
+  projectionCappedDays?: number
+  projectionOutlierCap?: number
   receivablesOpen: number
   receivablesOverdue: number
   overdueReceivablesCount: number

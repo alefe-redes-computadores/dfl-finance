@@ -127,6 +127,250 @@ const confidenceFromSample = (
   return 'low'
 }
 
+const clamp = (
+  value: number,
+  min: number,
+  max: number
+) =>
+  Math.min(
+    max,
+    Math.max(min, value)
+  )
+
+const percentile = (
+  sorted: number[],
+  percentileValue: number
+) => {
+  if (sorted.length === 0) {
+    return 0
+  }
+
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(
+      0,
+      Math.floor(
+        (sorted.length - 1) *
+          percentileValue
+      )
+    )
+  )
+
+  return sorted[index]
+}
+
+const buildRobustDailyExpense = (
+  transactions:
+    IntelligenceTransactionLike[],
+  startISO: string,
+  endISO: string
+) => {
+  const expenseByDay =
+    new Map<string, number>()
+
+  for (
+    const transaction of transactions
+  ) {
+    if (
+      !isExpenseTransaction(
+        transaction
+      )
+    ) {
+      continue
+    }
+
+    const date =
+      String(
+        transaction.date || ''
+      ).slice(0, 10)
+
+    if (
+      !date ||
+      date < startISO ||
+      date > endISO
+    ) {
+      continue
+    }
+
+    expenseByDay.set(
+      date,
+      (
+        expenseByDay.get(date) || 0
+      ) +
+        Math.abs(
+          safeNumber(
+            transaction.amount
+          )
+        )
+    )
+  }
+
+  const parse = (
+    value: string
+  ) => {
+    const match =
+      /^(\d{4})-(\d{2})-(\d{2})$/
+        .exec(value)
+
+    if (!match) {
+      return null
+    }
+
+    const parsed =
+      new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        12
+      )
+
+    return Number.isNaN(
+      parsed.getTime()
+    )
+      ? null
+      : parsed
+  }
+
+  const start = parse(startISO)
+  const end = parse(endISO)
+
+  if (
+    !start ||
+    !end ||
+    start > end
+  ) {
+    return {
+      dailyAverage: 0,
+      sampleDays: 0,
+      cappedDays: 0,
+      cap: 0,
+    }
+  }
+
+  const samples: number[] = []
+  const cursor =
+    new Date(start)
+
+  while (cursor <= end) {
+    samples.push(
+      expenseByDay.get(
+        iso(cursor)
+      ) || 0
+    )
+
+    cursor.setDate(
+      cursor.getDate() + 1
+    )
+  }
+
+  const positive =
+    samples
+      .filter(
+        (value) => value > 0
+      )
+      .sort(
+        (a, b) => a - b
+      )
+
+  const cap =
+    percentile(
+      positive,
+      0.9
+    )
+
+  const capped =
+    samples.map(
+      (value) =>
+        cap > 0
+          ? Math.min(
+              value,
+              cap
+            )
+          : value
+    )
+
+  return {
+    dailyAverage:
+      capped.length > 0
+        ? capped.reduce(
+            (sum, value) =>
+              sum + value,
+            0
+          ) / capped.length
+        : 0,
+
+    sampleDays:
+      samples.length,
+
+    cappedDays:
+      cap > 0
+        ? samples.filter(
+            (value) =>
+              value > cap
+          ).length
+        : 0,
+
+    cap,
+  }
+}
+
+const severityScore = {
+  critical: 52,
+  warning: 42,
+  attention: 30,
+  opportunity: 18,
+  info: 10,
+} as const
+
+const confidenceScore = {
+  high: 24,
+  medium: 15,
+  low: 6,
+} as const
+
+const buildPriorityScore = (
+  insight: FinancialInsight,
+  sampleSize: number,
+  confidence:
+    InsightConfidence
+) => {
+  const sampleScore =
+    sampleSize >= 40
+      ? 16
+      : sampleSize >= 15
+        ? 11
+        : sampleSize >= 5
+          ? 6
+          : 2
+
+  const deltaScore =
+    typeof insight.deltaPercent ===
+      'number'
+      ? clamp(
+          Math.abs(
+            insight.deltaPercent
+          ) / 5,
+          0,
+          8
+        )
+      : 0
+
+  return Math.round(
+    clamp(
+      severityScore[
+        insight.severity
+      ] +
+        confidenceScore[
+          confidence
+        ] +
+        sampleScore +
+        deltaScore,
+      0,
+      100
+    )
+  )
+}
+
 const subscriptionMonthlyEquivalent = (
   amount: number,
   cycle?: string | null
@@ -251,17 +495,65 @@ export function buildFinancialIntelligence({
       ? (currentMonthNet / currentMonthIncome) * 100
       : null
 
-  const elapsedDays = Math.max(1, now.getDate())
-  const monthDays = endOfMonth(now).getDate()
+  const elapsedDays =
+    Math.max(
+      1,
+      now.getDate()
+    )
+
+  const monthDays =
+    endOfMonth(now)
+      .getDate()
+
+  /*
+   * V54 — projeção mensal robusta.
+   *
+   * O ledger real não é alterado.
+   *
+   * Para estimar despesas:
+   * - agrega por dia civil;
+   * - inclui dias sem gasto;
+   * - suaviza somente a estimativa;
+   * - limita dias extremos pelo P90
+   *   da própria amostra.
+   *
+   * Isso evita que uma despesa
+   * extraordinária isolada transforme
+   * a projeção mensal em um número
+   * artificialmente astronômico.
+   */
+  const robustMonthExpense =
+    buildRobustDailyExpense(
+      currentMonth,
+      currentMonthStart,
+      todayISO
+    )
 
   const projectedMonthExpense =
-    (currentMonthExpense / elapsedDays) * monthDays
+    robustMonthExpense
+      .dailyAverage *
+    monthDays
 
+  /*
+   * Receita não recebe cap.
+   *
+   * Não inventamos receita quando não
+   * existe nenhuma observada no mês.
+   * Quando existe, mantemos a
+   * extrapolação temporal já usada pelo
+   * motor, acompanhada da confiança.
+   */
   const projectedMonthIncome =
-    (currentMonthIncome / elapsedDays) * monthDays
+    currentMonthIncome > 0
+      ? (
+          currentMonthIncome /
+          elapsedDays
+        ) * monthDays
+      : 0
 
   const projectedMonthNet =
-    projectedMonthIncome - projectedMonthExpense
+    projectedMonthIncome -
+    projectedMonthExpense
 
   const categoryById = new Map(
     categories.map((category) => [category.id, category])
@@ -795,11 +1087,49 @@ export function buildFinancialIntelligence({
     const resolvedConfidence =
       insight.confidence ?? confidence
 
+    const normalizedInsight:
+      FinancialInsight = {
+        ...insight,
+        sampleSize:
+          resolvedSampleSize,
+        confidence:
+          resolvedConfidence,
+      }
+
     insights.push({
-      ...insight,
-      sampleSize: resolvedSampleSize,
-      confidence: resolvedConfidence,
-      evidence: insight.evidence ?? {
+      ...normalizedInsight,
+
+      priorityScore:
+        insight.priorityScore ??
+        buildPriorityScore(
+          normalizedInsight,
+          resolvedSampleSize,
+          resolvedConfidence
+        ),
+
+      explanation:
+        insight.explanation ?? {
+          period:
+            `${currentMonthStart} até ${todayISO}`,
+
+          why:
+            resolvedConfidence ===
+              'high'
+              ? 'Sinal sustentado por uma amostra alta do histórico disponível.'
+              : resolvedConfidence ===
+                  'medium'
+                ? 'Sinal sustentado por uma amostra intermediária; acompanhe a evolução.'
+                : 'Sinal preliminar: a amostra ainda é pequena e deve ser interpretada com cautela.',
+
+          actionLabel:
+            'Ver análise completa',
+
+          actionRoute:
+            '/analysis',
+        },
+
+      evidence:
+        insight.evidence ?? {
         currentValue:
           insight.currentValue ?? null,
         baselineValue:
@@ -1560,24 +1890,46 @@ export function buildFinancialIntelligence({
     })
   }
 
-  insights.sort((a, b) => {
-    const severityDiff =
-      severityOrder[b.severity] -
-      severityOrder[a.severity]
+  insights.sort(
+    (a, b) => {
+      const scoreDiff =
+        (b.priorityScore || 0) -
+        (a.priorityScore || 0)
 
-    if (severityDiff !== 0) return severityDiff
+      if (scoreDiff !== 0) {
+        return scoreDiff
+      }
 
-    const confidenceOrder = {
-      high: 3,
-      medium: 2,
-      low: 1,
+      const severityDiff =
+        severityOrder[
+          b.severity
+        ] -
+        severityOrder[
+          a.severity
+        ]
+
+      if (
+        severityDiff !== 0
+      ) {
+        return severityDiff
+      }
+
+      const confidenceOrder = {
+        high: 3,
+        medium: 2,
+        low: 1,
+      }
+
+      return (
+        confidenceOrder[
+          b.confidence
+        ] -
+        confidenceOrder[
+          a.confidence
+        ]
+      )
     }
-
-    return (
-      confidenceOrder[b.confidence] -
-      confidenceOrder[a.confidence]
-    )
-  })
+  )
 
   return {
     context,
@@ -1603,8 +1955,29 @@ export function buildFinancialIntelligence({
       transactionCount: currentMonth.length,
       sampleSize,
       confidence,
-      projectedMonthExpense: round(projectedMonthExpense),
-      projectedMonthNet: round(projectedMonthNet),
+      projectedMonthExpense:
+        round(
+          projectedMonthExpense
+        ),
+
+      projectedMonthNet:
+        round(
+          projectedMonthNet
+        ),
+
+      projectionSampleDays:
+        robustMonthExpense
+          .sampleDays,
+
+      projectionCappedDays:
+        robustMonthExpense
+          .cappedDays,
+
+      projectionOutlierCap:
+        round(
+          robustMonthExpense
+            .cap
+        ),
       receivablesOpen: round(receivablesOpen),
       receivablesOverdue: round(receivablesOverdue),
       overdueReceivablesCount,

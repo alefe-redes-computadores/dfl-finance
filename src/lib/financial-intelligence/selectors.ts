@@ -70,9 +70,28 @@ export function selectFinancialInsightsV2(
   return intelligence.insights
     .filter(
       (insight) =>
-        insight.sampleSize >= minimumSample &&
-        confidenceRank[insight.confidence] >=
-          confidenceRank[minimumConfidence]
+        insight.sampleSize >=
+          minimumSample &&
+        confidenceRank[
+          insight.confidence
+        ] >=
+          confidenceRank[
+            minimumConfidence
+          ]
     )
-    .slice(0, limit)
+    .sort(
+      (a, b) =>
+        (
+          b.priorityScore ||
+          0
+        ) -
+        (
+          a.priorityScore ||
+          0
+        )
+    )
+    .slice(
+      0,
+      limit
+    )
 }
