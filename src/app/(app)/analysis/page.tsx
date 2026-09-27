@@ -455,21 +455,73 @@ function AnalysisContent() {
       const todayISO = format(new Date(), 'yyyy-MM-dd')
 
       const balanceEffect = (t: any) => {
-        if (t.status !== 'done' || !t.account_id || t.affects_balance === false) return 0
+        /*
+         * V55 — a transferência precisa ser interpretada antes do
+         * filtro genérico de affects_balance.
+         *
+         * affects_balance=false significa que a operação não deve
+         * alterar novamente o saldo/economia: transferBetweenAccounts
+         * já atualiza as duas contas atomicamente. Mesmo assim, a
+         * trilha precisa participar da reconstrução histórica quando
+         * uma conta específica está sendo analisada.
+         */
+        if (t.status !== 'done' || !t.account_id) return 0
 
         const amount = Number(t.amount || 0)
 
+        if (t.type === 'transfer') {
+          if (!filterAccount || t.account_id !== filterAccount) return 0
+
+          /*
+           * Formato canônico V55.
+           */
+          const transferIdentity =
+            String(t.idempotency_key || '')
+
+          if (transferIdentity.endsWith(':out')) {
+            return -amount
+          }
+
+          if (transferIdentity.endsWith(':in')) {
+            return amount
+          }
+
+          /*
+           * Compatibilidade histórica.
+           *
+           * Antes da identidade V55 as duas pernas já eram gravadas
+           * com account_id + to_account_id + transfer_group_id.
+           * A direção era expressa pela descrição padrão criada por
+           * accountOperations:
+           *
+           *   Transferência para <conta>  -> saída
+           *   Transferência de <conta>    -> entrada
+           *
+           * Não usamos transfer_to/transfer_from porque esses campos
+           * nunca fizeram parte do contrato persistido real.
+           */
+          const description =
+            String(t.description || '').trim()
+
+          if (/^Transferência para\b/i.test(description)) {
+            return -amount
+          }
+
+          if (/^Transferência de\b/i.test(description)) {
+            return amount
+          }
+
+          return 0
+        }
+
+        /*
+         * Demais trilhas com affects_balance=false continuam fora da
+         * reconstrução para impedir dupla aplicação de saldo.
+         */
+        if (t.affects_balance === false) return 0
+
         if (t.type === 'income') return amount
         if (t.type === 'expense' || t.type === 'sangria') return -amount
-
-        // Transferencia entre contas e neutra no patrimonio consolidado,
-        // mas altera o saldo historico quando uma conta especifica esta filtrada.
-        if (t.type === 'transfer') {
-          if (!filterAccount) return 0
-
-          if (t.transfer_to && t.account_id === filterAccount) return -amount
-          if (t.transfer_from && t.account_id === filterAccount) return amount
-        }
 
         return 0
       }

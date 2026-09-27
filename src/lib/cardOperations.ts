@@ -423,10 +423,22 @@ export async function reconcileCardInvoiceCycle({
       item.closing_date === cycle.closingDate
   )
 
-  if (invoice?.status === 'paid' && total > 0) {
-    throw new Error(
-      'Esta compra pertence a uma fatura que já foi paga. Altere a data da compra ou registre o ajuste em uma fatura aberta.'
-    )
+  /*
+   * V55 — uma fatura paga é histórico financeiro fechado.
+   *
+   * Depois do pagamento as compras do ciclo passam a
+   * affects_balance=true. Portanto total pode naturalmente chegar
+   * a zero numa reconciliação posterior sem que isso autorize
+   * apagar, zerar ou reabrir a fatura paga.
+   */
+  if (invoice?.status === 'paid') {
+    if (total > 0) {
+      throw new Error(
+        'Esta compra pertence a uma fatura que já foi paga. Altere a data da compra ou registre o ajuste em uma fatura aberta.'
+      )
+    }
+
+    return invoice
   }
 
   if (!invoice && total <= 0) {
@@ -787,6 +799,18 @@ export async function payCardInvoice({
 
         account_id: accountId,
         credit_card_id: null,
+
+        /*
+         * Esta movimentação representa a liquidação, não uma segunda
+         * despesa econômica. Mantemos vínculo explícito com a fatura
+         * e identidade semântica estável para auditoria/idempotência.
+         */
+        invoice_id:
+          invoice?.id ?? null,
+        idempotency_key:
+          invoice?.id
+            ? `card_invoice_payment:${invoice.id}`
+            : null,
 
         date: format(new Date(), 'yyyy-MM-dd'),
         status: 'done',

@@ -101,6 +101,17 @@ export async function transferBetweenAccounts({
         account_id: fromAccount.id,
         to_account_id: toAccount.id,
         transfer_group_id: transferGroupId,
+
+        /*
+         * V55 — direção canônica da transferência.
+         *
+         * account_id continua representando a conta desta perna e
+         * to_account_id a contraparte. O idempotency_key torna a
+         * direção inequívoca sem introduzir campos fantasmas.
+         */
+        idempotency_key:
+          `transfer:${transferGroupId}:out`,
+
         date,
         status: 'done',
 
@@ -132,6 +143,16 @@ export async function transferBetweenAccounts({
         account_id: toAccount.id,
         to_account_id: fromAccount.id,
         transfer_group_id: transferGroupId,
+
+        /*
+         * Segunda perna do mesmo grupo.
+         *
+         * affects_balance=false permanece porque os saldos das
+         * contas já são atualizados atomicamente nesta operação.
+         */
+        idempotency_key:
+          `transfer:${transferGroupId}:in`,
+
         date,
         status: 'done',
         affects_balance: false,
