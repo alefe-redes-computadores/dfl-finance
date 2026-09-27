@@ -14,9 +14,11 @@ import {
 import BankLogo from '@/components/BankLogo'
 import { useHapticFeedback } from '@/hooks/useHapticFeedback'
 import {
-  COMMON_BANKS,
   canonicalizeBankName,
-} from '@/lib/accountPresentation'
+  findBankIdentity,
+  normalizeBankKey,
+  searchBankRegistry,
+} from '@/lib/bankRegistry'
 
 type BankPickerFieldProps = {
   value: string
@@ -60,19 +62,11 @@ export default function BankPickerField({
 
   const canonicalValue = canonicalizeBankName(value)
   const query = search.trim()
-  const normalizedQuery = normalizeSearch(query)
-
-  const filteredBanks = useMemo(() => {
-    if (!normalizedQuery) return COMMON_BANKS
-
-    return COMMON_BANKS.filter((bank) =>
-      normalizeSearch(bank).includes(normalizedQuery),
-    )
-  }, [normalizedQuery])
-
-  const exactMatch = COMMON_BANKS.some(
-    (bank) => normalizeSearch(bank) === normalizedQuery,
+  const filteredBanks = useMemo(
+    () => searchBankRegistry(query),
+    [query],
   )
+  const exactMatch = Boolean(findBankIdentity(query))
 
   const customCandidate =
     query.length > 0 && !exactMatch
@@ -191,13 +185,13 @@ export default function BankPickerField({
                   <div className="space-y-1.5">
                     {filteredBanks.map((bank) => {
                       const active =
-                        normalizeSearch(canonicalValue) === normalizeSearch(bank)
+                        normalizeBankKey(canonicalValue) === normalizeBankKey(bank.name)
 
                       return (
                         <button
-                          key={bank}
+                          key={bank.id}
                           type="button"
-                          onClick={() => selectBank(bank)}
+                          onClick={() => selectBank(bank.name)}
                           aria-pressed={active}
                           className={`flex min-h-14 w-full items-center gap-3 rounded-[18px] border p-3 text-left transition-all active:scale-[0.99] ${
                             active
@@ -205,7 +199,7 @@ export default function BankPickerField({
                               : 'border-transparent bg-gray-50 dark:bg-slate-800/65'
                           }`}
                         >
-                          <BankLogo name={bank} size="sm" />
+                          <BankLogo name={bank.name} size="sm" />
 
                           <span
                             className={`min-w-0 flex-1 truncate text-[14px] font-semibold ${
@@ -214,7 +208,7 @@ export default function BankPickerField({
                                 : 'text-gray-800 dark:text-gray-200'
                             }`}
                           >
-                            {bank}
+                            {bank.name}
                           </span>
 
                           {active && (

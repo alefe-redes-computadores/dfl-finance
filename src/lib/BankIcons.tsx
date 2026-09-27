@@ -1,5 +1,9 @@
 // src/lib/BankIcons.tsx
 import React from 'react'
+import {
+  BANK_REGISTRY,
+  findBankIdentity,
+} from '@/lib/bankRegistry'
 
 type BrandKind =
   | 'nubank'
@@ -26,162 +30,16 @@ interface BankData {
   kind: BrandKind
 }
 
-const BANK_MAP: Record<string, BankData> = {
-  nubank: { color: '#820AD1', foreground: '#FFFFFF', sigla: 'nu', kind: 'nubank' },
-  nu: { color: '#820AD1', foreground: '#FFFFFF', sigla: 'nu', kind: 'nubank' },
+function findBank(bankName?: string | null): BankData | null {
+  const bank = findBankIdentity(bankName)
+  if (!bank) return null
 
-  inter: { color: '#FF7A00', foreground: '#FFFFFF', sigla: 'inter', kind: 'inter' },
-  'banco inter': { color: '#FF7A00', foreground: '#FFFFFF', sigla: 'inter', kind: 'inter' },
-
-  itau: { color: '#EC7000', foreground: '#FFFFFF', sigla: 'itaú', kind: 'itau' },
-  'itaú': { color: '#EC7000', foreground: '#FFFFFF', sigla: 'itaú', kind: 'itau' },
-  'itaú unibanco': { color: '#EC7000', foreground: '#FFFFFF', sigla: 'itaú', kind: 'itau' },
-
-  bradesco: { color: '#CC092F', foreground: '#FFFFFF', sigla: 'bra', kind: 'bradesco' },
-  santander: { color: '#EC0000', foreground: '#FFFFFF', sigla: 'san', kind: 'santander' },
-  'santander brasil': { color: '#EC0000', foreground: '#FFFFFF', sigla: 'san', kind: 'santander' },
-
-  caixa: { color: '#005CA9', foreground: '#FFFFFF', sigla: 'CEF', kind: 'caixa' },
-  'caixa econômica': { color: '#005CA9', foreground: '#FFFFFF', sigla: 'CEF', kind: 'caixa' },
-  'caixa economica federal': { color: '#005CA9', foreground: '#FFFFFF', sigla: 'CEF', kind: 'caixa' },
-  'caixa econômica federal': { color: '#005CA9', foreground: '#FFFFFF', sigla: 'CEF', kind: 'caixa' },
-
-  'banco do brasil': { color: '#FFED00', foreground: '#003D7C', sigla: 'BB', kind: 'bb' },
-  bb: { color: '#FFED00', foreground: '#003D7C', sigla: 'BB', kind: 'bb' },
-
-  'c6 bank': { color: '#151515', foreground: '#FFFFFF', sigla: 'C6', kind: 'c6' },
-  c6: { color: '#151515', foreground: '#FFFFFF', sigla: 'C6', kind: 'c6' },
-
-  picpay: { color: '#21C25E', foreground: '#FFFFFF', sigla: 'P', kind: 'picpay' },
-
-  pagbank: { color: '#12B886', foreground: '#FFFFFF', sigla: 'pag', kind: 'pagbank' },
-  'pag bank': { color: '#12B886', foreground: '#FFFFFF', sigla: 'pag', kind: 'pagbank' },
-  pagseguro: { color: '#12B886', foreground: '#FFFFFF', sigla: 'pag', kind: 'pagbank' },
-
-  'mercado pago': { color: '#00AEEF', foreground: '#FFFFFF', sigla: 'MP', kind: 'mercadopago' },
-  mercadopago: { color: '#00AEEF', foreground: '#FFFFFF', sigla: 'MP', kind: 'mercadopago' },
-
-  stone: { color: '#00A868', foreground: '#FFFFFF', sigla: 'stone', kind: 'stone' },
-
-  ifood: { color: '#EA1D2C', foreground: '#FFFFFF', sigla: 'iFood', kind: 'ifood' },
-  'ifood pago': { color: '#EA1D2C', foreground: '#FFFFFF', sigla: 'iFood', kind: 'ifood' },
-
-  cloudwalk: { color: '#101827', foreground: '#FFFFFF', sigla: '∞', kind: 'cloudwalk' },
-  infinitepay: { color: '#101827', foreground: '#FFFFFF', sigla: '∞', kind: 'cloudwalk' },
-  infinitypay: { color: '#101827', foreground: '#FFFFFF', sigla: '∞', kind: 'cloudwalk' },
-  infinitpay: { color: '#101827', foreground: '#FFFFFF', sigla: '∞', kind: 'cloudwalk' },
-
-  carteira: { color: '#475569', foreground: '#FFFFFF', sigla: '$', kind: 'wallet' },
-  dinheiro: { color: '#475569', foreground: '#FFFFFF', sigla: '$', kind: 'wallet' },
-  'dinheiro físico': { color: '#475569', foreground: '#FFFFFF', sigla: '$', kind: 'wallet' },
-
-  safra: { color: '#0B1836', foreground: '#FFFFFF', sigla: 'SAF', kind: 'wordmark' },
-  original: { color: '#00A651', foreground: '#FFFFFF', sigla: 'ORI', kind: 'wordmark' },
-  next: { color: '#101010', foreground: '#00FF5F', sigla: 'next', kind: 'wordmark' },
-  'will bank': { color: '#F7DF1E', foreground: '#121212', sigla: 'will', kind: 'wordmark' },
-  agibank: { color: '#003D3B', foreground: '#FFFFFF', sigla: 'agi', kind: 'wordmark' },
-  'digio bank': { color: '#4756FF', foreground: '#FFFFFF', sigla: 'digio', kind: 'wordmark' },
-  digio: { color: '#4756FF', foreground: '#FFFFFF', sigla: 'digio', kind: 'wordmark' },
-  btg: { color: '#002B49', foreground: '#FFFFFF', sigla: 'BTG', kind: 'wordmark' },
-  'btg pactual': { color: '#002B49', foreground: '#FFFFFF', sigla: 'BTG', kind: 'wordmark' },
-  sicoob: { color: '#003641', foreground: '#FFFFFF', sigla: 'SCO', kind: 'wordmark' },
-  sicredi: { color: '#32A041', foreground: '#FFFFFF', sigla: 'SIC', kind: 'wordmark' },
-  xp: { color: '#111111', foreground: '#FFFFFF', sigla: 'XP', kind: 'wordmark' },
-  paypal: { color: '#003087', foreground: '#FFFFFF', sigla: 'Pay', kind: 'wordmark' },
-
-  neon: { color: '#00E4DE', foreground: '#062E35', sigla: 'neon', kind: 'wordmark' },
-  bs2: { color: '#0B2A5B', foreground: '#FFFFFF', sigla: 'BS2', kind: 'wordmark' },
-  superdigital: { color: '#101010', foreground: '#FFFFFF', sigla: 'SD', kind: 'wordmark' },
-  creditas: { color: '#00BFA5', foreground: '#FFFFFF', sigla: 'CRE', kind: 'wordmark' },
-  '99pay': { color: '#FFD000', foreground: '#111111', sigla: '99', kind: 'wordmark' },
-  iti: { color: '#FF6F00', foreground: '#FFFFFF', sigla: 'iti', kind: 'wordmark' },
-  'iti itau': { color: '#FF6F00', foreground: '#FFFFFF', sigla: 'iti', kind: 'wordmark' },
-  'iti itaú': { color: '#FF6F00', foreground: '#FFFFFF', sigla: 'iti', kind: 'wordmark' },
-  cora: { color: '#E83E8C', foreground: '#FFFFFF', sigla: 'cora', kind: 'wordmark' },
-  ton: { color: '#00D47B', foreground: '#07382B', sigla: 'ton', kind: 'wordmark' },
-  z1: { color: '#6E42D5', foreground: '#FFFFFF', sigla: 'Z1', kind: 'wordmark' },
-  jeitto: { color: '#00C853', foreground: '#FFFFFF', sigla: 'J', kind: 'wordmark' },
-
-  pan: { color: '#00A3E0', foreground: '#FFFFFF', sigla: 'PAN', kind: 'wordmark' },
-  'banco pan': { color: '#00A3E0', foreground: '#FFFFFF', sigla: 'PAN', kind: 'wordmark' },
-  banrisul: { color: '#004B87', foreground: '#FFFFFF', sigla: 'BRS', kind: 'wordmark' },
-  bmg: { color: '#FF6900', foreground: '#FFFFFF', sigla: 'BMG', kind: 'wordmark' },
-  daycoval: { color: '#0B3A82', foreground: '#FFFFFF', sigla: 'DAY', kind: 'wordmark' },
-  pine: { color: '#00533C', foreground: '#FFFFFF', sigla: 'PINE', kind: 'wordmark' },
-  'abc brasil': { color: '#0B4EA2', foreground: '#FFFFFF', sigla: 'ABC', kind: 'wordmark' },
-  fibra: { color: '#E86A13', foreground: '#FFFFFF', sigla: 'FIB', kind: 'wordmark' },
-  brb: { color: '#005AA9', foreground: '#FFFFFF', sigla: 'BRB', kind: 'wordmark' },
-  'banco de brasilia': { color: '#005AA9', foreground: '#FFFFFF', sigla: 'BRB', kind: 'wordmark' },
-  'banco de brasília': { color: '#005AA9', foreground: '#FFFFFF', sigla: 'BRB', kind: 'wordmark' },
-  banese: { color: '#F58220', foreground: '#FFFFFF', sigla: 'BSE', kind: 'wordmark' },
-  basa: { color: '#007A4D', foreground: '#FFFFFF', sigla: 'BASA', kind: 'wordmark' },
-  'banco da amazonia': { color: '#007A4D', foreground: '#FFFFFF', sigla: 'BASA', kind: 'wordmark' },
-  'banco da amazônia': { color: '#007A4D', foreground: '#FFFFFF', sigla: 'BASA', kind: 'wordmark' },
-  bnb: { color: '#00569C', foreground: '#FFFFFF', sigla: 'BNB', kind: 'wordmark' },
-  'banco do nordeste': { color: '#00569C', foreground: '#FFFFFF', sigla: 'BNB', kind: 'wordmark' },
-  bdmg: { color: '#005CA9', foreground: '#FFFFFF', sigla: 'BDMG', kind: 'wordmark' },
-
-  unicred: { color: '#185A3B', foreground: '#FFFFFF', sigla: 'UNI', kind: 'wordmark' },
-  cresol: { color: '#F28C00', foreground: '#FFFFFF', sigla: 'CRE', kind: 'wordmark' },
-  ailos: { color: '#005CAB', foreground: '#FFFFFF', sigla: 'AIL', kind: 'wordmark' },
-  uniprime: { color: '#1C5D3A', foreground: '#FFFFFF', sigla: 'UP', kind: 'wordmark' },
-
-  rico: { color: '#FF5C00', foreground: '#FFFFFF', sigla: 'RICO', kind: 'wordmark' },
-  clear: { color: '#111111', foreground: '#FFFFFF', sigla: 'CLR', kind: 'wordmark' },
-  modal: { color: '#003DA5', foreground: '#FFFFFF', sigla: 'MOD', kind: 'wordmark' },
-  'modal mais': { color: '#003DA5', foreground: '#FFFFFF', sigla: 'MOD', kind: 'wordmark' },
-  genial: { color: '#6CB33F', foreground: '#FFFFFF', sigla: 'GEN', kind: 'wordmark' },
-  'genial investimentos': { color: '#6CB33F', foreground: '#FFFFFF', sigla: 'GEN', kind: 'wordmark' },
-  avenue: { color: '#111111', foreground: '#FFFFFF', sigla: 'AVE', kind: 'wordmark' },
-  warren: { color: '#E84D8A', foreground: '#FFFFFF', sigla: 'WAR', kind: 'wordmark' },
-  toro: { color: '#00A86B', foreground: '#FFFFFF', sigla: 'TORO', kind: 'wordmark' },
-  'toro investimentos': { color: '#00A86B', foreground: '#FFFFFF', sigla: 'TORO', kind: 'wordmark' },
-
-  mercantil: { color: '#0B3A6D', foreground: '#FFFFFF', sigla: 'MB', kind: 'wordmark' },
-  'banco mercantil': { color: '#0B3A6D', foreground: '#FFFFFF', sigla: 'MB', kind: 'wordmark' },
-  'mercantil do brasil': { color: '#0B3A6D', foreground: '#FFFFFF', sigla: 'MB', kind: 'wordmark' },
-  bari: { color: '#1B365D', foreground: '#FFFFFF', sigla: 'BARI', kind: 'wordmark' },
-  crefisa: { color: '#0A4A8A', foreground: '#FFFFFF', sigla: 'CRE', kind: 'wordmark' },
-  master: { color: '#F58220', foreground: '#FFFFFF', sigla: 'MAS', kind: 'wordmark' },
-  omni: { color: '#173E77', foreground: '#FFFFFF', sigla: 'OMNI', kind: 'wordmark' },
-  topazio: { color: '#0078BE', foreground: '#FFFFFF', sigla: 'TOP', kind: 'wordmark' },
-  'topázio': { color: '#0078BE', foreground: '#FFFFFF', sigla: 'TOP', kind: 'wordmark' },
-  tribanco: { color: '#006BB6', foreground: '#FFFFFF', sigla: 'TRI', kind: 'wordmark' },
-  carrefour: { color: '#00529B', foreground: '#FFFFFF', sigla: 'CAR', kind: 'wordmark' },
-  'carrefour banco': { color: '#00529B', foreground: '#FFFFFF', sigla: 'CAR', kind: 'wordmark' },
-  cetelem: { color: '#54B948', foreground: '#FFFFFF', sigla: 'CET', kind: 'wordmark' },
-  'porto seguro': { color: '#00A3E0', foreground: '#FFFFFF', sigla: 'PORTO', kind: 'wordmark' },
-  portoseg: { color: '#00A3E0', foreground: '#FFFFFF', sigla: 'PORTO', kind: 'wordmark' },
-  sofisa: { color: '#003DA5', foreground: '#FFFFFF', sigla: 'SOF', kind: 'wordmark' },
-  'sofisa direto': { color: '#003DA5', foreground: '#FFFFFF', sigla: 'SOF', kind: 'wordmark' },
-  'banco original': { color: '#00A651', foreground: '#FFFFFF', sigla: 'ORI', kind: 'wordmark' },
-}
-
-function normalizeBankName(value?: string | null) {
-  return (value || '')
-    .trim()
-    .toLocaleLowerCase('pt-BR')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-}
-
-function findBank(bankName?: string | null) {
-  const normalized = normalizeBankName(bankName)
-
-  if (!normalized) return null
-
-  if (BANK_MAP[normalized]) {
-    return BANK_MAP[normalized]
+  return {
+    color: bank.color,
+    foreground: bank.foreground,
+    sigla: bank.sigla,
+    kind: (bank.kind || 'wordmark') as BrandKind,
   }
-
-  const matchedKey = Object.keys(BANK_MAP)
-    .sort((a, b) => b.length - a.length)
-    .find((key) => normalized.includes(key))
-
-  return matchedKey
-    ? BANK_MAP[matchedKey]
-    : null
 }
 
 function renderMark(bank: BankData) {
@@ -368,20 +226,10 @@ export function hasBrandedBankIcon(
   return Boolean(findBank(bankName))
 }
 
-export const BANK_LIST = Array.from(
-  new Map(
-    Object.entries(BANK_MAP).map(
-      ([key, value]) => [
-        `${value.kind}:${value.color}`,
-        {
-          name:
-            key.charAt(0).toUpperCase() +
-            key.slice(1),
-          key,
-          color: value.color,
-          sigla: value.sigla,
-        },
-      ]
-    )
-  ).values()
-)
+
+export const BANK_LIST = BANK_REGISTRY.map((bank) => ({
+  name: bank.name,
+  key: bank.id,
+  color: bank.color,
+  sigla: bank.sigla,
+}))

@@ -4,51 +4,13 @@ import {
 } from '@/lib/BankIcons'
 import {
   canonicalizeBankName,
-} from '@/lib/accountPresentation'
+  findBankIdentity,
+} from '@/lib/bankRegistry'
 
 interface BankLogoProps {
   name: string
   color?: string
   size?: 'sm' | 'md' | 'lg'
-}
-
-interface BrandAsset {
-  src: string
-  background: string
-  imageClassName: string
-}
-
-const BRAND_ASSETS: Record<
-  string,
-  BrandAsset
-> = {
-  PagBank: {
-    src: '/banks/pagbank.svg',
-    background: '#FFFFFF',
-    imageClassName:
-      'h-[72%] w-[72%] object-cover object-left',
-  },
-
-  PicPay: {
-    src: '/banks/picpay.svg',
-    background: '#FFFFFF',
-    imageClassName:
-      'h-[68%] w-[72%] object-cover object-left',
-  },
-
-  'Mercado Pago': {
-    src: '/banks/mercado-pago.svg',
-    background: '#00AEEF',
-    imageClassName:
-      'h-[58%] w-[58%] object-contain brightness-0 invert',
-  },
-
-  Stone: {
-    src: '/banks/stone.svg',
-    background: '#FFFFFF',
-    imageClassName:
-      'h-[64%] w-[78%] object-cover object-left',
-  },
 }
 
 function getFallbackLabel(
@@ -86,7 +48,7 @@ export default function BankLogo({
     canonicalizeBankName(name)
 
   const asset =
-    BRAND_ASSETS[canonicalName]
+    findBankIdentity(canonicalName)?.asset
 
   const sizeClasses = {
     sm: 'h-7 w-7 rounded-[9px]',
