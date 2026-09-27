@@ -458,14 +458,27 @@ export default function MorePage() {
   }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setSelectedImage(e.target?.result as string)
-        setShowCropModal(true)
-      }
-      reader.readAsDataURL(event.target.files[0])
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      showToast('Use uma imagem JPG, PNG ou WebP.', 'warning')
+      return
     }
+
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('A imagem deve ter no máximo 15 MB.', 'warning')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setSelectedImage(e.target?.result as string)
+      setShowCropModal(true)
+    }
+    reader.onerror = () => showToast('Não foi possível ler a imagem.', 'error')
+    reader.readAsDataURL(file)
   }
 
   const handleCropAndUpload = async () => {
@@ -481,16 +494,32 @@ export default function MorePage() {
       ctx?.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, 400, 400)
       canvas.toBlob(async (blob) => {
         if (!blob) return
+        if (!user?.id) {
+          showToast('Sessão expirada. Entre novamente.', 'error')
+          setUploading(false)
+          return
+        }
+
         const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
-        const filePath = `${user?.id}-${Date.now()}.jpg`
-        const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
+        const filePath = `${user.id}/avatar.jpg`
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, file, { cacheControl: '3600', upsert: true })
         if (uploadError) {
           showToast('Erro no upload da foto', 'error')
           setUploading(false)
           return
         }
         const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-        await supabase.auth.updateUser({ data: { custom_avatar_url: data.publicUrl } })
+        const avatarUrl = `${data.publicUrl}?v=${Date.now()}`
+        const { error: profileError } = await supabase.auth.updateUser({
+          data: { custom_avatar_url: avatarUrl },
+        })
+        if (profileError) {
+          showToast('Foto enviada, mas não foi possível atualizar o perfil.', 'error')
+          setUploading(false)
+          return
+        }
         showToast('Foto atualizada com sucesso!', 'success')
         setUploading(false)
         setShowCropModal(false)
