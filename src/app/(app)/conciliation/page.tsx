@@ -107,21 +107,59 @@ export default function ConciliationPage() {
 
   const pendingBreakdown = useMemo(() => {
     const today = localIsoDate(new Date())
-    const monthStart = `${today.slice(0, 7)}-01`
 
     return pendingTransactions.reduce(
-      (acc: { overdue: number; currentMonth: number; whatsapp: number }, tx: any) => {
-        const date = String(tx.date || '').slice(0, 10)
+      (
+        acc: {
+          overdue: number
+          today: number
+          whatsapp: number
+          payableAmount: number
+          receivableAmount: number
+        },
+        tx: any
+      ) => {
+        const date =
+          String(tx.date || '').slice(0, 10)
 
-        if (date && date < monthStart) acc.overdue += 1
-        else acc.currentMonth += 1
+        const amount =
+          safeNum(tx.amount)
 
-        if (tx.source === 'whatsapp') acc.whatsapp += 1
+        if (date && date < today) {
+          acc.overdue += 1
+        }
+
+        if (date === today) {
+          acc.today += 1
+        }
+
+        if (tx.type === 'income') {
+          acc.receivableAmount += amount
+        } else {
+          acc.payableAmount += amount
+        }
+
+        if (tx.source === 'whatsapp') {
+          acc.whatsapp += 1
+        }
+
         return acc
       },
-      { overdue: 0, currentMonth: 0, whatsapp: 0 }
+      {
+        overdue: 0,
+        today: 0,
+        whatsapp: 0,
+        payableAmount: 0,
+        receivableAmount: 0,
+      }
     )
   }, [pendingTransactions])
+
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value)
 
   const accountMap = useMemo(
     () => new Map(accounts.map((account: any) => [account.id, account])),
@@ -354,14 +392,47 @@ export default function ConciliationPage() {
               <p className="text-[9.5px] font-bold uppercase tracking-wide text-red-500/70 dark:text-red-400/70">Atrasadas</p>
             </div>
             <div className="rounded-[15px] bg-amber-50/80 px-3 py-2.5 dark:bg-amber-500/10">
-              <p className="text-[18px] font-black text-amber-700 dark:text-amber-400">{pendingBreakdown.currentMonth}</p>
-              <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-600/70 dark:text-amber-400/70">Este mês</p>
+              <p className="text-[18px] font-black text-amber-700 dark:text-amber-400">
+                {pendingBreakdown.today}
+              </p>
+
+              <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-600/70 dark:text-amber-400/70">
+                Hoje
+              </p>
             </div>
             <div className="rounded-[15px] bg-emerald-50/80 px-3 py-2.5 dark:bg-emerald-500/10">
               <p className="text-[18px] font-black text-emerald-700 dark:text-emerald-400">{pendingBreakdown.whatsapp}</p>
               <p className="text-[9.5px] font-bold uppercase tracking-wide text-emerald-600/70 dark:text-emerald-400/70">WhatsApp</p>
             </div>
           </div>
+
+          {pendingTransactions.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-[15px] border border-red-100 bg-red-50/45 px-3 py-2.5 dark:border-red-500/10 dark:bg-red-500/5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-red-500/70">
+                  A pagar
+                </p>
+
+                <p className="mt-1 truncate text-[12px] font-black text-red-600 dark:text-red-400">
+                  {formatMoney(
+                    pendingBreakdown.payableAmount
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-[15px] border border-emerald-100 bg-emerald-50/45 px-3 py-2.5 dark:border-emerald-500/10 dark:bg-emerald-500/5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-600/70">
+                  A receber
+                </p>
+
+                <p className="mt-1 truncate text-[12px] font-black text-emerald-700 dark:text-emerald-400">
+                  {formatMoney(
+                    pendingBreakdown.receivableAmount
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
           {pendingBreakdown.whatsapp > 0 && (
             <p className="mt-3 text-[10.5px] leading-4 text-gray-400 dark:text-gray-500">

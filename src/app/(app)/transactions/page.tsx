@@ -1409,6 +1409,29 @@ export default function TransactionsPage() {
               ))}
             </div>
           )}
+
+          {quickFilter === 'pending' && (
+            <button
+              type="button"
+              onClick={() => router.push('/conciliation')}
+              className="mt-2 flex h-10 w-full items-center justify-between rounded-[14px] border border-amber-200/70 bg-amber-50/70 px-3 text-left transition-all active:scale-[0.985] dark:border-amber-500/20 dark:bg-amber-500/10"
+            >
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                  Revisar e conciliar
+                </span>
+
+                <span className="block truncate text-[9.5px] font-medium text-amber-700/70 dark:text-amber-400/70">
+                  Somente vencidas e de hoje entram na fila operacional
+                </span>
+              </span>
+
+              <ChevronRight
+                size={15}
+                className="shrink-0 text-amber-500"
+              />
+            </button>
+          )}
         </div>
       </div>
 

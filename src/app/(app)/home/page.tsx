@@ -512,6 +512,15 @@ function HomeContent() {
       faturas,
       transactionReceivables,
       debtReceivables,
+      actionableCount: allPending.length,
+      overdueCount: allPending.filter(
+        (tx: any) =>
+          String(tx.date || '').slice(0, 10) < todayIso
+      ).length,
+      dueTodayCount: allPending.filter(
+        (tx: any) =>
+          String(tx.date || '').slice(0, 10) === todayIso
+      ).length,
     }
   }, [localTransactions, cards, debtsList, todayIso])
 
@@ -1393,6 +1402,18 @@ function HomeContent() {
                   <h3 className="mt-0.5 text-[15px] font-semibold text-gray-900 dark:text-gray-100">
                     {hasPriorities ? 'Prioridades' : 'Pendências'}
                   </h3>
+
+                  {pendings.actionableCount > 0 && (
+                    <p className="mt-1 text-[10.5px] font-medium text-gray-400 dark:text-gray-500">
+                      {pendings.overdueCount > 0
+                        ? `${pendings.overdueCount} atrasada${pendings.overdueCount === 1 ? '' : 's'}`
+                        : 'Nada atrasado'}
+
+                      {pendings.dueTodayCount > 0
+                        ? ` • ${pendings.dueTodayCount} para hoje`
+                        : ''}
+                    </p>
+                  )}
                 </div>
 
                 {hasPriorities ? (
@@ -1510,6 +1531,32 @@ function HomeContent() {
                         : 'prioridades fora do resumo'}
                     </div>
                   )}
+                </div>
+              )}
+
+              {pendings.actionableCount > 0 && (
+                <div className="border-t border-gray-100 px-3 py-2.5 dark:border-slate-700/60">
+                  <button
+                    type="button"
+                    onClick={() => router.push('/conciliation')}
+                    className="flex w-full items-center justify-between gap-3 rounded-[16px] bg-gray-50 px-3.5 py-3 text-left transition-all hover:bg-gray-100 active:scale-[0.985] dark:bg-slate-900/55 dark:hover:bg-slate-900"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-bold text-gray-800 dark:text-gray-100">
+                        Revisar pendências de hoje
+                      </p>
+
+                      <p className="mt-0.5 text-[10.5px] text-gray-400 dark:text-gray-500">
+                        Concilie {pendings.actionableCount}{' '}
+                        item{pendings.actionableCount === 1 ? '' : 's'} sem misturar lançamentos futuros.
+                      </p>
+                    </div>
+
+                    <ChevronRight
+                      size={17}
+                      className="shrink-0 text-gray-300 dark:text-slate-600"
+                    />
+                  </button>
                 </div>
               )}
 
