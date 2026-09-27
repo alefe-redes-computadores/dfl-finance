@@ -86,7 +86,7 @@ ok(
 )
 
 ok(
-  logo.includes('findBankIdentity(canonicalName)?.asset'),
+  logo.includes('findBankIdentity(canonicalName)'),
   'BankLogo resolve identidade pelo registry',
 )
 

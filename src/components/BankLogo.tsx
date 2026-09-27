@@ -6,6 +6,12 @@ import {
   canonicalizeBankName,
   findBankIdentity,
 } from '@/lib/bankRegistry'
+import {
+  BANK_LOGO_CONTAINER_CLASS,
+  BANK_LOGO_FALLBACK_CLASS,
+  BANK_LOGO_SIZE_CLASSES,
+  getBankOpticalProfile,
+} from '@/lib/bankIdentityPresentation'
 
 interface BankLogoProps {
   name: string
@@ -47,14 +53,16 @@ export default function BankLogo({
   const canonicalName =
     canonicalizeBankName(name)
 
-  const asset =
-    findBankIdentity(canonicalName)?.asset
+  const identity =
+    findBankIdentity(canonicalName)
 
-  const sizeClasses = {
-    sm: 'h-7 w-7 rounded-[9px]',
-    md: 'h-10 w-10 rounded-[13px]',
-    lg: 'h-12 w-12 rounded-[15px]',
-  }
+  const asset =
+    identity?.asset
+
+  const optical =
+    getBankOpticalProfile(
+      identity?.id,
+    )
 
   /*
    * Os quatro assets abaixo são arquivos SVG
@@ -63,7 +71,7 @@ export default function BankLogo({
   if (asset) {
     return (
       <div
-        className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-sm ring-1 ring-black/5 dark:ring-white/10`}
+        className={`${BANK_LOGO_SIZE_CLASSES[size]} ${BANK_LOGO_CONTAINER_CLASS} bg-white`}
         style={{
           backgroundColor:
             asset.background,
@@ -105,13 +113,23 @@ export default function BankLogo({
   ) {
     return (
       <div
-        className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden shadow-sm ring-1 ring-black/5 dark:ring-white/10`}
+        className={`${BANK_LOGO_SIZE_CLASSES[size]} ${BANK_LOGO_CONTAINER_CLASS}`}
         title={canonicalName}
       >
-        {getBankIcon(
-          canonicalName,
-          color
-        )}
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{
+            transform: `translate(${optical.x ?? 0}px, ${optical.y ?? 0}px) scale(${optical.scale})`,
+            transformOrigin:
+              'center center',
+          }}
+          aria-hidden="true"
+        >
+          {getBankIcon(
+            canonicalName,
+            color
+          )}
+        </div>
       </div>
     )
   }
@@ -122,7 +140,7 @@ export default function BankLogo({
    */
   return (
     <div
-      className={`${sizeClasses[size]} relative flex shrink-0 items-center justify-center overflow-hidden bg-slate-100 shadow-sm ring-1 ring-black/5 dark:bg-slate-800 dark:ring-white/10`}
+      className={`${BANK_LOGO_SIZE_CLASSES[size]} ${BANK_LOGO_CONTAINER_CLASS} ${BANK_LOGO_FALLBACK_CLASS}`}
       title={
         canonicalName ||
         name ||
