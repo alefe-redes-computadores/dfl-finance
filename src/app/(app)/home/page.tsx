@@ -67,7 +67,7 @@ import {
 const ALL_SECTIONS = [
   { id: 'balance', label: 'Saldo Total', description: 'Visão consolidada do seu patrimônio' },
   { id: 'income-expense', label: 'Receitas e despesas', description: 'Entradas e saídas do mês' },
-  { id: 'intelligence', label: 'Inteligência financeira', description: 'Sinais e prioridades calculados pelos seus dados' },
+  { id: 'intelligence', label: 'Centro financeiro', description: 'Saúde, planejamento e prioridades calculadas pelos seus dados' },
   { id: 'pendings', label: 'Pendências', description: 'Prioridades, contas e vencimentos' },
   { id: 'accounts', label: 'Contas', description: 'Suas contas bancárias' },
   { id: 'projection', label: 'Projeção de Saldo', description: 'Previsão para os próximos 30 dias' },
@@ -1168,7 +1168,7 @@ function HomeContent() {
 
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
-                  Inteligência financeira
+                  Centro financeiro
                 </p>
 
                 <p className="mt-0.5 truncate text-[13px] font-semibold text-gray-900 dark:text-gray-100">
@@ -1184,7 +1184,7 @@ function HomeContent() {
 
               <div className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400">
                 <span>
-                  Ver análise
+                  Abrir centro
                 </span>
                 <ChevronRight size={15} />
               </div>

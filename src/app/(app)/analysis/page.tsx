@@ -70,6 +70,7 @@ import {
   type FinancialInsight,
 } from '@/lib/financial-intelligence'
 import { createPortal } from 'react-dom' // IMPORT ADICIONADO
+import FinancialHealthCenter from '@/components/financial/FinancialHealthCenter'
 
 // SKELETON ATUALIZADO
 const AnalysisSkeleton = () => (
@@ -886,6 +887,11 @@ function AnalysisContent() {
         </div>
       </div>
 
+      <FinancialHealthCenter
+        intelligence={financialIntelligence}
+        transactions={(localTransactions || []) as any[]}
+      />
+
       <section
         id="intelligence"
         className="mb-4 scroll-mt-4 overflow-hidden rounded-[18px] border border-teal-200/70 bg-white shadow-sm dark:border-teal-900/50 dark:bg-slate-800"
@@ -1051,6 +1057,14 @@ function AnalysisContent() {
                           </div>
                         )}
                       </div>
+
+                      {insight.explanation && (
+                        <div className="mt-2.5 rounded-[13px] border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 dark:border-indigo-900/50 dark:bg-indigo-500/5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-indigo-600 dark:text-indigo-400">Por que o Finance mostrou isso?</p>
+                          <p className="mt-1 text-[11px] leading-4 text-gray-600 dark:text-gray-300">{insight.explanation.why}</p>
+                          <p className="mt-1.5 text-[9px] text-gray-400">Período: {insight.explanation.period}</p>
+                        </div>
+                      )}
 
                       {insight.evidence && Object.keys(insight.evidence).length > 0 && (
                         <details className="mt-2.5 rounded-[13px] border border-gray-200/70 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
